@@ -3,7 +3,8 @@ import { BattleController } from './controller';
 import { memoryProgressStore } from './ports';
 import type { Digit } from './entry';
 import { enemyHitsPlayer, LIVES } from './hitRule';
-import { applyImpact, createRound, muzzle, placedEnemy, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from './round';
+import { applyImpact, createRound, muzzle, placedEnemy, tankCenter, TANK_HIT_RADIUS, WORLD_HEIGHT, WORLD_WIDTH } from './round';
+import { HIDDEN_SHELL_SPREAD } from './hiddenShell';
 import { defaultSettings } from '../settings/defaults';
 import type { BattleState, RoundState, Settings, TankState } from '../types';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
@@ -1395,5 +1396,70 @@ describe('BattleController round ruler level (T064, FR-018)', () => {
     expect(g.controller.getState().rulerLevel).toBe(3);
     g.controller.startRound('freePlay');
     expect(g.controller.getState().rulerLevel).toBe(3);
+  });
+});
+
+describe('BattleController hidden enemy stays hidden while it fires (T215, FR-010)', () => {
+  /** Every state the subscribers receive from now on. */
+  function record(g: Guided): RoundState[] {
+    const seen: RoundState[] = [];
+    g.controller.subscribe((s) => seen.push(s));
+    return seen;
+  }
+
+  it('during a hidden search the enemy shell enters from the top edge above the child, not from the enemy', () => {
+    const g = guidedRoundWhere(hiddenSearch, { noDamage: true });
+    const s0 = g.controller.getState();
+    const enemyX = numberToX(s0.challenge!.answer, 0, 100);
+    const seen = record(g);
+    answer(g, missNumber(s0));
+    answer(g, missNumber(s0));
+    const firing = seen.find((s) => s.phase === 'enemyTurn')!;
+    expect(firing.enemyFound).toBe(false);
+    const path = firing.shot!.path;
+    expect(path[0]!.y).toBe(WORLD_HEIGHT);
+    expect(Math.abs(path[0]!.x - s0.player.x)).toBeLessThanOrEqual(HIDDEN_SHELL_SPREAD);
+    expect(Math.abs(path[0]!.x - enemyX)).toBeGreaterThan(TANK_HIT_RADIUS);
+    expect(path.at(-1)).toEqual(firing.shot!.impact);
+    // No point of the shell's path is at the enemy tank.
+    for (const p of path) expect(Math.abs(p.x - enemyX)).toBeGreaterThan(TANK_HIT_RADIUS);
+  });
+
+  it('during a hidden search no state gives the enemy number or x: enemy, lastShot and shell path', () => {
+    const g = guidedRoundWhere(hiddenSearch, { noDamage: true });
+    const s0 = g.controller.getState();
+    const answerNumber = s0.challenge!.answer;
+    const enemyX = numberToX(answerNumber, 0, 100);
+    const seen = record(g);
+    answer(g, nearNumber(s0));
+    answer(g, missNumber(s0));
+    answer(g, missNumber(s0));
+    const hidden = seen.filter((s) => !s.enemyFound);
+    expect(hidden.length).toBeGreaterThan(4);
+    expect(hidden.some((s) => s.lastShot?.nearMiss)).toBe(true);
+    for (const s of hidden) {
+      expect(s.enemy).toEqual({ id: 'enemy', kind: 'enemy', alive: true });
+      if (s.lastShot) {
+        expect(s.lastShot.enemyNumber).toBeNull();
+        expect(s.lastShot.distance).toBeNull();
+      }
+      if (s.shot?.shooter === 'enemy') expect(Math.abs(s.shot.path[0]!.x - enemyX)).toBeGreaterThan(TANK_HIT_RADIUS);
+    }
+    // The hit reveals the enemy, and the feedback names its number.
+    answer(g, answerNumber);
+    const revealed = seen.find((s) => s.lastShot?.hit)!;
+    expect(revealed.enemyFound).toBe(true);
+    expect(revealed.lastShot!.enemyNumber).toBe(answerNumber);
+  });
+
+  it('a visible enemy fires from its own tank as before', () => {
+    const g = guidedRoundWhere((s) => s.challenge?.kind === 'readPosition', { noDamage: true });
+    const s0 = g.controller.getState();
+    const seen = record(g);
+    answer(g, missNumber(s0));
+    answer(g, missNumber(s0));
+    const firing = seen.find((s) => s.phase === 'enemyTurn')!;
+    expect(firing.enemyFound).toBe(true);
+    expect(firing.shot!.path[0]).toEqual(muzzle(enemyOf(firing)));
   });
 });

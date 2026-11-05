@@ -46,7 +46,7 @@ test('play a free-play round with the keyboard only and start another', async ({
     },
     [SETTINGS_KEY, JSON.stringify(twoEnemies)] as const,
   );
-  await page.goto('/?seed=1');
+  await page.goto('/?seed=1&mode=free');
 
   // Count page loads from here on. Firefox also fires 'load' for the initial about:blank page,
   // so counting starts after the app has loaded; a marker in the page must survive too.
@@ -150,7 +150,7 @@ test('the new scene button starts a fresh round in the same mode, and no key pre
     },
     [SETTINGS_KEY, JSON.stringify(settings)] as const,
   );
-  await page.goto('/?seed=2');
+  await page.goto('/?seed=2&mode=free');
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.locator('[data-phase]');
@@ -204,7 +204,7 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
     },
     [SETTINGS_KEY, JSON.stringify(settings)] as const,
   );
-  await page.goto('/?seed=3');
+  await page.goto('/?seed=3&mode=free');
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.locator('[data-phase]');
@@ -277,7 +277,7 @@ test('on a crowded level 1 ruler only the typed number is labeled, once, under t
     },
     [SETTINGS_KEY, JSON.stringify(settings)] as const,
   );
-  await page.goto('/?seed=4');
+  await page.goto('/?seed=4&mode=free');
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.locator('[data-phase]');

@@ -154,13 +154,17 @@ export class TankView {
     this.scene.tweens.add({ targets: parts, x: SHAKE_PX, duration: SHAKE_MS, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => parts.forEach((p) => (p.x = 0)) });
   }
 
-  /** Hidden tanks draw nothing; `fade` blends in or out instead of switching at once. */
-  setHidden(hidden: boolean, fade: boolean): void {
+  /**
+   * Hidden tanks draw nothing; `fade` blends in or out after `delayMs` instead of switching at once. Any running fade
+   * (also a pending `appear`) stops first, so a hidden tank never fades back in.
+   */
+  setHidden(hidden: boolean, fade: boolean, delayMs = 0): void {
     if (hidden === this.hidden) return;
     this.hidden = hidden;
     const alpha = hidden ? 0 : 1;
+    this.scene.tweens.killTweensOf(this.container);
     if (fade) {
-      this.scene.tweens.add({ targets: this.container, alpha, duration: FADE_MS });
+      this.scene.tweens.add({ targets: this.container, alpha, delay: delayMs, duration: FADE_MS });
     } else {
       this.container.alpha = alpha;
     }

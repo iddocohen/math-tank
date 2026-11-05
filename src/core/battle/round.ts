@@ -38,11 +38,16 @@ export function visibleEnemy(s: RoundState): TankState | null {
   return s.enemyFound && s.enemy.alive ? placedEnemy(s) : null;
 }
 
-/** What getState() reports: while the enemy is hidden it has only its id, kind and alive (FR-010). */
+/**
+ * What getState() reports: while the enemy is hidden it has only its id, kind and alive, and the last shot of a miss
+ * carries neither the enemy's number nor the distance to it (FR-010, T215). A hit keeps the number of the enemy it
+ * destroyed, which the hit has revealed.
+ */
 export function publicState(s: BattleState): RoundState {
   if (s.enemyFound) return s;
   const { id, alive } = s.enemy;
-  return { ...s, enemy: { id, kind: 'enemy', alive } };
+  const lastShot = s.lastShot && !s.lastShot.hit ? { ...s.lastShot, enemyNumber: null, distance: null } : s.lastShot;
+  return { ...s, enemy: { id, kind: 'enemy', alive }, lastShot };
 }
 
 /** Where shells leave the cannon. */

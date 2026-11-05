@@ -242,10 +242,13 @@ export interface LastShot {
   nearMiss: boolean;
   /** The destroyed enemy or the destroyed decoy, or null. */
   hitTankId: string | null;
-  /** Steps from the landed number to the enemy's number. */
+  /** Steps from the landed number to the enemy's number; null in getState() while the enemy is hidden. */
   distance: number | null;
-  /** The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068). */
-  enemyNumber: number;
+  /**
+   * The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068).
+   * Null in getState() after a miss while a guided search hides the enemy (FR-010, T215).
+   */
+  enemyNumber: number | null;
 }
 
 export interface ShotInFlight {

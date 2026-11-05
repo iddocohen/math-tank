@@ -32,6 +32,8 @@ export const de = {
     hit: 'Getroffen!',
     /** Amendment 06: on the tank body but not at the number, a miss (FR-066, FR-072). */
     near: 'Ganz knapp! Triff die Linie.',
+    /** T215: a near miss while the enemy is still hidden; there is no line yet and no enemy number (FR-010). */
+    nearHidden: 'Ganz knapp!',
     /** Amendment 06: label of the tank counter at the top, for screen readers only (FR-083). */
     score: 'Getroffene Panzer',
     /** Amendment 06: label of the optional clock, for screen readers only (FR-084). */
@@ -50,14 +52,15 @@ export const de = {
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
   },
 
+  /** Challenge banner (T069, FR-056, FR-057): at most about 8 words each. */
   challenge: {
-    findNumber: (n: number) => `Wo ist die ${n}?`,
-    after: (n: number) => `Welche Zahl kommt nach ${n}?`,
-    before: (n: number) => `Welche Zahl kommt vor ${n}?`,
-    stepsRight: (n: number, k: number) => `Starte bei ${n} und geh ${k} Schritte nach rechts.`,
-    stepsLeft: (n: number, k: number) => `Starte bei ${n} und geh ${k} Schritte nach links.`,
+    findNumber: (n: number) => `Finde ${n}`,
+    after: (n: number) => `Welche Zahl kommt direkt nach ${n}?`,
+    before: (n: number) => `Welche Zahl kommt direkt vor ${n}?`,
+    stepsRight: (n: number, k: number) => `Von ${n} aus ${k === 1 ? '1 Schritt' : `${k} Schritte`} nach rechts.`,
+    stepsLeft: (n: number, k: number) => `Von ${n} aus ${k === 1 ? '1 Schritt' : `${k} Schritte`} nach links.`,
     missingBetween: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
-    midpoint: (a: number, b: number) => `Welche Zahl liegt genau in der Mitte von ${a} und ${b}?`,
+    midpoint: (a: number, b: number) => `Welche Zahl liegt mitten zwischen ${a} und ${b}?`,
     readPosition: 'Wo steht der Gegner?',
     addition: (a: number, b: number) => `${a} + ${b} = ?`,
     subtraction: (a: number, b: number) => `${a} − ${b} = ?`,

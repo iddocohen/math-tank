@@ -27,7 +27,7 @@ async function startFreePlay(page: Page, stored: Settings) {
     },
     [SETTINGS_KEY, JSON.stringify(stored)] as const,
   );
-  await page.goto('/?seed=5');
+  await page.goto('/?seed=5&mode=free');
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.locator('[data-phase]');

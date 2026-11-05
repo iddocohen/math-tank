@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_ERROR_KEYS } from '../core/settings/validate';
 import { de } from './de';
-import { encouragements, forbiddenWords, t } from './index';
+import { encouragements, forbiddenWords, promptText, t } from './index';
 
 const SAMPLE_ARGS = [7, 13, 42, 100, 5];
 
@@ -86,6 +86,26 @@ describe('de table', () => {
     expect(r.result(1, '0:42')).toBe('1 Panzer getroffen in 0:42');
     expect(r.newRecord).toBe('Neuer Rekord!');
     expect(r.yourRecord(12)).toBe('Dein Rekord: 12');
+  });
+
+  it('has a short prompt for each of the seven number-line kinds (T069, FR-056, FR-057)', () => {
+    const c = t().challenge;
+    expect(c.findNumber(37)).toBe('Finde 37');
+    expect(c.after(41)).toBe('Welche Zahl kommt direkt nach 41?');
+    expect(c.before(41)).toBe('Welche Zahl kommt direkt vor 41?');
+    const prompts = [c.findNumber(37), c.after(41), c.before(41), c.stepsRight(40, 3), c.stepsLeft(40, 3), c.missingBetween(40, 42), c.midpoint(40, 60)];
+    for (const p of prompts) expect(wordCount(p), p).toBeLessThanOrEqual(8);
+    expect(c.stepsRight(40, 3)).toContain('40');
+    expect(c.stepsRight(40, 1)).toContain('1 Schritt ');
+    expect(c.midpoint(40, 60)).toMatch(/40.*60/);
+  });
+
+  it('promptText renders a challenge prompt from its key and parameters', () => {
+    expect(promptText({ key: 'findNumber', params: { n: 37 } })).toBe('Finde 37');
+    expect(promptText({ key: 'stepsLeft', params: { n: 40, k: 2 } })).toBe(t().challenge.stepsLeft(40, 2));
+    expect(promptText({ key: 'missingBetween', params: { a: 40, b: 42 } })).toBe(t().challenge.missingBetween(40, 42));
+    expect(promptText({ key: 'readPosition', params: {} })).toBe(t().challenge.readPosition);
+    expect(promptText({ key: 'unknownKind', params: {} })).toBe('');
   });
 
   it('t() returns the German table', () => {

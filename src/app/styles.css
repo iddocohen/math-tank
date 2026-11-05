@@ -91,6 +91,18 @@ input:focus-visible {
   font-size: 2.5rem;
 }
 
+.play-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: center;
+}
+
+.free-play-button {
+  background: #4a5a80;
+  box-shadow: 0 6px 0 #313d58;
+}
+
 .secondary-button {
   min-height: 64px;
   padding: 0 28px;
@@ -204,15 +216,57 @@ input:focus-visible {
   box-shadow: 0 6px 0 #9e2522;
 }
 
-/* Range hint and landing number, at the top center. */
+/* Challenge banner at the top center (T068); the status line sits below it. */
+.challenge-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(max(8px, env(safe-area-inset-top)) + 8px);
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100% - 320px));
+  padding: 8px 20px;
+  border-radius: 14px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  background: rgb(20 28 48 / 0.88);
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .challenge-banner {
+    max-width: calc(100% - 32px);
+    top: calc(max(8px, env(safe-area-inset-top)) + 64px);
+    font-size: 1.25rem;
+  }
+}
+
+/* Range hint, landing number and encouragement, at the top center below the banner. */
 .status-line {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(max(8px, env(safe-area-inset-top)) + 8px);
+  top: calc(max(8px, env(safe-area-inset-top)) + 72px);
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: center;
   pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .status-line {
+    top: calc(max(8px, env(safe-area-inset-top)) + 120px);
+  }
+}
+
+.encouragement {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgb(20 28 48 / 0.8);
 }
 
 .range-hint,

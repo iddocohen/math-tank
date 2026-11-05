@@ -14,7 +14,9 @@
  * the personal best for the round's range, ruler starting level and round type, and the end screen shows it. While
  * the browser tab is hidden the battle is paused, so the time does not run; it resumes only what it paused.
  *
- * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4).
+ * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). "Spielen", Enter and Space
+ * start guided mode; "Freies Spiel" (only with the parent's free-play setting) starts free play, and so do Enter and
+ * Space with `?mode=free` (T070). "Nochmal" and Enter on the end screen start a new round in the same mode.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -26,7 +28,7 @@ import { ParentGate } from './ParentGate';
 import { RoundEnd, type RoundRecord } from './RoundEnd';
 import { recordKey } from '../core/records/records';
 import { SettingsPage } from './SettingsPage';
-import { StartScreen } from './StartScreen';
+import { keyStartMode, StartScreen, type StartMode } from './StartScreen';
 import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
@@ -51,7 +53,7 @@ function createApp() {
   const settings = persistence.settings();
   const controller = new BattleController({
     settings,
-    // Free play records no attempts; recording into stored progress arrives with guided mode.
+    // Attempts go to an in-memory copy of the stored progress; saving them arrives with the progress phases.
     progress: memoryProgressStore(persistence.progress()),
     clock: () => Date.now(),
     seed: seedFromUrl(window.location.search),
@@ -109,12 +111,15 @@ export function App() {
     setRoundRecord({ seed: roundOverSeed, record });
   }, [roundOverSeed, controller, persistence]);
 
-  // Until Phase 15, "Spielen", Enter on the start screen and "Nochmal" start free play (tasks.md D3).
-  const startRound = useCallback(() => controller.startRound('freePlay'), [controller]);
-  const play = useCallback(() => {
-    startRound();
-    setScreen('battle');
-  }, [startRound]);
+  // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070).
+  const startRound = useCallback(() => controller.startRound(controller.getState().mode), [controller]);
+  const play = useCallback(
+    (mode: StartMode) => {
+      controller.startRound(mode);
+      setScreen('battle');
+    },
+    [controller],
+  );
 
   const openParent = useCallback(() => {
     setParent('menu');
@@ -134,11 +139,11 @@ export function App() {
   const keyScreen = parent === 'closed' ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
-      if (action.type === 'start') play();
+      if (action.type === 'start') play(keyStartMode(window.location.search, persistence.settings().freePlay));
       else if (action.type === 'newRound') startRound();
       else applyBattleAction(controller, action);
     },
-    [controller, play, startRound],
+    [controller, persistence, play, startRound],
   );
   useKeyboard({ screen: keyScreen, helpLevel: state.help.level, onAction });
 
@@ -152,7 +157,7 @@ export function App() {
   return (
     <div className="app-root" ref={root} tabIndex={-1} data-testid="app-root">
       {screen === 'start' ? (
-        <StartScreen onPlay={play} gear={gear} />
+        <StartScreen onPlay={play} freePlay={persistence.settings().freePlay} gear={gear} />
       ) : (
         <main className="battle">
           <div className="game-parent" ref={gameParent} />

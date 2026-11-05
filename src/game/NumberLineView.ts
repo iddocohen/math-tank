@@ -19,7 +19,12 @@
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
  *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
  * - After a near miss on the tank body (amendment 06), a bracket from the child's number to the enemy's number,
- *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072).
+ *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072). Not while a guided search hides the enemy: getState() then has
+ *   no enemy number, and the ruler shows only the landing marker (T215, FR-010).
+ * - Guided searches (T066, decision D12): nothing on the ruler hints at the hidden enemy; the landing marker of a
+ *   miss stays with its number in large digits until the next fire; no free-play bracket; after a hit a short pulse
+ *   on the ruler at the destroyed enemy's number. The canvas carries `data-hit-pulse` (the pulsed number, '' when
+ *   none) for the end-to-end tests only.
  * - Pointer lines (amendment 04, FR-073): a thin dashed vertical line from the center of every visible tank (the
  *   enemy once found, and every decoy) down to the ruler, ending in a small triangle on the ruler line
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
@@ -50,6 +55,8 @@ const LINE = 0xf4f6fb;
 const SELECT = 0xffd54a;
 const LANDED = 0xff8a65;
 const POINTER = 0xf4f6fb;
+const PULSE = 0x9be89f;
+const PULSE_MS = 700;
 /** The zoomed ten: a box this wide and tall, its top this far below the top of the world. */
 const ZOOM_WIDTH = 640;
 const ZOOM_HEIGHT = 110;
@@ -81,6 +88,9 @@ export class NumberLineView {
   private drawn: Drawn | null = null;
   private dragging = false;
   private last: RoundState | null = null;
+  /** The ring that pulses on the ruler at the destroyed enemy's number after a hit. */
+  private readonly pulse: Phaser.GameObjects.Graphics;
+  private pulsedShot: RoundState['lastShot'] = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -90,6 +100,7 @@ export class NumberLineView {
     this.ruler = scene.add.graphics().setDepth(10);
     this.marks = scene.add.graphics().setDepth(11);
     this.zoom = scene.add.graphics().setDepth(13);
+    this.pulse = scene.add.graphics().setDepth(12).setVisible(false);
     this.typedChip = scene.add.graphics().setDepth(12).setVisible(false);
     this.typedText = scene.add
       .text(0, 0, '', { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: '#ffd54a' })
@@ -122,6 +133,32 @@ export class NumberLineView {
       this.drawRuler(min, max, rulerLevel, s.seed);
     }
     this.drawMarks(s, min, max);
+    this.pulseHit(s, min, max);
+  }
+
+  /** A short pulse on the ruler where the destroyed enemy stood, once per hit (T066). */
+  private pulseHit(s: RoundState, min: number, max: number): void {
+    const shot = s.lastShot;
+    if (!shot?.hit || shot === this.pulsedShot || shot.enemyNumber === null) return;
+    this.pulsedShot = shot;
+    const x = numberToX(shot.enemyNumber, min, max);
+    this.scene.game.canvas.dataset.hitPulse = String(shot.enemyNumber);
+    const g = this.pulse;
+    this.scene.tweens.killTweensOf(g);
+    g.clear().setPosition(x, AXIS_Y).setScale(0.4).setAlpha(1).setVisible(true);
+    g.lineStyle(6, PULSE, 1);
+    g.strokeCircle(0, 0, 28);
+    this.scene.tweens.add({
+      targets: g,
+      scale: 1.6,
+      alpha: 0,
+      duration: PULSE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        g.setVisible(false);
+        this.scene.game.canvas.dataset.hitPulse = '';
+      },
+    });
   }
 
   /** Draws the zoomed ten `view` above the ruler, every line labeled, with connectors to the ruler (FR-020). */
@@ -175,6 +212,7 @@ export class NumberLineView {
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.onUp, this);
     this.hideZoom();
+    this.scene.tweens.killTweensOf(this.pulse);
   }
 
   private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
@@ -246,7 +284,7 @@ export class NumberLineView {
       this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
 
       const enemy = visibleEnemy(s);
-      if (shot.nearMiss) {
+      if (shot.nearMiss && shot.enemyNumber !== null) {
         // A near miss on the tank body: both numbers and the distance (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
       } else if (s.mode === 'freePlay' && !shot.hit && enemy && shot.landed !== enemy.position) {

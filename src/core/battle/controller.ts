@@ -27,6 +27,7 @@ import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterMiss, startSearch } from './guided';
 import { buildAttempt } from './attempt';
+import { hiddenShellEntryX, hiddenShellPath } from './hiddenShell';
 import {
   applyImpact,
   createRound,
@@ -94,6 +95,12 @@ export class BattleController {
   elapsedMs(): number {
     const running = this.runningSince === null ? 0 : Math.max(0, this.deps.clock() - this.runningSince);
     return this.state.elapsedMs + running;
+  }
+
+  /** Milliseconds until the current challenge accepts answers; 0 when it does already or there is none (T068). */
+  answerableIn(): number {
+    const at = this.state.answerableAt;
+    return at === null ? 0 : Math.max(0, at - this.deps.clock());
   }
 
   getState(): RoundState {
@@ -326,10 +333,11 @@ export class BattleController {
   /** The enemy's shell on the state after the player's impact (enemy aiming, research R18). */
   private nextEnemyShot(s: BattleState): ShotInFlight {
     const origin = muzzle(s.enemy);
+    const shotIndex = this.enemyShotIndex++;
     const aim = enemyShot({
       difficulty: this.settings.enemyDifficulty,
       rng: this.enemyRng,
-      shotIndexInRound: this.enemyShotIndex++,
+      shotIndexInRound: shotIndex,
       origin,
       target: tankCenter(s.player),
       terrain: s.terrain,
@@ -339,7 +347,11 @@ export class BattleController {
     // The enemy is not a target: its shell starts inside its own hit circle.
     const targets = [s.player, ...s.decoys].filter((t) => t.alive).map((t) => ({ id: t.id, ...tankCenter(t), radius: TANK_HIT_RADIUS }));
     const r = simulateShot({ ...aim, origin, terrain: s.terrain, targets, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
-    return { shooter: 'enemy', path: r.path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius: BLAST_RADIUS };
+    // A hidden enemy's shell falls from the top edge, so its path does not show where the enemy is (FR-010, T215).
+    const path = s.enemyFound
+      ? r.path
+      : hiddenShellPath({ impact: r.impact, entryX: hiddenShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
+    return { shooter: 'enemy', path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius: BLAST_RADIUS };
   }
 
   private impact(impact: Impact, blastRadius: number): BattleState {

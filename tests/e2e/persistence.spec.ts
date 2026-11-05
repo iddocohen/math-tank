@@ -52,7 +52,7 @@ async function storedSettings(page: Page): Promise<Settings | null> {
 
 test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
   // A custom range far from the default 0 to 100, so an enemy number inside it can only come from the stored settings.
-  const custom: Settings = { ...withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }), enemyDifficulty: 'normal', rulerLevelStart: 3 };
+  const custom: Settings = { ...withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }), enemyDifficulty: 'normal', rulerLevelStart: 3, freePlay: true };
 
   test(`stored settings are loaded in a new context, ${RUNS} runs in a row`, async ({ browser }) => {
     expect(validateSettings(custom)).toEqual({ ok: true });
@@ -65,7 +65,8 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
       await first.context.close();
 
       const second = await silentPage(browser, state);
-      await second.page.goto(`/?seed=${run}`);
+      // Free play (?mode=free, T070) shows the enemy, so its number comes from the stored range.
+      await second.page.goto(`/?seed=${run}&mode=free`);
       await expect(second.page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
       expect(await storedSettings(second.page), `run ${run}`).toEqual(custom);
       await second.page.keyboard.press('Enter');
@@ -126,7 +127,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
     await page.keyboard.press('Enter');
     const overlay = page.getByTestId('battle-overlay');
-    await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
     await openSettings(page);
     await expect(overlay).toHaveAttribute('data-phase', 'paused');
     // Keys do nothing in the game while settings are open.
@@ -134,7 +135,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await expect(overlay).toHaveAttribute('data-phase', 'paused');
     await page.getByRole('button', { name: m.parent.close, exact: true }).click();
     await expect(page.getByTestId('settings-page')).toHaveCount(0);
-    await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   });
 
   test('the parent menu shows "Fortschritt" disabled with "kommt bald"', async ({ page }) => {

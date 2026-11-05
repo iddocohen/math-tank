@@ -17,6 +17,12 @@
  * enemy stood at; a near miss on the body shows "Ganz knapp! Triff die Linie." with both numbers and the distance;
  * a miss shows the landing number.
  *
+ * Guided searches (T068, FR-010, FR-019, FR-053): the challenge banner at the top center shows the prompt; after a
+ * miss the status line shows the landing number and an encouraging phrase. While the enemy is hidden the overlay never
+ * names its number: a near miss shows "Ganz knapp!" and the landing number, without the compare text (T215).
+ * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
+ * `data-help-level` is the help step. The fire button stays the only submit control.
+ *
  * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
  * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
  */
@@ -25,7 +31,7 @@ import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
 import { visibleEnemy } from '../core/battle/round';
 import type { LastShot, RoundState } from '../core/types';
-import { t } from '../i18n';
+import { encouragements, promptText, t } from '../i18n';
 
 interface Props {
   controller: BattleController;
@@ -38,13 +44,16 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
-  const answerable = state.challenge !== null && state.answerableAt !== null && state.phase === 'challenge';
+  const answerable = useAnswerable(controller, state);
   const enemy = visibleEnemy(state);
   // Typed digits are shown exactly as typed (a lone "-" too). A number chosen by pointing is not shown (FR-019).
   const readout = state.entry.typed !== '' ? state.entry.typed : '?';
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
+  // While the enemy hides, the near-miss feedback has no enemy number (T215).
+  const nearHidden = lastShot?.nearMiss === true && lastShot.enemyNumber === null;
+  const encouragement = state.mode === 'guided' && lastShot !== null && !lastShot.hit && state.phase !== 'roundOver' ? encouragements[state.turn % encouragements.length] : null;
 
   return (
     <div
@@ -59,20 +68,31 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-shots-since-enemy-fire={state.shotsSinceEnemyFire}
       data-outcome={state.outcome ?? undefined}
       data-challenge-answerable={answerable}
+      data-help-level={state.help.level}
       data-selection={state.selection ?? undefined}
       data-last-landing={state.lastShot?.landed ?? undefined}
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemy?.position}
     >
+      {state.challenge && (
+        <div className="challenge-banner" data-testid="challenge-banner">
+          {promptText(state.challenge.prompt)}
+        </div>
+      )}
+
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
         ) : lastShot?.hit ? (
           // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
           <span className="landed hit" data-testid="hit-feedback">
-            {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
+            {m.battle.hit} {lastShot.enemyNumber !== null && m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
-        ) : lastShot?.nearMiss ? (
+        ) : nearHidden ? (
+          <span className="landed near" data-testid="hit-feedback">
+            {m.battle.nearHidden} {m.battle.landedAt(lastShot.landed)}
+          </span>
+        ) : lastShot?.nearMiss && lastShot.enemyNumber !== null ? (
           // On the tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072).
           <span className="landed near" data-testid="hit-feedback">
             {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
@@ -80,6 +100,11 @@ export function BattleOverlay({ controller, state, gear }: Props) {
         ) : lastShot ? (
           <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
         ) : null}
+        {encouragement && (
+          <span className="encouragement" data-testid="encouragement">
+            {encouragement}
+          </span>
+        )}
       </div>
 
       <div className="top-left">
@@ -120,6 +145,18 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       </div>
     </div>
   );
+}
+
+/** True once the current challenge accepts answers; re-renders when the 1-second wait ends (edge case "Rapid tapping"). */
+function useAnswerable(controller: BattleController, state: RoundState): boolean {
+  const [, setTick] = useState(0);
+  const waiting = state.phase === 'challenge' && state.challenge !== null ? controller.answerableIn() : 0;
+  useEffect(() => {
+    if (waiting <= 0) return;
+    const id = setTimeout(() => setTick((n) => n + 1), waiting);
+    return () => clearTimeout(id);
+  }, [waiting, state.answerableAt]);
+  return state.phase === 'challenge' && state.challenge !== null && state.answerableAt !== null && waiting <= 0;
 }
 
 function lastShotKind(shot: LastShot): 'hit' | 'near' | 'miss' {

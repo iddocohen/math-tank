@@ -12,7 +12,7 @@ import { placedEnemy } from '../core/battle/round';
 import type { RoundState, TankState } from '../core/types';
 import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
-import { t } from '../i18n';
+import { encouragements, promptText, t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
 import { useRoundState } from './useController';
 
@@ -161,5 +161,78 @@ describe('BattleOverlay (amendment 06)', () => {
       vi.advanceTimersByTime(1000);
     });
     expect(screen.getByTestId('clock').textContent).toBe('1:05');
+  });
+});
+
+/** A guided round whose first search hides the enemy (not readPosition). */
+function setupGuided(over: Partial<Settings> = {}) {
+  for (let seed = 1; seed < 200; seed++) {
+    let now = 1000;
+    const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true, ...over }, progress: memoryProgressStore(), clock: () => now, seed });
+    controller.startRound('guided');
+    if (controller.getState().challenge?.kind === 'readPosition') continue;
+    const view = render(<Overlay controller={controller} />);
+    return { controller, view, advance: (ms: number) => (now += ms) };
+  }
+  throw new Error('no seed found');
+}
+
+describe('BattleOverlay in a guided search (T068, T215)', () => {
+  it('shows the challenge banner at the top with the prompt text', () => {
+    const { controller } = setupGuided();
+    const banner = screen.getByTestId('challenge-banner');
+    expect(banner.textContent).toBe(promptText(controller.getState().challenge!.prompt));
+    expect(banner.textContent).not.toBe('');
+  });
+
+  it('data-challenge-answerable turns true 1 second after the challenge appears; data-help-level follows the help step', () => {
+    vi.useFakeTimers();
+    const { controller, advance } = setupGuided();
+    const root = screen.getByTestId('battle-overlay');
+    expect(root.getAttribute('data-challenge-answerable')).toBe('false');
+    expect(root.getAttribute('data-help-level')).toBe('0');
+    advance(1000);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(root.getAttribute('data-challenge-answerable')).toBe('true');
+    const s = controller.getState();
+    act(() => {
+      controller.fireAt(Math.round((s.player.position + s.challenge!.answer) / 2));
+      controller.shotAnimationDone();
+    });
+    expect(root.getAttribute('data-help-level')).toBe('1');
+  });
+
+  it('after a miss shows the landing number and an encouraging phrase, never the enemy number', () => {
+    const { controller, advance } = setupGuided();
+    const s = controller.getState();
+    const miss = Math.round((s.player.position + s.challenge!.answer) / 2);
+    advance(1000);
+    act(() => {
+      controller.fireAt(miss);
+      controller.shotAnimationDone();
+    });
+    const root = screen.getByTestId('battle-overlay');
+    expect(root.textContent).toContain(t().battle.landedAt(miss));
+    expect(encouragements).toContain(screen.getByTestId('encouragement').textContent);
+    expect(root.getAttribute('data-enemy-number')).toBeNull();
+  });
+
+  it('a near miss on the hidden enemy shows "Ganz knapp!" and the landing number, with no compare text or enemy number', () => {
+    const { controller, advance } = setupGuided();
+    const s = controller.getState();
+    const answer = s.challenge!.answer;
+    const near = answer + Math.sign(s.player.position - answer);
+    advance(1000);
+    act(() => {
+      controller.fireAt(near);
+      controller.shotAnimationDone();
+    });
+    const root = screen.getByTestId('battle-overlay');
+    expect(root.getAttribute('data-last-shot')).toBe('near');
+    expect(screen.getByTestId('hit-feedback').textContent).toBe(`${t().battle.nearHidden} ${t().battle.landedAt(near)}`);
+    expect(screen.queryByTestId('compare')).toBeNull();
+    expect(root.textContent).not.toContain(t().battle.near);
   });
 });
