@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -26,11 +26,20 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 ## Decisions made while writing this task list
 
 - **D1**: The core contract has no method for the optional time limit. `BattleController` gets `tick(): void`, which the renderer calls about once a second; it compares `clock()` with the challenge start and shows the next help step when the limit is reached (FR-034).
-- **D2**: The two-step selection for ranges over 100 units (FR-020) adds `selectInterval(index: number): void` and `leaveZoom(): void` to `BattleController`.
-- **D3**: Before Phase 9, "Spielen" starts a free-play round, so US1 is playable on its own. Phase 9 switches "Spielen" to guided mode and keeps "Freies Spiel" behind the free-play setting (FR-014).
+- **D2**: *Removed by amendment 02.* There is no two-step selection, so `selectInterval` and `leaveZoom` are not built. Wide ranges are reached by typing, +1 and −1 and arrow keys (FR-020).
+- **D3**: Before Phase 13, "Spielen" (and Enter on the start screen) starts a free-play round, so US1 is playable on its own. Phase 13 switches "Spielen" to guided mode and keeps "Freies Spiel" behind the free-play setting (FR-014).
 - **D4**: Playwright tests read game state from `data-*` attributes on the React overlay (`data-phase`, `data-turn`, `data-player-health`, `data-enemy-health`, `data-challenge-answerable`), never from a global variable, so the production build exposes no debug API. The `?seed=<n>` query parameter (quickstart.md) fixes the round seed.
-- **D5**: Attempts are built from Phase 8 on with `independent = solved && helpLevel === 0 && wrongAnswers === 0` and `guess = false`. Phase 18 replaces this with `classifyAttempt` (FR-038).
-- **D6**: Service worker behavior differs across Playwright browsers. `tests/e2e/offline.spec.ts` must pass in Chromium; in WebKit and Firefox it runs and is skipped with a stated reason only where Playwright cannot control the service worker. Manual check on a real iPad covers the gap (Phase 21).
+- **D5**: Attempts are built from Phase 12 on with `independent = solved && helpLevel === 0 && wrongAnswers === 0` (a hit on the first shot without help) and `guess = false`. Phase 22 replaces this with `classifyAttempt` (FR-038).
+- **D6**: Service worker behavior differs across Playwright browsers. `tests/e2e/offline.spec.ts` must pass in Chromium; in WebKit and Firefox it runs and is skipped with a stated reason only where Playwright cannot control the service worker. Manual check on a real iPad covers the gap (Phase 24).
+- **D7**: Amendments 01 and 02 arrived after Phases 1 to 7 were built. Phases 8 to 10 rework the built code; Phase 11 (US9, raised to P2) follows at once. Unchecked tasks T060 to T155 keep their IDs but were rewritten and moved to new phase numbers; new tasks start at T156. Removed requirements FR-011 and FR-012 have no tasks.
+- **D8**: Phases: `challenge` is a guided search in which every fire is an answer; `aiming` is free play, in which the child chooses a number and fires at a visible enemy. `RoundState` loses `aim`, `charged`, `shotsAtEnemy` and `challengePurpose`, and gains `entry`, `orderTaps`, `rulerLevel` and `lastShot` (data-model.md).
+- **D9**: The player's arc comes from `solveArcToX` (research R21): 65 degrees, raised in 5-degree steps to 85, power by bisection, lifted fallback arc. `solveAim` stays for the enemy only.
+- **D10**: Damage from the player's shell follows the number: the enemy takes `MAX_DAMAGE` only when the fired number equals its number (or is within `hitTolerance` for `readPosition`); a decoy at the fired number is destroyed; inside the blast radius without a hit the enemy shakes (`lastShot.nearMiss`). The player's own shell never damages the player. Enemy shells keep the distance-based damage.
+- **D11**: Keyboard: `keyToAction` in `src/app/keyboard.ts` and `applyKey` in `src/core/battle/entry.ts` are pure and unit-tested; `useKeyboard` listens on `window`; the app root gets focus on load and on screen changes; keys with Ctrl, Alt or Meta, and repeated Enter or Space, are ignored; the gear ignores keys (research R22).
+- **D12**: Miss display: guided misses show the landing number large and, from help step 1, the direction; the step count from the landing number appears at help step 2. Free play shows a distance bracket with the step count after every miss. After each free-play hit the enemy moves to a new visible position.
+- **D13**: Settings become version 2 in one migration (Phase 10): drop `aimCorrection`, replace `labelLevel` with `rulerLevelStart` and `rulerLevelMax`. The storage keys keep their names.
+- **D14**: Free play uses only `readPosition` and records no attempts. On ruler level 5 the read-the-ruler tolerance uses the major step (spec Assumptions; open question for the product owner).
+- **D15**: Comparison typing: a typed number that matches a tank's label acts like a tap on that tank. In single-choice comparisons any other typed number is fired like any number (a miss); in `order3` it places no badge and shows a hint.
 
 ---
 
@@ -168,47 +177,124 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
-## Phase 8: US2 guided turn flow in the controller
+## Phase 8: Amendment 01 rework of the built battle for number aiming and keyboard play
 
-**Goal (US2, P1)**: Guided mode in `BattleController`: hidden enemy, preview and confirm, charged cannon, enemy that stays for up to 3 shots, bonus challenges, aim correction.
+**Goal (US1, amendment 01)**: Rework the built core so the player aims by choosing a number: a fixed cannon with an automatic arc, exact-number damage, free-play shots by number, and keyboard entry of digits. No angle, power, aim correction or charged shots remain in `src/core`.
 
-**Independent Test**: The guided part of `battleController.test.ts` passes.
+**Independent Test**: `pnpm test src/core/physics src/core/battle` passes, including a scripted free-play round fired only with `fireAt` and `typeDigit` plus `confirm`.
 
-- [ ] T060 [P] [US2] Add guided tests to `src/core/battle/battleController.test.ts`: `startRound('guided')` begins in `challenge` with `challengePurpose: 'search'` and `enemyFound: false`; `getState()` exposes no enemy coordinates while `enemyFound` is false (the enemy tank is reported with `alive` and `health` only); answers submitted before `answerableAt` (1 s after display) are ignored; `selectNumber` and `nudgeSelection` change only `selection`; `submitSelection` with the right number moves to `aiming` with `charged: true` and `enemyFound: true`; a wrong number keeps `challenge` and does not change health or turn; `fire` does nothing in phase `challenge` (SC-009); after a miss the enemy keeps its position and the next turn offers a bonus challenge, not a search; after a hit or 3 shots at the enemy the next turn starts a new search with a new enemy position (FR-010, FR-010a, FR-011, FR-013, FR-019, SC-009, US2 scenarios 3, 8, 9, edge case "Rapid tapping")
-- [ ] T061 [P] [US2] Add aim and bonus tests to `src/core/battle/battleController.test.ts`: with `aimCorrection: false`, a correct answer leaves `aim` unchanged; with `aimCorrection: true`, it sets `aim` to the `solveAim` result for the target; `requestBonusChallenge` in free play generates only number-line, addition or subtraction kinds and a correct answer charges the next shot; the charged flag resets after one shot (FR-011, FR-012, FR-014, US2 scenario 7)
-- [ ] T062 [US2] Implement the guided flow in `src/core/battle/guided.ts` and wire it into `src/core/battle/controller.ts`: `selectNumber`, `nudgeSelection`, `submitSelection`, `requestBonusChallenge`, search and bonus challenges via `generateChallenge` with `playerPosition` from the fixed player side, `shotsAtEnemy` counting, enemy hide and move, `answerableAt = clock() + 1000` (FR-010, FR-010a, FR-011, FR-013, FR-014, FR-019, FR-025)
-- [ ] T063 [US2] Implement `src/core/battle/attempt.ts`: builds an `Attempt` when a challenge ends (`solved`, `helpLevel`, `wrongAnswers`, `responseMs` from `answerableAt`, `rangeKey` such as `0-100`, `sessionId`, `at`), with the interim `independent` and `guess` rule from D5, and calls `ProgressStore.record` between turns, never during a shot animation. Add a test in `src/core/battle/battleController.test.ts` that one attempt is recorded per finished challenge (FR-035)
-- [ ] T064 [US2] Implement aim correction in `src/core/battle/controller.ts` using `solveAim` on the current terrain, until the tests from T061 pass (FR-012)
+- [ ] T156 [P] [US1] Write `src/core/physics/arc.test.ts`: `solveArcToX` starts at `FIXED_ANGLE_DEG` 65 toward the enemy side for both player sides; for every integer in ranges 0-10, 0-100 and 0-1000 and 5 seeded terrains, `xToNumber(impact.x)` equals the chosen number and `|impact.x - numberToX(n)| <= 0.25 * unitWidth`; with a tall hill built into a test heightmap, the angle rises in 5-degree steps and never above 85; when a wall blocks every angle, the result has `lifted: true`, ends on the surface at the target x, and every path point lies above the terrain; identical input gives identical output; one call takes under 20 ms (FR-004, FR-065, SC-012, edge case "Hill blocks the fixed arc")
+- [ ] T157 [P] [US1] Write `src/core/battle/entry.test.ts` for the pure `applyKey`: digits append and `selection` follows at once (3 then 7 gives 37); Backspace removes the last character and an empty entry keeps the last selection; digits past the length of the longest number in the range are ignored; `minus` is accepted only as the first character and only when `range.min < 0`; typing 150 in range 0-100 gives `selection` 100 and `outOfRange: true`; typing -25 in range -20 to 30 gives -20 and `outOfRange: true` (FR-060, FR-063, edge cases "Typed number outside the range" and "Minus key")
+- [ ] T158 [P] [US1] Rewrite the free-play part of `src/core/battle/battleController.test.ts`: remove every use of `setAim`, `fire`, `aim` and `charged`; `fireAt(n)` in phase `aiming` moves to `playerShot` with a path from `solveArcToX` that lands at `numberToX(n)`; `typeDigit`, `backspace`, `nudge(±1, ±10)` and `selectNumber` change only `selection` and `entry`; `confirm()` fires at the selection and does nothing when `entry.outOfRange` is true or no selection exists; digits and `confirm` are ignored in `playerShot` and `enemyTurn`; after `shotAnimationDone` the crater is at the chosen x, the enemy loses `MAX_DAMAGE` only when `n === enemy.position`, a shot inside the blast radius sets `lastShot.nearMiss` with no damage, the player's own shell never changes player health, and `lastShot.landed === n`; every free-play shot is followed by `enemyTurn`; after a hit the enemy moves to a new visible position at least `minEnemyGap` from the player; round end, side alternation, `noDamage`, easy damage factor, pause and resume still pass (FR-002 to FR-008, FR-014, FR-061, FR-063, FR-066, SC-012, US1 scenarios 1 to 9)
+- [ ] T159 [P] [US1] Update `src/core/physics/damage.test.ts`: remove the charged blast radius check; `damageAt` keeps its distance rule for enemy shells (FR-006, FR-011 removed)
+- [ ] T160 [US1] Implement `src/core/physics/arc.ts` (`FIXED_ANGLE_DEG`, `MAX_ARC_ANGLE_DEG`, `ARC_ANGLE_STEP_DEG`, `solveArcToX`) using `simulateShot` with no tank targets, per research R21, until `arc.test.ts` passes (FR-004, FR-065)
+- [ ] T161 [US1] Implement `src/core/battle/entry.ts` (`applyKey`, `emptyEntry`), until `entry.test.ts` passes (FR-060, FR-063)
+- [ ] T162 [US1] Update `src/core/physics/damage.ts` (remove `CHARGED_BLAST_RADIUS`) and `src/core/battle/round.ts` (remove `blastRadiusFor`; `applyImpact` takes the fired number and applies the exact-number rule of decision D10 for the player's shell and the distance rule for enemy shells; sets `lastShot`), until `damage.test.ts` passes (FR-006, FR-066)
+- [ ] T163 [US1] Update `src/core/types.ts` (`RoundState` per decision D8: remove `aim`, `charged`, `shotsAtEnemy`, `challengePurpose`; add `entry`, `orderTaps`, `rulerLevel`, `lastShot`) and `src/core/battle/controller.ts` (remove `setAim` and `fire`; add `selectNumber`, `nudge`, `typeDigit`, `typeMinus`, `backspace`, `confirm`, `fireAt`; player shots from `solveArcToX`; free-play enemy moves after a hit), until the free-play part of `battleController.test.ts` passes. Done when `grep -rn "setAim\|charged\|angleDeg" src/core/battle` finds nothing (FR-002, FR-003, FR-014, FR-059 to FR-061, FR-065, FR-066)
+- [ ] T164 [US1] Run `pnpm lint && pnpm typecheck && pnpm test` and fix every failure inside `src/core`. `src/game` and `src/app` may fail typecheck until Phase 9; list those errors in the task note for Phase 9 (FR-028)
 
-**Checkpoint**: Guided turns work in unit tests.
+**Checkpoint**: A free-play round runs in unit tests by choosing numbers only.
 
 ---
 
-## Phase 9: US2 number line view and guided screens
+## Phase 9: Amendment 01 rework of the battle view and keyboard input
 
-**Goal (US2, P1)**: The child views the number line under the battlefield, selects a number by tap or drag, adjusts it with +1 and −1, confirms it, and the enemy appears.
+**Goal (US1 and US8, amendment 01)**: Remove angle and power controls and cannon dragging, add a minimal number line view with tap, drag and keyboard digit entry, and make free play work by number with the keyboard alone.
+
+**Independent Test**: `pnpm e2e tests/e2e/battle.spec.ts` passes in all three browsers using only `page.keyboard`.
+
+- [ ] T165 [P] [US1] Rewrite `tests/e2e/battle.spec.ts` to use only the keyboard (no `click`, `tap` or mouse call): open `/?seed=1` with stored settings `freePlay: true`; press Enter on the start screen, the canvas appears within 3 seconds; read the enemy's number from `data-enemy-number` (set only while the enemy is visible); type a wrong number digit by digit and check `data-selection`, press Enter, wait for `data-last-landing` to equal it, enemy health unchanged, then `data-phase="enemyTurn"` and back to `aiming`; type the enemy's number and Enter, enemy health drops; play until `data-phase="roundOver"`; the round end shows encouraging text and no forbidden word; press Enter and confirm a new round starts without a page reload (FR-001 to FR-008, FR-059 to FR-062, FR-066, SC-001, AC-01)
+- [ ] T166 [P] [US8] Write `src/app/keyboard.test.ts` for the pure `keyToAction(event, screen)`: digits 0 to 9 (main row and numpad) map to digit actions in `battle`; `-` to minus; Backspace; Enter to `confirm` in `battle`, `start` on `start`, `newRound` on `roundEnd`, `resume` on `paused`; Space to `start`, `newRound`, `resume` and, in `battle` only at help level 3, `confirm`; arrows to nudges of ±1 and ±10; `h` and `H` to `help`; Escape to `pause` and `resume`; keys with Ctrl, Alt or Meta and repeated Enter or Space return `null`; no key returns an action that opens the parent gate (FR-059 to FR-062, FR-045)
+- [ ] T167 [US8] Implement `src/app/keyboard.ts` (`keyToAction`) until `keyboard.test.ts` passes, and `src/app/useKeyboard.ts` (one `keydown` listener on `window`, `preventDefault` for handled keys, dispatches to controller methods or screen callbacks) (FR-059 to FR-062)
+- [ ] T168 [US1] Implement a first `src/game/NumberLineView.ts`: draws the ruler in world y 720 to 820, x 80 to 1520 with `numberToX` and `ticksFor` (current label levels; Phase 10 switches to ruler levels); tap and drag on the whole line call `selectNumber(xToNumber(x))`; a vertical guide line and a target marker at `selection` on the battlefield; release only previews; after each shot a landing marker with the landing number in large digits; in free play a bracket from the landing number to the enemy's number with the step count (FR-004, FR-014, FR-015, FR-019, FR-053, US2 scenarios 1 and 6)
+- [ ] T169 [US1] Update `src/game/BattleScene.ts`, `src/game/TankView.ts`, `src/core/view/geometry.ts` and `src/core/view/geometry.test.ts`: remove cannon dragging, pointer aiming and `aimAngleFromPointer` (with its tests); the player turret shows the fixed 65-degree angle and turns to the arc's launch angle (`launchAngle(path)`) just before a lifted or raised shot; the enemy tank shakes on `lastShot.nearMiss`; compose `NumberLineView` (FR-003, FR-065, FR-066)
+- [ ] T170 [US1] Update `src/app/BattleOverlay.tsx` and `src/app/styles.css`: remove the angle and power controls; add the large number readout of `selection` (typed digits shown as typed), −1 and +1 buttons, a large fire button calling `confirm` (enabled in `aiming` and `challenge`), the out-of-range hint "Zahlen von {min} bis {max}", and the attributes `data-selection`, `data-last-landing`, and `data-enemy-number` only while the enemy is visible; every button at least 48 px (FR-003, FR-019, FR-053, FR-063)
+- [ ] T171 [US8] Update `src/app/App.tsx`, `src/app/StartScreen.tsx` and `src/app/RoundEnd.tsx`: mount `useKeyboard` with the current screen; Enter or Space on the start screen does what "Spielen" does (free play until Phase 13, decision D3); Enter or Space on the round end starts a new round; the app root has `tabIndex={-1}` and receives focus on load and on every screen change, so typing works without a click; there is no text field (FR-059, FR-062, US8 scenario 6)
+- [ ] T172 [US1] Update `src/i18n/de.ts`: remove the angle, power and aim-correction strings that are no longer used; add fire, landing number ("Gelandet bei {n}"), free-play distance ("{n} Schritte"), and the range hint; `src/i18n/i18n.test.ts` still passes. Then make `tests/e2e/battle.spec.ts` pass in Chromium, WebKit and Firefox, and run `pnpm lint && pnpm typecheck` (FR-033, FR-056, FR-057, AC-01)
+
+**Checkpoint**: Free play works by number, with mouse, touch or the keyboard alone (AC-01 under amendment 01).
+
+---
+
+## Phase 10: Amendment 02 rework of the ruler, settings and challenge kinds
+
+**Goal (US2 and US9, amendment 02)**: Replace the four label levels built in Phase 7 with the five ruler levels, move settings to version 2 (no `aimCorrection`, no `labelLevel`), allow any range start, add the `readPosition` challenge kind, and remove the bonus purpose from the generator.
+
+**Independent Test**: `pnpm test src/core/numberline src/core/settings src/core/storage src/core/math` passes.
+
+- [ ] T173 [P] [US9] Rewrite `src/core/numberline/ticks.test.ts` for `ticksFor(view, level, seed, opts)`: steps follow the amended FR-016 table for every width from 5 to 1000 (width 230 as in 550 to 780 gives major 50 and minor 10, majors at 550, 600, 650, 700, 750); at most 101 ticks per view; level 1 draws major and minor lines and labels all of them when the label spacing is at least 28 logical units, otherwise sets `labelsNearPreview`; level 2 labels only major lines; level 3 labels a seed-chosen subset of major lines and always both end points; level 4 has no visible minor lines; level 5 draws only the end points; end points are always visible and labeled; `allLines: true` makes every line visible and labeled; `smallestVisibleStep` returns the minor step on levels 1 to 3 and the major step on 4 and 5; the view 30 to 40 at level 1 still has majors at 30 and 40 and nine equal minors (FR-016, FR-017, FR-018, FR-068, AC-03, US2 scenario 5, US9 scenario 4)
+- [ ] T174 [US9] Rewrite `src/core/numberline/ticks.ts` (`ticksFor` with the `RulerLevel` type, `smallestVisibleStep`), until `ticks.test.ts` passes (FR-016, FR-017)
+- [ ] T175 [P] [US9] Update `src/core/settings/settings.test.ts` and `src/core/storage/storage.test.ts`: defaults have `version: 2`, `rulerLevelStart: 1`, `rulerLevelMax: 5`, no `aimCorrection`, no `labelLevel`; `validateSettings` rejects `rulerLevelStart > rulerLevelMax`, accepts custom 550 to 780 and -20 to 30, rejects a width below 5 or above 1000 and a minimum outside -1000 to 9000; `withRange` still clamps the linked limits; `migrate` turns a version 1 fixture with `labelLevel: 4` and `aimCorrection: true` into a valid version 2 object with `rulerLevelStart: 5`, `rulerLevelMax: 5` (start must not exceed max) and no `aimCorrection`, and `labelLevel: 2` into start 2, max 5 (FR-018, FR-046, FR-047, FR-048, US9 scenario 4, decision D13)
+- [ ] T176 [US9] Update `src/core/settings/schema.ts`, `src/core/settings/defaults.ts`, `src/core/settings/validate.ts` and `src/core/storage/migrate.ts` for settings version 2, until `settings.test.ts` and `storage.test.ts` pass (FR-046, FR-047, FR-048)
+- [ ] T177 [P] [US9] Write `src/core/math/readPosition.test.ts`: the builder places the answer on a multiple of the minor step on levels 1 to 3 and on any whole number on levels 4 and 5, always inside the range and at least `minEnemyGap` from the player; `hitTolerance` is 0 when the answer is on a visible line and half of `smallestVisibleStep` otherwise; `checkAnswer` accepts a fired number within the tolerance; main skill is `positions`; with range 550 to 780 and level 2 every answer is a multiple of 10; `generateChallenge` with `kindsAllowed: ['readPosition']` returns only that kind; same seed gives the same challenge (FR-021, FR-067, FR-068, US9 scenario 5)
+- [ ] T178 [US9] Implement `src/core/math/readPosition.ts` (builder and `hitTolerance`); add `readPosition` and the `rulerLevel` and `hitTolerance` fields to `src/core/types.ts`; register it in `src/core/math/generate.ts` (part of the number-line type; new `rulerLevel` input; remove the `purpose: 'search' | 'bonus'` input), `src/core/math/skills.ts` and `src/core/math/validate.ts` (`checkAnswer` with tolerance), until `readPosition.test.ts`, `numberLine.test.ts`, `validate.test.ts` and `generator.property.test.ts` pass (FR-014, FR-021, FR-029, FR-067, FR-068)
+- [ ] T179 [US9] Update `src/i18n/de.ts`: settings labels "Lineal: Startstufe" and "Lineal: schwerste Stufe" replace the label-level and aim-correction labels; add the `readPosition` prompt ("Wo steht der Gegner?") and the hit feedback "Treffer! Der Gegner stand bei {n}."; `src/i18n/i18n.test.ts` still passes. Then run `pnpm lint && pnpm typecheck && pnpm test` (FR-056, FR-057, FR-068)
+
+**Checkpoint**: Ruler levels, settings version 2 and "read the ruler" work without a browser.
+
+---
+
+## Phase 11: US9 any number range and read-the-ruler free play
+
+**Goal (US9, P2 since amendment 02)**: Any range of width 5 to 1000, such as 550 to 780, plays end to end; free play is "read the ruler"; the zoomed view exists only as a help visual.
+
+**Independent Test**: `pnpm e2e tests/e2e/range.spec.ts` passes: range 550 to 780, free play, read the ruler, type the number, hit.
+
+- [ ] T180 [P] [US9] Add free-play read-the-ruler tests to `src/core/battle/battleController.test.ts`: each free-play turn has a `readPosition` challenge with the enemy visible at its answer; a shot within `hitTolerance` hits and `lastShot` carries the exact enemy number for the feedback; free play records no attempt; `state.rulerLevel` equals `rulerLevelStart`; with range 550 to 780 the player stands at 550 or 780 and the enemy on a multiple of 10 at level 2 (FR-014, FR-067, FR-068, US9 scenarios 4 and 5, decision D14)
+- [ ] T181 [US9] Implement read-the-ruler free play in `src/core/battle/controller.ts` and `src/core/battle/round.ts` (generate with `kindsAllowed: ['readPosition']` and the round's `rulerLevel`, hit rule with tolerance, no attempt), until the tests from T180 pass (FR-014, FR-067, FR-068)
+- [ ] T143 [P] [US9] Write `src/core/numberline/zoom.test.ts`: `helpZoomView(437, 0, 1000)` is 430 to 440; `helpZoomView(637, 550, 780)` is 630 to 640; `helpZoomView(3, 0, 10)` is 0 to 10; a view at a range end is clamped to the range (for example 775 to 780 or the ten 770 to 780); `ticksFor(helpZoomView(...), level, seed, { allLines: true })` has every unit line visible and labeled (FR-018, FR-020, FR-031, US9 scenario 6)
+- [ ] T144 [US9] Implement `src/core/numberline/zoom.ts` (`helpZoomView`), until `zoom.test.ts` passes. Do not build `needsZoom`, `zoomIntervals`, `selectInterval` or `leaveZoom` (decision D2) (FR-020)
+- [ ] T145 [P] [US9] Add range tests to `src/core/battle/battleController.test.ts`: with range 0 to 1000, typing 4, 3, 7 and `confirm` fires at 437 and the shell lands at 437; `nudge(1)` from 436 reaches 437; `selectNumber` from a pointer x snaps to the nearest whole number; with range -20 to 30, `typeMinus` then 5 gives -5; with range 0 to 100, `typeMinus` is ignored (FR-020, FR-060, FR-064, US9 scenario 2)
+- [ ] T146 [US9] Make the tests from T145 pass in `src/core/battle/controller.ts` and `src/core/battle/entry.ts` (FR-020, FR-060, FR-064)
+- [ ] T147 [US9] Update `src/game/NumberLineView.ts` for ruler levels: draw only visible ticks and labels from `ticksFor(view, state.rulerLevel, seed)`; when `labelsNearPreview` is set, label the minor lines next to the preview marker; add `showZoom(view)` that draws a zoomed ten above the ruler with all lines and labels and connector lines from its two ends to the matching part of the battlefield, for the help steps in Phase 18 (FR-016, FR-017, FR-018, FR-020, FR-053, US2 scenario 5)
+- [ ] T148 [US9] Extend `src/core/math/generator.property.test.ts` with 0 to 50, 0 to 1000 with `crossHundreds` on and off, custom 15 to 45, custom 550 to 780, custom -20 to 30 with negative results on and off, and `readPosition` at all 5 ruler levels, 10,000 seeds each (FR-029, FR-067, SC-003, SC-013, US9 scenarios 3 and 4)
+- [ ] T149 [US9] Write `tests/e2e/range.spec.ts`: with stored settings range 550 to 780, `freePlay: true`, ruler level 2, and a fixed seed, start free play with Enter, read the enemy's number from `data-enemy-number`, type it and press Enter, and confirm the enemy's health drops and the feedback shows the exact number; also check that the ruler's first and last labels read 550 and 780. Make it pass in all three browsers (FR-014, FR-016, FR-067, US9 scenarios 2 and 4)
+
+**Checkpoint**: Any range plays in free play; US9 is complete except the guided searches, which Phase 13 adds for every range.
+
+---
+
+## Phase 12: US2 guided turn flow in the controller
+
+**Goal (US2, P1)**: Guided mode in `BattleController`: hidden enemy, every fire is an answer, misses escalate help without an enemy turn, a hit gives the enemy its turn, then a new search.
+
+**Independent Test**: The guided part of `battleController.test.ts` passes.
+
+- [ ] T060 [P] [US2] Add guided tests to `src/core/battle/battleController.test.ts`: `startRound('guided')` begins in `challenge` with `enemyFound: false`; `getState()` exposes no enemy coordinates while `enemyFound` is false (the enemy tank is reported with `alive` and `health` only); fires before `answerableAt` (1 s after display) are ignored; `selectNumber`, `typeDigit` and `nudge` change only `selection` and `entry`; `confirm` fires at the selection and moves to `playerShot`; a miss returns to `challenge` with `lastShot.landed` set, `help.level` 1 and `help.wrongAnswers` 1, with no `enemyTurn` and no change to health or `turn`; a hit sets `enemyFound: true`, damages the enemy, then `enemyTurn`, then a new search with a new enemy position at least `minEnemyGap` from the player and `turn + 1` (FR-002, FR-010, FR-010a, FR-013, FR-019, FR-066, SC-009, US2 scenarios 3, 7, 8, 9, edge case "Rapid tapping or typing")
+- [ ] T061 [P] [US2] Add miss-path tests to `src/core/battle/battleController.test.ts`: three misses in one search never produce `enemyTurn` and never call the enemy's `Rng`; after the third miss `selection` equals the answer and `confirm` fires at it and hits; the round ends with `turnsUsed` after `roundLength` searches; a guided `readPosition` search starts with the enemy visible (`enemyFound: true`) and hits within `hitTolerance`; no method or state for bonus challenges exists (FR-010a, FR-013, FR-014, FR-067, SC-005)
+- [ ] T062 [US2] Implement the guided flow in `src/core/battle/guided.ts` and wire it into `src/core/battle/controller.ts`: search challenges via `generateChallenge` with `playerPosition` from the fixed player side and the round's `rulerLevel`; fire as answer with `checkAnswer`; miss handling (help level and wrong answers, no enemy turn); hit then enemy turn, then hide and move; `answerableAt = clock() + 1000`, until the tests from T060 and T061 pass (FR-010, FR-010a, FR-013, FR-019, FR-025)
+- [ ] T063 [US2] Implement `src/core/battle/attempt.ts`: builds an `Attempt` when a search ends with a hit or a shot at the shown solution (`solved`, `helpLevel`, `wrongAnswers` = misses, `responseMs` from `answerableAt`, `rangeKey` such as `550-780`, `sessionId`, `at`), with the interim `independent` and `guess` rule from D5, and calls `ProgressStore.record` between turns, never during a shot animation. Add a test in `src/core/battle/battleController.test.ts` that one attempt is recorded per finished search and none in free play (FR-035, decision D14)
+- [ ] T064 [US2] Add the round's ruler level to `src/core/battle/round.ts`: `state.rulerLevel` is `rulerLevelStart` (Phase 22 replaces this with the adaptive level), and add a test in `src/core/battle/battleController.test.ts` that settings with `rulerLevelStart: 3` give `state.rulerLevel` 3 in both modes (FR-018)
+
+**Checkpoint**: Guided searches work in unit tests.
+
+---
+
+## Phase 13: US2 guided screens
+
+**Goal (US2, P1)**: The child views the challenge, chooses a number on the ruler or by typing, fires, and views a hit or the landing number of a miss.
 
 **Independent Test**: `pnpm e2e tests/e2e/guided.spec.ts` passes; in `pnpm dev`, range 0 to 100, number line only, the marker for 37 sits directly under battlefield position 37.
 
-- [ ] T065 [P] [US2] Write `tests/e2e/guided.spec.ts`: with `/?seed=<fixed>` and default settings, tap "Spielen"; the challenge banner shows "Finde N" (read N from the banner); the fire button is disabled; tap the number line at the x of N (computed from the canvas bounding box and `numberToX`), check the large readout shows N, tap the check button; `data-phase="aiming"` and the fire button is enabled. Also: releasing on a wrong number and not tapping check leaves the phase at `challenge` (FR-010, FR-019, SC-009, AC-02)
-- [ ] T066 [US2] Implement `src/game/NumberLineView.ts`: draws the line in world y 720 to 820, x 80 to 1520 with `numberToX` and `ticksFor` (major ticks longer and bolder, labels per labeling level); tap and drag on the whole line call `selectNumber(xToNumber(x))`; while dragging shows a vertical guide line up to the battlefield, a target marker, and the number in large digits above the finger; release only previews (FR-015, FR-016, FR-017, FR-019, FR-053, US2 scenarios 1, 2, 5, 6)
-- [ ] T067 [US2] Update `src/game/BattleScene.ts` and `src/game/TankView.ts`: during a search nothing is drawn at the enemy position (no marker, shadow or sound cue); when `enemyFound` becomes true the enemy fades in at the answer and the turret glows while `charged`; on a new search the enemy fades out (FR-010, FR-011, US2 scenario 8)
-- [ ] T068 [US2] Update `src/app/BattleOverlay.tsx`: challenge banner at top center, +1 and −1 buttons and a check button (each at least 48 px), a "Bonus" button in follow-up turns and in free play, and `data-challenge-answerable` (FR-010a, FR-014, FR-019, FR-053)
+- [ ] T065 [P] [US2] Write `tests/e2e/guided.spec.ts`: with `/?seed=<fixed>` and default settings, tap "Spielen"; the challenge banner shows "Finde N" (read N from the banner, retry seeds until a `findNumber` challenge); tap the ruler at the x of a wrong number (computed from the canvas bounding box and `numberToX`), check the large readout, tap fire; `data-last-landing` shows that number, `data-phase` returns to `challenge` without passing `enemyTurn`, an encouraging message is visible; releasing on a number without firing leaves the phase at `challenge`; then tap N and fire; the enemy health drops and `data-phase` passes `enemyTurn` (FR-010, FR-013, FR-019, SC-009, AC-02)
+- [ ] T066 [US2] Update `src/game/NumberLineView.ts` for guided searches: nothing on the ruler hints at the hidden enemy; the landing marker of a miss stays with its number in large digits until the next fire; after a hit, a short pulse at the enemy's number; the free-play distance bracket is not shown in guided mode (decision D12) (FR-004, FR-010, FR-013)
+- [ ] T067 [US2] Update `src/game/BattleScene.ts` and `src/game/TankView.ts`: during a position search nothing is drawn at the enemy position (no marker, shadow or sound cue); on a hit the enemy fades in at its number and shows the hit; after the enemy turn it fades out for the new search; for `readPosition` it is visible from the start (FR-010, FR-066, FR-067, US2 scenario 8)
+- [ ] T068 [US2] Update `src/app/BattleOverlay.tsx`: challenge banner at top center, the hit feedback "Treffer! Der Gegner stand bei {n}." for `readPosition`, the message line for misses, and the attributes `data-challenge-answerable` and `data-help-level`; the fire button stays the only submit control (FR-010, FR-019, FR-053, FR-068)
 - [ ] T069 [US2] Add prompt strings for the seven number-line kinds to `src/i18n/de.ts` (for example `findNumber(n)` "Finde {n}", `after(n)` "Welche Zahl kommt direkt nach {n}?", `before(n)`, `stepsRight(n, k)`, `stepsLeft(n, k)`, `missingBetween(a, b)`, `midpoint(a, b)`), each at most about 8 words (FR-056, FR-057)
-- [ ] T070 [US2] Update `src/app/StartScreen.tsx`: "Spielen" starts guided mode; "Freies Spiel" appears next to it only when `settings.freePlay` is true; the free-play bonus button is hidden when no challenge type is enabled. Then make `tests/e2e/guided.spec.ts` pass in all three browsers (FR-010, FR-014, edge case "Free-play with no challenge types enabled", AC-02, AC-03)
+- [ ] T070 [US2] Update `src/app/StartScreen.tsx`, `src/app/App.tsx` and `tests/e2e/battle.spec.ts`: "Spielen" and Enter or Space start guided mode; "Freies Spiel" appears next to it only when `settings.freePlay` is true; `App.tsx` reads a `?mode=free` query parameter (like `?seed=`, decision D4) so that Enter starts free play when free play is allowed, and `battle.spec.ts` uses it to stay keyboard-only. Then make `tests/e2e/guided.spec.ts` and `tests/e2e/battle.spec.ts` pass in all three browsers (FR-010, FR-014, FR-062, AC-02, AC-03)
 
 **Checkpoint**: US1 and US2 together form the MVP core loop.
 
 ---
 
-## Phase 10: US3 addition and subtraction generators
+## Phase 14: US3 addition and subtraction generators
 
 **Goal (US3, P2)**: Addition and subtraction challenges whose result is the enemy position, respecting every parent limit, with step paths.
 
 **Independent Test**: `pnpm test src/core/math` passes, including the 43 − 7 fixture.
 
 - [ ] T071 [P] [US3] Write `src/core/math/crossing.test.ts`: `crossesTen(24, 32)` is true, `crossesTen(24, 29)` false, `crossesTen(43, 36)` true; `crossesHundred(95, 103)` true (FR-022, FR-023)
-- [ ] T072 [P] [US3] Write `src/core/math/addition.test.ts`: over 10,000 seeds no operand exceeds `addition.maxOperand` and no result exceeds `addition.maxResult` (US3 scenario 5 with 10 and 20); with `crossTens: false` no exercise crosses a ten (24 + 8 never appears, 24 + 5 can); with `crossHundreds: false` none crosses a hundred; `steps: 2` produces `a + b + c` with every intermediate sum in range (FR-022, FR-025, US3 scenarios 3 and 5)
+- [ ] T072 [P] [US3] Write `src/core/math/addition.test.ts`: over 10,000 seeds no operand exceeds `addition.maxOperand` and no result exceeds `addition.maxResult` (US3 scenario 5 with 10 and 20); with `crossTens: false` no exercise crosses a ten (24 + 8 never appears, 24 + 5 can); with `crossHundreds: false` none crosses a hundred; `steps: 2` produces `a + b + c` with every intermediate sum in range; with range 550 to 780 every operand and result stays in range or is a valid addend (FR-022, FR-025, US3 scenarios 3 and 5)
 - [ ] T073 [P] [US3] Write `src/core/math/subtraction.test.ts`: no subtrahend exceeds `subtraction.maxOperand`; with `negativeResults: false` no result is below 0 or below `range.min`; with a custom range -20 to 30 and `negativeResults: true` results may be negative but never below `range.min`; crossing rules hold; `steps: 2` works; the fixture seed in `src/core/math/fixtures.ts` produces 43 − 7 (FR-023, FR-025, US3 scenario 4, AC-05)
 - [ ] T074 [P] [US3] Write `src/core/math/stepPath.test.ts`: `stepPath` for 43 − 7 with `beginnerAssist: true` is `[43, 40, 36]`, for 24 + 8 is `[24, 30, 32]`; with `beginnerAssist: false` it is `[43, 36]` and `[24, 32]`; for two-step exercises it passes through the intermediate result (FR-024, US3 scenarios 1 and 2)
 - [ ] T075 [US3] Implement `src/core/math/crossing.ts` (`crossesTen`, `crossesHundred`) until `crossing.test.ts` passes
@@ -221,121 +307,122 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
-## Phase 11: US3 step animation on the number line
+## Phase 15: US3 step animation on the number line
 
-**Goal (US3, P2)**: The child taps help on an addition or subtraction challenge and views a marker step along the number line.
+**Goal (US3, P2)**: The child presses H or taps help on an addition or subtraction challenge and views a marker step along the ruler.
 
-**Independent Test**: In `pnpm dev` with only subtraction on and the 43 − 7 fixture seed, tap help and view the marker move 43 → 40 → 36; select 36 and confirm.
+**Independent Test**: In `pnpm dev` with only subtraction on and the 43 − 7 fixture seed, press H and view the marker move 43 → 40 → 36; type 36 and press Enter; the enemy is hit.
 
-- [ ] T080 [P] [US3] Add a test to `src/core/battle/battleController.test.ts`: for an addition or subtraction challenge, `requestHelp` sets `state.stepAnimation` to `stepPath(challenge, settings.beginnerAssist)` and does not change health, turn or charge (FR-024, FR-030)
-- [ ] T081 [US3] Implement `requestHelp` for addition and subtraction in `src/core/battle/controller.ts` (sets `stepAnimation`; general help escalation follows in Phase 13) and add `stepAnimation: number[] | null` to `RoundState` in `src/core/types.ts` (FR-024)
-- [ ] T082 [US3] Add the step animation to `src/game/NumberLineView.ts`: a small tank icon moves one unit at a time along `stepAnimation`, pausing at each ten boundary when `beginnerAssist` is on, with each step counted on screen (FR-024, US3 scenarios 1 and 2, AC-05)
-- [ ] T083 [US3] Add addition and subtraction prompts to `src/i18n/de.ts` (for example "Der Gegner ist bei {a} − {b}"), and show the starting number highlighted on the number line in `src/game/NumberLineView.ts` (FR-056, FR-057, AC-05)
+- [ ] T080 [P] [US3] Add a test to `src/core/battle/battleController.test.ts`: for an addition or subtraction challenge, `requestHelp` sets `state.stepAnimation` to `stepPath(challenge, settings.beginnerAssist)` and does not change health or turn (FR-024, FR-030)
+- [ ] T081 [US3] Implement `requestHelp` for addition and subtraction in `src/core/battle/controller.ts` (sets `stepAnimation`; general help escalation follows in Phase 17) and add `stepAnimation: number[] | null` to `RoundState` in `src/core/types.ts` (FR-024)
+- [ ] T082 [US3] Add the step animation to `src/game/NumberLineView.ts`: a small tank icon moves one unit at a time along `stepAnimation`, pausing at each ten boundary when `beginnerAssist` is on, with each step counted on screen and all lines of the passed area shown (FR-018, FR-024, US3 scenarios 1 and 2, AC-05)
+- [ ] T083 [US3] Add addition and subtraction prompts to `src/i18n/de.ts` (for example "Der Gegner ist bei {a} − {b}"), and show the starting number highlighted on the ruler in `src/game/NumberLineView.ts` (FR-056, FR-057, AC-05)
 
 **Checkpoint**: US3 works on its own with only addition or subtraction enabled.
 
 ---
 
-## Phase 12: US4 comparison with decoy tanks
+## Phase 16: US4 comparison with decoy tanks
 
-**Goal (US4, P2)**: Comparison challenges with numbered decoy tanks standing at their own numbers; tapping the right tank marks the target.
+**Goal (US4, P2)**: Comparison challenges with numbered decoy tanks standing at their own numbers; tapping a tank or typing its number fires at it.
 
-**Independent Test**: With only comparison on and the 47 vs 74 fixture seed, tap the tank labeled 74, fire, and hit only that tank.
+**Independent Test**: With only comparison on and the 47 vs 74 fixture seed, type 74 and press Enter; the enemy is hit. Tapping 47 destroys only the decoy.
 
-- [ ] T084 [P] [US4] Write `src/core/math/comparison.test.ts`: each kind `greater`, `smaller`, `equal`, `order3`, `largest3`, `smallest3`, `closestTo`, `between` has exactly one correct answer, distinct options, all numbers inside the range, every option at least `minTankGap` from every other option and from the player tank; `order3` sets `orderAnswer` ascending; comparison is skipped when the range cannot fit 2 options at `minTankGap` on the side away from the player; the fixture seed produces 47 and 74 with "greater" (FR-026, FR-027, US4 scenario 6, edge case "Comparison options too close together", AC-06)
+- [ ] T084 [P] [US4] Write `src/core/math/comparison.test.ts`: each kind `greater`, `smaller`, `equal`, `order3`, `largest3`, `smallest3`, `closestTo`, `between` has exactly one correct answer, distinct options, all numbers inside the range, every option at least `minTankGap` from every other option and from the player tank; `order3` sets `orderAnswer` ascending and `answer` to the largest number; comparison is skipped when the range cannot fit 2 options at `minTankGap` on the side away from the player; the fixture seed produces 47 and 74 with "greater" (FR-026, FR-027, US4 scenario 6, edge case "Comparison options too close together", AC-06)
 - [ ] T085 [US4] Implement `src/core/math/comparison.ts` (answer-first builders for the eight kinds) and add the 47 vs 74 fixture to `src/core/math/fixtures.ts` (FR-026, FR-027)
 - [ ] T086 [US4] Register comparison in `src/core/math/generate.ts`; extend `src/core/math/validate.ts` (`checkAnswer` accepts a `number[]` for `order3`; gap and single-answer checks) and `src/core/math/validate.test.ts`; extend `src/core/math/generator.property.test.ts` with comparison on. Done when all math tests pass (FR-027, FR-029, SC-003)
-- [ ] T087 [P] [US4] Add comparison tests to `src/core/battle/battleController.test.ts`: a comparison turn creates decoy `TankState`s at their own numbers with `label` set and the real enemy at the answer; `tapTank` on the correct tank moves to `aiming` with `charged: true`; on a wrong tank keeps `challenge`; for `order3` taps are collected and a wrong tap resets the sequence; a shot that hits a decoy destroys only the decoy and the enemy keeps its health (FR-026, FR-027, US4 scenarios 1 to 5)
-- [ ] T088 [US4] Implement comparison turns in `src/core/battle/controller.ts` and `src/core/battle/round.ts` (`tapTank`, decoy placement and damage, `order3` sequence), until the tests from T087 pass (FR-026, FR-027)
-- [ ] T089 [US4] Update `src/game/TankView.ts`: a number plate on each numbered tank, decoys drawn the same as the enemy, tap on a tank calls `tapTank`, order badges 1, 2, 3 for `order3`, target mark on the chosen tank; tap area at least 48 by 48 CSS pixels (FR-026, FR-053)
+- [ ] T087 [P] [US4] Add comparison tests to `src/core/battle/battleController.test.ts`: a comparison search creates decoy `TankState`s at their own numbers with `label` set and the real enemy at the answer; `tapTank` on the correct tank fires at its number and the enemy loses health; `tapTank` on a decoy fires at it, destroys only the decoy, counts as a miss with `help.level` 1 and no `enemyTurn`; typing a tank's number and `confirm` acts like `tapTank` on it; typing another number fires at it as a miss; for `order3`, taps or typed numbers with `confirm` place badges in `orderTaps` without firing, a typed number on no tank places no badge, a wrong order resets `orderTaps` and counts as a miss, and the correct third badge fires at the enemy (FR-026, FR-027, FR-064, US4 scenarios 1 to 5, decision D15)
+- [ ] T088 [US4] Implement comparison searches in `src/core/battle/controller.ts` and `src/core/battle/round.ts` (`tapTank`, typed tank numbers in `confirm`, decoy placement and destruction, `order3` badges), until the tests from T087 pass (FR-026, FR-027, FR-064)
+- [ ] T089 [US4] Update `src/game/TankView.ts`: a number plate on each numbered tank, decoys drawn the same as the enemy, a tap on a tank calls `tapTank`, order badges 1, 2, 3 for `order3`, a destroy effect for a hit decoy; tap area at least 48 by 48 CSS pixels (FR-026, FR-053)
 - [ ] T090 [US4] Update `src/game/BattleScene.ts` to create and remove decoy tank views and play the destroy effect for a hit decoy (FR-027)
-- [ ] T091 [US4] Add comparison prompts to `src/i18n/de.ts` ("Welche Zahl ist größer?", "Welche Zahl ist kleiner?", "Welche Zahl ist gleich {n}?", "Tippe die Zahlen von klein nach groß an", "Welche Zahl ist am größten?", "Welche Zahl ist am kleinsten?", "Welche Zahl ist am nächsten an {n}?", "Welche Zahl liegt zwischen {a} und {b}?"), and show the reference number for `equal` in `src/app/BattleOverlay.tsx` (FR-026, FR-056)
-- [ ] T092 [US4] Write `tests/e2e/comparison.spec.ts`: with settings stored in `localStorage` before load (only comparison on) and the fixture seed, tap the tank labeled 74, confirm `data-phase="aiming"`, fire. Make it pass in all three browsers (AC-06)
+- [ ] T091 [US4] Add comparison prompts to `src/i18n/de.ts` ("Welche Zahl ist größer?", "Welche Zahl ist kleiner?", "Welche Zahl ist gleich {n}?", "Tippe die Zahlen von klein nach groß an", "Welche Zahl ist am größten?", "Welche Zahl ist am kleinsten?", "Welche Zahl ist am nächsten an {n}?", "Welche Zahl liegt zwischen {a} und {b}?") and the hint for a typed number on no tank, and show the reference number for `equal` in `src/app/BattleOverlay.tsx` (FR-026, FR-056)
+- [ ] T092 [US4] Write `tests/e2e/comparison.spec.ts`: with settings stored in `localStorage` before load (only comparison on) and the fixture seed, tap the tank labeled 47 and confirm the decoy is gone with no `enemyTurn`; then type 74 and press Enter and confirm the enemy health drops. Make it pass in all three browsers (AC-06)
 
 **Checkpoint**: US4 works on its own with only comparison enabled.
 
 ---
 
-## Phase 13: US5 help escalation logic
+## Phase 17: US5 help escalation logic
 
-**Goal (US5, P2)**: Help that becomes more explicit with each wrong answer or help request and always ends with the solution, with no penalty.
+**Goal (US5, P2)**: Help that appears after each miss and becomes more explicit, always ending with a solution the child fires at, with no penalty and no enemy turn.
 
-**Independent Test**: `pnpm test src/core/battle` passes, including three wrong answers in a row.
+**Independent Test**: `pnpm test src/core/battle` passes, including three misses in a row.
 
-- [ ] T093 [P] [US5] Write `src/core/battle/help.test.ts`: `nextHelp(challenge, level, settings)` returns step 1 (nearest major tick), step 2 (ten-number interval and count start, or step path for addition and subtraction), step 3 (solution) for position challenges, and the comparison variants (tens digits, number-line markers under options, correct tank or order); a help type turned off by the parent is skipped, but step 3 is always returned (FR-031, FR-032)
-- [ ] T094 [US5] Implement `src/core/battle/help.ts` (`nextHelp`, `nearestMajorTick`, `tenInterval`), until `help.test.ts` passes (FR-031, FR-032)
-- [ ] T095 [P] [US5] Add help tests to `src/core/battle/battleController.test.ts`: each wrong answer raises `help.level` by one and sets an encouraging message key from `encouragements`; `requestHelp` before answering shows the next step at once; the third wrong answer (or a help request at level 2) shows the solution; `continueAfterSolution` moves to `aiming` with `charged: false`; health, turn count and charge are never reduced by a wrong answer or help; the recorded attempt has `helpLevel: 3`, `solved: false`, `independent: false`; with `timeLimitSeconds: 10`, `tick()` after 10 s shows the next help step with no penalty and without a limit no timer exists (FR-013, FR-030, FR-031, FR-034, SC-005, AC-07, US5 scenarios 1 to 5)
-- [ ] T096 [US5] Implement help escalation in `src/core/battle/controller.ts` (`requestHelp` for all kinds, wrong-answer escalation, `continueAfterSolution`, `tick()` per decision D1) and add `help.content` and `message` to `RoundState` in `src/core/types.ts`, until the tests from T095 pass (FR-013, FR-030, FR-031, FR-034)
-- [ ] T097 [US5] Add help phrases to `src/i18n/de.ts` ("Versuch eine andere Stelle.", step-count texts, "Weiter"), and extend `src/i18n/i18n.test.ts` so it also checks every text passed to `Speaker.speak` (spoken texts come only from the table) (FR-033, SC-006, US5 scenario 6)
+- [ ] T093 [P] [US5] Write `src/core/battle/help.test.ts`: `nextHelp(challenge, level, landed, settings)` returns step 1 (direction from the landing number to the answer, "right" or "left", none when `landed` is null, and the nearest major line to the answer), step 2 (the ten from `helpZoomView` and a count from the landing number to the answer, or from the nearest major line when `landed` is null; the step path for addition and subtraction), step 3 (solution) for position challenges, and the comparison variants (tens digits, ruler markers under options, correct tank or order); a help type turned off by the parent is skipped, but step 3 is always returned (FR-031, FR-032)
+- [ ] T094 [US5] Implement `src/core/battle/help.ts` (`nextHelp`, `nearestMajorTick`, `directionTo`), until `help.test.ts` passes (FR-031, FR-032)
+- [ ] T095 [P] [US5] Add help tests to `src/core/battle/battleController.test.ts`: each miss raises `help.level` by one and sets an encouraging message key from `encouragements`; `requestHelp` (help button or H) before firing shows the next step at once; the third miss (or a help request at level 2) shows the solution and sets `selection` to the answer; `confirm` then fires at the solution, which hits, and the enemy turn follows; health and turn count never change because of a miss or help, and no `enemyTurn` happens between misses; the recorded attempt has `helpLevel: 3`, `solved: false`, `independent: false`, `wrongAnswers: 3`; with `timeLimitSeconds: 10`, `tick()` after 10 s shows the next help step with no penalty, and without a limit no timer exists (FR-013, FR-030, FR-031, FR-034, SC-005, AC-07, US5 scenarios 1 to 5 and 7)
+- [ ] T096 [US5] Implement help escalation in `src/core/battle/controller.ts` (`requestHelp` for all kinds, miss-driven escalation, solution step with `selection` set to the answer, `tick()` per decision D1) and add `help.content` and `message` to `RoundState` in `src/core/types.ts`, until the tests from T095 pass (FR-013, FR-030, FR-031, FR-034)
+- [ ] T097 [US5] Add help phrases to `src/i18n/de.ts` ("Versuch eine andere Stelle.", "Weiter nach rechts", "Weiter nach links", step-count texts), and extend `src/i18n/i18n.test.ts` so it also checks every text passed to `Speaker.speak` (spoken texts come only from the table) (FR-033, SC-006, US5 scenario 6)
 
 **Checkpoint**: The help ladder is complete and tested.
 
 ---
 
-## Phase 14: US5 help visuals and help end-to-end test
+## Phase 18: US5 help visuals and help end-to-end test
 
-**Goal (US5, P2)**: The child views each help step on the number line or the tanks and continues with one tap.
+**Goal (US5, P2)**: The child views each help step on the ruler or the tanks and fires at the solution with one tap or Enter.
 
 **Independent Test**: `pnpm e2e tests/e2e/help.spec.ts` passes.
 
-- [ ] T098 [P] [US5] Write `tests/e2e/help.spec.ts`: in a guided search, confirm three wrong numbers; after each, an encouraging message is visible and contains no forbidden word; after the third, the solution is shown and a "Weiter" button appears; one tap leads to `data-phase="aiming"` with the fire button enabled; player health is unchanged (AC-07, SC-005, SC-006)
-- [ ] T099 [US5] Add help visuals to `src/game/NumberLineView.ts`: step 1 pulsing highlight on the nearest major tick; step 2 zoom into the ten-number interval with numbers popping up one by one from the nearest major tick; step 3 marker animated to the solution with the number shown large (FR-031, US5 scenarios 1 to 3)
+- [ ] T098 [P] [US5] Write `tests/e2e/help.spec.ts`: in a guided search, type and fire three wrong numbers; after each, the landing number and an encouraging message are visible and contain no forbidden word, and `data-phase` never becomes `enemyTurn`; after the first, the direction text is shown; after the third, the solution is shown; one press of Enter fires at it, the enemy health drops, and then `enemyTurn` follows; player health is unchanged throughout; press H in a new search and confirm `data-help-level` rises (AC-07, SC-005, SC-006, FR-062)
+- [ ] T099 [US5] Add help visuals to `src/game/NumberLineView.ts`: step 1 a direction arrow from the landing marker and a pulsing highlight on the nearest major line; step 2 `showZoom(helpZoomView(...))` with all lines shown whatever the ruler level, and numbers popping up one by one from the landing number to the answer; step 3 a marker animated to the solution with the number shown large (FR-018, FR-031, US5 scenarios 1 to 3, US9 scenario 6)
 - [ ] T100 [US5] Add comparison help visuals to `src/game/TankView.ts` (highlight tens digits on every plate) and `src/game/NumberLineView.ts` (markers under each option's number), and show the correct tank or order at step 3 (FR-031)
-- [ ] T101 [US5] Update `src/app/BattleOverlay.tsx`: a help button visible during every challenge, the encouraging message line, the "Weiter" button at step 3, and a time-limit indicator only when the parent set a limit; call `controller.tick()` once a second while a challenge is shown (FR-030, FR-034)
-- [ ] T102 [US5] Update `src/audio/sfx.ts` and its callers so a wrong answer plays no sound at all and a correct answer plays the soft chime; then make `tests/e2e/help.spec.ts` pass in all three browsers (FR-009, AC-07)
+- [ ] T101 [US5] Update `src/app/BattleOverlay.tsx`: a help button visible during every challenge, the encouraging message line, the direction text, a label on the fire button at step 3 ("Feuer auf {n}"), and a time-limit indicator only when the parent set a limit; call `controller.tick()` once a second while a challenge is shown (FR-030, FR-031, FR-034)
+- [ ] T102 [US5] Update `src/audio/sfx.ts` and its callers so a miss plays only the same soft boom as every explosion, never an extra or negative sound, and a hit plays the soft chime; then make `tests/e2e/help.spec.ts` pass in all three browsers (FR-009, AC-07)
 
 **Checkpoint**: US5 complete (AC-07).
 
 ---
 
-## Phase 15: US6 settings rules, persistence and export
+## Phase 19: US6 settings rules, persistence and export
 
 **Goal (US6, P2)**: Settings apply from the next round, survive a browser restart, can be exported and imported, and the game asks for persistent storage.
 
 **Independent Test**: `pnpm test src/core` passes, including export and import and the random-settings property test.
 
-- [ ] T103 [P] [US6] Write `src/core/storage/exportImport.test.ts`: `exportData` produces `{ app: 'math-tanks', exportedAt, settings, progress }`; `importData` of that text returns the same settings and progress; a file with the wrong `app`, broken JSON or invalid settings returns `{ ok: false, reason }` and changes nothing; an older-version file is migrated (FR-048, FR-048a)
-- [ ] T104 [US6] Implement `src/core/storage/exportImport.ts` (`exportData`, `importData`, using the schemas and `migrate` from Phase 2), until `exportImport.test.ts` passes (FR-048a)
-- [ ] T105 [P] [US6] Add a test to `src/core/battle/battleController.test.ts`: `controller.updateSettings(newSettings)` during a round leaves the current round's range, difficulty and challenge types unchanged and applies them at the next `startRound` (FR-049, US6 scenario 6, edge case "Settings opened mid-round")
+- [ ] T103 [P] [US6] Write `src/core/storage/exportImport.test.ts`: `exportData` produces `{ app: 'math-tanks', exportedAt, settings, progress }`; `importData` of that text returns the same settings and progress; a file with the wrong `app`, broken JSON or invalid settings returns `{ ok: false, reason }` and changes nothing; a version 1 settings file is migrated to version 2 (FR-048, FR-048a)
+- [ ] T104 [US6] Implement `src/core/storage/exportImport.ts` (`exportData`, `importData`, using the schemas and `migrate` from Phases 2 and 10), until `exportImport.test.ts` passes (FR-048a)
+- [ ] T105 [P] [US6] Add a test to `src/core/battle/battleController.test.ts`: `controller.updateSettings(newSettings)` during a round leaves the current round's range, ruler level, difficulty and challenge types unchanged and applies them at the next `startRound` (FR-049, US6 scenario 6, edge case "Settings opened mid-round")
 - [ ] T106 [US6] Implement `updateSettings` in `src/core/battle/controller.ts` (stores pending settings, used at the next `startRound`), until the test from T105 passes (FR-049)
-- [ ] T107 [P] [US6] Extend `src/core/math/generator.property.test.ts` with 200 random valid settings (built with a seeded `Rng`, kept only when `validateSettings` passes, including custom ranges and range 0-20 with every combination of challenge types) and 1000 seeds each; every challenge must validate and every number, operand and intermediate step must be inside the range (FR-029, SC-003, US6 scenario 3, AC-04)
+- [ ] T107 [P] [US6] Extend `src/core/math/generator.property.test.ts` with 200 random valid settings (built with a seeded `Rng`, kept only when `validateSettings` passes, including custom ranges with any start, range 0-20 with every combination of challenge types, and every ruler level) and 1000 seeds each; every challenge must validate and every number, operand and intermediate step must be inside the range (FR-029, SC-003, SC-013, US6 scenario 3, AC-04)
 - [ ] T108 [US6] Implement `src/app/persistence.ts`: calls `navigator.storage.persist()` once on first load when available, saves settings with `saveSettings(localStorageKeyValue(), s)`, and reports `resetReason` and save failures so the settings page can show them (FR-048, edge cases "Stored data is missing or damaged" and "Browser storage full or blocked")
-- [ ] T109 [US6] Write `tests/e2e/persistence.spec.ts`: change range to 0 to 20 and enemy difficulty to "Leicht" in the settings page, save, close the page and its context after saving `storageState`, open a new context with that state, and confirm both values are shown; repeat 5 times in a loop to cover "100% of runs" (FR-048, SC-007, AC-08, US6 scenario 2)
+- [ ] T109 [US6] Write `tests/e2e/persistence.spec.ts`: change range to 0 to 20, enemy difficulty to "Leicht" and the ruler starting level to 3 in the settings page, save, close the page and its context after saving `storageState`, open a new context with that state, and confirm the values are shown; repeat 5 times in a loop to cover "100% of runs" (FR-048, SC-007, AC-08, US6 scenario 2)
 
 **Checkpoint**: Settings and progress persist and can be moved between devices.
 
 ---
 
-## Phase 16: US6 parent gate and settings page
+## Phase 20: US6 parent gate and settings page
 
-**Goal (US6, P2)**: A parent opens settings with a 2-second press and changes every option; a child's short tap does nothing.
+**Goal (US6, P2)**: A parent opens settings with a 2-second press and changes every option, with a ruler preview; a child's short tap or any key does nothing.
 
 **Independent Test**: `pnpm test src/app` passes and `tests/e2e/persistence.spec.ts` passes in all three browsers.
 
-- [ ] T110 [P] [US6] Write `src/app/ParentGate.test.tsx` (Testing Library, jsdom, fake timers): a pointer down and up after 500 ms does not open the menu; a pointer down held for 2000 ms opens it and calls `onOpen` (which pauses the game); releasing at 1900 ms cancels; the filling ring progress is shown (FR-045, US6 scenario 1)
-- [ ] T111 [US6] Implement `src/app/ParentGate.tsx`: gear button (at least 48 px) with pointer events, a filling ring and a parent menu with "Einstellungen" and "Fortschritt"; opening pauses the controller and closing resumes it (FR-045, FR-054)
-- [ ] T112 [P] [US6] Write `src/app/SettingsPage.test.tsx`: a custom range with min 50 and max 20 shows an error next to the field and disables "Speichern"; turning off all challenge types shows the hint that guided mode needs one type and offers free play; changing the preset from 0-100 to 0-20 clamps `addition.maxResult` to 20; the negative-results switch appears only when a custom min is below 0; a reset notice appears when `resetReason` is `'invalid'` (FR-046, FR-047, FR-048, US6 scenarios 4 and 5)
-- [ ] T113 [US6] Implement `src/app/SettingsPage.tsx` with every field in FR-046, grouped as Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl, Hilfe, Gegner, Ton, Runde; presets 0-10, 0-20, 0-50, 0-100, 0-1000 and custom min and max; validation with `validateSettings`; `withRange` on range change; save via `src/app/persistence.ts` and `controller.updateSettings`, until `SettingsPage.test.tsx` passes (FR-046, FR-047, FR-049)
+- [ ] T110 [P] [US6] Write `src/app/ParentGate.test.tsx` (Testing Library, jsdom, fake timers): a pointer down and up after 500 ms does not open the menu; a pointer down held for 2000 ms opens it and calls `onOpen` (which pauses the game); releasing at 1900 ms cancels; the filling ring progress is shown; with the gear focused, Enter, Space or holding any key for 3 s does not open it (FR-045, FR-062, US6 scenario 1, US8 scenario 9)
+- [ ] T111 [US6] Implement `src/app/ParentGate.tsx`: gear button (at least 48 px) with pointer events only, `tabIndex={-1}` and keyboard activation blocked, a filling ring and a parent menu with "Einstellungen" and "Fortschritt"; opening pauses the controller and closing resumes it (FR-045, FR-054, FR-062)
+- [ ] T182 [P] [US6] Write `src/app/RulerPreview.test.tsx` and implement `src/app/RulerPreview.tsx`: an SVG ruler drawn from `ticksFor(range, level, 0)` and `numberToX` scaled to the preview width; for 550 to 780 at level 2 it shows labels 550, 600, 650, 700, 750, 780 and minor lines; at level 5 only the two end points; it updates when range or level props change (FR-017, FR-069)
+- [ ] T112 [P] [US6] Write `src/app/SettingsPage.test.tsx`: a custom range with min 50 and max 20 shows an error next to the field and disables "Speichern"; custom 550 to 780 is accepted; turning off all challenge types shows the hint that guided mode needs one type and offers free play; changing the preset from 0-100 to 0-20 clamps `addition.maxResult` to 20; the negative-results switch appears only when a custom min is below 0; a ruler starting level above the hardest level shows an error; the ruler preview shows the chosen range and starting level; no aim-correction or label-level field exists; a reset notice appears when `resetReason` is `'invalid'` (FR-046, FR-047, FR-048, FR-069, US6 scenarios 4 and 5)
+- [ ] T113 [US6] Implement `src/app/SettingsPage.tsx` with every field in FR-046, grouped as Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level with `RulerPreview`), Hilfe, Gegner, Ton, Runde; presets 0-10, 0-20, 0-50, 0-100, 0-1000 and custom min and max; validation with `validateSettings`; `withRange` on range change; save via `src/app/persistence.ts` and `controller.updateSettings`, until `SettingsPage.test.tsx` passes (FR-046, FR-047, FR-049, FR-069)
 - [ ] T114 [US6] Add the data section to `src/app/SettingsPage.tsx`: "Daten sichern" downloads `exportData(...)` as `mathe-panzer-<date>.json`; "Daten laden" reads a chosen file with `importData` and shows the result; a short note explains how to add the game to the Home Screen on iPad and Android (FR-048a, edge case "Browser deletes stored data")
-- [ ] T115 [US6] Wire the gear into `src/app/StartScreen.tsx` and `src/app/BattleOverlay.tsx`, and add routing for the parent menu and settings page in `src/app/App.tsx` (FR-045)
+- [ ] T115 [US6] Wire the gear into `src/app/StartScreen.tsx` and `src/app/BattleOverlay.tsx`, and add routing for the parent menu and settings page in `src/app/App.tsx`; while settings are open, `useKeyboard` sends no game actions (FR-045)
 - [ ] T116 [US6] Add every settings label, group name, error, hint, Home Screen note and notice to `src/i18n/de.ts`, then make `tests/e2e/persistence.spec.ts` pass in Chromium, WebKit and Firefox (FR-056, AC-08)
 
 **Checkpoint**: US6 complete (AC-04, AC-08).
 
 ---
 
-## Phase 17: US7 attempt classification, adaptive ladders and mastery
+## Phase 21: US7 attempt classification, adaptive ladders and mastery
 
-**Goal (US7, P3)**: Engine-free progression logic: guess detection, difficulty ladders, adaptive steps within parent ceilings, mastery and sessions.
+**Goal (US7, P3)**: Engine-free progression logic: guess detection, difficulty ladders including the ruler level, adaptive steps within parent limits, mastery and sessions.
 
 **Independent Test**: `pnpm test src/core/progress` passes.
 
-- [ ] T117 [P] [US7] Write `src/core/progress/classify.test.ts`: a correct answer with `responseMs` 1400 is a guess, 1500 is not; a correct answer after 3 wrong answers within 5000 ms before submission is a guess, after 3 wrong answers spread over 6000 ms is not; `independent` is true only when solved with help level 0 and no wrong answer; outcome is `'independent'`, `'assisted'` or `'unsolved'` (FR-038, US7 scenario 3)
-- [ ] T118 [P] [US7] Write `src/core/progress/adaptive.test.ts`: each skill starts at step 0; 5 independent of the last 6 non-guess outcomes raise the step by one and clear `recent`; 3 assisted or unsolved of the last 5 lower it by one, never below 0; the step never passes the top of the ladder or a parent limit (for example `addition.maxOperand` 10 caps the ladder's `maxOperand`); guesses never enter `recent`; with `adaptive: false` `effectiveStep` returns the top step clamped by settings (FR-037, US7 scenarios 1, 2 and 6, AC-09)
+- [ ] T117 [P] [US7] Write `src/core/progress/classify.test.ts`: a hit with `responseMs` 1400 is a guess, 1500 is not; a hit after 3 misses within 5000 ms before the hit is a guess, after 3 misses spread over 6000 ms is not; `independent` is true only for a hit on the first shot with help level 0; outcome is `'independent'`, `'assisted'` or `'unsolved'` (FR-038, US7 scenario 3)
+- [ ] T118 [P] [US7] Write `src/core/progress/adaptive.test.ts`: each skill starts at step 0; 5 independent of the last 6 non-guess outcomes raise the step by one and clear `recent`; 3 assisted or unsolved of the last 5 lower it by one, never below 0; the step never passes the top of the ladder or a parent limit (for example `addition.maxOperand` 10 caps the ladder's `maxOperand`, and the `positions` ladder's ruler level stays within `rulerLevelStart` and `rulerLevelMax`); equal start and hardest levels lock the ruler level; guesses never enter `recent`; with `adaptive: false` `effectiveStep` returns the top step clamped by settings and the ruler level `rulerLevelStart` (FR-018, FR-037, US7 scenarios 1, 2 and 6, AC-09)
 - [ ] T119 [P] [US7] Write `src/core/progress/mastery.test.ts`: `skillStatus` is `'mastered'` only with `independentCorrect >= 10`, a full `masteryWindow` of 10 and at least 8 `'independent'`; a step change does not clear `masteryWindow`; a skill whose correct answers all needed help is never mastered (FR-039, US7 scenario 4)
 - [ ] T120 [P] [US7] Write `src/core/progress/session.test.ts`: `startOrContinueSession` starts a new session on game load, after more than 30 minutes since `lastActiveAt`, and on a new calendar day; otherwise updates `lastActiveAt` (Key Entities "Session")
 - [ ] T121 [US7] Implement `src/core/progress/classify.ts` (`classifyAttempt`), until `classify.test.ts` passes (FR-038)
-- [ ] T122 [US7] Implement `src/core/progress/ladders.ts`: a fixed ordered `DifficultyStep[]` per skill (for example `positions`: 0.2, 0.5, 1 of the range with label levels 1, 2, 3, 4; `addition`: small operands without crossing, then larger, then crossing tens), and `effectiveStep(p, skill, rangeKey, settings)` clamping every field by the parent settings; only the `positions` ladder sets `labelLevel`, and the result is never easier than the parent's level (FR-018, FR-036, FR-037)
+- [ ] T122 [US7] Implement `src/core/progress/ladders.ts`: a fixed ordered `DifficultyStep[]` per skill (for example `positions`: 0.2, 0.5, 1 of the range with ruler levels 1 to 5; `addition`: small operands without crossing, then larger, then crossing tens), and `effectiveStep(p, skill, rangeKey, settings)` clamping every field by the parent settings; only the `positions` ladder sets `rulerLevel`, clamped to `[rulerLevelStart, rulerLevelMax]` (FR-018, FR-036, FR-037)
 - [ ] T123 [US7] Implement `src/core/progress/adaptive.ts` (`recordAttempt` updating `SkillProgress` for the main skill and further skills: counters, `recent` max 6, `masteryWindow` max 10, step changes per FR-037), until `adaptive.test.ts` passes (FR-035, FR-036, FR-037)
 - [ ] T124 [US7] Implement `src/core/progress/mastery.ts` (`skillStatus`), until `mastery.test.ts` passes (FR-039)
 - [ ] T125 [US7] Implement `src/core/progress/session.ts` (`startOrContinueSession`), until `session.test.ts` passes
@@ -345,16 +432,16 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
-## Phase 18: US7 adaptive play and progress page
+## Phase 22: US7 adaptive play and progress page
 
-**Goal (US7, P3)**: Challenges follow each skill's step, attempts are classified and saved, and a parent views progress.
+**Goal (US7, P3)**: Challenges and the ruler level follow each skill's step, attempts are classified and saved, and a parent views progress.
 
-**Independent Test**: `pnpm test` passes; in `pnpm dev`, open the parent menu and view per-skill counts after playing a few turns.
+**Independent Test**: `pnpm test` passes; in `pnpm dev`, open the parent menu and view per-skill counts after playing a few searches.
 
 - [ ] T127 [P] [US7] Write `src/core/progress/summarize.test.ts`: `summarize(p)` returns per skill and range the attempts, independent correct, with help, current step and status; the skills sorted by help needed; and a session list with date, attempts, independent correct and with help (FR-040, US7 scenario 5)
 - [ ] T128 [US7] Implement `src/core/progress/summarize.ts` (`summarize`), until `summarize.test.ts` passes (FR-040)
-- [ ] T129 [P] [US7] Add tests to `src/core/battle/battleController.test.ts`: with `adaptive: true` and a skill at step 0, generated challenges use step 0 limits; after 5 independent attempts the next challenge in that skill uses step 1; attempts use `classifyAttempt` (a correct answer 1 s after answerable is stored with `guess: true`); the label level follows the `positions` skill only (FR-018, FR-035, FR-037, FR-038, AC-09)
-- [ ] T130 [US7] Update `src/core/battle/controller.ts` and `src/core/battle/attempt.ts`: pass `skillSteps` from `effectiveStep` to `generateChallenge`, classify attempts with `classifyAttempt` (replacing D5), start or continue the session, until the tests from T129 pass (FR-035, FR-037, FR-038)
+- [ ] T129 [P] [US7] Add tests to `src/core/battle/battleController.test.ts`: with `adaptive: true` and a skill at step 0, generated challenges use step 0 limits; after 5 independent attempts the next challenge in that skill uses step 1; attempts use `classifyAttempt` (a hit 1 s after answerable is stored with `guess: true`); `state.rulerLevel` follows the `positions` skill only and stays within the parent's two limits (FR-018, FR-035, FR-037, FR-038, AC-09)
+- [ ] T130 [US7] Update `src/core/battle/controller.ts`, `src/core/battle/round.ts` and `src/core/battle/attempt.ts`: pass `skillSteps` from `effectiveStep` and the adaptive `rulerLevel` to `generateChallenge`, classify attempts with `classifyAttempt` (replacing D5), start or continue the session, until the tests from T129 pass (FR-018, FR-035, FR-037, FR-038)
 - [ ] T131 [US7] Implement `src/core/storage/progressStore.ts`: a `ProgressStore` that applies `recordAttempt` and saves with `saveProgress` after each attempt, between turns; use it in `src/app/App.tsx` (FR-035, FR-048)
 - [ ] T132 [P] [US7] Write `src/app/ProgressPage.test.tsx`: renders counts from a fixture `Progress`; "with help" is shown separately from accuracy; a skill with only assisted answers shows "noch am Üben" (developing); reset asks for confirmation and only then clears progress (FR-040, US7 scenarios 4 and 5)
 - [ ] T133 [US7] Implement `src/app/ProgressPage.tsx` (per-skill table, most-help skills, session list, reset with confirmation), link it from the parent menu in `src/app/ParentGate.tsx`, and add its strings to `src/i18n/de.ts`, until `ProgressPage.test.tsx` passes (FR-040, FR-056)
@@ -363,54 +450,37 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
-## Phase 19: US8 offline play, pause, fullscreen, speech and touch
+## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
-**Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with pause, fullscreen and spoken challenges.
+**Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
 
-**Independent Test**: `pnpm e2e` passes for offline, no-external-requests and touch specs.
+**Independent Test**: `pnpm e2e` passes for offline, no-external-requests, touch and keyboard specs.
 
-- [ ] T134 [P] [US8] Write `tests/e2e/offline.spec.ts`: load `/` against the production build, wait until the service worker controls the page, set the context offline, reload, tap "Spielen" and play until `data-phase="roundOver"` (shorten with stored settings `roundLength: 3`). Must pass in Chromium; see D6 for WebKit and Firefox (FR-051, SC-008, AC-10, US8 scenario 1)
+- [ ] T134 [P] [US8] Write `tests/e2e/offline.spec.ts`: load `/` against the production build, wait until the service worker controls the page, set the context offline, reload, press Enter to start and play until `data-phase="roundOver"` (shorten with stored settings `roundLength: 3`, reading the answer of each `findNumber` search from the banner). Must pass in Chromium; see D6 for WebKit and Firefox (FR-051, SC-008, AC-10, US8 scenario 1)
 - [ ] T135 [P] [US8] Write `tests/e2e/no-external-requests.spec.ts`: record every request during load and one full round; fail on any request whose origin differs from `baseURL` (FR-052)
-- [ ] T136 [P] [US8] Write `tests/e2e/touch.spec.ts` with `hasTouch: true` and viewports 1024 by 768, 768 by 1024 and 768 by 600: every visible button and the number line have a bounding box of at least 48 by 48 CSS pixels and do not overlap; tap the number line, the check button, aim controls and fire by touch; the number-line marker for a chosen number lines up with the battlefield x within half a unit (FR-053, FR-058, SC-004, US8 scenarios 2 and 5)
+- [ ] T136 [P] [US8] Write `tests/e2e/touch.spec.ts` with `hasTouch: true` and viewports 1024 by 768, 768 by 1024 and 768 by 600: every visible button and the ruler have a bounding box of at least 48 by 48 CSS pixels and do not overlap; tap the ruler, −1, +1 and the fire button by touch; no on-screen keyboard field is focused; the ruler marker for a chosen number lines up with the battlefield x within half a unit (FR-053, FR-058, SC-004, US8 scenarios 2 and 5)
+- [ ] T183 [P] [US8] Write `tests/e2e/keyboard.spec.ts` using only `page.keyboard` (no click, tap or mouse call, checked by a helper that fails on any pointer event reaching the page): load `/?seed=<fixed>` and press Enter without clicking; in a `findNumber` search type a wrong number and Enter; press H and check `data-help-level`; fire two more wrong numbers; at the solution press Enter and confirm the hit; type 150 in range 0 to 100 and press Enter, nothing fires and the range hint shows; press Escape to pause and again to resume; in a comparison search (stored settings, fixture seed) type 74 and Enter; in an `order3` search type the three numbers with Enter after each; play to the round end and press Enter for a new round; hold Enter with the gear focused by script and confirm settings never open. Run in Chromium, WebKit and Firefox (FR-059 to FR-064, SC-011, US8 scenarios 6 to 10)
 - [ ] T137 [P] [US8] Write `src/audio/speaker.test.ts` with a mocked `speechSynthesis`: `available` is false when the API or a German voice is missing; `speak` uses `lang: 'de-DE'` and cancels earlier speech; `prime()` speaks a short greeting (FR-055, edge case "Speech not available")
-- [ ] T138 [US8] Implement `src/audio/speaker.ts` (`createSpeaker()` implementing the `Speaker` port), call `prime()` and resume Web Audio from the "Spielen" tap in `src/app/StartScreen.tsx`, speak each new challenge when `settings.sound.speech` is on, and show a speaker icon in `src/app/BattleOverlay.tsx` only when `available` (FR-055, US8 scenario 4)
+- [ ] T138 [US8] Implement `src/audio/speaker.ts` (`createSpeaker()` implementing the `Speaker` port), call `prime()` and resume Web Audio from the "Spielen" tap or the starting Enter key in `src/app/StartScreen.tsx`, speak each new challenge when `settings.sound.speech` is on, and show a speaker icon in `src/app/BattleOverlay.tsx` only when `available` (FR-055, US8 scenario 4)
 - [ ] T139 [US8] Implement the PWA registration in `src/app/swUpdate.ts` and `src/main.tsx` using `virtual:pwa-register` with `registerType: 'prompt'`: when a new version is waiting, apply it only while the start screen is shown, never during a round. Then make `tests/e2e/offline.spec.ts` pass (FR-051, FR-051a, research R12)
-- [ ] T140 [US8] Add pause and resume to `src/app/BattleOverlay.tsx` (pause button at top left, a resume screen) and to `src/game/BattleScene.ts` (pause tweens, particles and path replay on `paused`, continue on resume from the same point) (FR-054, US8 scenario 3)
-- [ ] T141 [US8] Add a fullscreen button to `src/app/StartScreen.tsx` and `src/app/BattleOverlay.tsx` using the Fullscreen API on the app root; hide it where the API is missing (FR-054, US8 scenario 5)
-- [ ] T142 [US8] Add an optional generated music loop to `src/audio/sfx.ts`, played only when `settings.sound.music` is on (default off), and make `tests/e2e/touch.spec.ts` and `tests/e2e/no-external-requests.spec.ts` pass in all three browsers (FR-009, FR-052, AC-10)
+- [ ] T140 [US8] Add pause and resume to `src/app/BattleOverlay.tsx` (pause button at top left, a resume screen; Escape pauses and resumes through `useKeyboard`, Enter and Space resume) and to `src/game/BattleScene.ts` (pause tweens, particles and path replay on `paused`, continue on resume from the same point) (FR-054, FR-062, US8 scenarios 3 and 9)
+- [ ] T141 [US8] Add a fullscreen button to `src/app/StartScreen.tsx` and `src/app/BattleOverlay.tsx` using the Fullscreen API on the app root; hide it where the API is missing; after leaving fullscreen, focus returns to the app root (FR-054, FR-059, US8 scenario 5)
+- [ ] T142 [US8] Add an optional generated music loop to `src/audio/sfx.ts`, played only when `settings.sound.music` is on (default off), and make `tests/e2e/touch.spec.ts`, `tests/e2e/keyboard.spec.ts` and `tests/e2e/no-external-requests.spec.ts` pass in all three browsers (FR-009, FR-052, SC-011, AC-10)
 
 **Checkpoint**: US8 complete (AC-10).
 
 ---
 
-## Phase 20: US9 large ranges and two-step zoom
-
-**Goal (US9, P3)**: Ranges 0 to 50, 0 to 1000 and custom ranges, with a two-step selection for ranges over 100 units.
-
-**Independent Test**: Range 0 to 1000, challenge "Finde 437": select the 400s, then 437.
-
-- [ ] T143 [P] [US9] Write `src/core/numberline/zoom.test.ts`: `needsZoom(0, 100)` is false and `needsZoom(0, 1000)` true; `zoomIntervals(0, 1000)` returns ten intervals of 100; the overview of 0 to 1000 has major ticks every 100, minor every 10 and at most 101 ticks; the zoomed view 400 to 500 has major every 10 and minor every 1; for 0 to 150 the overview uses major 50 and minor 10; custom 15 to 45 has major ticks at 20, 30, 40 and labeled end points (FR-016, FR-020, US9 scenarios 1 and 3)
-- [ ] T144 [US9] Implement `src/core/numberline/zoom.ts` (`needsZoom`, `zoomIntervals`) and extend `src/core/numberline/ticks.ts` for overview and zoomed views, until `zoom.test.ts` and `ticks.test.ts` pass (FR-016, FR-020)
-- [ ] T145 [P] [US9] Add tests to `src/core/battle/battleController.test.ts`: with range 0 to 1000, `selectInterval(4)` sets the zoomed view to 400 to 500; `selectNumber(437)` then `submitSelection` solves "Finde 437"; `leaveZoom` returns to the overview; with range 0 to 100 `selectInterval` does nothing (FR-020, US9 scenario 2, decision D2)
-- [ ] T146 [US9] Implement `selectInterval`, `leaveZoom` and `zoomView` state in `src/core/battle/controller.ts` and `src/core/types.ts`, until the tests from T145 pass (FR-020)
-- [ ] T147 [US9] Update `src/game/NumberLineView.ts`: overview with tappable intervals, zoomed line for the chosen interval with connector lines from its two ends to the matching part of the battlefield, and a back control (at least 48 px) (FR-020, FR-053)
-- [ ] T148 [US9] Extend `src/core/math/generator.property.test.ts` with 0 to 50, 0 to 1000 with `crossHundreds` on and off, custom 15 to 45 and custom -20 to 30 with negative results on and off, 10,000 seeds each (FR-029, SC-003, US9 scenario 3)
-- [ ] T149 [US9] Write `tests/e2e/range1000.spec.ts`: with stored settings range 0 to 1000 and a fixed seed, read "Finde N", tap the interval containing N, tap N in the zoomed line, confirm, and reach `data-phase="aiming"`. Make it pass in all three browsers (FR-020, US9 scenario 2)
-
-**Checkpoint**: All user stories complete.
-
----
-
-## Phase 21: Polish and cross-cutting checks
+## Phase 24: Polish and cross-cutting checks
 
 **Purpose**: Performance, text rules, browser coverage and a final run of every validation scenario.
 
-- [ ] T150 [P] Write `tests/e2e/performance.spec.ts` (Chromium): the battlefield appears within 3 seconds of tapping "Spielen"; during a shot the frame rate measured with `requestAnimationFrame` timestamps averages at least 55 frames per second on desktop (SC-001, SC-002)
+- [ ] T150 [P] Write `tests/e2e/performance.spec.ts` (Chromium): the battlefield appears within 3 seconds of pressing Enter on the start screen; during a shot the frame rate measured with `requestAnimationFrame` timestamps averages at least 55 frames per second on desktop (SC-001, SC-002)
 - [ ] T151 [P] Write `src/i18n/noHardcodedText.test.ts`: scans `src/app/**/*.tsx` and `src/game/**/*.ts` for German string literals (letters ä, ö, ü, ß or words from a short list such as "Spielen", "Nochmal") outside `src/i18n/`, and fails when it finds one (FR-056)
-- [ ] T152 [P] Extend `src/i18n/i18n.test.ts`: every child-facing message key (banner, feedback, help, round end) has at most about 8 words, checked as at most 9 words with an allowlist for prompts that need the numbers (FR-057)
-- [ ] T153 Accessibility pass on `src/app/*.tsx`: every icon-only button (gear, help, speaker, pause, fullscreen, +1, −1, check, fire) gets a German `aria-label` from `src/i18n/de.ts`; focus is visible; no text below 18 px on child screens (FR-053, FR-057)
-- [ ] T154 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e` and fix every failure. Done when all pass in Chromium, WebKit and Firefox (FR-050)
-- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 12) against `pnpm preview`, including scenario 12 on a tablet or with touch emulation at 1024 by 768, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
+- [ ] T152 [P] Extend `src/i18n/i18n.test.ts`: every child-facing message key (banner, feedback, help, round end, range hint) has at most about 8 words, checked as at most 9 words with an allowlist for prompts that need the numbers (FR-057)
+- [ ] T153 Accessibility pass on `src/app/*.tsx`: every icon-only button (gear, help, speaker, pause, fullscreen, +1, −1, fire) gets a German `aria-label` from `src/i18n/de.ts`; focus is visible on the app root; the number readout is announced with `aria-live="polite"`; no text below 18 px on child screens (FR-053, FR-057, FR-059)
+- [ ] T154 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e` and fix every failure. Done when all pass in Chromium, WebKit and Firefox, and `grep -rni "setAim\|aimCorrection\|charged\|labelLevel\|selectInterval" src tests` finds nothing (FR-050)
+- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 16) against `pnpm preview`, including scenario 12 on a tablet or with touch emulation at 1024 by 768, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
 
 ---
 
@@ -420,27 +490,31 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 - **Phase 1 Setup**: no dependencies.
 - **Phase 2 Foundational**: depends on Phase 1. Blocks every user story.
-- **Phases 3 to 6 (US1)**: in order; Phase 3 and Phase 4's mapping and gaps tasks have no UI dependency.
-- **Phases 7 to 9 (US2)**: Phase 7 depends only on Phase 2 and can run in parallel with Phases 3 to 6. Phase 8 depends on Phases 4 and 7. Phase 9 depends on Phases 6 and 8.
-- **Phases 10 and 11 (US3)**: Phase 10 depends on Phase 7. Phase 11 depends on Phases 9 and 10.
-- **Phase 12 (US4)**: depends on Phases 7 and 9.
-- **Phases 13 and 14 (US5)**: depend on Phase 9; comparison help in Phase 14 needs Phase 12; step-path help needs Phase 11.
-- **Phases 15 and 16 (US6)**: Phase 15 depends on Phases 2 and 7 (property test) and Phase 4 (controller); Phase 16 depends on Phases 6 and 15.
-- **Phases 17 and 18 (US7)**: Phase 17 depends only on Phase 2. Phase 18 depends on Phases 8, 16 and 17.
-- **Phase 19 (US8)**: depends on Phase 9; the speech part needs Phase 6.
-- **Phase 20 (US9)**: depends on Phases 9 and 16.
-- **Phase 21 Polish**: depends on all earlier phases.
+- **Phases 3 to 6 (US1)**: done; the angle and power parts are reworked in Phases 8 and 9.
+- **Phase 7 (US2 generators)**: done; label levels are reworked in Phase 10.
+- **Phase 8 (amendment 01, core)**: depends on Phases 4 and 7. Blocks every later phase.
+- **Phase 9 (amendment 01, view and keyboard)**: depends on Phase 8.
+- **Phase 10 (amendment 02, ruler, settings, challenge kinds)**: depends on Phase 8; can run in parallel with Phase 9 except for `src/i18n/de.ts` (run T179 after T172).
+- **Phase 11 (US9, P2)**: depends on Phases 9 and 10.
+- **Phases 12 and 13 (US2)**: Phase 12 depends on Phases 8 and 10; Phase 13 depends on Phases 9, 11 and 12.
+- **Phases 14 and 15 (US3)**: Phase 14 depends on Phase 10. Phase 15 depends on Phases 13 and 14.
+- **Phase 16 (US4)**: depends on Phases 10 and 13.
+- **Phases 17 and 18 (US5)**: depend on Phase 13; Phase 18 needs Phase 11 (`showZoom`); comparison help needs Phase 16; step-path help needs Phase 15.
+- **Phases 19 and 20 (US6)**: Phase 19 depends on Phases 10 and 12; Phase 20 depends on Phases 9 and 19.
+- **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 12, 20 and 21.
+- **Phase 23 (US8)**: depends on Phase 13; the keyboard spec T183 needs Phases 16 and 18; speech needs Phase 9.
+- **Phase 24 Polish**: depends on all earlier phases.
 
 ### User story dependencies
 
-- US1 (P1): none beyond Foundational.
-- US2 (P1): uses the US1 controller and battle scene.
+- US1 (P1): none beyond Foundational; reworked by amendment 01 in Phases 8 and 9.
+- US2 (P1): uses the reworked US1 controller, the ruler from Phase 10 and the battle scene.
+- US9 (P2, raised by amendment 02): uses the reworked US1 and the amendment 02 core; runs before the other P2 stories.
 - US3, US4 (P2): use the US2 generator and number-line view.
-- US5 (P2): uses US2; full coverage needs US3 and US4.
-- US6 (P2): uses US1 screens; independent of US3 to US5.
+- US5 (P2): uses US2 and the US9 zoom view; full coverage needs US3 and US4.
+- US6 (P2): uses US1 screens and the version 2 settings; independent of US3 to US5.
 - US7 (P3): core logic independent; integration needs US2 and US6.
-- US8 (P3): needs a playable guided game (US2).
-- US9 (P3): needs US2 and the US6 settings page.
+- US8 (P3): needs a playable guided game (US2); the keyboard spec needs US4 and US5.
 
 ### Within each phase
 
@@ -449,69 +523,72 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ## Parallel Execution Examples
 
-- **Phase 2**: T008, T010, T011, T014, T016 (tests and types in different files) together; then T009, T012, T015, T017.
-- **Phase 3 (US1)**: T018, T019, T020, T021, T026 together; then T022 to T025 and T027.
-- **Phase 5 (US1)**: after T035, T036, T037, T038, T039, T040, T042 together; then T041.
-- **Phase 7 (US2)**: T051, T053, T054, T055, T056 together.
-- **Phase 10 (US3)**: T071, T072, T073, T074 together.
-- **Phase 17 (US7)**: T117, T118, T119, T120 together; Phase 17 as a whole can run in parallel with Phases 3 to 16.
-- **Phase 19 (US8)**: T134, T135, T136, T137 together.
-- **Across phases**: Phase 7 alongside Phases 3 to 6; Phase 17 alongside anything after Phase 2.
+- **Phase 8**: T156, T157, T158, T159 together; then T160, T161, T162; then T163.
+- **Phase 9**: T165 and T166 together; then T167 to T171; T172 last.
+- **Phase 10**: T173, T175, T177 together; then T174, T176, T178.
+- **Phase 11**: T180, T143, T145 together.
+- **Phase 14 (US3)**: T071, T072, T073, T074 together.
+- **Phase 21 (US7)**: T117, T118, T119, T120 together; Phase 21 as a whole can run in parallel with Phases 11 to 20.
+- **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
+- **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
 ## Implementation Strategy
 
-### MVP first (US1 and US2)
+### MVP first (US1 and US2, under amendments 01 and 02)
 
-1. Phases 1 and 2.
-2. Phases 3 to 6 (US1). Stop and validate: a free-play battle is playable (AC-01).
-3. Phases 7 to 9 (US2). Stop and validate: guided searches on the number line (AC-02, AC-03). This is the MVP core loop.
+1. Phases 1 to 7 (done).
+2. Phases 8 and 9. Stop and validate: free play works by choosing numbers, with mouse, touch or keyboard alone (AC-01).
+3. Phase 10, then Phase 11 (US9). Stop and validate: range 550 to 780 plays in free play with the ruler levels.
+4. Phases 12 and 13 (US2). Stop and validate: guided searches on the ruler (AC-02, AC-03). This is the MVP core loop.
 
 ### Incremental delivery
 
-4. US3 (Phases 10, 11), US4 (Phase 12), US5 (Phases 13, 14), US6 (Phases 15, 16): each adds one PRD acceptance criterion (AC-05, AC-06, AC-07, AC-04 and AC-08).
-5. US7 (Phases 17, 18), US8 (Phase 19), US9 (Phase 20): AC-09, AC-10 and the larger ranges. US9 is the first to cut if time is short (spec Assumptions).
-6. Phase 21.
+5. US3 (Phases 14, 15), US4 (Phase 16), US5 (Phases 17, 18), US6 (Phases 19, 20): each adds one PRD acceptance criterion (AC-05, AC-06, AC-07, AC-04 and AC-08).
+6. US7 (Phases 21, 22) and US8 (Phase 23): AC-09, AC-10 and the keyboard-only check (SC-011).
+7. Phase 24.
 
 ---
 
 ## Coverage: requirements and acceptance criteria to tasks
 
+Removed requirements have no tasks. Tasks in Phases 3 to 7 that named them (T020, T021, T024, T025, T032) are done and were reworked by T158, T159 and T162.
+
 | ID | Tasks |
 |----|-------|
-| FR-001 | T018, T022, T032, T035, T036, T043 |
-| FR-002 | T032, T034, T041, T043 |
-| FR-003 | T041, T043, T047 |
-| FR-004 | T019, T023, T032, T039, T041 |
-| FR-005 | T018, T022, T032, T037 |
-| FR-006 | T020, T024, T032, T038 |
-| FR-007 | T018, T022, T032, T038 |
-| FR-008 | T032, T034, T043, T048 |
+| FR-001 | T018, T022, T032, T035, T036, T043, T165 |
+| FR-002 | T032, T034, T041, T043, T060, T158, T163, T165 |
+| FR-003 | T032, T041, T043, T047, T158, T163, T165, T169, T170 |
+| FR-004 | T019, T023, T032, T039, T041, T043, T066, T156, T158, T160, T165, T168 |
+| FR-005 | T018, T022, T032, T037, T043, T158, T165 |
+| FR-006 | T020, T024, T032, T038, T043, T158, T159, T162, T165 |
+| FR-007 | T018, T022, T032, T038, T043, T158, T165 |
+| FR-008 | T032, T034, T043, T048, T158, T165 |
 | FR-009 | T040, T042, T102, T142 |
-| FR-010 | T060, T062, T065, T067, T070 |
-| FR-010a | T030, T060, T062, T068 |
-| FR-011 | T020, T024, T032, T060, T061, T062, T067 |
-| FR-012 | T021, T025, T061, T064 |
-| FR-013 | T060, T062, T095, T096 |
-| FR-014 | T061, T062, T068, T070 |
-| FR-015 | T028, T029, T066 |
-| FR-016 | T051, T052, T066, T143, T144 |
-| FR-017 | T051, T052, T066 |
-| FR-018 | T122, T129 |
-| FR-019 | T060, T062, T065, T066, T068 |
-| FR-020 | T143, T144, T145, T146, T147, T149 |
-| FR-021 | T053, T057, T059 |
+| FR-010 | T060, T062, T065, T066, T067, T068, T070 |
+| FR-010a | T030, T060, T061, T062 |
+| FR-011 | Removed by amendment 01 |
+| FR-012 | Removed by amendment 01 |
+| FR-013 | T060, T061, T062, T065, T066, T095, T096 |
+| FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181 |
+| FR-015 | T028, T029, T168 |
+| FR-016 | T051, T052, T147, T149, T173, T174 |
+| FR-017 | T051, T052, T147, T173, T174, T182 |
+| FR-018 | T064, T082, T099, T118, T122, T129, T130, T143, T147, T173, T175 |
+| FR-019 | T060, T062, T065, T068, T168, T170 |
+| FR-020 | T143, T144, T145, T146, T147 |
+| FR-021 | T053, T057, T059, T177, T178 |
 | FR-022 | T071, T072, T076 |
 | FR-023 | T071, T073, T077 |
 | FR-024 | T074, T078, T080, T081, T082 |
 | FR-025 | T057, T059, T062, T072, T073, T076, T077 |
 | FR-026 | T084, T085, T087, T088, T089, T091 |
 | FR-027 | T030, T031, T084, T085, T086, T087, T088, T090 |
-| FR-028 | T002, T004, T008, T009, T053, T059 |
-| FR-029 | T054, T055, T058, T059, T079, T086, T107, T148 |
+| FR-028 | T002, T004, T008, T009, T053, T059, T164 |
+| FR-029 | T054, T055, T058, T059, T079, T086, T107, T148, T178 |
 | FR-030 | T080, T095, T096, T101 |
-| FR-031 | T093, T094, T095, T096, T099, T100 |
+| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143 |
 | FR-032 | T093, T094 |
-| FR-033 | T014, T015, T049, T097 |
+| FR-033 | T014, T015, T049, T097, T172 |
 | FR-034 | T095, T096, T101 |
 | FR-035 | T010, T063, T123, T129, T130, T131 |
 | FR-036 | T010, T056, T122, T123 |
@@ -523,39 +600,53 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 | FR-042 | T026, T027, T034 |
 | FR-043 | T026, T027, T032 |
 | FR-044 | T032 |
-| FR-045 | T110, T111, T115 |
-| FR-046 | T011, T012, T112, T113 |
-| FR-047 | T011, T013, T112, T113 |
-| FR-048 | T016, T017, T103, T108, T109, T112, T131 |
+| FR-045 | T110, T111, T115, T166 |
+| FR-046 | T011, T012, T112, T113, T175, T176 |
+| FR-047 | T011, T013, T112, T113, T175, T176 |
+| FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176 |
 | FR-048a | T103, T104, T114 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154 |
 | FR-051 | T003, T134, T139 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
-| FR-053 | T046, T047, T050, T066, T068, T089, T136, T147, T153 |
+| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170 |
 | FR-054 | T032, T041, T111, T140, T141 |
 | FR-055 | T137, T138 |
-| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151 |
-| FR-057 | T014, T049, T069, T083, T152, T153 |
+| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179 |
+| FR-057 | T014, T049, T069, T083, T152, T153, T172, T179 |
 | FR-058 | T029, T035, T050, T136 |
-| SC-001 | T043, T046, T150 |
+| FR-059 | T141, T153, T163, T165, T166, T167, T171, T183 |
+| FR-060 | T145, T146, T157, T161, T163, T165, T166, T167, T183 |
+| FR-061 | T158, T163, T165, T166, T167, T183 |
+| FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183 |
+| FR-063 | T157, T158, T161, T170, T183 |
+| FR-064 | T087, T088, T145, T146, T183 |
+| FR-065 | T156, T160, T163, T169 |
+| FR-066 | T060, T067, T158, T162, T163, T165, T169 |
+| FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
+| FR-068 | T068, T173, T177, T178, T179, T180, T181 |
+| FR-069 | T112, T113, T182 |
+| SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148 |
 | SC-004 | T028, T136 |
-| SC-005 | T095, T098 |
+| SC-005 | T061, T095, T098 |
 | SC-006 | T014, T097, T098 |
 | SC-007 | T016, T109 |
-| SC-008 | T134 |
+| SC-008 | T134, T155 |
 | SC-009 | T060, T065 |
 | SC-010 | T155 (evaluation goal, not automated) |
-| AC-01 | T043, T050, T155 |
-| AC-02 | T028, T065, T070 |
-| AC-03 | T051, T070 |
-| AC-04 | T055, T079, T107 |
-| AC-05 | T073, T077, T082, T083 |
-| AC-06 | T084, T092 |
-| AC-07 | T095, T098, T102 |
-| AC-08 | T109, T116 |
-| AC-09 | T118, T129 |
-| AC-10 | T134, T142 |
+| SC-011 | T142, T183 |
+| SC-012 | T156, T158 |
+| SC-013 | T107, T148 |
+| AC-01 | T043, T050, T155, T165, T172 |
+| AC-02 | T028, T065, T070, T155 |
+| AC-03 | T051, T070, T155, T173 |
+| AC-04 | T055, T079, T107, T155 |
+| AC-05 | T073, T077, T082, T083, T155 |
+| AC-06 | T084, T092, T155 |
+| AC-07 | T095, T098, T102, T155 |
+| AC-08 | T109, T116, T155 |
+| AC-09 | T118, T129, T155 |
+| AC-10 | T134, T142, T155 |

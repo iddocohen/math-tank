@@ -1,24 +1,24 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) and [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler").
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `1` | `1` | Schema version |
+| `version` | `2` | `2` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; `migrate` upgrades version 1 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
-| `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; preset values fix `min` and `max` |
+| `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max` |
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
 | `crossTens` | `boolean` | `true` | |
 | `crossHundreds` | `boolean` | `false` | |
 | `negativeResults` | `boolean` | `false` | Shown only when `range.min < 0` (custom ranges may start below 0, down to -1000). When `false`, results are never below 0; when `true`, results may go down to `range.min` |
-| `labelLevel` | `1 \| 2 \| 3 \| 4` | `1` | |
+| `rulerLevelStart` | `1 \| 2 \| 3 \| 4 \| 5` | `1` | Ruler detail level used when adaptive is off, and the easiest level adaptive may use (FR-018) |
+| `rulerLevelMax` | `1 \| 2 \| 3 \| 4 \| 5` | `5` | Hardest level adaptive may reach; `rulerLevelStart <= rulerLevelMax`; equal values lock the level |
 | `enemyDifficulty` | `'easy' \| 'normal' \| 'challenging'` | `'easy'` | |
 | `help` | `{ nearestTen: boolean; countSteps: boolean; zoom: boolean; stepAnimation: boolean }` | all `true` | Showing the solution is always on (FR-032) |
 | `beginnerAssist` | `boolean` | `true` | Splits addition and subtraction animations at ten boundaries (FR-024) |
-| `aimCorrection` | `boolean` | `false` | FR-012 |
 | `sound` | `{ effects: boolean; music: boolean; speech: boolean }` | `true`, `false`, `true` | |
 | `roundLength` | `number` | `10` | Player turns, 3 to 30 |
 | `adaptive` | `boolean` | `true` | |
@@ -27,6 +27,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
+
+**Migration from version 1**: `aimCorrection` is dropped; `rulerLevelStart` comes from `labelLevel` (1 → 1, 2 → 2, 3 → 3, 4 → 5, because old level 4 showed only the end points); `rulerLevelMax` is 5; `version` becomes 2.
 
 `withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 
@@ -43,6 +45,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 ```ts
 type ChallengeKind =
   | 'findNumber' | 'after' | 'before' | 'stepsRight' | 'stepsLeft' | 'missingBetween' | 'midpoint'   // number line
+  | 'readPosition'                                                                                   // number line, amendment 02: enemy visible, child reads the ruler
   | 'addition' | 'subtraction'
   | 'greater' | 'smaller' | 'equal' | 'order3' | 'largest3' | 'smallest3' | 'closestTo' | 'between'; // comparison
 
@@ -60,6 +63,9 @@ interface Challenge {
   options?: number[];         // numbers on the 2 or 3 tanks; options include answer
   orderAnswer?: number[];     // for 'order3': the required tap sequence
   steps?: number[];           // intermediate positions for the step animation, e.g. [43, 40, 36]
+  // readPosition only:
+  rulerLevel?: 1 | 2 | 3 | 4 | 5;   // level the challenge was built for
+  hitTolerance?: number;            // 0 when the enemy stands on a visible line; otherwise half the smallest visible step (FR-068)
 }
 ```
 
@@ -67,7 +73,9 @@ interface Challenge {
 
 **Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`. When the range cannot fit 2 options at `minTankGap` on the side away from the player, comparison is skipped for that configuration.
 
-**Main skill per kind**: `findNumber`, `missingBetween`, `midpoint` → `positions`; `after`, `stepsRight` → `countForward`; `before`, `stepsLeft` → `countBackward`; `addition` → `addition`; `subtraction` → `subtraction`; all comparison kinds → `comparison`. `tens` and `crossTens` are secondary skills added when a challenge involves a multiple of ten or crosses a ten boundary.
+**readPosition placement**: on ruler levels 1 to 3 the answer is a multiple of the minor step (a number with a visible line); on levels 4 and 5 any whole number. `checkAnswer` accepts `|answer - fired| <= hitTolerance`. On level 5 the step used for the tolerance is the major step, see spec Assumptions.
+
+**Main skill per kind**: `findNumber`, `missingBetween`, `midpoint`, `readPosition` → `positions`; `after`, `stepsRight` → `countForward`; `before`, `stepsLeft` → `countBackward`; `addition` → `addition`; `subtraction` → `subtraction`; all comparison kinds → `comparison`. `tens` and `crossTens` are secondary skills added when a challenge involves a multiple of ten or crosses a ten boundary.
 
 ## Attempt (persisted inside Progress)
 
@@ -80,9 +88,9 @@ interface Challenge {
 | `rangeKey` | `string` | e.g. `0-100` or `15-45` |
 | `difficultyStep` | `number` | |
 | `solved` | `boolean` | `true` if a correct answer was given before the solution was shown |
-| `independent` | `boolean` | `solved` and no help was used and no wrong answer |
+| `independent` | `boolean` | Hit on the first shot without help (`solved`, `helpLevel` 0, `wrongAnswers` 0) |
 | `helpLevel` | `0 \| 1 \| 2 \| 3` | Highest help step reached; 3 means the solution was shown |
-| `wrongAnswers` | `number` | |
+| `wrongAnswers` | `number` | Misses: fired numbers that did not hit, decoys hit, and wrong `order3` sequences |
 | `responseMs` | `number` | From challenge answerable to final answer |
 | `guess` | `boolean` | FR-038 |
 | `sessionId` | `string` | |
@@ -129,20 +137,37 @@ interface DifficultyStep {
   maxNumberFraction: number;   // fraction of the range the answer may come from, e.g. 0.2, 0.5, 1
   allowCrossTens: boolean;     // still limited by settings.crossTens
   maxOperand?: number;         // still limited by settings
-  labelLevel?: 1 | 2 | 3 | 4;  // only applies when adaptive is on; never easier than the parent's choice is forced
+  rulerLevel?: 1 | 2 | 3 | 4 | 5;  // positions ladder only; clamped to [rulerLevelStart, rulerLevelMax]
 }
 ```
 
 **Adaptive rule** (`nextStep(sp, settings)`, FR-037): if `adaptive` is off, the generator uses the parent settings directly (the top of every ladder, clamped by settings) and the parent's label level. Otherwise each skill starts at step 0: up one step when at least 5 of the last 6 entries in `recent` are `'independent'`; down one step when at least 3 of the last 5 are `'assisted'` or `'unsolved'`. Guesses never enter `recent` or `masteryWindow`. After a change, `recent` is cleared so the next change needs new evidence; `masteryWindow` is kept. Parent settings are ceilings: a step never allows numbers, operands or crossings that the settings forbid.
 
-**Label level**: when adaptive is off, the parent's level. When adaptive is on, the level comes from the `positions` skill's step (`labelLevel` on its ladder), but never easier than the parent's level. Other skills' ladders have no `labelLevel`, so labels do not change between challenge kinds.
+**Ruler level** (FR-018): when adaptive is off, `rulerLevelStart`. When adaptive is on, the level comes from the `positions` skill's step (`rulerLevel` on its ladder), clamped to `[rulerLevelStart, rulerLevelMax]`. Other skills' ladders have no `rulerLevel`, so the ruler does not change between challenge kinds. Help steps draw all lines of the zoomed area whatever the level.
+
+## Ruler (not persisted)
+
+```ts
+type RulerLevel = 1 | 2 | 3 | 4 | 5;
+interface Tick { value: number; major: boolean; visible: boolean; labeled: boolean; }
+```
+
+| Level | Lines drawn | Labels |
+|-------|-------------|--------|
+| 1 | major and minor | every line where the label spacing is at least 28 logical units; otherwise major lines, and minor labels next to the preview marker |
+| 2 | major and minor | major lines |
+| 3 | major and minor | some major lines, chosen by seed, always both end points |
+| 4 | major only | major lines |
+| 5 | end points only | end points |
+
+Steps follow spec FR-016 for the view's width. Both end points are always drawn and labeled.
 
 ## Round state (not persisted)
 
 ```ts
 type Phase =
-  | 'challenge'        // waiting for an answer (guided mode)
-  | 'aiming'           // target known; player sets angle and power
+  | 'challenge'        // guided: challenge shown; the child chooses a number and fires; every fire is an answer
+  | 'aiming'           // free play: the enemy is visible ("read the ruler"); the child chooses a number and fires
   | 'playerShot'       // shell in flight
   | 'enemyTurn'        // enemy aiming and shot in flight
   | 'roundOver'
@@ -158,38 +183,50 @@ interface RoundState {
   enemy: TankState;
   decoys: TankState[];             // comparison turns only
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
-  enemyFound: boolean;             // false during a search: enemy hidden, nothing drawn at its position
-  shotsAtEnemy: number;            // shots since the enemy was found; new search after a hit or 3 shots
-  challenge: Challenge | null;
-  challengePurpose: 'search' | 'bonus' | null;
+  enemyFound: boolean;             // false during a position search: enemy hidden; true after a hit, for readPosition and in free play
+  challenge: Challenge | null;     // in free play always a readPosition challenge
   answerableAt: number | null;     // clock time when answers became possible (1 s after display)
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
-  selection: number | null;        // previewed number; submitted only by the check button
-  charged: boolean;                // FR-011
-  aim: { angleDeg: number; power: number };
+  selection: number | null;        // previewed number; fired by the fire button or Enter
+  entry: { typed: string; outOfRange: boolean };   // keyboard digits typed so far ('' when none, may start with '-'); outOfRange shows the range hint (FR-063)
+  orderTaps: string[];             // order3: tank ids badged so far
+  rulerLevel: 1 | 2 | 3 | 4 | 5;   // for this round (FR-018)
+  lastShot: { fired: number; landed: number; hit: boolean; nearMiss: boolean; hitTankId: string | null; distance: number | null } | null;
+                                   // landed number shown large; distance in steps shown in free play
   lastPlayerPath: Point[] | null;  // FR-004 trail
+  shot: ShotInFlight | null;       // shell in flight for the renderer to replay
   outcome: 'playerWon' | 'enemyWon' | 'turnsUsed' | null;
 }
 
 interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: number /* number on the line */; x: number; y: number; health: number /* 0..100 */; label?: number; alive: boolean; }
 ```
 
+Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain).
+
+**Keyboard entry** (`applyKey(entry, key, range)` in `src/core/battle/entry.ts`, pure): a digit appends to `typed` (ignored past the digit count of the longest number in the range); `-` is accepted only as the first character when `range.min < 0`; Backspace removes the last character. After each change, `selection` is the typed value when it is inside the range; otherwise `selection` is the nearest end and `outOfRange` is true. A pointer selection or a nudge clears `typed`.
+
 **State transitions**
 
 ```text
-start → challenge/search (guided) | aiming (freePlay)
-challenge --correct--> aiming (charged = true, enemyFound = true for a search)
-challenge --wrong--> challenge (help.level + 1, message)
-challenge --wrong at level 2 or help at level 2 or time limit--> challenge (help.level = 3, solution shown) --continue--> aiming (charged = false, enemyFound = true)
-aiming --bonus button--> challenge/bonus --solved or solution shown--> aiming
-aiming --fire--> playerShot --impact--> enemyTurn | roundOver
+start → challenge (guided search) | aiming (freePlay, readPosition, enemy visible)
+challenge | aiming --typeDigit / backspace / nudge / selectNumber--> same phase (selection and entry change)
+challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
+challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
+challenge --tapTank (single choice)--> playerShot at that tank's number
+challenge --tapTank (order3)--> challenge (badge placed) ; third correct badge --> playerShot at the enemy ; wrong order --> challenge (badges reset, miss)
+playerShot (guided) --hit--> enemyTurn (enemyFound = true, enemy damaged, attempt recorded)
+playerShot (guided) --miss--> challenge (help.level + 1, lastShot shown, no enemy turn, no health change)
+challenge --help (button or H) or time limit--> challenge (help.level + 1)
+challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
+playerShot (freePlay) --hit or miss--> enemyTurn
 enemyTurn --impact--> next player turn | roundOver
-next player turn (guided): enemy hit by last shot or shotsAtEnemy == 3 → enemy hides and moves, challenge/search; otherwise aiming
-any (except roundOver) --pause--> paused --resume--> previous phase
+next player turn (guided): enemy hides and moves; new search, turn + 1
+next player turn (freePlay): new readPosition challenge; after a hit the enemy moves to a new visible position
+any (except roundOver) --pause (button or Escape)--> paused --resume--> previous phase
 ```
 
-Round over when `player.health == 0` (`enemyWon`), `enemy.health == 0` (`playerWon`), or `turn == roundLength` after the enemy turn (`turnsUsed`). In `noDamage` mode the player's health never drops.
+Round over when `player.health == 0` (`enemyWon`), `enemy.health == 0` (`playerWon`), or `turn == roundLength` after the enemy turn (`turnsUsed`); `turn` counts searches in guided mode and shots in free play. In `noDamage` mode the player's health never drops. The player's shell damages only the tank whose number equals the fired number (or within `hitTolerance` for readPosition): the enemy loses the direct-hit damage, a decoy is destroyed; a shell inside the enemy's blast radius that does not hit sets `nearMiss` (the enemy shakes, no damage). The player's own shell never damages the player.
 
-The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the enemy hides (fades out) and the next challenge's answer becomes its position; it is drawn again only when `enemyFound` becomes `true`. The answer is always at least `minEnemyGap` from the player tank.
+The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the enemy hides (fades out) and the next challenge's answer becomes its position; it is drawn again only when `enemyFound` becomes `true` (at once for readPosition). The answer is always at least `minEnemyGap` from the player tank.
 
 In comparison turns, each option is shown on a tank standing at the position of its own number, so the battlefield keeps the same number-to-position mapping as the number line. The real enemy is the tank whose number is the correct answer.

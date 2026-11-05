@@ -1,6 +1,6 @@
 # Research: Math Tanks
 
-All decisions below resolve the Technical Context of [plan.md](./plan.md). Package versions were read from the npm registry on 2026-11-05.
+All decisions below resolve the Technical Context of [plan.md](./plan.md). R6, R7, R8, R19 and R20 were changed, and R21 to R23 added, for [amendment 01](./amendment-01-number-aiming.md) and [amendment 02](./amendment-02-ruler-ranges-and-detail.md). Package versions were read from the npm registry on 2026-11-05.
 
 ## R1. Language and build tool
 
@@ -34,18 +34,18 @@ All decisions below resolve the Technical Context of [plan.md](./plan.md). Packa
 
 ## R6. Ballistics
 
-- **Decision**: Fixed-step simulation at 120 steps per second with constant gravity and no wind in this release. `simulateShot(angle, power, start, terrain)` returns the full path and the impact point. The renderer replays the path over time. Enemy aiming and aim correction use the same function to search for a hitting angle and power.
+- **Decision**: Fixed-step simulation at 120 steps per second with constant gravity and no wind in this release. `simulateShot(angle, power, start, terrain)` returns the full path and the impact point. The renderer replays the path over time. Enemy aiming (R18) and the player's automatic arc (R21) use the same function. Since amendment 01 the player never sets angle or power.
 - **Rationale**: Fixed steps give identical results on every device and frame rate, which tests can check. Replaying a precomputed path keeps animation smooth.
 - **Alternatives considered**: closed-form parabola (cannot detect terrain hits along the path without sampling anyway); wind (adds difficulty unrelated to the learning goal; deferred).
 
 ## R7. Mapping between numbers and battlefield
 
-- **Decision**: The playable width of the world (from 80 to 1520 logical units) maps linearly to the configured range `[min, max]`. `numberToX(n) = left + (n - min) / (max - min) * width`. The number line is drawn in the same logical world, under the battlefield, using the same function, so alignment holds at every screen size because Phaser scales the whole world. For ranges with more than 100 units, the number line shows the coarse level (major and minor ticks at 100 and 10, or 10 and 1 depending on range) and a zoomed sub-line for the chosen interval; the battlefield mapping does not change.
+- **Decision**: The playable width of the world (from 80 to 1520 logical units) maps linearly to the configured range `[min, max]`. `numberToX(n) = left + (n - min) / (max - min) * width`. The number line is drawn in the same logical world, under the battlefield, using the same function, so alignment holds at every screen size because Phaser scales the whole world. The same function works for any start, such as 550 to 780 (amendment 02). There is no two-step selection: for wide ranges the child types the number or uses +1, −1 and the arrow keys, and a zoomed sub-line appears only as a help visual; the battlefield mapping does not change.
 - **Rationale**: One function for both drawing and tests (SC-004). Scaling the whole world with Phaser's FIT scale mode keeps the number line and battlefield aligned (FR-015, FR-058).
 
 ## R8. Tick marks
 
-- **Decision**: Steps follow the width table in spec FR-016 (width up to 20: major 5 or 10, minor 1; 21 to 100: major 10, minor 1; 101 to 200: overview major 50, minor 10, zoomed view major 10, minor 1; 201 to 1000: overview major 100, minor 10, zoomed view per FR-020). Custom ranges place major ticks at multiples of the major step within the range and always label both end points. A unit test checks the table for every width from 5 to 1000, including a range of width 150.
+- **Decision**: Steps follow the width table in spec FR-016 (width up to 20: major 5 or 10, minor 1; 21 to 100: major 10, minor 1; 101 to 400: major 50, minor 10; 401 to 1000: major 100, minor 10). Five ruler levels (FR-017) decide which lines and labels are drawn (R23). Custom ranges place major ticks at multiples of the major step within the range and always label both end points. A unit test checks the table for every width from 5 to 1000, including a range of width 150.
 - **Rationale**: Matches PRD section 3.3: consistent intervals and major ticks as reference markers. At 0 to 100 over 1440 units, the unit spacing is 14.4 units, readable on a tablet.
 
 ## R9. Random numbers and determinism
@@ -101,11 +101,29 @@ All decisions below resolve the Technical Context of [plan.md](./plan.md). Packa
 - **Decision**: The enemy computes an ideal shot to the player's tank by searching angle and power with `simulateShot`, then adds random error from a normal distribution whose spread depends on difficulty (large on Easy, medium on Normal, small on Challenging). Easy also halves enemy damage and forces the first enemy shot of a round to miss (FR-043). The enemy's random generator is separate from the challenge generator and is never given any attempt data (FR-042).
 - **Rationale**: Simple, testable, and visibly improving with difficulty.
 
-## R19. Aim correction
+## R19. Aim solver for the enemy (aim correction removed)
 
-- **Decision**: `solveAim` searches a grid of angles (every 1 degree) and powers (every 1%) with `simulateShot` on the current terrain and returns the shot whose impact is closest to the target, flagging whether it hits. Aim correction (FR-012) and the enemy (R18) both use it.
-- **Rationale**: Takes hills into account; the search is about 9000 short simulations, done once per turn, a few milliseconds of work.
+- **Decision**: `solveAim` searches a grid of angles (every 1 degree) and powers (every 1%) with `simulateShot` on the current terrain and returns the shot whose impact is closest to the target, flagging whether it hits. Only the enemy (R18) uses it. Aim correction (FR-012) was removed by amendment 01, because the player's shell always lands at the chosen number (R21).
+- **Rationale**: Takes hills into account; the search is about 9000 short simulations, done once per enemy turn, a few milliseconds of work.
 
 ## R20. Critique follow-up
 
-The critique report [critiques/critique-20261105-064803.md](./critiques/critique-20261105-064803.md) led to: hidden enemy during a search with no marker; fixed player side per round and an enemy that stays for up to 3 shots; preview-then-confirm selection with +1/−1 buttons; minimum tank gaps; a mastery record kept separate from the adaptive record; persistent storage, export and import, and WebKit tests; plus the smaller changes listed in spec FR-014, FR-016, FR-020, FR-031, FR-034, FR-036 to FR-039, FR-047, FR-048, FR-051a, FR-055 and SC-009.
+The critique report [critiques/critique-20261105-064803.md](./critiques/critique-20261105-064803.md) led to: hidden enemy during a search with no marker; fixed player side per round and an enemy that stays for up to 3 shots; preview-then-confirm selection with +1/−1 buttons; minimum tank gaps; a mastery record kept separate from the adaptive record; persistent storage, export and import, and WebKit tests; plus the smaller changes listed in spec FR-014, FR-016, FR-020, FR-031, FR-034, FR-036 to FR-039, FR-047, FR-048, FR-051a, FR-055 and SC-009. Amendment 01 later replaced the "enemy stays for 3 shots" rule and the check button; amendment 02 replaced the two-step selection.
+
+## R21. Fixed cannon and automatic arc (amendment 01)
+
+- **Decision**: `solveArcToX` in `src/core/physics/arc.ts`. The cannon points at 65 degrees toward the enemy side. For a chosen number, the target x is `numberToX(n)`. For the angle 65, the function finds the power by bisection over `simulateShot` (with no tank targets, so only terrain stops the shell) until the impact is within a quarter of one unit's width of the target x. When the terrain stops the shell before the target and no power reaches it, it tries 70, 75, 80 and 85 degrees. When no angle works, it returns a lifted 85-degree arc: a parabola from the muzzle over the highest terrain point between muzzle and target plus a margin, ending on the surface at the target x. The last path point is set to exactly the target x, so the landing number always equals the chosen number.
+- **Rationale**: The product owner wants the child to learn the ruler, not ballistics. A steep fixed angle clears most hills; bisection is fast (about 20 simulations) and deterministic. Ignoring tanks in flight means a decoy in the way never takes a shot meant for another number; damage follows the number, not the path.
+- **Alternatives considered**: closed-form power for flat ground (rejected: ignores hills); keeping `solveAim` for the player (rejected: it changes the angle, which the amendment forbids, and it may miss).
+
+## R22. Keyboard input (amendment 01)
+
+- **Decision**: one `keydown` listener on `window` (in `src/app/useKeyboard.ts`) calls the pure `keyToAction(key, screen)` from `src/app/keyboard.ts`, which returns an action such as a digit, confirm, nudge, help, pause, start, or nothing. Battle actions go to controller methods (`typeDigit`, `typeMinus`, `backspace`, `nudge`, `confirm`, `requestHelp`, `pause`, `resume`); typed digits live in `RoundState.entry` and are handled by the pure reducer `applyKey` in `src/core/battle/entry.ts`. The app root has `tabIndex={-1}` and receives focus on load and after each screen change. Keys with Ctrl, Alt or Meta are ignored so browser shortcuts keep working; handled keys call `preventDefault`. Enter and Space with `repeat: true` are ignored. The gear button handles only pointer events, so no key opens the parent gate.
+- **Rationale**: No visible text field means nothing to click and no on-screen keyboard on tablets. Pure functions keep the key rules testable without a browser. Playwright drives the keyboard-only test with `page.keyboard` only.
+- **Alternatives considered**: a hidden `<input>` (rejected: focus is easy to lose, and tablets open the on-screen keyboard); Phaser keyboard input (rejected: start and round-end screens are React).
+
+## R23. Ruler levels, any range and "read the ruler" (amendment 02)
+
+- **Decision**: `ticksFor(view, level, seed, { allLines })` returns every tick with `visible` and `labeled` flags per the five levels of FR-017. Level 1 labels minor lines only when the label spacing is at least 28 logical units; otherwise it sets `labelsNearPreview` and the view labels the minor lines next to the preview marker. Help steps call it with `allLines: true`. Settings version 2 replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax` (migration in data-model.md). The `positions` ladder carries `rulerLevel` values from 1 to 5, clamped to the parent's limits. `readPosition` places the enemy on a minor-step multiple at levels 1 to 3 and on any whole number at levels 4 and 5, with `hitTolerance` per FR-068. Custom ranges accept a minimum from -1000 to 9000 and a width from 5 to 1000.
+- **Rationale**: One function draws the game ruler, the help zoom and the settings preview, so the parent sees exactly what the child sees. Keeping the tolerance on the challenge makes the hit rule testable in the controller.
+- **Alternatives considered**: separate settings for lines and labels (rejected: the amendment ties them into one level); keeping two-step selection for wide ranges (rejected: typing and +1 and −1 reach every number, and the amendment asks to drop it).

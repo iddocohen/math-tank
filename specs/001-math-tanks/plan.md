@@ -2,11 +2,11 @@
 
 **Branch**: `001-math-tanks` | **Date**: 2026-11-05 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `specs/001-math-tanks/spec.md`
+**Input**: Feature specification from `specs/001-math-tanks/spec.md`, changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard-only play) and [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler")
 
 ## Summary
 
-A static, offline-capable browser game. A Phaser 4 canvas draws a side-view artillery battle whose horizontal axis is the number line of the configured range. A React overlay shows the challenge, help, controls, parent gate, settings and progress page. All learning logic (challenge generation, validation, number-line mapping and ticks, adaptive difficulty, mastery) and all game logic (terrain heightmap, fixed-step ballistics, damage, enemy aiming, turn state machine) live in engine-free TypeScript modules under `src/core/`, which are deterministic for a given seed and covered by Vitest. Settings and progress are stored in `localStorage` with Zod validation. A generated service worker precaches the build for offline play.
+A static, offline-capable browser game. A Phaser 4 canvas draws a side-view artillery battle whose horizontal axis is the number line of the configured range (any whole-number range of width 5 to 1000, such as 550 to 780). The child aims by choosing a number with the ruler, the +1 and −1 buttons or the keyboard; the cannon has a fixed angle and the shell lands at that number. A React overlay shows the challenge, help, controls, parent gate, settings and progress page. All learning logic (challenge generation, validation, number-line mapping and ticks, adaptive difficulty, mastery) and all game logic (terrain heightmap, fixed-step ballistics, the automatic arc to a chosen number, damage, enemy aiming, turn state machine, keyboard entry) live in engine-free TypeScript modules under `src/core/`, which are deterministic for a given seed and covered by Vitest. Settings and progress are stored in `localStorage` with Zod validation. A generated service worker precaches the build for offline play.
 
 ## Technical Context
 
@@ -26,7 +26,7 @@ A static, offline-capable browser game. A Phaser 4 canvas draws a side-view arti
 
 **Constraints**: Works offline after the first load; no network requests after load; no external fonts, CDNs or analytics; no assets from existing games; all child feedback encouraging; no time limit by default
 
-**Scale/Scope**: One player per browser; 6 screens; 17 challenge kinds; 8 skills; stored data under 1 MB
+**Scale/Scope**: One player per browser; 6 screens; 18 challenge kinds; 8 skills; 5 ruler levels; stored data under 1 MB
 
 ## Constitution Check
 
@@ -52,6 +52,8 @@ Post-design re-check: Pass. No violations to justify.
 ```text
 specs/001-math-tanks/
 ├── source-prd.md        # verbatim user PRD
+├── amendment-01-number-aiming.md           # product owner change: number aiming, keyboard play
+├── amendment-02-ruler-ranges-and-detail.md # product owner change: any range, ruler levels, read the ruler
 ├── spec.md
 ├── plan.md              # this file
 ├── research.md
@@ -86,6 +88,8 @@ src/
 │   ├── SettingsPage.tsx
 │   ├── ProgressPage.tsx
 │   ├── useController.ts  # useSyncExternalStore bridge
+│   ├── keyboard.ts       # keyToAction: key map per screen (amendment 01)
+│   ├── useKeyboard.ts    # window keydown listener
 │   └── styles.css
 ├── game/                 # Phaser: game config and scenes, draws core state only
 │   ├── createGame.ts
@@ -103,12 +107,12 @@ src/
 │   ├── rng.ts
 │   ├── types.ts
 │   ├── settings/         # schema, defaults, validate
-│   ├── numberline/       # mapping, ticks, zoom
+│   ├── numberline/       # mapping, ticks (5 ruler levels), help zoom view
 │   ├── math/             # generators per family, validate, checkAnswer, stepPath
 │   ├── progress/         # classify, adaptive, ladders, mastery, summarize
-│   ├── physics/          # terrain, ballistics, damage, aim solver
+│   ├── physics/          # terrain, ballistics, damage, aim solver (enemy), arc solver (player)
 │   ├── ai/               # enemy shot
-│   ├── battle/           # BattleController state machine
+│   ├── battle/           # BattleController state machine, keyboard entry reducer
 │   └── storage/          # KeyValue, load/save with Zod
 └── i18n/
     ├── de.ts
@@ -128,9 +132,12 @@ Unit tests sit next to their modules as `*.test.ts`.
 3. **Engine-free physics with fixed timestep** (R5, R6): a heightmap terrain and precomputed shot paths make every shot reproducible; Phaser replays the path.
 4. **Controller as the single state owner** (R4): React and Phaser subscribe; neither mutates state directly.
 5. **Comparison tanks stand at their own numbers**: keeps one consistent number-to-position mapping everywhere, as PRD section 3.1 requires.
-6. **Hidden enemy in guided searches**: nothing marks the enemy's position until the challenge is solved or the solution is shown, so the math tells the child where to aim. The enemy then stays for up to 3 shots so the child can correct their aim; the player's tank keeps its side for the whole round.
-7. **Preview, then confirm**: releasing on the number line only previews a number; the check button submits it, so a finger slip never counts as a wrong answer.
+6. **Hidden enemy in guided searches**: nothing marks the enemy's position until it is hit or the solution is shown, so the math tells the child where to aim. A search is one player turn: every fired number is an answer, misses never give the enemy a turn, and help escalates with each miss (amendment 01). The player's tank keeps its side for the whole round.
+7. **Preview, then fire**: releasing on the number line or typing only previews a number; the fire button or Enter fires it, so a finger slip never counts as a miss.
 8. **Storage that survives Safari**: persistent storage request, Home Screen instructions, export and import, versioned data with migrations.
+9. **Aim by number** (amendment 01, research R21): the cannon has a fixed angle of 65 degrees; `solveArcToX` computes the power so the shell lands at the chosen number and raises the angle in 5-degree steps up to 85 degrees when a hill blocks the arc. Only the exact number damages the enemy. Angle and power controls, cannon dragging, aim correction, charged shots and bonus challenges are removed.
+10. **Keyboard-only play** (amendment 01, research R22): a pure key map in `src/app/keyboard.ts` and a pure entry reducer in `src/core/battle/entry.ts`; one window listener; focus on the app root at load; no text field; the parent gate ignores keys.
+11. **Ruler detail levels and any range** (amendment 02, research R23): five ruler levels replace the four label levels; the parent sets a starting and a hardest level, and adaptive difficulty moves the level within them through the positions skill. Any range of width 5 to 1000 works; typing replaces the two-step zoom selection, and zoom stays only as a help visual. "Read the ruler" is a new challenge kind and the only kind in free play.
 
 ## Phasing (maps to spec priorities)
 
@@ -141,8 +148,10 @@ Unit tests sit next to their modules as `*.test.ts`.
 5. **US5 (P2)**: help escalation, encouraging phrases, forbidden-word test.
 6. **US6 (P2)**: parent gate, settings page, validation, persistence.
 7. **US7 (P3)**: attempt classification, adaptive ladders, mastery, progress page.
-8. **US8 (P3)**: PWA offline, pause, fullscreen, speech, touch sizing.
-9. **US9 (P3)**: 0 to 50, 0 to 1000 and custom ranges, two-step zoom selection.
+8. **US8 (P3)**: PWA offline, pause, fullscreen, speech, touch sizing, keyboard-only end-to-end check.
+9. **US9 (P2 since amendment 02)**: any range of width 5 to 1000, ruler for those ranges, "read the ruler" in free play. Scheduled right after the amendment reworks, see tasks.md.
+
+Amendments 01 and 02 arrived after US1 and the number-line generators were built (tasks.md Phases 1 to 7). tasks.md Phases 8 to 10 rework that code first; the later phases were rewritten to match.
 10. **Polish**: e2e tests, performance check, accessibility pass.
 
 ## Risks
@@ -154,6 +163,11 @@ Unit tests sit next to their modules as `*.test.ts`.
 | Number line unreadable on small tablets at 0 to 100 | Unit spacing 14.4 logical units scales to about 9 CSS px at 1024 width; labels only on major ticks below level 1 when spacing is under 12 px; zoom help step |
 | Comparison is visually trivial because larger numbers stand further right | Accepted, see spec Assumptions: it reinforces the number line concept and keeps one mapping everywhere |
 | Speech voices missing on some devices | Feature-detect and hide the speaker icon |
+| A hill blocks every arc from 65 to 85 degrees | `solveArcToX` falls back to a lifted 85-degree arc that ends at the chosen number; tested on seeded terrains |
+| Keyboard focus lost to a browser control (address bar, devtools) or to an iframe host | Listener on `window`, focus moved to the app root on load and after every screen change; tested in all three browsers |
+| A held Enter key fires several times | Keys ignored while a shell is in flight; `keydown` with `repeat: true` ignored for Enter and Space |
+| Read-the-ruler tolerance on level 5 is ambiguous in amendment 02 | Major step used; flagged in spec Assumptions for the product owner |
+| Width 1000 gives 1.44 logical units per number, too small to tap exactly | Typing, +1 and −1 and arrow keys reach every number (FR-020) |
 
 ## Complexity Tracking
 
