@@ -7,6 +7,7 @@ import { TEX } from './textures';
 import type { TankView } from './TankView';
 
 const PARTICLE_LIFE_MS = 700;
+const CARDBOARD_MS = 900;
 
 export class Effects {
   constructor(private readonly scene: Phaser.Scene) {}
@@ -47,6 +48,32 @@ export class Effects {
     this.explosion(x, y, blastRadius * 1.8);
     const ring = this.scene.add.circle(x, y, blastRadius * 1.4).setStrokeStyle(8, 0xffffff, 0.9).setScale(0.3).setDepth(22);
     this.scene.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 550, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+  }
+
+  /**
+   * A decoy bursts like a cardboard dummy (amendment 10, FR-066): flat brown pieces fly up a little, tumble and fall,
+   * with no fire and no ring, so it looks clearly different from the enemy's explosion.
+   */
+  cardboard(x: number, y: number): void {
+    const scene = this.scene;
+    const colors = [0xc8a165, 0xb08850, 0xd9b77e, 0x9c7442];
+    for (let i = 0; i < 12; i++) {
+      const w = Phaser.Math.Between(10, 22);
+      const h = Phaser.Math.Between(5, 10);
+      const piece = scene.add.rectangle(x + Phaser.Math.Between(-20, 20), y + Phaser.Math.Between(-12, 6), w, h, colors[i % colors.length]!).setStrokeStyle(1, 0x6b4a22).setDepth(21);
+      const dx = Phaser.Math.Between(-90, 90);
+      const rise = Phaser.Math.Between(30, 80);
+      scene.tweens.add({ targets: piece, x: piece.x + dx, angle: Phaser.Math.Between(-540, 540), duration: CARDBOARD_MS, ease: 'Linear' });
+      scene.tweens.add({
+        targets: piece,
+        y: piece.y - rise,
+        duration: CARDBOARD_MS * 0.3,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          scene.tweens.add({ targets: piece, y: piece.y + rise + 50, alpha: 0, duration: CARDBOARD_MS * 0.7, ease: 'Quad.easeIn', onComplete: () => piece.destroy() });
+        },
+      });
+    }
   }
 
   /** White flash on the child's tank when an enemy shell costs a heart. */

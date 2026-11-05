@@ -123,6 +123,7 @@ export function createRound(
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
+    decoys: [],
     playerSide: side,
     challenge,
     answerableAt: null,
@@ -186,8 +187,9 @@ export interface DamageRules {
  *
  * An enemy shell that hits the player's tank costs one heart unless noDamage (FR-006, FR-080); one next to it does
  * nothing. The player's shell follows the amendment 06 rule (FR-066): the exact number destroys the enemy (the
- * controller then brings a new one) and a shell on the body but not exact is a near miss (the enemy shakes). The
- * player's own shell never harms the player. Sets lastShot for player shells
+ * controller then brings a new one) and a shell on the body but not exact is a near miss (the enemy shakes). In
+ * comparison turns (amendment 10) a decoy at the exact fired number bursts as a miss, and a near miss shakes whichever
+ * standing tank's body the shell landed on. The player's own shell never harms the player. Sets lastShot for player shells
  * and lastEnemyHit for enemy shells.
  */
 export function applyImpact(state: BattleState, impact: Impact, blastRadius: number, rules: DamageRules): BattleState {
@@ -207,6 +209,7 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
       terrain,
       player: settle(state.player),
       enemy: settle(state.enemy),
+      decoys: state.decoys.map((d) => settle(d)),
       lives: lostHeart ? Math.max(0, state.lives - 1) : state.lives,
       lastEnemyHit: lostHeart,
     };
@@ -214,15 +217,26 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
 
   const { fired, landed } = impact;
   const enemy = state.enemy;
-  const kind = enemy.alive ? shotKind(fired, enemy.position, rules.range) : 'miss';
-  const hit = kind === 'hit';
+  const hit = enemy.alive && shotKind(fired, enemy.position, rules.range) === 'hit';
+  // Comparison (amendment 10): a decoy at the exact fired number bursts; it is a miss.
+  const decoyHit = hit ? null : (state.decoys.find((d) => d.alive && d.position === fired) ?? null);
+  const decoys = state.decoys.map((d) => settle(d, d === decoyHit));
+  // A near miss shakes the standing tank whose body the shell landed on (enemy or decoy).
+  const standingBefore = [enemy, ...state.decoys].filter((t) => t.alive);
+  const nearTank = hit || decoyHit ? null : (standingBefore.find((t) => shotKind(fired, t.position, rules.range) === 'near') ?? null);
+  // The step count refers to the enemy, or in comparison turns to the nearest tank still standing (FR-072).
+  const standingAfter = [enemy, ...decoys].filter((t) => t.alive || t === enemy);
+  const target = state.decoys.length === 0 ? enemy : nearestTo(landed, standingAfter);
   const lastShot: LastShot = {
     fired,
     landed,
     hit,
-    nearMiss: kind === 'near',
-    hitTankId: hit ? enemy.id : null,
-    distance: Math.abs(landed - enemy.position),
+    nearMiss: nearTank !== null,
+    nearTankId: nearTank?.id ?? null,
+    hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
+    decoyHit: decoyHit !== null,
+    targetNumber: target.position,
+    distance: Math.abs(landed - target.position),
     enemyNumber: enemy.position,
   };
   return {
@@ -230,6 +244,12 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
     terrain,
     player: settle(state.player),
     enemy: settle(enemy, hit),
+    decoys,
     lastShot,
   };
+}
+
+/** The tank whose number is nearest to n; on a tie the first one. */
+function nearestTo(n: number, tanks: TankState[]): TankState {
+  return tanks.reduce((best, t) => (Math.abs(t.position - n) < Math.abs(best.position - n) ? t : best));
 }

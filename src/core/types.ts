@@ -157,7 +157,8 @@ export type Heightmap = Float32Array;
 
 export interface TankState {
   id: string;
-  kind: 'player' | 'enemy';
+  /** A decoy stands at a comparison option that is not the answer and looks exactly like the enemy (amendment 10). */
+  kind: 'player' | 'enemy' | 'decoy';
   /** Number on the line. */
   position: number;
   x: number;
@@ -187,6 +188,11 @@ export interface RoundState {
   player: TankState;
   /** Always visible with its number and coordinates (amendment 07, FR-010). */
   enemy: TankState;
+  /**
+   * Comparison searches: a decoy at each option other than the answer, no number plate (amendment 10); [] otherwise.
+   * A burst decoy stays here with alive false until the search ends.
+   */
+  decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
   /** In free play a readPosition challenge whose answer is the enemy's number (amendment 02, FR-067). */
@@ -254,11 +260,23 @@ export interface LastShot {
   landed: number;
   /** The fired number was the enemy's number: the enemy was destroyed (amendment 06, FR-066). */
   hit: boolean;
-  /** On the enemy tank's body but not exact: the enemy shakes, "Ganz knapp! Triff die Linie." (FR-066, FR-072). */
+  /**
+   * On a tank's body but not exact: that tank shakes, "Ganz knapp! Triff die Linie." (FR-066, FR-072). In comparison
+   * turns the tank may be a decoy (amendment 10).
+   */
   nearMiss: boolean;
-  /** The destroyed enemy, or null. */
+  /** With nearMiss: the tank whose body the shell landed on; null otherwise. */
+  nearTankId: string | null;
+  /** The destroyed enemy or the burst decoy, or null. */
   hitTankId: string | null;
-  /** Steps from the landed number to the enemy's number. */
+  /** A decoy stood at the fired number and burst; the shot is a miss (amendment 10, FR-066). */
+  decoyHit: boolean;
+  /**
+   * The number the step count refers to: the enemy's, or in comparison turns the number of the tank nearest the
+   * landing number among the tanks still standing, so the count does not show which tank is the enemy (FR-072).
+   */
+  targetNumber: number;
+  /** Steps from the landed number to targetNumber. */
   distance: number;
   /** The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068). */
   enemyNumber: number;

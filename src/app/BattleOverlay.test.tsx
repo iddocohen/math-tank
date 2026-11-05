@@ -418,6 +418,37 @@ describe('BattleOverlay comparison (US4, T091)', () => {
     expect(screen.queryAllByTestId('tens-digit')).toHaveLength(0);
   });
 
+  it('a near miss on a decoy names the nearest tank, not the enemy (amendment 10, FR-072)', () => {
+    const { controller, advance } = guided((s) => s.challenge?.kind === 'greater' && s.decoys.length === 1 && Math.abs(s.decoys[0]!.position - s.challenge.answer) > 10);
+    const decoy = controller.getState().decoys[0]!.position;
+    const near = decoy + (decoy > 0 ? -1 : 1);
+    advance(1000);
+    act(() => {
+      controller.fireAt(near);
+      controller.shotAnimationDone();
+    });
+    const root = screen.getByTestId('battle-overlay');
+    expect(root.getAttribute('data-last-shot')).toBe('near');
+    expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, decoy));
+    expect(root.getAttribute('data-last-distance')).toBe('1');
+  });
+
+  it('a burst decoy is a miss: the encouraging phrase, no hit text (amendment 10, FR-066)', () => {
+    const { controller, advance } = guided((s) => s.decoys.length > 0);
+    const decoy = controller.getState().decoys[0]!.position;
+    advance(1000);
+    act(() => {
+      controller.fireAt(decoy);
+      controller.shotAnimationDone();
+    });
+    expect(controller.getState().lastShot).toMatchObject({ decoyHit: true });
+    const root = screen.getByTestId('battle-overlay');
+    expect(root.getAttribute('data-last-shot')).toBe('miss');
+    expect(root.getAttribute('data-enemies-destroyed')).toBe('0');
+    expect(screen.queryByText(t().battle.hit, { exact: false })).toBeNull();
+    expect(screen.getByTestId('encouragement')).toBeTruthy();
+  });
+
   it('a one-digit option has no tens digit to mark', () => {
     const { controller } = guided((s) => s.challenge?.options?.some((o) => o < 10) === true);
     const options = controller.getState().challenge!.options!;

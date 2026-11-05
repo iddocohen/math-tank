@@ -1,6 +1,6 @@
 /**
- * Synthesized sound effects (FR-009, research R13): a shot, a soft boom and a soft chime, made
- * with the Web Audio API at runtime, so there are no audio files.
+ * Synthesized sound effects (FR-009, research R13): a shot, a soft boom, a soft chime and the light "plopp" of a
+ * bursting cardboard decoy (amendment 10), made with the Web Audio API at runtime, so there are no audio files.
  *
  * - Sounds play only while `enabled()` returns true (wire it to settings.sound.effects).
  * - There is deliberately no sound for a wrong answer.
@@ -28,6 +28,8 @@ export interface Sfx {
   shot(): void;
   boom(): void;
   chime(): void;
+  /** A light, short pop for a decoy that bursts like a cardboard dummy (amendment 10, FR-066); at most half MAX_GAIN. */
+  plopp(): void;
   /** Creates and resumes the audio context; call from a user gesture. */
   unlock(): Promise<void>;
   /** Unlocks on the first pointer or key press on `target`; returns a function that removes the listeners. */
@@ -36,11 +38,13 @@ export interface Sfx {
 
 /**
  * The sounds of a shell landing (FR-009, AC-07): every explosion plays the same soft boom, a miss included, and a
- * shot that destroyed the enemy adds the soft chime. A shell that left the battlefield makes no sound. There is no
+ * shot that destroyed the enemy adds the soft chime. A shot that burst a decoy plays only the light plopp, clearly
+ * different from the enemy's explosion (amendment 10). A shell that left the battlefield makes no sound. There is no
  * other sound for a miss.
  */
-export function landingSounds(landing: { outOfBounds: boolean; destroyedEnemy: boolean }): Array<'boom' | 'chime'> {
+export function landingSounds(landing: { outOfBounds: boolean; destroyedEnemy: boolean; burstDecoy?: boolean }): Array<'boom' | 'chime' | 'plopp'> {
   if (landing.outOfBounds) return [];
+  if (landing.burstDecoy) return ['plopp'];
   return landing.destroyedEnemy ? ['boom', 'chime'] : ['boom'];
 }
 
@@ -133,6 +137,12 @@ export function createSfx(options: SfxOptions): Sfx {
       if (!c) return;
       tone(c, 'sine', 880, 880, 0.12, 0.01, 0.5);
       tone(c, 'sine', 1320, 1320, 0.08, 0.01, 0.6, 0.09);
+    },
+    plopp() {
+      const c = ready();
+      if (!c) return;
+      tone(c, 'sine', 520, 180, 0.1, 0.004, 0.1);
+      filteredNoise(c, 2400, 0.05, 0.002, 0.06);
     },
     unlock,
     installUnlock(target: EventTarget = globalThis) {

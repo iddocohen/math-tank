@@ -92,14 +92,38 @@ describe('sfx', () => {
     expect(Math.max(...f.gains)).toBeLessThanOrEqual(MAX_GAIN);
   });
 
-  it('offers no sound for a wrong answer', () => {
+  it('offers no sound for a wrong answer; the only extra voice is the light plopp of a bursting decoy (amendment 10)', () => {
     const sfx = createSfx({ enabled: () => true, createContext: () => fakeContext().ctx });
-    expect(Object.keys(sfx).sort()).toEqual(['boom', 'chime', 'installUnlock', 'shot', 'unlock']);
+    expect(Object.keys(sfx).sort()).toEqual(['boom', 'chime', 'installUnlock', 'plopp', 'shot', 'unlock']);
+  });
+
+  it('the plopp is quiet, plays only when effects are on, and is lighter than the boom (amendment 10, FR-066)', async () => {
+    const f = fakeContext();
+    let on = false;
+    const sfx = createSfx({ enabled: () => on, createContext: () => f.ctx });
+    await sfx.unlock();
+    sfx.plopp();
+    expect(f.started).toEqual([]);
+    on = true;
+    sfx.plopp();
+    expect(f.started.length).toBeGreaterThan(0);
+    const ploppPeak = Math.max(...f.gains);
+    expect(ploppPeak).toBeLessThanOrEqual(MAX_GAIN / 2);
+    const b = fakeContext();
+    const boom = createSfx({ enabled: () => true, createContext: () => b.ctx });
+    await boom.unlock();
+    boom.boom();
+    expect(ploppPeak).toBeLessThan(Math.max(...b.gains));
   });
 
   it('a landing plays only the soft boom, a hit adds the soft chime, and a miss adds nothing (FR-009, AC-07)', () => {
     expect(landingSounds({ outOfBounds: false, destroyedEnemy: false })).toEqual(['boom']);
     expect(landingSounds({ outOfBounds: false, destroyedEnemy: true })).toEqual(['boom', 'chime']);
     expect(landingSounds({ outOfBounds: true, destroyedEnemy: false })).toEqual([]);
+  });
+
+  it('a burst decoy plays only the light plopp, clearly different from the enemy explosion (amendment 10, FR-066)', () => {
+    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: true })).toEqual(['plopp']);
+    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: false })).toEqual(['boom']);
   });
 });

@@ -145,9 +145,10 @@ export function generateChallenge(input: GenerateInput): Challenge {
   };
 
   const keyboard = input.inputMethod === 'keyboard';
-  // A comparison kind is skipped when its options do not fit at minOptionGap (edge case "Comparison options too close").
+  // A comparison kind is skipped when its options do not fit at minOptionGap clear of the player tank (edge case
+  // "Comparison options too close together", amendment 10).
   let kinds = (input.kindsAllowed ?? enabledKinds(settings)).filter(
-    (k) => BUILDERS[k] !== undefined && !(keyboard && k === 'findNumber') && !(isComparisonKind(k) && !comparisonFits(k, settings)),
+    (k) => BUILDERS[k] !== undefined && !(keyboard && k === 'findNumber') && !(isComparisonKind(k) && !comparisonFits(k, settings, playerPosition)),
   );
 
   while (kinds.length > 0) {

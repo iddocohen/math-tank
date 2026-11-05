@@ -3,7 +3,7 @@
  * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss on the body (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
  * `appear` fades a new enemy in after the old one was destroyed (amendment 06). The enemy is never hidden
- * (amendment 07).
+ * (amendment 07); a burst decoy is hidden at once and a folded decoy fades out (amendment 10).
  *
  * Amendment 05 (FR-077): the look comes from tankStyle. The child's tank is blue and rounded with a yellow star flag
  * on its antenna; the enemy is dark red and angular with a black flag. `showYouMarker` shows a bouncing
@@ -13,8 +13,12 @@
  * red and lost ones as an outline, with no text; the enemy has no health bar. `setTarget` draws a small target ring
  * where the pointer line meets the tank, on its center line, with no number.
  *
- * Amendment 09 (FR-026): no tank carries a number plate, takes taps or shows an order badge; comparison turns show
- * the one enemy like every other turn.
+ * Amendment 09 (FR-026): no tank carries a number plate or shows an order badge.
+ *
+ * Amendment 10 (FR-026, FR-031, FR-053, FR-064): in comparison turns the enemy and its decoys look the same and take
+ * taps: `setTappable` turns on a tap area of at least TAP_MIN_CSS by TAP_MIN_CSS CSS pixels around the tank, which
+ * calls the `onTap` handler; `tapCenter` gives its center for the end-to-end tests. `setMark` draws the green ring of
+ * help step 3 around the correct tank.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -42,6 +46,13 @@ const SETTLE_MS = 450;
 const FADE_MS = 500;
 const SHAKE_PX = 6;
 const SHAKE_MS = 50;
+/** The smallest tap area in CSS pixels (FR-053), and the tap area in world units on a large screen. */
+const TAP_MIN_CSS = 48;
+const TAP_W = 100;
+const TAP_H = 90;
+/** The green ring of help step 3 around the correct tank in a comparison (amendment 10, FR-031). */
+const MARK_COLOR = 0x3fae5a;
+const MARK_R = 46;
 
 export class TankView {
   readonly container: Phaser.GameObjects.Container;
@@ -58,11 +69,15 @@ export class TankView {
   private lastY: number | null = null;
   private lastLives: number | null = null;
   private hidden = false;
+  private readonly tapZone: Phaser.GameObjects.Zone;
+  private tappable = false;
+  private readonly mark: Phaser.GameObjects.Graphics;
 
   constructor(
     private readonly scene: Phaser.Scene,
     kind: TankState['kind'],
     private readonly worldHeight: number,
+    onTap?: () => void,
   ) {
     this.style = tankStyle(kind);
     this.color = this.style.color;
@@ -76,7 +91,39 @@ export class TankView {
     this.target = scene.add.graphics().setVisible(false);
     drawTarget(this.target);
     this.you = createYouMarker(scene).setVisible(false);
-    this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.target, this.hearts, this.you]);
+    this.mark = scene.add.graphics().setVisible(false);
+    this.mark.lineStyle(6, MARK_COLOR, 1);
+    this.mark.strokeCircle(0, -TANK_BODY_HEIGHT / 2, MARK_R);
+    this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
+    if (onTap) this.tapZone.on('pointerdown', onTap);
+    this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.target, this.hearts, this.you, this.tapZone]);
+  }
+
+  /** Comparison turns (amendment 10): a tap on the tank fires at its number; off outside comparison searches. */
+  setTappable(on: boolean): void {
+    if (on === this.tappable) return;
+    this.tappable = on;
+    if (!on) {
+      this.tapZone.disableInteractive();
+      return;
+    }
+    // displayScale is world units per CSS pixel: the area is at least TAP_MIN_CSS CSS pixels in each direction.
+    const scale = this.scene.scale.displayScale.x || 1;
+    const w = Math.max(TAP_W, TAP_MIN_CSS * scale);
+    const h = Math.max(TAP_H, TAP_MIN_CSS * scale);
+    this.tapZone.setSize(w, h).setPosition(0, 10 - h / 2);
+    this.tapZone.setInteractive({ useHandCursor: true });
+    if (this.tapZone.input) this.tapZone.input.hitArea.setTo(0, 0, w, h);
+  }
+
+  /** The center of the tap area in world coordinates, for the end-to-end tests (tasks.md D4). */
+  tapCenter(): { x: number; y: number } {
+    return { x: this.container.x + this.tapZone.x, y: this.container.y + this.tapZone.y };
+  }
+
+  /** The green ring around the correct tank at comparison help step 3 (amendment 10, FR-031). */
+  setMark(on: boolean): void {
+    this.mark.setVisible(on);
   }
 
   /**
@@ -187,6 +234,7 @@ export class TankView {
   destroy(): void {
     this.youTimer?.remove();
     this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.you]);
+    this.tapZone.removeAllListeners();
     this.container.destroy();
   }
 }

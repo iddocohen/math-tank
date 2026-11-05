@@ -86,7 +86,7 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       break;
     default:
       // Comparison: option count, minOptionGap and exactly one correct option (FR-027, amendment 09).
-      errors.push(...comparisonErrors(c, settings));
+      errors.push(...comparisonErrors(c, settings, playerPosition));
       break;
   }
 

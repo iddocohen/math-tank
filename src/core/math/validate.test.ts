@@ -121,7 +121,7 @@ describe('validateChallenge (FR-029)', () => {
 });
 
 describe('validateChallenge comparison rules (T086, FR-027, amendment 09)', () => {
-  // 0 to 100: minOptionGap 2, minEnemyGap 15.
+  // 0 to 100: minOptionGap 8 (amendment 10), minTankGap 8, minEnemyGap 15.
   const params = (options: number[]) => Object.fromEntries(options.map((o, i) => [`o${i + 1}`, o]));
   const greater = (options: number[], answer: number) =>
     challenge({ kind: 'greater', mainSkill: 'comparison', skills: ['comparison'], prompt: { key: 'greater', params: params(options) }, operands: options, options, answer });
@@ -130,13 +130,18 @@ describe('validateChallenge comparison rules (T086, FR-027, amendment 09)', () =
     expect(validateChallenge(greater([47, 74], 74), settings, 100)).toEqual([]);
   });
 
-  it('accepts options near the player tank and 2 apart: only the enemy keeps its distance from the player', () => {
-    expect(validateChallenge(greater([5, 74], 74), settings, 0)).toEqual([]);
-    expect(validateChallenge(greater([72, 74], 74), settings, 0)).toEqual([]);
+  it('accepts options 8 apart and 8 from the player tank (amendment 10)', () => {
+    expect(validateChallenge(greater([8, 74], 74), settings, 0)).toEqual([]);
+    expect(validateChallenge(greater([66, 74], 74), settings, 0)).toEqual([]);
   });
 
   it('reports options closer than minOptionGap to each other', () => {
     expect(validateChallenge(greater([73, 74], 74), settings, 0).some((e) => e.includes('closer than'))).toBe(true);
+    expect(validateChallenge(greater([67, 74], 74), settings, 0).some((e) => e.includes('closer than'))).toBe(true);
+  });
+
+  it('reports a decoy option closer than minTankGap to the player tank (amendment 10)', () => {
+    expect(validateChallenge(greater([5, 74], 74), settings, 0).some((e) => e.includes('player'))).toBe(true);
   });
 
   it('reports an enemy closer than minEnemyGap to the player', () => {

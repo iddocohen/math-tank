@@ -6,11 +6,12 @@
  */
 import { deriveSeed } from '../rng';
 import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, Skill, TankState } from '../types';
-import { generateChallenge } from '../math/generate';
+import { enabledKinds, generateChallenge } from '../math/generate';
+import { isComparisonKind } from '../math/comparison';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { nextHelp } from './help';
-import { moveTank, parentDifficulty, type Difficulty } from './round';
+import { makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
 export const ANSWER_DELAY_MS = 1000;
@@ -24,6 +25,8 @@ const NEW_POSITION_TRIES = 8;
 /**
  * The challenge of a guided search. The latest input method decides whether findNumber may come: before any input
  * the game treats the input as keyboard input (FR-076). With `avoid`, another answer is chosen whenever possible.
+ * With `noComparison` (amendment 08 item 1, restored by amendment 10 item 10) the challenge is never a comparison, so
+ * right after "Neue Landschaft" exactly one tank stands opposite the child.
  */
 export function searchChallenge(
   settings: Settings,
@@ -34,7 +37,9 @@ export function searchChallenge(
   inputMethod: InputMethod | null,
   avoid: number | null = null,
   skillSteps: Record<Skill, number> = parentDifficulty(settings).skillSteps,
+  noComparison = false,
 ): Challenge {
+  const kindsAllowed = noComparison ? enabledKinds(settings).filter((k) => !isComparisonKind(k)) : undefined;
   let challenge: Challenge | null = null;
   for (let i = 0; i < NEW_POSITION_TRIES; i++) {
     challenge = generateChallenge({
@@ -45,6 +50,7 @@ export function searchChallenge(
       playerPosition,
       rulerLevel,
       inputMethod: inputMethod ?? 'keyboard',
+      ...(kindsAllowed ? { kindsAllowed } : {}),
     });
     if (challenge.answer !== avoid) break;
   }
@@ -56,10 +62,11 @@ export function searchChallenge(
  * input reset, answers accepted from `now + ANSWER_DELAY_MS`. lastShot stays, so the feedback of the previous shot
  * remains visible.
  *
- * Comparison (US4, FR-026, FR-027, amendment 09): the banner names the options and the one enemy stands at the answer,
- * like in every other challenge; the other options are not on the battlefield.
+ * Comparison (US4, FR-026, FR-027, amendment 10): the banner names the options; the enemy stands at the answer and a
+ * decoy, which looks the same and carries no number plate, at each other option. Other searches have no decoys.
  *
  * `difficulty` (US7, FR-018, FR-037): the skill steps the challenge is built with and the ruler level of the search.
+ * `noComparison` (amendment 08 item 1, amendment 10 item 10): the search right after "Neue Landschaft".
  */
 export function startSearch(
   s: BattleState,
@@ -67,16 +74,21 @@ export function startSearch(
   now: number,
   avoid: number | null,
   difficulty: Difficulty = { ...parentDifficulty(settings), rulerLevel: s.rulerLevel },
+  noComparison = false,
 ): BattleState {
   const rulerLevel = difficulty.rulerLevel;
-  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps);
+  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps, noComparison);
   const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
+  const decoys: TankState[] = (challenge.options ?? [])
+    .filter((n) => n !== challenge.answer)
+    .map((n, i) => makeTank(`decoy-${challenge.id}-${i}`, 'decoy', n, settings, s.terrain));
   return {
     ...s,
     phase: 'challenge',
     rulerLevel,
     challenge,
     enemy,
+    decoys,
     answerableAt: now + ANSWER_DELAY_MS,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null },
     message: null,
@@ -119,7 +131,7 @@ export function afterHelpRequest(s: BattleState, settings: Settings): BattleStat
 }
 
 /**
- * A miss in a search (a near miss on the body or a plain miss): one more wrong
+ * A miss in a search (a near miss on a tank's body, a plain miss or a burst decoy): one more wrong
  * answer, the next help step and a feedback line, "Ganz knapp! Triff die Linie." after a near miss, otherwise an
  * encouraging phrase chosen by the round seed (FR-033).
  */

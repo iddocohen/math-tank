@@ -26,6 +26,7 @@ import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
+import { topShellEntryX, topShellPath } from './topShell';
 import {
   applyImpact,
   createRound,
@@ -135,8 +136,9 @@ export class BattleController {
 
   /**
    * "Neue Landschaft" button (amendment 03, amendment 08, FR-070): a new landscape in the same round. New terrain from a
-   * new seed, the child's tank on the other side, exactly one enemy at a new position with a new challenge of any
-   * enabled kind (T243: a comparison too, since it has one enemy since amendment 09). Hearts, destroyed enemies, turn, the round time and the enemy's shot count stay; the enemy
+   * new seed, the child's tank on the other side, exactly one enemy at a new position with a new challenge that is not
+   * a comparison (amendment 10 item 10 restores amendment 08 item 1, so no decoys stand on the field right after the
+   * press). Hearts, destroyed enemies, turn, the round time and the enemy's shot count stay; the enemy
    * does not fire. An unfinished challenge is dropped without recording an attempt. Ignored while a shell is in
    * flight, while paused and once the round is over (a new round starts from the round-end screen).
    */
@@ -157,7 +159,7 @@ export class BattleController {
       elapsedMs: prev.elapsedMs,
       inputMethod: prev.inputMethod,
     };
-    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty) : scene);
+    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true) : scene);
   }
 
   /**
@@ -191,6 +193,17 @@ export class BattleController {
     const { selection, entry } = this.state;
     if (selection === null || entry.outOfRange) return;
     this.shoot(selection, method);
+  }
+
+  /**
+   * Comparison (amendment 10, FR-026, FR-064): a tap on a standing tank, the enemy or a decoy, fires at its number like
+   * the fire button. Ignored outside comparison searches, for burst decoys and before the challenge is answerable.
+   */
+  tapTank(tankId: string): void {
+    const s = this.state;
+    if (s.mode !== 'guided' || s.phase !== 'challenge' || s.decoys.length === 0) return;
+    const tank = [s.enemy, ...s.decoys].find((t) => t.id === tankId && t.alive);
+    if (tank) this.shoot(tank.position, 'pointer');
   }
 
   /** Fires at n with the fixed cannon (FR-065); the renderer replays the path and then calls shotAnimationDone. */
@@ -269,7 +282,8 @@ export class BattleController {
     const guided = next.mode === 'guided';
     if (next.lastShot?.hit) {
       // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
-      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1 };
+      // The remaining decoys fold away with it (amendment 10).
+      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
       if (guided) this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
@@ -380,8 +394,9 @@ export class BattleController {
 
   /**
    * The enemy's shell on the state after the player's impact (amendment 07, FR-041 to FR-043a): the seeded draw of
-   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle in every turn, comparison
-   * turns included (amendment 09: the only tank on the field is the enemy).
+   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle; in a comparison turn it
+   * enters from the top edge instead, at an x that depends on nothing about the enemy, so it does not show which tank
+   * is the enemy (amendment 10).
    */
   private nextEnemyShot(s: BattleState): ShotInFlight {
     const shotIndex = this.enemyShotIndex++;
@@ -395,7 +410,10 @@ export class BattleController {
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
     });
-    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
+    const path = s.decoys.length === 0
+      ? shot.path
+      : topShellPath({ impact: shot.impact, entryX: topShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
+    return { shooter: 'enemy', path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
   }
 
   private impact(impact: Impact, blastRadius: number): BattleState {

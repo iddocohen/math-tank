@@ -16,6 +16,7 @@ import { defaultSettings } from '../../src/core/settings/defaults';
 import { withRange } from '../../src/core/settings/validate';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { forbiddenWords, t } from '../../src/i18n';
+import { COMPARISON_47_74 } from '../../src/core/math/fixtures';
 
 const m = t();
 const settings = { ...defaultSettings(), freePlay: true };
@@ -312,4 +313,31 @@ test('on a crowded level 1 ruler only the typed number is labeled, once, under t
   await expect(overlay).toHaveAttribute('data-selection', '400');
   await expect(canvas).toHaveAttribute('data-preview-text', '');
   await expect(canvas).toHaveAttribute('data-ruler-labels', /(^|,)400(,|$)/);
+});
+
+test('after "Neue Landschaft" the search is never a comparison, so one tank stands opposite the child (amendment 08 item 1, amendment 10 item 10, FR-070)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(
+    ([key, value]) => {
+      window.localStorage.setItem(key, value);
+    },
+    [SETTINGS_KEY, JSON.stringify(COMPARISON_47_74.settings)] as const,
+  );
+  await page.goto(`/?seed=${COMPARISON_47_74.seed}`);
+  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  const overlay = page.getByTestId('battle-overlay');
+  const canvas = page.locator('canvas');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  // Only comparison is on, so the first search is a comparison with a decoy.
+  await expect(page.getByTestId('banner-option')).toHaveCount(2);
+  await expect(canvas).toHaveAttribute('data-enemy-tanks', '2');
+
+  const seed = await overlay.getAttribute('data-round-seed');
+  await page.getByRole('button', { name: m.battle.newScene, exact: true }).click();
+  await expect(overlay).not.toHaveAttribute('data-round-seed', seed!);
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expect(page.getByTestId('banner-option')).toHaveCount(0);
+  await expect(canvas).toHaveAttribute('data-enemy-tanks', '1');
+  await expect(canvas).toHaveAttribute('data-pointer-lines', /^-?\d+$/);
 });

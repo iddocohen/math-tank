@@ -31,7 +31,7 @@
  *   the next fire; after a hit a short pulse on the ruler at the destroyed enemy's number. The canvas carries `data-hit-pulse` (the pulsed number, '' when
  *   none) for the end-to-end tests only.
  * - Pointer lines (amendment 04, FR-073): a thin dashed vertical line from the center of the enemy tank, which is
- *   always visible, down to the ruler, ending in a small triangle on the ruler line
+ *   always visible, and from every standing decoy in comparison turns (amendment 10), down to the ruler, ending in a small triangle on the ruler line
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
  *   number from the ruler. The canvas carries `data-pointer-lines`, the numbers of those tanks, for the end-to-end
  *   tests only; nothing is drawn from it.
@@ -698,12 +698,13 @@ export class NumberLineView {
       this.landedText.setAlpha(1).setText(String(shot.landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
       this.scene.game.canvas.dataset.landing = String(shot.landed);
 
-      const to = shot.hit ? null : shot.enemyNumber;
+      // The step count refers to the enemy, or in comparison turns to the nearest standing tank (amendment 10).
+      const to = shot.hit ? null : shot.targetNumber;
       if (shot.nearMiss) {
-        // A near miss on the tank body: both numbers and the distance (amendment 06, FR-072).
-        this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
+        // A near miss on a tank body: both numbers and the distance (amendment 06, FR-072).
+        this.drawBracket(lx, numberToX(shot.targetNumber, min, max), t().battle.compare(shot.fired, shot.targetNumber));
       } else if (to !== null && to !== shot.landed) {
-        // Every miss, in every mode: the steps from the landing number to the enemy (amendment 07, FR-072).
+        // Every miss, in every mode: the steps from the landing number to the tank (amendments 07 and 10, FR-072).
         this.drawBracket(lx, numberToX(to, min, max), t().battle.steps(Math.abs(shot.landed - to)));
       } else {
         this.hideSteps();
@@ -790,11 +791,14 @@ export class NumberLineView {
     this.scene.game.canvas.dataset.stepsLabel = '';
   }
 
-  /** Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073). */
+  /**
+   * Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073): the
+   * enemy and, in comparison turns, every standing decoy (amendment 10).
+   */
   private drawPointerLines(s: RoundState): void {
     const g = this.marks;
     const enemy = visibleEnemy(s);
-    const visible: TankState[] = enemy ? [enemy] : [];
+    const visible: TankState[] = [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
     g.lineStyle(2, POINTER, 0.8);
     g.fillStyle(POINTER, 0.9);
     for (const tank of visible) {

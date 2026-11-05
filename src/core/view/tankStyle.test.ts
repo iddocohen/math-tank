@@ -41,6 +41,10 @@ describe('tankStyle (amendment 05, FR-077, FR-078)', () => {
     expect(e < 20 || e > 340).toBe(true);
   });
 
+  it('a decoy looks exactly like the enemy (amendment 10, FR-077)', () => {
+    expect(tankStyle('decoy')).toEqual(enemy);
+  });
+
   it('the enemy body is darker than the child tank', () => {
     expect(luminance(enemy.color)).toBeLessThan(luminance(player.color));
   });

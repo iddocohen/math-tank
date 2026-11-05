@@ -12,7 +12,7 @@ import { validateSettings, withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
 import { generateChallenge } from './generate';
 import { validateChallenge } from './validate';
-import { minEnemyGap } from './gaps';
+import { minEnemyGap, minTankGap } from './gaps';
 import { clampStep, ladders } from '../progress/ladders';
 import { crossesMultiple, mainSkillOf } from './skills';
 
@@ -214,6 +214,9 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
             comparisonKinds.add(c.kind);
           }
           const errors = validateChallenge(c, settings, playerPosition);
+          // Amendment 10: every option is a tank, so each keeps minTankGap from the player.
+          const { min, max } = settings.range;
+          for (const o of c.options ?? []) if (Math.abs(o - playerPosition) < minTankGap(min, max)) errors.push(`option ${o} too close to the player`);
           if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind} ${String(c.options)}: ${errors.join('; ')}`);
         }
         expect(problems).toEqual([]);

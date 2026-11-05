@@ -132,9 +132,10 @@ export function BattleOverlay({ controller, state, gear }: Props) {
             {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
         ) : showMiss && lastShot.nearMiss ? (
-          // On the tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072).
+          // On a tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072). In a
+          // comparison turn the number is the nearest standing tank's, so it does not show which tank is the enemy.
           <span className="landed near" data-testid="hit-feedback">
-            {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
+            {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.targetNumber)}</span>
           </span>
         ) : encouragement ? (
           <span className="encouragement" data-testid="encouragement">

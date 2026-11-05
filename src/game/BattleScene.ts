@@ -18,9 +18,15 @@
  * - At the start of every round, which includes "Neue Landschaft", a bouncing "Du" arrow points at the child's tank
  *   for YOU_MARKER_MS (amendment 05, FR-077). The canvas attribute `data-you-marker` is `on` while it shows and `off`
  *   after, for the end-to-end tests only (tasks.md D4).
- * - Comparison (US4, amendment 09, FR-026): a comparison turn looks like every other turn, with exactly one enemy
- *   tank and no number plate; the banner names the options. The canvas attribute `data-enemy-tanks` counts the enemy
- *   tanks standing on the battlefield, for the end-to-end tests only.
+ * - Comparison (US4, amendment 10, FR-026, FR-066): the banner names the options; the enemy stands at the correct
+ *   option and a decoy view, drawn exactly like the enemy and with no number plate, at each other option. Decoy views
+ *   are created when a comparison search starts and removed when it ends. Every standing tank takes taps
+ *   (controller.tapTank). A burst decoy breaks into cardboard pieces and is gone; when the enemy is destroyed the
+ *   remaining decoys fade out. A near miss shakes the tank in lastShot.nearTankId. Help step 3 puts a green ring
+ *   around the enemy. The enemy does not turn its turret before a shell from the top edge. For the end-to-end tests
+ *   only, the canvas carries `data-enemy-tanks` (standing tanks that look like the enemy), `data-tank-taps`
+ *   (`<number>@<x>,<y>` of each tappable tank, in world units), `data-decoy-bursts` (decoys burst this round) and
+ *   `data-help-tanks` (the number of the tank marked by help step 3, or '').
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  */
 import Phaser from 'phaser';
@@ -29,7 +35,7 @@ import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
-import type { RoundState, ShotInFlight } from '../core/types';
+import type { RoundState, ShotInFlight, TankState } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
 import { YOU_MARKER_MS } from '../core/view/tankStyle';
 import { Effects } from './effects';
@@ -45,6 +51,7 @@ export interface BattleSounds {
   shot(): void;
   boom(): void;
   chime(): void;
+  plopp(): void;
 }
 
 export interface BattleSceneOptions {
@@ -58,6 +65,8 @@ const NEW_ENEMY_DELAY_MS = 600;
 /** The enemy turns its cannon, then fires after this pause, so the child can follow. */
 const ENEMY_TURN_MS = 450;
 const ENEMY_FIRE_DELAY_MS = 700;
+/** A folded decoy view is removed once its fade-out is over. */
+const FOLD_REMOVE_MS = 800;
 
 export class BattleScene extends Phaser.Scene {
   private readonly controller: BattleController;
@@ -66,6 +75,9 @@ export class BattleScene extends Phaser.Scene {
   private terrain!: TerrainView;
   private player!: TankView;
   private enemy!: TankView;
+  /** Decoy views by tank id, for the decoys of the current comparison search (amendment 10). */
+  private readonly decoyViews = new Map<string, TankView>();
+  private decoyBursts = 0;
   private projectile!: ProjectileView;
   private effects!: Effects;
   private numberLine!: NumberLineView;
@@ -86,7 +98,7 @@ export class BattleScene extends Phaser.Scene {
     this.terrain = new TerrainView(this, WORLD_HEIGHT);
     this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT);
     this.player = new TankView(this, 'player', WORLD_HEIGHT);
-    this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT);
+    this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT, () => this.controller.tapTank(this.controller.getState().enemy.id));
     this.numberLine = new NumberLineView(this, this.controller, WORLD_HEIGHT);
     this.effects = new Effects(this);
     this.prev = null;
@@ -105,6 +117,8 @@ export class BattleScene extends Phaser.Scene {
   private teardown(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    for (const view of this.decoyViews.values()) view.destroy();
+    this.decoyViews.clear();
     this.numberLine.destroy();
   }
 
@@ -136,7 +150,10 @@ export class BattleScene extends Phaser.Scene {
     if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
-    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
+    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) {
+      const id = s.lastShot.nearTankId;
+      (id === null || id === s.enemy.id ? this.enemy : this.decoyViews.get(id))?.shake();
+    }
     // The large explosion where the destroyed enemy stood. In free play the previous state holds the destroyed enemy
     // and the new one fades in at its new number; in a guided search the hit state itself holds the destroyed enemy.
     const gone = destroyed ? (s.mode === 'guided' ? s.enemy : (prev?.enemy ?? s.enemy)) : null;
@@ -145,7 +162,7 @@ export class BattleScene extends Phaser.Scene {
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
       if (s.mode !== 'guided') this.enemy.appear(NEW_ENEMY_DELAY_MS);
     }
-    this.game.canvas.dataset.enemyTanks = s.enemy.alive ? '1' : '0';
+    this.drawDecoys(s, prev, newRound, searchAfterHit);
     this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
     this.projectile.setTrail(s.phase === 'playerShot' ? null : s.lastPlayerPath);
@@ -156,6 +173,79 @@ export class BattleScene extends Phaser.Scene {
 
     if (s.phase === 'paused' && !this.scene.isPaused()) this.scene.pause();
     else if (s.phase !== 'paused' && this.scene.isPaused()) this.scene.resume();
+  }
+
+  /**
+   * Decoy views of a comparison search (amendment 10, FR-026, FR-066): created with the search, fading in with a new
+   * enemy, burst into cardboard at their number, folded away with a destroyed enemy, removed when the search ends.
+   */
+  private drawDecoys(s: RoundState, prev: RoundState | null, newRound: boolean, searchAfterHit: boolean): void {
+    if (newRound) this.decoyBursts = 0;
+    const ids = new Set(s.decoys.map((d) => d.id));
+    for (const [id, view] of this.decoyViews) {
+      if (ids.has(id)) continue;
+      this.decoyViews.delete(id);
+      if (newRound) view.destroy();
+      else {
+        view.setTappable(false);
+        view.setHidden(true, true);
+        this.time.delayedCall(FOLD_REMOVE_MS, () => view.destroy());
+      }
+    }
+    const shotChanged = !newRound && s.lastShot !== prev?.lastShot;
+    for (const decoy of s.decoys) {
+      let view = this.decoyViews.get(decoy.id);
+      const created = !view;
+      if (!view) {
+        view = new TankView(this, 'decoy', WORLD_HEIGHT, () => this.controller.tapTank(decoy.id));
+        view.setAim(s.playerSide === 'left' ? 150 : 30);
+        view.setTarget(true);
+        this.decoyViews.set(decoy.id, view);
+        if (searchAfterHit) view.appear(NEW_ENEMY_DELAY_MS);
+      }
+      view.sync({ ...decoy, alive: true }, created);
+      const wasAlive = prev?.decoys.find((d) => d.id === decoy.id)?.alive ?? decoy.alive;
+      if (wasAlive && !decoy.alive) {
+        if (shotChanged && s.lastShot?.decoyHit && s.lastShot.hitTankId === decoy.id) {
+          // A decoy hit at its number bursts like a cardboard dummy and is gone (FR-066).
+          const c = tankCenter(decoy);
+          this.effects.cardboard(c.x, toScreenY(c.y, WORLD_HEIGHT));
+          view.setHidden(true, false);
+          this.decoyBursts++;
+        } else {
+          // The enemy was destroyed: the remaining decoys fold away (fade out).
+          view.setHidden(true, true);
+        }
+      } else if (!decoy.alive) {
+        view.setHidden(true, false);
+      }
+    }
+
+    // Taps, the help mark and the test attributes.
+    const choosing = s.phase === 'challenge' && s.decoys.length > 0;
+    const standing: Array<{ tank: TankState; view: TankView }> = [];
+    if (s.enemy.alive) standing.push({ tank: s.enemy, view: this.enemy });
+    for (const decoy of s.decoys) {
+      const view = this.decoyViews.get(decoy.id);
+      if (view && decoy.alive) standing.push({ tank: decoy, view });
+    }
+    standing.sort((a, b) => a.tank.position - b.tank.position);
+    this.enemy.setTappable(choosing && s.enemy.alive);
+    for (const decoy of s.decoys) this.decoyViews.get(decoy.id)?.setTappable(choosing && decoy.alive);
+    const marked = s.decoys.length > 0 && s.enemy.alive && s.phase !== 'roundOver' && s.help.content?.solution != null;
+    this.enemy.setMark(marked);
+    const canvas = this.game.canvas;
+    canvas.dataset.enemyTanks = String(standing.length);
+    canvas.dataset.tankTaps = choosing
+      ? standing
+          .map(({ tank, view }) => {
+            const p = view.tapCenter();
+            return `${tank.position}@${Math.round(p.x)},${Math.round(p.y)}`;
+          })
+          .join(';')
+      : '';
+    canvas.dataset.decoyBursts = String(this.decoyBursts);
+    canvas.dataset.helpTanks = marked ? String(s.enemy.position) : '';
   }
 
   private showYouMarker(): void {
@@ -180,8 +270,9 @@ export class BattleScene extends Phaser.Scene {
       this.fireAfter(shot, PLAYER_TURN_MS);
       return;
     }
-    // The enemy turns its turret toward its aim in every turn, comparison turns included (amendment 09).
-    if (angle !== null) this.enemy.turnTo(angle, ENEMY_TURN_MS);
+    // The enemy turns its turret toward its aim, except before a shell from the top edge in a comparison turn, which
+    // must not show which tank is the enemy (amendment 10, FR-043a).
+    if (angle !== null && this.controller.getState().decoys.length === 0) this.enemy.turnTo(angle, ENEMY_TURN_MS);
     this.fireAfter(shot, ENEMY_FIRE_DELAY_MS);
   }
 
@@ -207,7 +298,9 @@ export class BattleScene extends Phaser.Scene {
     else this.controller.enemyShotAnimationDone();
     // The same soft boom for every explosion, a miss included, and the soft chime after a hit (FR-009, AC-07).
     const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesDestroyed > before;
-    for (const sound of landingSounds({ outOfBounds: shot.outOfBounds, destroyedEnemy })) this.sounds?.[sound]();
+    // A burst decoy plays only the light plopp (amendment 10, FR-066).
+    const burstDecoy = shot.shooter === 'player' && this.controller.getState().lastShot?.decoyHit === true;
+    for (const sound of landingSounds({ outOfBounds: shot.outOfBounds, destroyedEnemy, burstDecoy })) this.sounds?.[sound]();
   }
 }
 
