@@ -162,3 +162,18 @@ The product owner said: "The enemy AI is too simple in the sense he never hits m
 - Decisions of this update that the amendment does not state: the shell lands about 35 world units away at 3 misses in a row, not 30, because the hit area reaches 30 world units from the tank's center; a fast guess that adds 2 can skip the warning; free play has no fast-guess rule, so every miss there adds 1; on the enemy's first shot of a round the count is kept even when it reached the limit, so the next miss hits; the new terrain seed comes from the round seed and the number of destroyed enemies, so the challenges stay as they were.
 
 The spec (US1, US2, US5, Edge Cases, FR-041 to FR-044, FR-070, FR-081, Key Entities, new FR-098 to FR-101, Amendments), the data model (`RoundState.missStreak`, `RoundState.terrainSeed`), the contracts (`core/ai`, `isFastGuess`, `renewTerrain`, the battle flow and test attributes), quickstart (scenarios 22 and 24) and tasks (Phase 22f) were updated to match.
+
+## Amendment 12
+
+**Date**: 2026-11-05
+
+The product owner said: "It must also run on a IPAD resolution and/or phone resolution". This is an intended change, not drift.
+
+- **PRD section 11 (accessibility and usability)** says "Desktop and tablet support", and section 12 (technical requirements) says "Maintain smooth animation on typical desktop and tablet hardware". [Amendment 12](./amendment-12-tablet-phone.md) keeps both and adds phones held sideways (FR-050). The performance target SC-002 names tablets and desktops; no frame-rate target is set for phones.
+- **Tablet support before this amendment** assumed a minimum screen of 768 by 600 CSS pixels and touch on the ruler, with the fire button as the only touch control. The amendment adds an on-screen number pad on touch devices (FR-102, FR-103) and layouts for an iPad held sideways or upright and for a phone held sideways (FR-104). The 768 by 600 minimum is replaced by the tested sizes 1024 by 768, 768 by 1024 and 844 by 390.
+- **A phone held upright is not a play layout.** The amendment asks for a picture "Bitte dreh das Handy" that pauses the game; the settings and progress pages still work upright.
+- **Amendment 05 item 3 (input methods)** is extended, not changed: the number pad counts as keyboard input, so "Finde N" is not generated while the child uses it (FR-076, FR-103).
+- **Fullscreen (FR-054)**: on iPhone the Fullscreen API is not available to web pages, so the fullscreen button is hidden there (FR-106) and the Home Screen note of FR-048a applies.
+- Decisions of this update that the amendment does not state: the layout limits (a phone held sideways is at most 500 CSS pixels tall; a phone held upright is narrower than 600 pixels); "touch device" uses the main pointer (`pointer: fine`), so an iPad with a trackpad counts as a touch device unless its screen is at least 1100 pixels wide and the trackpad is the main pointer; with "Zahlenfeld" set to "Nie" every size uses the bar at the bottom; the pad's "Feuer!" key is the only fire button while the pad shows; the picture "Bitte dreh das Handy" also covers the start screen and the garage, with the gear on it so the parent can reach the settings upright; the smallest tested screen is 844 by 390.
+
+The spec (US8, Edge Cases, FR-046, FR-050, FR-053, FR-058, FR-076, new FR-102 to FR-106, Assumptions, Amendments), the data model (Settings version 6 with `numberPad`, the screen layout rule), the contracts (screens, layouts and the number pad, the keyboard map note, the input method), quickstart (scenario 12 and new scenarios 25 to 27) and tasks (Phases 22g and 22h, Phase 23 tasks T136 and T141) were updated to match.

@@ -1,12 +1,12 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed) and [amendment 09](./amendment-09-comparison-one-enemy.md) (comparison with one enemy and the options in the banner; decoys, number plates, `orderTaps`, `notOnTank`, `orderAnswer` and the kinds `'equal'` and `'order3'` removed; `'middle3'` added) and [amendment 10](./amendment-10-decoys-without-plates.md) (decoy tanks without number plates at the other options; `decoys`, the `'decoy'` tank kind, `tapTank` and the shell from the top edge in comparison turns are back; options keep the tank gap) and [amendment 11](./amendment-11-tank-garage.md) (stars, garage items and the chosen look in `mathtanks.garage.v1`; settings version 5 adds `garage`).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed) and [amendment 09](./amendment-09-comparison-one-enemy.md) (comparison with one enemy and the options in the banner; decoys, number plates, `orderTaps`, `notOnTank`, `orderAnswer` and the kinds `'equal'` and `'order3'` removed; `'middle3'` added) and [amendment 10](./amendment-10-decoys-without-plates.md) (decoy tanks without number plates at the other options; `decoys`, the `'decoy'` tank kind, `tapTank` and the shell from the top edge in comparison turns are back; options keep the tank gap) and [amendment 11](./amendment-11-tank-garage.md) (stars, garage items and the chosen look in `mathtanks.garage.v1`; settings version 5 adds `garage`) and [amendment 12](./amendment-12-tablet-phone.md) (settings version 6 adds `numberPad`; the screen layout rule in `src/core/view/screen.ts`).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `5` | `5` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; `migrate` upgrades version 0 to 4 data (see below) |
+| `version` | `6` | `6` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; `migrate` upgrades version 0 to 5 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -29,6 +29,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `showRecords` | `boolean` | `true` | Shows "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086); the best is stored either way |
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
 | `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
+| `numberPad` | `'auto' \| 'always' \| 'never'` | `'auto'` | "Zahlenfeld" (amendment 12, FR-102): `'auto'` shows the on-screen number pad in battle when the main pointer is not fine or the screen is narrower than 1100 CSS pixels; `'always'` shows it on every screen; `'never'` hides it |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
 
@@ -39,6 +40,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 3** (amendment 06): `exactHit` is dropped; `roundType` is added with `'untilHearts'`, or `'enemyCount'` when `noDamage` is `true`; `showClock` is added with `false` and `showRecords` with `true`; `roundLength` is kept as the number of enemies, clamped to 1 to 20 (a whole number; anything else is left for validation to reject); `version` becomes 4. Version 0, 1 and 2 data go through every step.
 
 **Migration from version 4** (amendment 11): `garage` is added with `true` unless already set; `version` becomes 5. Version 0 to 3 data go through every step.
+
+**Migration from version 5** (amendment 12): `numberPad` is added with `'auto'` unless already set; `version` becomes 6. Version 0 to 4 data go through every step.
 
 `withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 
@@ -179,6 +182,17 @@ interface Garage { version: 1; stars: number; look: Look }   // stars: whole num
 - `looks.ts` gives each item's drawing as plain shapes in tank coordinates (polygons, circles and lines with colors), drawn by Phaser in battle and by SVG in the garage preview, and `tankColor(id)` the body color. Every tank color has a hue between 175 and 235 degrees (blue to blue-green), far from the red enemy (hue near 0).
 
 **Loading** (`loadGarage`): a missing key gives `resetStars()`. Data without `version` (version 0) gets `version: 1`, a whole-number `stars` of at least 0 (anything else gives 0) and a full `look` (missing parts from `STANDARD_LOOK`). After the schema check, every part of `look` that is unknown or not unlocked for `stars` becomes the standard item of its kind. Damaged JSON or a failed schema check loads `resetStars()` and reports `'invalid'` like settings. "Fortschritt zurücksetzen" never touches this key; "Sterne zurücksetzen" writes `resetStars()`.
+
+## Screen layout (not persisted, amendment 12)
+
+`src/core/view/screen.ts`, pure, no DOM:
+
+- `ScreenLayout = 'wide' | 'portrait' | 'side' | 'rotate'` (FR-104).
+- `screenLayout(width, height): ScreenLayout` from the viewport size in CSS pixels: `'rotate'` when `height > width` and `width < 600`; `'portrait'` when `height > width` otherwise; `'side'` when `width >= height` and `height <= 500`; else `'wide'`.
+- `numberPadShown(setting, { finePointer, width }): boolean` (FR-102): `'always'` gives `true`, `'never'` gives `false`, `'auto'` gives `true` when `finePointer` is `false` or `width < 1100`.
+- Constants `PAD_WIDTH_LIMIT = 1100`, `PHONE_WIDTH_LIMIT = 600`, `SIDE_HEIGHT_LIMIT = 500`.
+
+The app reads the size from `window.innerWidth` and `window.innerHeight` and the pointer from `matchMedia('(pointer: fine)')` (no `matchMedia` counts as a fine pointer), and updates on `resize` and `orientationchange`.
 
 ## Difficulty ladders
 

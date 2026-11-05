@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [amendment-12-tablet-phone.md](./amendment-12-tablet-phone.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -672,21 +672,54 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 
 ---
 
+## Phase 22g: Amendment 12 number pad, settings and layout rule
+
+**Goal**: The engine-free layout rule, the "Zahlenfeld" setting with its storage version, and the number pad component that acts exactly like the keyboard ([amendment 12](./amendment-12-tablet-phone.md)), so Phase 22h only arranges them on the screen.
+
+**Independent Test**: `pnpm test` passes for `src/core/view/screen.test.ts`, `src/core/settings/`, `src/core/storage/`, `src/app/NumberPad.test.tsx`, `src/app/BattleOverlay.test.tsx` and `src/app/SettingsPage.test.tsx`: 844 by 390 gives the `side` layout; version 5 settings load as version 6 with `numberPad: 'auto'`; tapping 3, 7 and "Feuer!" on the pad types 37 and fires as keyboard input.
+
+- [ ] T272 [P] [US8] Write `src/core/view/screen.test.ts` before the code: `screenLayout(width, height)` gives `'wide'` for 1024 by 768, 1180 by 820, 1366 by 1024, 1280 by 720 and 1920 by 1080; `'portrait'` for 768 by 1024, 820 by 1180 and 600 by 900; `'side'` for 844 by 390, 932 by 430 and 667 by 375; `'rotate'` for 390 by 844, 430 by 932 and 375 by 667; a square screen counts as wider than tall; `numberPadShown(setting, { finePointer, width })` gives `true` for `'always'`, `false` for `'never'`, and for `'auto'` `true` when `finePointer` is `false` or `width < 1100`, else `false` (FR-102, FR-104)
+- [ ] T273 [P] [US8] Update tests before the code: `src/core/settings/settings.test.ts` (version 6, `numberPad` default `'auto'`, the schema accepts `'auto'`, `'always'` and `'never'` and rejects any other value or a missing field); `src/core/storage/storage.test.ts` (version 5 settings migrate to version 6 with `numberPad: 'auto'`, a stored value is kept, versions 0 to 4 go through every step to version 6); `src/core/storage/exportImport.test.ts` (old settings files import as version 6) (FR-046, FR-048, FR-102)
+- [ ] T274 [US8] Implement until T272 and T273 pass: new `src/core/view/screen.ts` (`ScreenLayout`, `screenLayout`, `numberPadShown`, `PAD_WIDTH_LIMIT`, `PHONE_WIDTH_LIMIT`, `SIDE_HEIGHT_LIMIT`); `numberPad` in `src/core/settings/schema.ts` and `src/core/settings/defaults.ts`; the version 5 to 6 step in `src/core/storage/migrate.ts` (FR-046, FR-048, FR-102, FR-104)
+- [ ] T275 [P] [US8] Write and update component tests before the code: new `src/app/NumberPad.test.tsx` (keys 0 to 9 and ⌫ with `data-testid="pad-key"` and `data-key`; a minus key only when the range minimum is below 0; tapping 3 and 7 calls `typeDigit(3)` and `typeDigit(7)`, ⌫ calls `backspace`, minus calls `typeMinus`; every key has `tabIndex` -1 and the class `pad-key`; keys are disabled when `disabled` is set); `src/app/BattleOverlay.test.tsx` (with `numberPad` the overlay shows the pad and exactly one fire button, `data-number-pad` is `true`, tapping 3, 7 and "Feuer!" fires at 37 with `inputMethod` `'keyboard'`, and at the solution step the key reads "Feuer auf {n}"; without `numberPad` there is no pad and the fire button still sets `'pointer'`); `src/app/SettingsPage.test.tsx` (the "Zahlenfeld" select offers "Automatisch", "Immer" and "Nie" and saves `numberPad`) (FR-046, FR-053, FR-076, FR-102, FR-103)
+- [ ] T276 [US8] Implement until T275 passes: new `src/app/NumberPad.tsx`; the `numberPad` prop, the pad in the control bar and `confirm('keyboard')` for its "Feuer!" key in `src/app/BattleOverlay.tsx`; the "Zahlenfeld" select in the group Runde in `src/app/SettingsPage.tsx` and `'numberPad'` in `SETTING_FIELDS` in `src/app/comingSoon.ts`; texts in `src/i18n/de.ts` (FR-046, FR-053, FR-056, FR-102, FR-103)
+
+**Checkpoint**: The number pad and its setting work and are tested; the battle screen does not yet choose a layout.
+
+---
+
+## Phase 22h: Amendment 12 layouts on iPad and phone, rotate picture and device tests
+
+**Goal**: The battle screen arranges the battlefield, the ruler and the number pad for an iPad held sideways or upright and a phone held sideways; a phone held upright shows "Bitte dreh das Handy" and pauses; nothing is cut off; the parent gate works by touch; the fullscreen button is hidden where fullscreen is not available ([amendment 12](./amendment-12-tablet-phone.md)).
+
+**Independent Test**: `tests/e2e/devices.spec.ts` passes in the WebKit projects `ipad-landscape` (1024 by 768), `ipad-portrait` (768 by 1024) and `iphone-landscape` (844 by 390, with the 390 by 844 rotate check): one full guided round is played with taps on the number pad only, and every listed element is inside the screen with no two targets overlapping.
+
+- [ ] T277 [P] [US8] Write component tests before the code: `src/app/StartScreen.test.tsx` (the fullscreen button shows only when `document.fullscreenEnabled` is `true`); new `src/app/RotateScreen.test.tsx` (`data-testid="rotate-screen"`, the text "Bitte dreh das Handy", the phone picture, and the gear passed in) (FR-104, FR-106)
+- [ ] T278 [P] [US8] Write `tests/e2e/devices.spec.ts` before the layout code, and add the WebKit projects `ipad-landscape` (Playwright "iPad Mini landscape", 1024 by 768), `ipad-portrait` ("iPad Mini", 768 by 1024) and `iphone-landscape` ("iPhone 13 landscape" with the viewport 844 by 390) to `playwright.config.ts`, which run only this spec, while the projects `chromium`, `webkit` and `firefox` ignore it. Cases, with taps only: (a) after "Spielen" the battle has `data-number-pad="true"` and the expected `data-layout`; every pad key is at least 48 by 48 CSS px; the canvas, the banner, the help button, the gear, "Neue Landschaft" and every pad key lie inside the viewport; no two of these targets overlap and the canvas does not overlap the pad; the page does not scroll; in `side` the banner text is at least 16 px; (b) one full guided round with "Gegner pro Runde" 2, answered by tapping the digits of `data-enemy-number` and "Feuer!" on the pad, ending at the round-end screen, and no banner reads "Finde"; (c) the gear held by touch for 2 seconds opens the parent menu, "Einstellungen" opens the settings page, which fits the screen width; (d) in `iphone-landscape` only: resizing to 390 by 844 during a round shows `rotate-screen` and `data-phase="paused"`; the gear on it opens the settings page; resizing back to 844 by 390 hides the picture and the round continues. With `SCREENSHOT_DIR` set, each case saves a screenshot of the size (FR-050, FR-053, FR-058, FR-102 to FR-105, US8 scenarios 2, 5, 11 and 12)
+- [ ] T279 [US8] Implement until T277 and T278 pass: new `src/app/useScreen.ts` (layout and pad from the window size, `matchMedia('(pointer: fine)')` and the setting, updated on `resize` and `orientationchange`); new `src/app/RotateScreen.tsx`; `src/app/App.tsx` (`data-layout` and `data-number-pad` on the battle, the rotate picture over the start screen, the garage and the battle while no parent page is open, pause on it and resume only what it paused, keys off while it shows); `src/app/StartScreen.tsx` (fullscreen button only with `document.fullscreenEnabled`); `src/app/ParentGate.tsx` (no long-press menu or text selection on touch); `src/app/styles.css` (the layouts `wide`, `portrait` and `side` with the pad, the banner centered over the battlefield, the rotate picture); texts in `src/i18n/de.ts` (FR-053, FR-054, FR-058, FR-104, FR-105, FR-106)
+- [ ] T280 [US8] Run lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox and in the three device projects; take muted headless screenshots of a battle mid-round with the number pad at 1024 by 768, 768 by 1024, 844 by 390 and of the rotate picture at 390 by 844, and of the settings page at 768 by 1024, stored in the session scratchpad, and check them for cut-off or overlapping elements (FR-058, FR-105)
+
+**Checkpoint**: The game plays on an iPad held either way and on a phone held sideways with the number pad alone.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
-**Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
+**Goal (US8, P3)**: The game works offline after one load, with the keyboard alone, with pause, fullscreen and spoken challenges. Touch on tablets and phones, the number pad and the screen sizes are built and tested in Phases 22g and 22h (amendment 12).
 
 **Independent Test**: `pnpm e2e` passes for offline, no-external-requests, touch and keyboard specs.
 
+*Changed by amendment 12*: T136 keeps only the touch checks that `tests/e2e/devices.spec.ts` (T278) does not make; T141 keeps only the fullscreen button in the battle, because T279 hides the start screen's button where fullscreen is not available.
+
 - [ ] T134 [P] [US8] Write `tests/e2e/offline.spec.ts`: load `/` against the production build, wait until the service worker controls the page, set the context offline, reload, press Enter to start and play until `data-phase="roundOver"` (shorten with stored settings `roundType: 'enemyCount'` and `roundLength: 3`, reading the answer of each `findNumber` search from the banner). Must pass in Chromium; see D6 for WebKit and Firefox (FR-051, SC-008, AC-10, US8 scenario 1)
 - [ ] T135 [P] [US8] Write `tests/e2e/no-external-requests.spec.ts`: record every request during load and one full round; fail on any request whose origin differs from `baseURL` (FR-052)
-- [ ] T136 [P] [US8] Write `tests/e2e/touch.spec.ts` with `hasTouch: true` and viewports 1024 by 768, 768 by 1024 and 768 by 600: every visible button and the ruler have a bounding box of at least 48 by 48 CSS pixels and do not overlap; tap the ruler and the fire button by touch, and check that no −1 or +1 button exists (amendment 05); no on-screen keyboard field is focused; the ruler marker for a chosen number lines up with the battlefield x within half a unit (FR-053, FR-058, SC-004, US8 scenarios 2 and 5)
+- [ ] T136 [P] [US8] Write `tests/e2e/touch.spec.ts` for the device projects of T278 (add it to their `testMatch`): tap the ruler and then "Feuer!" by touch and check that the shell lands at the tapped number; check that no −1 or +1 button exists (amendment 05) and that no text field is focused; the ruler marker for a tapped number lines up with the battlefield x within half a unit. Target sizes, overlaps and the screen sizes are covered by T278 (amendment 12) (FR-053, SC-004, US8 scenario 2)
 - [ ] T183 [P] [US8] Write `tests/e2e/keyboard.spec.ts` using only `page.keyboard` (no click, tap or mouse call, checked by a helper that fails on any pointer event reaching the page): load `/?seed=<fixed>` and press Enter without clicking; in a `findNumber` search type a wrong number and Enter; press H and check `data-help-level`; fire two more wrong numbers; at the solution press Enter and confirm the hit; type 150 in range 0 to 100 and press Enter, nothing fires and the range hint shows; press Escape to pause and again to resume; in a comparison search (stored settings, fixture seed, "Der Gegner steht bei der größeren Zahl: 47 oder 74") type 74 and Enter (amendment 09: no `order3`, no tank typing); play to the round end and press Enter for a new round; hold Enter with the gear focused by script and confirm settings never open; the arrow keys change nothing, and with typed answers no search is "Finde N" (amendment 05). Run in Chromium, WebKit and Firefox (FR-059 to FR-064, FR-076, SC-011, US8 scenarios 6 to 10)
 - [ ] T137 [P] [US8] Write `src/audio/speaker.test.ts` with a mocked `speechSynthesis`: `available` is false when the API or a German voice is missing; `speak` uses `lang: 'de-DE'` and cancels earlier speech; `prime()` speaks a short greeting (FR-055, edge case "Speech not available")
 - [ ] T138 [US8] Implement `src/audio/speaker.ts` (`createSpeaker()` implementing the `Speaker` port), call `prime()` and resume Web Audio from the "Spielen" tap or the starting Enter key in `src/app/StartScreen.tsx`, speak each new challenge when `settings.sound.speech` is on, and show a speaker icon in `src/app/BattleOverlay.tsx` only when `available` (FR-055, US8 scenario 4)
 - [ ] T139 [US8] Implement the PWA registration in `src/app/swUpdate.ts` and `src/main.tsx` using `virtual:pwa-register` with `registerType: 'prompt'`: when a new version is waiting, apply it only while the start screen is shown, never during a round. Then make `tests/e2e/offline.spec.ts` pass (FR-051, FR-051a, research R12)
 - [ ] T140 [US8] Add pause and resume to `src/app/BattleOverlay.tsx` (pause button at top left, a resume screen; Escape pauses and resumes through `useKeyboard`, Enter and Space resume) and to `src/game/BattleScene.ts` (pause tweens, particles and path replay on `paused`, continue on resume from the same point) (FR-054, FR-062, US8 scenarios 3 and 9)
-- [ ] T141 [US8] Add a fullscreen button to `src/app/StartScreen.tsx` and `src/app/BattleOverlay.tsx` using the Fullscreen API on the app root; hide it where the API is missing; after leaving fullscreen, focus returns to the app root (FR-054, FR-059, US8 scenario 5)
+- [ ] T141 [US8] Add a fullscreen button to `src/app/BattleOverlay.tsx` using the Fullscreen API on the app root, shown only with `document.fullscreenEnabled` like the start screen's button (T279, FR-106), placed so it overlaps no other target in the layouts of FR-104; after leaving fullscreen, focus returns to the app root (FR-054, FR-059, US8 scenario 5)
 - [ ] T142 [US8] Add an optional generated music loop to `src/audio/sfx.ts`, played only when `settings.sound.music` is on (default off), and make `tests/e2e/touch.spec.ts`, `tests/e2e/keyboard.spec.ts` and `tests/e2e/no-external-requests.spec.ts` pass in all three browsers (FR-009, FR-052, SC-011, AC-10)
 
 **Checkpoint**: US8 complete (AC-10).
@@ -702,7 +735,7 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - [ ] T152 [P] Extend `src/i18n/i18n.test.ts`: every child-facing message key (banner, feedback, help, round end, range hint) has at most about 8 words, checked as at most 9 words with an allowlist for prompts that need the numbers (FR-057)
 - [ ] T153 Accessibility pass on `src/app/*.tsx`: every icon-only button (gear, help, speaker, pause, fullscreen, new scene, fire) gets a German `aria-label` from `src/i18n/de.ts`; focus is visible on the app root; the readout of typed digits is announced with `aria-live="polite"` (it shows no number while pointing, amendment 05); no text below 18 px on child screens (FR-053, FR-057, FR-059)
 - [ ] T154 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e` and fix every failure. Done when all pass in Chromium, WebKit and Firefox, and `grep -rni "setAim\|aimCorrection\|charged\|labelLevel\|selectInterval\|nudge" src tests` finds nothing (FR-050)
-- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 21) against `pnpm preview`, including scenario 12 on a tablet or with touch emulation at 1024 by 768, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
+- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 27) against `pnpm preview`, including scenarios 12 and 25 to 27 on an iPad and an iPhone or with Playwright's device emulation, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
 
 ---
 
@@ -735,6 +768,8 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phase 22d (amendment 11 core)**: depends on Phases 13a and 22c. T252 and T253 run before T254, T255 before T256, T257 before T258; T254 and T256 run before T257.
 - **Phase 22e (amendment 11 screens and battle look)**: depends on Phase 22d. T259, T260 and T261 run before T262 and T263; T264 runs last. Runs before Phase 23, whose keyboard spec T183 must also allow G on the start screen.
 - **Phase 22f (amendment 13)**: depends on Phases 18b, 22c and 22e. T265 runs before T266, T267 before T268, T266 before T267 (the controller uses the new enemy input), T269 before T270; T271 runs last.
+- **Phase 22g (amendment 12 core and components)**: depends on Phases 13 (settings page), 22e (settings version 5) and 22f. T272 and T273 run before T274, T275 before T276; T274 runs before T276 (the overlay reads the setting).
+- **Phase 22h (amendment 12 layouts and device tests)**: depends on Phase 22g. T277 and T278 run before T279; T280 runs last. Runs before Phase 23, whose touch spec T136 uses the device projects of T278.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -770,6 +805,8 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phase 21 (US7)**: T117, T118, T119, T120 together; Phase 21 as a whole can run in parallel with Phases 11 to 20.
 - **Phase 22d**: T252, T253 and T255 together; then T254 and T256; then T257; T258 last.
 - **Phase 22e**: T259, T260 and T261 together; then T262 and T263; T264 last.
+- **Phase 22g**: T272, T273 and T275 together; then T274; T276 last.
+- **Phase 22h**: T277 and T278 together; then T279; T280 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -844,21 +881,21 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276 |
 | FR-047 | T011, T013, T112, T113, T175, T176 |
-| FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256 |
+| FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
 | FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258 |
 | FR-049 | T034, T105, T106, T113 |
-| FR-050 | T001, T003, T005, T045, T154 |
+| FR-050 | T001, T003, T005, T045, T154, T278 |
 | FR-051 | T003, T134, T139 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
-| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234, T249, T250, T260, T262 |
-| FR-054 | T032, T041, T111, T140, T141 |
+| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234, T249, T250, T260, T262, T275, T276, T278, T279 |
+| FR-054 | T032, T041, T111, T140, T141, T279 |
 | FR-055 | T137, T138 |
-| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179, T262 |
+| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179, T262, T276 |
 | FR-057 | T014, T049, T069, T083, T152, T153, T172, T179, T230 |
-| FR-058 | T029, T035, T050, T136, T184 |
+| FR-058 | T029, T035, T050, T136, T184, T278, T279, T280 |
 | FR-059 | T141, T153, T163, T165, T166, T167, T171, T183 |
 | FR-060 | T145, T146, T157, T161, T163, T165, T166, T167, T183 |
 | FR-061 | T158, T163, T165, T166, T167, T183, T194, T195, T197, T202 |
@@ -876,7 +913,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226, T249, T250 |
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
-| FR-076 | T060, T062, T065, T183, T195, T196, T197, T199 |
+| FR-076 | T060, T062, T065, T183, T195, T196, T197, T199, T275 |
 | FR-077 | T198, T200, T202, T241, T248, T250, T253, T263 |
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
@@ -902,6 +939,11 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-099 | T265, T266, T267, T268, T269, T271 |
 | FR-100 | T265, T266, T269, T270 |
 | FR-101 | T267, T268, T269, T270, T271 |
+| FR-102 | T272, T273, T274, T275, T276, T278 |
+| FR-103 | T275, T276, T278 |
+| FR-104 | T272, T274, T277, T278, T279 |
+| FR-105 | T278, T279, T280 |
+| FR-106 | T277, T279 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -926,3 +968,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-09 | T118, T129, T155 |
 | AC-10 | T134, T142, T155 |
 | US10 | T252 to T264 |
+| Amendment 12 | T272 to T280; T136 and T141 changed |
