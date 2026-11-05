@@ -1,6 +1,7 @@
 /**
  * Round end (FR-008, US1 scenarios 7 and 8): an encouraging message chosen by the outcome,
- * "Nochmal" for a new round without a page reload, and a way back to the start screen.
+ * "Nochmal" (or Enter or Space, handled by the app's keyboard listener, FR-062) for a new round without a page
+ * reload, and a way back to the start screen.
  * A round that ends because all turns are used names no winner.
  */
 import type { RoundState } from '../core/types';

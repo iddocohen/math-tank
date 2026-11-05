@@ -1,17 +1,13 @@
 /**
- * Battle overlay (FR-003, FR-053): health bars at the top, angle and power controls and the
- * fire button at the bottom right. The root carries the data-* attributes that the end-to-end
- * tests read (tasks.md D4); there is no global debug API.
+ * Battle overlay (FR-003, FR-019, FR-053, FR-063): health bars at the top; at the bottom right the large number
+ * readout, −1 and +1 buttons and the fire button. There are no angle or power controls (amendment 01).
  *
- * The angle is shown toward the enemy side: 0 is flat toward the enemy, 90 is straight up,
- * so "plus" always raises the cannon whichever side the player stands on.
+ * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
+ * `data-enemy-number` is set only while the enemy is visible, so a test cannot read a hidden enemy's number.
  */
 import type { BattleController } from '../core/battle/controller';
 import type { RoundState } from '../core/types';
 import { t } from '../i18n';
-
-const ANGLE_STEP = 5;
-const POWER_STEP = 5;
 
 interface Props {
   controller: BattleController;
@@ -20,13 +16,13 @@ interface Props {
 
 export function BattleOverlay({ controller, state }: Props) {
   const m = t();
-  const aiming = state.phase === 'aiming';
-  const toDisplay = (angleDeg: number) => (state.playerSide === 'left' ? angleDeg : 180 - angleDeg);
-  const angle = Math.round(toDisplay(state.aim.angleDeg));
-  const power = Math.round(state.aim.power);
-  const setAngle = (display: number) => controller.setAim(toDisplay(clamp(display, 0, 180)), state.aim.power);
-  const setPower = (p: number) => controller.setAim(state.aim.angleDeg, clamp(p, 0, 100));
+  const { min, max } = controller.getRoundSettings().range;
+  const choosing = state.phase === 'aiming' || state.phase === 'challenge';
   const answerable = state.challenge !== null && state.answerableAt !== null && state.phase === 'challenge';
+  const enemyVisible = state.enemyFound && state.enemy.alive;
+  // Typed digits are shown exactly as typed (a lone "-" too); otherwise the previewed number.
+  const readout = state.entry.typed !== '' ? state.entry.typed : state.selection !== null ? String(state.selection) : '?';
+  const landed = state.lastShot && state.phase !== 'playerShot' ? state.lastShot.landed : null;
 
   const playerBar = <HealthBar label={m.battle.playerHealth} health={state.player.health} kind="player" />;
   const enemyBar = <HealthBar label={m.battle.enemyHealth} health={state.enemy.health} kind="enemy" />;
@@ -40,38 +36,39 @@ export function BattleOverlay({ controller, state }: Props) {
       data-player-health={Math.round(state.player.health)}
       data-enemy-health={Math.round(state.enemy.health)}
       data-challenge-answerable={answerable}
+      data-selection={state.selection ?? undefined}
+      data-last-landing={state.lastShot?.landed ?? undefined}
+      data-enemy-number={enemyVisible ? state.enemy.position : undefined}
     >
       <div className="top-bars">
         {state.playerSide === 'left' ? playerBar : enemyBar}
         {state.playerSide === 'left' ? enemyBar : playerBar}
       </div>
 
+      <div className="status-line" role="status" aria-live="polite">
+        {state.entry.outOfRange ? (
+          <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
+        ) : landed !== null ? (
+          <span className="landed">{m.battle.landedAt(landed)}</span>
+        ) : null}
+      </div>
+
       <div className="controls">
-        <Stepper
-          label={m.battle.angle}
-          value={angle}
-          unit="°"
-          min={0}
-          max={180}
-          step={ANGLE_STEP}
-          upLabel={m.battle.angleUp}
-          downLabel={m.battle.angleDown}
-          disabled={!aiming}
-          onChange={setAngle}
-        />
-        <Stepper
-          label={m.battle.power}
-          value={power}
-          unit=""
-          min={0}
-          max={100}
-          step={POWER_STEP}
-          upLabel={m.battle.powerUp}
-          downLabel={m.battle.powerDown}
-          disabled={!aiming}
-          onChange={setPower}
-        />
-        <button type="button" className="fire-button" disabled={!aiming} onClick={() => controller.fire()}>
+        <div className="readout" aria-label={m.battle.yourNumber}>
+          <span className="readout-label">{m.battle.yourNumber}</span>
+          <span className="readout-value" data-testid="readout">
+            {readout}
+          </span>
+        </div>
+        <div className="nudge-row">
+          <button type="button" className="step-button" aria-label={m.battle.minusOneLabel} disabled={!choosing || state.selection === min} onClick={() => controller.nudge(-1)}>
+            {m.battle.minusOne}
+          </button>
+          <button type="button" className="step-button" aria-label={m.battle.plusOneLabel} disabled={!choosing || state.selection === max} onClick={() => controller.nudge(1)}>
+            {m.battle.plusOne}
+          </button>
+        </div>
+        <button type="button" className="fire-button" disabled={!choosing} onClick={() => controller.confirm()}>
           {m.battle.fire}
         </button>
       </div>
@@ -89,55 +86,4 @@ function HealthBar({ label, health, kind }: { label: string; health: number; kin
       </div>
     </div>
   );
-}
-
-interface StepperProps {
-  label: string;
-  value: number;
-  unit: string;
-  min: number;
-  max: number;
-  step: number;
-  upLabel: string;
-  downLabel: string;
-  disabled: boolean;
-  onChange: (v: number) => void;
-}
-
-function Stepper({ label, value, unit, min, max, step, upLabel, downLabel, disabled, onChange }: StepperProps) {
-  const m = t();
-  return (
-    <div className="stepper">
-      <div className="stepper-head">
-        <span className="stepper-label">{label}</span>
-        <span className="stepper-value">
-          {value}
-          {unit}
-        </span>
-      </div>
-      <div className="stepper-row">
-        <button type="button" className="step-button" aria-label={downLabel} disabled={disabled || value <= min} onClick={() => onChange(value - step)}>
-          {m.battle.minus}
-        </button>
-        <input
-          type="range"
-          className="slider"
-          aria-label={label}
-          min={min}
-          max={max}
-          step={1}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(Number(e.currentTarget.value))}
-        />
-        <button type="button" className="step-button" aria-label={upLabel} disabled={disabled || value >= max} onClick={() => onChange(value + step)}>
-          {m.battle.plus}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, v));
 }

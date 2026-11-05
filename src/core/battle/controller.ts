@@ -70,6 +70,11 @@ export class BattleController {
     return this.state;
   }
 
+  /** The settings snapshot of the current round (range and label level for the views). */
+  getRoundSettings(): Readonly<Settings> {
+    return this.settings;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {

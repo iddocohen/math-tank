@@ -3,9 +3,12 @@
  * the React overlay while a battle is shown, and switches between the start screen, the battle
  * and the round end.
  *
+ * Keyboard (FR-059, FR-062, research R22): one window listener (useKeyboard). The app root has tabIndex -1 and
+ * receives focus on load and on every screen change, so typing works without a click; there is no text field.
+ *
  * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore } from '../core/battle/ports';
@@ -15,7 +18,9 @@ import { createGame } from '../game/createGame';
 import { BattleOverlay } from './BattleOverlay';
 import { RoundEnd } from './RoundEnd';
 import { StartScreen } from './StartScreen';
+import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
+import { applyBattleAction, useKeyboard } from './useKeyboard';
 
 type Screen = 'start' | 'battle';
 
@@ -54,25 +59,58 @@ export function App() {
     return () => handle.destroy();
   }, [screen, controller, sfx]);
 
-  // Until Phase 9, "Spielen" and "Nochmal" start free play (tasks.md D3).
-  const startRound = () => controller.startRound('freePlay');
+  // Until Phase 13, "Spielen", Enter on the start screen and "Nochmal" start free play (tasks.md D3).
+  const startRound = useCallback(() => controller.startRound('freePlay'), [controller]);
+  const play = useCallback(() => {
+    startRound();
+    setScreen('battle');
+  }, [startRound]);
 
-  if (screen === 'start') {
-    return (
-      <StartScreen
-        onPlay={() => {
-          startRound();
-          setScreen('battle');
-        }}
-      />
-    );
-  }
+  const keyScreen = keyScreenFor(screen, state.phase);
+  const onAction = useCallback(
+    (action: KeyAction) => {
+      if (action.type === 'start') play();
+      else if (action.type === 'newRound') startRound();
+      else applyBattleAction(controller, action);
+    },
+    [controller, play, startRound],
+  );
+  useKeyboard({ screen: keyScreen, helpLevel: state.help.level, onAction });
+
+  // Focus the root on load and on every screen change (start, battle, round end).
+  const root = useRef<HTMLDivElement>(null);
+  const roundOver = state.phase === 'roundOver';
+  useEffect(() => {
+    root.current?.focus({ preventScroll: true });
+  }, [screen, roundOver]);
 
   return (
-    <main className="battle">
-      <div className="game-parent" ref={gameParent} />
-      <BattleOverlay controller={controller} state={state} />
-      {state.phase === 'roundOver' && <RoundEnd outcome={state.outcome} onAgain={startRound} onBackToStart={() => setScreen('start')} />}
-    </main>
+    <div className="app-root" ref={root} tabIndex={-1} data-testid="app-root">
+      {screen === 'start' ? (
+        <StartScreen onPlay={play} />
+      ) : (
+        <main className="battle">
+          <div className="game-parent" ref={gameParent} />
+          <BattleOverlay controller={controller} state={state} />
+          {roundOver && <RoundEnd outcome={state.outcome} onAgain={startRound} onBackToStart={() => setScreen('start')} />}
+        </main>
+      )}
+    </div>
   );
+}
+
+/** Which keyboard map applies; null while a shell is in flight, so keys do nothing (FR-061). */
+export function keyScreenFor(screen: Screen, phase: string): KeyScreen | null {
+  if (screen === 'start') return 'start';
+  switch (phase) {
+    case 'roundOver':
+      return 'roundEnd';
+    case 'paused':
+      return 'paused';
+    case 'aiming':
+    case 'challenge':
+      return 'battle';
+    default:
+      return null;
+  }
 }

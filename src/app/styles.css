@@ -116,14 +116,23 @@ input:focus-visible {
 
 /* Battle: Phaser canvas below, React overlay on top (ui-flows.md battle layout). */
 .battle {
+  --controls-height: 112px;
   position: relative;
   width: 100%;
   height: 100%;
+  outline: none;
 }
 
+/* The canvas fills the space above the control bar, so no control covers the ruler. */
 .game-parent {
   position: absolute;
-  inset: 0;
+  inset: 0 0 var(--controls-height) 0;
+}
+
+.app-root {
+  width: 100%;
+  height: 100%;
+  outline: none;
 }
 
 .battle-overlay {
@@ -186,85 +195,116 @@ input:focus-visible {
   background: #ff8a65;
 }
 
-/* Angle and power controls and the fire button at the bottom right. */
+/* Control bar below the battlefield: number readout, −1 and +1, fire button (FR-019, FR-053). */
 .controls {
   position: absolute;
-  right: max(12px, env(safe-area-inset-right));
-  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--controls-height);
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 16px;
-  background: rgb(20 28 48 / 0.75);
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgb(20 28 48 / 0.9);
 }
 
-.stepper {
+.readout {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  min-width: 140px;
 }
 
-.stepper-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.stepper-label {
-  font-size: 1rem;
+.readout-label {
+  font-size: 0.9rem;
   font-weight: 700;
+  opacity: 0.8;
 }
 
 /* Large, clear digits (FR-053). */
-.stepper-value {
-  font-size: 1.75rem;
+.readout-value {
+  font-size: 3rem;
+  line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  color: #ffd54a;
 }
 
-.stepper-row {
+.nudge-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .step-button {
-  width: 48px;
-  height: 48px;
-  font-size: 1.75rem;
+  width: 64px;
+  height: 64px;
+  font-size: 1.5rem;
   line-height: 1;
   background: #4a5a80;
 }
 
-.slider {
-  width: 120px;
-  height: 48px;
-  margin: 0;
-  accent-color: #ffd54a;
-  touch-action: none;
-}
-
 .fire-button {
-  min-width: 120px;
-  min-height: 96px;
-  padding: 0 20px;
+  min-width: 140px;
+  min-height: 80px;
+  padding: 0 24px;
   font-size: 1.75rem;
   background: #e53935;
   box-shadow: 0 6px 0 #9e2522;
 }
 
-/* Narrow screens: the controls stack so they stay inside the screen. */
-@media (max-width: 760px) {
-  .controls {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    left: 12px;
+/* Range hint and landing number, at the top center below the health bars. */
+.status-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(max(8px, env(safe-area-inset-top)) + 56px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.range-hint,
+.landed {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  background: rgb(20 28 48 / 0.8);
+}
+
+.range-hint {
+  color: #ffd54a;
+}
+
+@media (max-width: 560px) {
+  .battle {
+    --controls-height: 96px;
   }
 
-  .slider {
-    width: 96px;
+  .controls {
+    gap: 8px;
+  }
+
+  .readout {
+    min-width: 88px;
+  }
+
+  .readout-value {
+    font-size: 2.25rem;
+  }
+
+  .step-button {
+    width: 52px;
+    height: 52px;
+  }
+
+  .fire-button {
+    min-width: 96px;
+    min-height: 64px;
+    padding: 0 12px;
+    font-size: 1.25rem;
   }
 }
 

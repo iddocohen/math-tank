@@ -61,19 +61,9 @@ export function pathDuration(path: readonly Point[], speed: number): number {
 }
 
 /**
- * Cannon angle that points from the muzzle to the pointer (both in physics coordinates),
- * clamped to 0..180. A pointer below the muzzle snaps to the horizontal on its side.
- * Null when the pointer is on the muzzle.
+ * Cannon angle a path was fired at, from its first segment (physics convention); null if too short.
+ * The player's turret turns to it before a raised or lifted shot (FR-065); the enemy's before every shot.
  */
-export function aimAngleFromPointer(muzzle: Point, pointer: Point): number | null {
-  const dx = pointer.x - muzzle.x;
-  const dy = pointer.y - muzzle.y;
-  if (dx === 0 && dy === 0) return null;
-  if (dy < 0) return dx >= 0 ? 0 : 180;
-  return (Math.atan2(dy, dx) * 180) / Math.PI;
-}
-
-/** Cannon angle a path was fired at, from its first segment (physics convention); null if too short. */
 export function launchAngle(path: readonly Point[]): number | null {
   const a = path[0];
   const b = path[1];

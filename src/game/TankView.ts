@@ -1,5 +1,6 @@
 /**
- * One tank on screen (FR-006, FR-007): body, turret rotated by the aim angle, health bar.
+ * One tank on screen (FR-006, FR-007): body, turret rotated by the cannon angle, health bar.
+ * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss without damage (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
  * Fade in and out and a fully hidden state are here for the search turns of later phases.
  */
@@ -20,6 +21,8 @@ const BAR_HEIGHT = 8;
 const BAR_OFFSET = TANK_BODY_HEIGHT + 30;
 const SETTLE_MS = 450;
 const FADE_MS = 500;
+const SHAKE_PX = 6;
+const SHAKE_MS = 50;
 
 export class TankView {
   readonly container: Phaser.GameObjects.Container;
@@ -79,6 +82,12 @@ export class TankView {
     this.scene.tweens.add({ targets: this.turret, angle: -angleDeg, duration: ms, ease: 'Sine.easeInOut' });
   }
 
+  /** Short side-to-side shake of body and turret; the container keeps its position on the number. */
+  shake(): void {
+    const parts = [this.body, this.turret];
+    this.scene.tweens.add({ targets: parts, x: SHAKE_PX, duration: SHAKE_MS, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => parts.forEach((p) => (p.x = 0)) });
+  }
+
   /** Hidden tanks draw nothing; `fade` blends in or out instead of switching at once. */
   setHidden(hidden: boolean, fade: boolean): void {
     if (hidden === this.hidden) return;
@@ -117,7 +126,7 @@ export class TankView {
   }
 
   destroy(): void {
-    this.scene.tweens.killTweensOf([this.container, this.turret]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body]);
     this.container.destroy();
   }
 }

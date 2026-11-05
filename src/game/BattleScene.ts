@@ -4,15 +4,19 @@
  *
  * - Subscribes to the controller in create() and unsubscribes on shutdown.
  * - Replays the shell path in state.shot, then calls shotAnimationDone or enemyShotAnimationDone.
- * - Dragging near the player's cannon sets the angle (setAim); power stays as it is.
+ * - The ruler (NumberLineView) handles tapping and dragging; the cannon cannot be dragged (FR-003).
+ * - The player's turret shows the fixed 65-degree angle and turns to the arc's launch angle just before a
+ *   raised or lifted shot (FR-065). The enemy shakes when the player's shell lands near it (lastShot.nearMiss).
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { muzzle, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import type { RoundState, ShotInFlight, TankState } from '../core/types';
-import { aimAngleFromPointer, launchAngle, toScreenY } from '../core/view/geometry';
+import { launchAngle, toScreenY } from '../core/view/geometry';
 import { Effects } from './effects';
+import { NumberLineView } from './NumberLineView';
 import { ProjectileView } from './ProjectileView';
 import { TankView } from './TankView';
 import { TerrainView } from './TerrainView';
@@ -28,8 +32,8 @@ export interface BattleSceneOptions {
   sounds?: BattleSounds;
 }
 
-/** How far from the muzzle (world units) a press still grabs the cannon. */
-const GRAB_RADIUS = 150;
+/** The player's turret turns to a raised or lifted arc over this time before the shell leaves. */
+const PLAYER_TURN_MS = 250;
 /** The enemy turns its cannon, then fires after this pause, so the child can follow. */
 const ENEMY_TURN_MS = 450;
 const ENEMY_FIRE_DELAY_MS = 700;
@@ -43,11 +47,11 @@ export class BattleScene extends Phaser.Scene {
   private enemy!: TankView;
   private projectile!: ProjectileView;
   private effects!: Effects;
+  private numberLine!: NumberLineView;
   private prev: RoundState | null = null;
   /** The shot whose replay has been started, so a state update never starts it twice. */
   private startedShot: ShotInFlight | null = null;
-  private pendingEnemyFire: Phaser.Time.TimerEvent | null = null;
-  private dragging = false;
+  private pendingFire: Phaser.Time.TimerEvent | null = null;
 
   constructor(controller: BattleController, options: BattleSceneOptions = {}) {
     super('battle');
@@ -62,14 +66,10 @@ export class BattleScene extends Phaser.Scene {
     this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT);
     this.player = new TankView(this, 'player', WORLD_HEIGHT);
     this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT);
+    this.numberLine = new NumberLineView(this, this.controller, WORLD_HEIGHT);
     this.effects = new Effects(this);
     this.prev = null;
     this.startedShot = null;
-
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
-    this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
-    this.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
-    this.input.on(Phaser.Input.Events.GAME_OUT, this.onPointerUp, this);
 
     this.unsubscribe = this.controller.subscribe((s) => this.draw(s));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
@@ -84,10 +84,7 @@ export class BattleScene extends Phaser.Scene {
   private teardown(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
-    this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
-    this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
-    this.input.off(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
-    this.input.off(Phaser.Input.Events.GAME_OUT, this.onPointerUp, this);
+    this.numberLine.destroy();
   }
 
   private draw(s: RoundState): void {
@@ -97,18 +94,21 @@ export class BattleScene extends Phaser.Scene {
 
     if (newRound) {
       this.projectile.stop();
-      this.pendingEnemyFire?.remove();
-      this.pendingEnemyFire = null;
+      this.pendingFire?.remove();
+      this.pendingFire = null;
       this.startedShot = null;
-      this.dragging = false;
       this.enemy.setAim(s.player.x < s.enemy.x ? 150 : 30);
+      this.player.setAim(fixedAngle(s));
     }
 
     this.terrain.update(s.terrain);
     this.syncTank(this.player, s.player, prev?.player, newRound);
     this.syncTank(this.enemy, s.enemy, prev?.enemy, newRound);
     this.enemy.setHidden(!s.enemyFound, !newRound);
-    this.player.setAim(s.aim.angleDeg);
+    // Back to the fixed angle once a raised or lifted shot has landed.
+    if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
+    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
+    this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
     this.projectile.setTrail(s.phase === 'playerShot' ? null : s.lastPlayerPath);
 
@@ -127,14 +127,25 @@ export class BattleScene extends Phaser.Scene {
 
   private startShot(shot: ShotInFlight): void {
     this.startedShot = shot;
+    const angle = launchAngle(shot.path);
     if (shot.shooter === 'player') {
-      this.fire(shot);
+      // The turret stays at the fixed angle unless the arc had to be raised or lifted.
+      const fixed = fixedAngle(this.controller.getState());
+      if (angle === null || Math.abs(angle - fixed) < 1) {
+        this.fire(shot);
+        return;
+      }
+      this.player.turnTo(angle, PLAYER_TURN_MS);
+      this.fireAfter(shot, PLAYER_TURN_MS);
       return;
     }
-    const angle = launchAngle(shot.path);
     if (angle !== null) this.enemy.turnTo(angle, ENEMY_TURN_MS);
-    this.pendingEnemyFire = this.time.delayedCall(ENEMY_FIRE_DELAY_MS, () => {
-      this.pendingEnemyFire = null;
+    this.fireAfter(shot, ENEMY_FIRE_DELAY_MS);
+  }
+
+  private fireAfter(shot: ShotInFlight, ms: number): void {
+    this.pendingFire = this.time.delayedCall(ms, () => {
+      this.pendingFire = null;
       if (this.startedShot === shot) this.fire(shot);
     });
   }
@@ -156,33 +167,9 @@ export class BattleScene extends Phaser.Scene {
     if (shot.shooter === 'player') this.controller.shotAnimationDone();
     else this.controller.enemyShotAnimationDone();
   }
+}
 
-  private onPointerDown(p: Phaser.Input.Pointer): void {
-    const s = this.controller.getState();
-    if (s.phase !== 'aiming') return;
-    const m = muzzle(s.player);
-    if (Math.hypot(p.worldX - m.x, p.worldY - toScreenY(m.y, WORLD_HEIGHT)) > GRAB_RADIUS) return;
-    this.dragging = true;
-    this.aimAt(p);
-  }
-
-  private onPointerMove(p: Phaser.Input.Pointer): void {
-    if (this.dragging) this.aimAt(p);
-  }
-
-  private onPointerUp(): void {
-    this.dragging = false;
-  }
-
-  private aimAt(p: Phaser.Input.Pointer): void {
-    const s = this.controller.getState();
-    if (s.phase !== 'aiming') {
-      this.dragging = false;
-      return;
-    }
-    const angle = aimAngleFromPointer(muzzle(s.player), { x: p.worldX, y: toScreenY(p.worldY, WORLD_HEIGHT) });
-    if (angle === null) return;
-    const rounded = Math.round(angle);
-    if (rounded !== s.aim.angleDeg) this.controller.setAim(rounded, s.aim.power);
-  }
+/** The player's fixed cannon angle toward the enemy side, in physics degrees (0 right, 90 up). */
+function fixedAngle(s: RoundState): number {
+  return s.playerSide === 'left' ? FIXED_ANGLE_DEG : 180 - FIXED_ANGLE_DEG;
 }

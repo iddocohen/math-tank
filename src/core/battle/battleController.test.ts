@@ -54,6 +54,15 @@ function without(s: RoundState, ...keys: Array<keyof RoundState>): Partial<Round
 }
 
 describe('BattleController free play (US1, amendment 01)', () => {
+  it('getRoundSettings returns the settings snapshot of the current round (FR-049)', () => {
+    const { controller } = makeController({ range: { preset: '0-20', min: 0, max: 20 } });
+    controller.startRound('freePlay');
+    controller.setSettings(freePlaySettings({ range: { preset: '0-50', min: 0, max: 50 } }));
+    expect(controller.getRoundSettings().range).toEqual({ preset: '0-20', min: 0, max: 20 });
+    controller.startRound('freePlay');
+    expect(controller.getRoundSettings().range.max).toBe(50);
+  });
+
   it('starts a free-play round with terrain, both tanks and the aiming phase', () => {
     const { controller } = makeController();
     controller.startRound('freePlay');

@@ -1,6 +1,5 @@
 /**
- * Explosion and hit effects (FR-009). The burst is sized by the blast radius, so a charged shot
- * (radius 90) looks bigger than a normal one (radius 60). Emitters and tweens belong to the scene,
+ * Explosion and hit effects (FR-009). The burst is sized by the blast radius. Emitters and tweens belong to the scene,
  * so pausing the scene freezes them.
  */
 import Phaser from 'phaser';

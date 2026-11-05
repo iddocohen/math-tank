@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  aimAngleFromPointer,
   dottedTrail,
   edgeMarker,
   launchAngle,
@@ -79,26 +78,6 @@ describe('pathPointAt', () => {
     const ms = pathDuration(path, 1.5);
     expect(pathPointAt(path, ms - 1, 1.5).done).toBe(false);
     expect(pathPointAt(path, ms, 1.5).done).toBe(true);
-  });
-});
-
-describe('aimAngleFromPointer', () => {
-  const muzzle = { x: 100, y: 100 };
-
-  it('follows the physics convention: 0 right, 90 up, 180 left', () => {
-    expect(aimAngleFromPointer(muzzle, { x: 200, y: 100 })).toBeCloseTo(0);
-    expect(aimAngleFromPointer(muzzle, { x: 100, y: 200 })).toBeCloseTo(90);
-    expect(aimAngleFromPointer(muzzle, { x: 0, y: 100 })).toBeCloseTo(180);
-    expect(aimAngleFromPointer(muzzle, { x: 200, y: 200 })).toBeCloseTo(45);
-  });
-
-  it('clamps a pointer below the muzzle to the nearest horizontal side', () => {
-    expect(aimAngleFromPointer(muzzle, { x: 200, y: 50 })).toBe(0);
-    expect(aimAngleFromPointer(muzzle, { x: 0, y: 50 })).toBe(180);
-  });
-
-  it('returns null when the pointer is on the muzzle', () => {
-    expect(aimAngleFromPointer(muzzle, { x: 100, y: 100 })).toBeNull();
   });
 });
 
