@@ -19,6 +19,12 @@
  * - At the start of every round, which includes "Neue Landschaft", a bouncing "Du" arrow points at the child's tank
  *   for YOU_MARKER_MS (amendment 05, FR-077). The canvas attribute `data-you-marker` is `on` while it shows and `off`
  *   after, for the end-to-end tests only (tasks.md D4).
+ * - Comparison (US4, FR-026, FR-027): every numbered tank, the enemy and its decoys alike, carries a number plate
+ *   and a target ring and takes taps (controller.tapTank). Decoy views are created when a comparison search shows
+ *   them and removed when it ends. A decoy hit at its number is destroyed with the same large explosion and fades
+ *   out. In order3 each badged tank shows its badge 1, 2 or 3. The enemy does not turn its turret before it fires,
+ *   so its shell does not show which tank is the enemy. The canvas carries `data-tank-taps`, the label and the tap
+ *   point in world coordinates of each tappable tank ("47@x,y;74@x,y"), for the end-to-end tests only.
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  */
 import Phaser from 'phaser';
@@ -62,6 +68,8 @@ export class BattleScene extends Phaser.Scene {
   private terrain!: TerrainView;
   private player!: TankView;
   private enemy!: TankView;
+  /** Decoy views by tank id, for the decoys of the current comparison search. */
+  private readonly decoyViews = new Map<string, TankView>();
   private projectile!: ProjectileView;
   private effects!: Effects;
   private numberLine!: NumberLineView;
@@ -82,7 +90,7 @@ export class BattleScene extends Phaser.Scene {
     this.terrain = new TerrainView(this, WORLD_HEIGHT);
     this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT);
     this.player = new TankView(this, 'player', WORLD_HEIGHT);
-    this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT);
+    this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT, () => this.tap(this.controller.getState().enemy.id));
     this.numberLine = new NumberLineView(this, this.controller, WORLD_HEIGHT);
     this.effects = new Effects(this);
     this.prev = null;
@@ -101,6 +109,8 @@ export class BattleScene extends Phaser.Scene {
   private teardown(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    for (const view of this.decoyViews.values()) view.destroy();
+    this.decoyViews.clear();
     this.numberLine.destroy();
   }
 
@@ -155,6 +165,7 @@ export class BattleScene extends Phaser.Scene {
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
       if (s.mode !== 'guided') this.enemy.appear(NEW_ENEMY_DELAY_MS);
     }
+    this.drawComparison(s, prev, newRound);
     this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
     this.projectile.setTrail(s.phase === 'playerShot' ? null : s.lastPlayerPath);
@@ -165,6 +176,65 @@ export class BattleScene extends Phaser.Scene {
 
     if (s.phase === 'paused' && !this.scene.isPaused()) this.scene.pause();
     else if (s.phase !== 'paused' && this.scene.isPaused()) this.scene.resume();
+  }
+
+  private tap(tankId: string): void {
+    this.controller.tapTank(tankId);
+  }
+
+  /**
+   * Number plates, order badges and decoy views of a comparison search (FR-026, FR-027). Decoys look exactly like
+   * the enemy: same view kind, plate and target ring.
+   */
+  private drawComparison(s: RoundState, prev: RoundState | null, newRound: boolean): void {
+    const placed = placedEnemy(s);
+    const badge = (id: string): number | null => (s.orderTaps.includes(id) ? s.orderTaps.indexOf(id) + 1 : null);
+    // The destroyed enemy keeps its plate during its explosion; the next one gets its own plate.
+    this.enemy.setLabel(s.enemyFound ? (placed?.label ?? null) : null);
+    this.enemy.setBadge(badge(s.enemy.id));
+
+    const ids = new Set(s.decoys.map((d) => d.id));
+    for (const [id, view] of this.decoyViews) {
+      if (newRound || !ids.has(id)) {
+        view.destroy();
+        this.decoyViews.delete(id);
+      }
+    }
+    const shotChanged = !newRound && s.lastShot !== prev?.lastShot;
+    for (const decoy of s.decoys) {
+      let view = this.decoyViews.get(decoy.id);
+      const created = !view;
+      if (!view) {
+        view = new TankView(this, 'decoy', WORLD_HEIGHT, () => this.tap(decoy.id));
+        view.setAim(s.playerSide === 'left' ? 150 : 30);
+        view.setTarget(true);
+        this.decoyViews.set(decoy.id, view);
+      }
+      view.sync(decoy, created);
+      view.setLabel(decoy.alive ? (decoy.label ?? null) : null);
+      view.setBadge(badge(decoy.id));
+      if (created && !newRound && s.mode === 'guided') view.appear(NEW_ENEMY_DELAY_MS);
+      if (shotChanged && s.lastShot?.hitTankId === decoy.id && !decoy.alive) {
+        // A decoy hit at its number: the same large explosion, then it fades out (FR-027).
+        const c = tankCenter(decoy);
+        this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
+        view.setHidden(true, true, 200);
+      } else if (!decoy.alive) {
+        view.setHidden(true, false);
+      }
+    }
+
+    const tappable = [...(s.enemyFound && placed?.label !== undefined && placed.alive ? [{ tank: placed, view: this.enemy }] : [])];
+    for (const decoy of s.decoys) {
+      const view = this.decoyViews.get(decoy.id);
+      if (view && decoy.alive && decoy.label !== undefined) tappable.push({ tank: decoy, view });
+    }
+    this.game.canvas.dataset.tankTaps = tappable
+      .map(({ tank, view }) => {
+        const p = view.tapCenter();
+        return `${tank.label}@${Math.round(p.x)},${Math.round(p.y)}`;
+      })
+      .join(';');
   }
 
   private showYouMarker(): void {
@@ -189,7 +259,8 @@ export class BattleScene extends Phaser.Scene {
       this.fireAfter(shot, PLAYER_TURN_MS);
       return;
     }
-    if (angle !== null) this.enemy.turnTo(angle, ENEMY_TURN_MS);
+    // In a comparison the turret stays still, so it does not show which tank is the enemy.
+    if (angle !== null && this.controller.getState().decoys.length === 0) this.enemy.turnTo(angle, ENEMY_TURN_MS);
     this.fireAfter(shot, ENEMY_FIRE_DELAY_MS);
   }
 

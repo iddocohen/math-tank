@@ -223,7 +223,9 @@ describe('SettingsPage', () => {
     for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps, L.beginnerAssist]) {
       expect(field(label).disabled, label).toBe(false);
     }
-    for (const label of [L.comparison, L.helpNearestTen, L.music, L.speech, L.adaptive, L.timeLimit]) {
+    // Comparison works since Phase 18.
+    expect(field(L.comparison).disabled).toBe(false);
+    for (const label of [L.helpNearestTen, L.music, L.speech, L.adaptive, L.timeLimit]) {
       const input = field(label);
       expect(input.disabled, label).toBe(true);
       const note = document.getElementById(input.getAttribute('aria-describedby') ?? '');

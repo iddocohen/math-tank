@@ -23,6 +23,9 @@
  * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
  * `data-help-level` is the help step. The fire button stays the only submit control.
  *
+ * Comparison (US4, T091, FR-026): for "equal" the banner also shows the reference number large
+ * (`data-testid="reference-number"`). In order3 a typed number on no tank shows a hint (decision D15).
+ *
  * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
  * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
  */
@@ -77,12 +80,21 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       {state.challenge && (
         <div className="challenge-banner" data-testid="challenge-banner">
           {promptText(state.challenge.prompt)}
+          {state.challenge.kind === 'equal' && state.challenge.prompt.params.n !== undefined && (
+            <span className="reference-number" data-testid="reference-number">
+              {state.challenge.prompt.params.n}
+            </span>
+          )}
         </div>
       )}
 
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
+        ) : state.notOnTank ? (
+          <span className="range-hint" data-testid="not-on-tank">
+            {m.battle.notOnTank}
+          </span>
         ) : lastShot?.hit ? (
           // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
           <span className="landed hit" data-testid="hit-feedback">

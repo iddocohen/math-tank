@@ -4,6 +4,7 @@
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
+import { COMPARISON_KINDS, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { answerCandidates, NUMBER_LINE_KINDS, numberLineBuilders, type Builder, type ChallengeDraft } from './numberLine';
@@ -38,15 +39,13 @@ export const ANSWER_TRIES = 50;
 /** Salt for deriveSeed; kept at the value searches used before the bonus purpose was removed, so seeds stay stable. */
 const SEED_SALT = 1;
 
-/**
- * Builders per kind. Comparison builders are added in a later phase; until then the generator offers only the
- * kinds listed here.
- */
+/** Builders per kind. */
 const BUILDERS: Partial<Record<ChallengeKind, Builder>> = {
   ...numberLineBuilders,
   readPosition: buildReadPosition,
   addition: buildAddition,
   subtraction: buildSubtraction,
+  ...comparisonBuilders,
 };
 
 const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: DifficultyStep) => number[]>> = {
@@ -62,7 +61,7 @@ function enabledKinds(settings: Settings): ChallengeKind[] {
   if (settings.challengeTypes.addition) kinds.push('addition');
   if (settings.challengeTypes.subtraction) kinds.push('subtraction');
   if (settings.challengeTypes.comparison) {
-    kinds.push('greater', 'smaller', 'equal', 'order3', 'largest3', 'smallest3', 'closestTo', 'between');
+    kinds.push(...COMPARISON_KINDS);
   }
   return kinds;
 }
@@ -99,7 +98,7 @@ function tryKind(
   const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : answers;
   if (pool.length === 0) return null;
   for (let i = 0; i < ANSWER_TRIES; i++) {
-    const draft = build(rng.pick(pool), input.settings, step, rng);
+    const draft = build(rng.pick(pool), input.settings, step, rng, input.playerPosition);
     const challenge = draft && finish(draft);
     if (challenge) return challenge;
   }
@@ -126,7 +125,10 @@ export function generateChallenge(input: GenerateInput): Challenge {
   };
 
   const keyboard = input.inputMethod === 'keyboard';
-  let kinds = (input.kindsAllowed ?? enabledKinds(settings)).filter((k) => BUILDERS[k] !== undefined && !(keyboard && k === 'findNumber'));
+  // A comparison kind is skipped when its options do not fit at minTankGap (edge case "Comparison options too close").
+  let kinds = (input.kindsAllowed ?? enabledKinds(settings)).filter(
+    (k) => BUILDERS[k] !== undefined && !(keyboard && k === 'findNumber') && !(isComparisonKind(k) && !comparisonFits(k, settings, playerPosition)),
+  );
 
   while (kinds.length > 0) {
     const kind = rng.pick(kinds);

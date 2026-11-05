@@ -232,6 +232,8 @@ export interface RoundState {
    * starting number to the result, e.g. [43, 40, 36] (stepPath, FR-024). Null when no animation is shown.
    */
   stepAnimation: number[] | null;
+  /** order3: the confirmed number is on no tank, so no badge was placed; the overlay shows a hint (decision D15). */
+  notOnTank: boolean;
   /** goalReached: roundLength enemies destroyed with roundType 'enemyCount'; heartsGone: no lives left (FR-082). */
   outcome: 'goalReached' | 'heartsGone' | null;
 }

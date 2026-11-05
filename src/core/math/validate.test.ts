@@ -120,6 +120,41 @@ describe('validateChallenge (FR-029)', () => {
   });
 });
 
+describe('validateChallenge comparison rules (T086, FR-027)', () => {
+  // 0 to 100: minTankGap 8, minEnemyGap 15.
+  const greater = (options: number[], answer: number) =>
+    challenge({ kind: 'greater', mainSkill: 'comparison', skills: ['comparison'], prompt: { key: 'greater', params: {} }, operands: options, options, answer });
+
+  it('accepts a valid comparison', () => {
+    expect(validateChallenge(greater([47, 74], 74), settings, 100)).toEqual([]);
+  });
+
+  it('reports options closer than minTankGap to each other or to the player', () => {
+    expect(validateChallenge(greater([40, 47], 47), settings, 100).length).toBeGreaterThan(0);
+    expect(validateChallenge(greater([5, 74], 74), settings, 0).length).toBeGreaterThan(0);
+  });
+
+  it('reports an answer that is not the one correct option', () => {
+    expect(validateChallenge(greater([47, 74], 47), settings, 100).length).toBeGreaterThan(0);
+    const closest = challenge({ kind: 'closestTo', mainSkill: 'comparison', prompt: { key: 'closestTo', params: { n: 50 } }, operands: [40, 60, 50], options: [40, 60], answer: 40 });
+    expect(validateChallenge(closest, settings, 100).some((e) => e.includes('correct option'))).toBe(true);
+    const between = challenge({ kind: 'between', mainSkill: 'comparison', prompt: { key: 'between', params: { a: 30, b: 70 } }, operands: [40, 60, 30, 70], options: [40, 60], answer: 40 });
+    expect(validateChallenge(between, settings, 100).some((e) => e.includes('correct option'))).toBe(true);
+  });
+
+  it('reports a wrong number of options', () => {
+    expect(validateChallenge(greater([20, 47, 74], 74), settings, 100).some((e) => e.includes('options instead of'))).toBe(true);
+  });
+
+  it('order3 needs the ascending order answer and the largest number as the enemy', () => {
+    const order = (orderAnswer: number[], answer: number) =>
+      challenge({ kind: 'order3', mainSkill: 'comparison', prompt: { key: 'order3', params: {} }, operands: [20, 50, 80], options: [20, 50, 80], orderAnswer, answer });
+    expect(validateChallenge(order([20, 50, 80], 80), settings, 100)).toEqual([]);
+    expect(validateChallenge(order([20, 80, 50], 80), settings, 100).length).toBeGreaterThan(0);
+    expect(validateChallenge(order([20, 50, 80], 20), settings, 100).length).toBeGreaterThan(0);
+  });
+});
+
 describe('checkAnswer (FR-029)', () => {
   it('accepts only the exact answer', () => {
     const c = challenge({});

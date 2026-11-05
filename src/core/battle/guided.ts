@@ -5,11 +5,11 @@
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
 import { deriveSeed } from '../rng';
-import type { BattleState, Challenge, InputMethod, RulerLevel, Settings } from '../types';
+import type { BattleState, Challenge, InputMethod, RulerLevel, Settings, TankState } from '../types';
 import { generateChallenge } from '../math/generate';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
-import { FIRST_STEPS, moveTank } from './round';
+import { FIRST_STEPS, makeTank, moveTank } from './round';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
 export const ANSWER_DELAY_MS = 1000;
@@ -50,18 +50,31 @@ export function searchChallenge(
 }
 
 /**
- * A new search: a new challenge, the enemy moved to its answer (hidden unless readPosition), help and input reset,
- * answers accepted from `now + ANSWER_DELAY_MS`. lastShot stays, so the feedback of the previous shot remains visible.
+ * A new search: a new challenge, the enemy moved to its answer (hidden unless readPosition or a comparison), help and
+ * input reset, answers accepted from `now + ANSWER_DELAY_MS`. lastShot stays, so the feedback of the previous shot
+ * remains visible.
+ *
+ * Comparison (US4, FR-026, FR-027): every option stands on a tank at its own number, each labeled with it. The enemy
+ * stands at the answer; the other options are decoys, which look the same. All of them are visible.
  */
 export function startSearch(s: BattleState, settings: Settings, now: number, avoid: number | null): BattleState {
   const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.inputMethod, avoid);
-  const enemy = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
+  const moved: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
+  // Only a comparison enemy carries a number plate.
+  delete moved.label;
+  const options = challenge.options;
+  const enemy: TankState = options ? { ...moved, label: challenge.answer } : moved;
+  const decoys: TankState[] = (options ?? [])
+    .filter((n) => n !== challenge.answer)
+    .map((n, i) => ({ ...makeTank(`decoy-${challenge.id}-${i}`, 'decoy', n, settings, s.terrain), label: n }));
   return {
     ...s,
     phase: 'challenge',
     challenge,
     enemy,
-    enemyFound: challenge.kind === 'readPosition',
+    decoys,
+    enemyFound: challenge.kind === 'readPosition' || options !== undefined,
+    notOnTank: false,
     answerableAt: now + ANSWER_DELAY_MS,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [] },
     selection: null,

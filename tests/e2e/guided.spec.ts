@@ -40,6 +40,13 @@ async function findNumberSearch(page: Page, overlay: Locator): Promise<number> {
 
 test('a guided "Finde N" search: a miss shows the landing number, the exact number destroys the hidden enemy', async ({ page }) => {
   test.setTimeout(120_000);
+  // Comparison off: a comparison search shows the enemy among its decoys, and this test is about a hidden enemy.
+  await page.addInitScript(
+    ([key, value]) => {
+      window.localStorage.setItem(key, value);
+    },
+    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
+  );
   await page.goto('/?seed=11');
   await page.getByRole('button', { name: m.start.play, exact: true }).click();
   const overlay = page.getByTestId('battle-overlay');

@@ -23,7 +23,8 @@ export type NumberLineKind = (typeof NUMBER_LINE_KINDS)[number];
 export type ChallengeDraft = Pick<Challenge, 'kind' | 'prompt' | 'operands' | 'answer'> &
   Partial<Pick<Challenge, 'options' | 'orderAnswer' | 'steps' | 'rulerLevel'>>;
 
-export type Builder = (answer: number, settings: Settings, step: DifficultyStep, rng: Rng) => ChallengeDraft | null;
+/** `playerPosition` matters only to comparison builders, whose decoys keep minTankGap from the player tank. */
+export type Builder = (answer: number, settings: Settings, step: DifficultyStep, rng: Rng, playerPosition?: number) => ChallengeDraft | null;
 
 /** Smallest and default largest step count for "move N steps". */
 export const MIN_STEP_COUNT = 2;

@@ -49,6 +49,8 @@ export const de = {
     landedAt: (n: number) => `Gelandet bei ${n}`,
     steps: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
+    /** Order of three numbers (decision D15): the typed number is on no tank, so no badge was placed. */
+    notOnTank: 'Tippe eine Zahl von einem Panzer.',
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
   },
 
@@ -65,11 +67,13 @@ export const de = {
     // US3: the result of the exercise is the enemy's number (T083).
     addition: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} + ${b}${c === undefined ? '' : ` + ${c}`}`,
     subtraction: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} − ${b}${c === undefined ? '' : ` − ${c}`}`,
-    greater: 'Tippe auf die größere Zahl.',
-    smaller: 'Tippe auf die kleinere Zahl.',
-    largest3: 'Tippe auf die größte Zahl.',
-    smallest3: 'Tippe auf die kleinste Zahl.',
-    order3: 'Tippe die Zahlen von klein nach groß an.',
+    // US4 (T091, FR-026): the child taps the tank with the answer, or types its number.
+    greater: 'Welche Zahl ist größer?',
+    smaller: 'Welche Zahl ist kleiner?',
+    equal: (n: number) => `Welche Zahl ist gleich ${n}?`,
+    order3: 'Tippe die Zahlen von klein nach groß an',
+    largest3: 'Welche Zahl ist am größten?',
+    smallest3: 'Welche Zahl ist am kleinsten?',
     closestTo: (n: number) => `Welche Zahl ist am nächsten an ${n}?`,
     between: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
   },

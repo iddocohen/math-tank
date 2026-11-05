@@ -1,6 +1,7 @@
 /** Challenge validation and answer checking (FR-029, data-model.md "Validation"). */
 import type { Challenge, Settings } from '../types';
 import { arithmeticErrors } from './arithmetic';
+import { comparisonErrors } from './comparison';
 import { minEnemyGap } from './gaps';
 import { movementAllowed, rangeMajorStep } from './numberLine';
 import { readPositionAnswers } from './readPosition';
@@ -85,7 +86,8 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       errors.push(...arithmeticErrors({ ...c, kind: c.kind }, settings));
       break;
     default:
-      // Comparison rules are added with those challenge kinds.
+      // Comparison: option count, minTankGap and exactly one correct option (FR-027).
+      errors.push(...comparisonErrors(c, settings, playerPosition));
       break;
   }
 

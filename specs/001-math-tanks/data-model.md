@@ -220,6 +220,7 @@ interface RoundState {
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
   stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
+  notOnTank: boolean;              // order3: the confirmed number is on no tank, so no badge was placed; the overlay shows a hint (decision D15)
   shot: ShotInFlight | null;       // shell in flight for the renderer to replay
   outcome: 'goalReached' | 'heartsGone' | null;   // goalReached: roundLength enemies destroyed with roundType 'enemyCount'
 }

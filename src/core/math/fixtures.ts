@@ -1,5 +1,5 @@
 /**
- * Fixture seeds for the acceptance checks (AC-05). `seed` is the value of the `seed` URL parameter
+ * Fixture seeds for the acceptance checks (AC-05, AC-06). `seed` is the value of the `seed` URL parameter
  * (`?seed=...`): the first guided round started with it searches with `input`, so the first challenge is 43 − 7.
  */
 import { deriveSeed } from '../rng';
@@ -28,6 +28,32 @@ export const SUBTRACTION_43_MINUS_7: {
     roundSeed: deriveSeed(SEED_43_MINUS_7, 1),
     turn: 0,
     // The base seed 1033 puts the player on the right, at range.max.
+    playerPosition: 100,
+    rulerLevel: 1,
+    inputMethod: 'keyboard',
+  },
+};
+
+/** Only comparison on, range 0 to 100, the other settings at their defaults. */
+function onlyComparison(): Settings {
+  return { ...defaultSettings(), challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
+}
+
+const SEED_47_74 = 65327;
+
+/** US4 Independent Test (AC-06): the first guided search with this seed is "Welche Zahl ist größer?" with 47 and 74. */
+export const COMPARISON_47_74: {
+  seed: number;
+  settings: Settings;
+  input: Omit<GenerateInput, 'settings'>;
+} = {
+  seed: SEED_47_74,
+  settings: onlyComparison(),
+  input: {
+    skillSteps: { positions: 0, countForward: 0, countBackward: 0, tens: 0, crossTens: 0, addition: 0, subtraction: 0, comparison: 0 },
+    roundSeed: deriveSeed(SEED_47_74, 1),
+    turn: 0,
+    // The base seed 65327 puts the player on the right, at range.max.
     playerPosition: 100,
     rulerLevel: 1,
     inputMethod: 'keyboard',

@@ -189,6 +189,32 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
     }
   });
 
+  describe('comparison on, 10,000 seeds each (T086, FR-026, FR-027, FR-029, SC-003)', () => {
+    const comparisonOnly = { numberLine: false, addition: false, subtraction: false, comparison: true };
+    const cases: Array<[string, Settings]> = [
+      ['0 to 10', presetSettings('0-10', { challengeTypes: comparisonOnly })],
+      ['0 to 100', presetSettings('0-100', { challengeTypes: comparisonOnly })],
+      ['0 to 1000', presetSettings('0-1000', { challengeTypes: comparisonOnly })],
+      ['custom 550 to 780', { ...defaultSettings(), challengeTypes: comparisonOnly, range: { preset: 'custom', min: 550, max: 780 } }],
+      ['0 to 100, every type on', presetSettings('0-100')],
+    ];
+    for (const [name, settings] of cases) {
+      it(`${name}: every challenge validates and comparisons come`, () => {
+        const problems: string[] = [];
+        let comparisons = 0;
+        for (let seed = 0; seed < SEEDS; seed++) {
+          const playerPosition = seed % 2 === 0 ? settings.range.min : settings.range.max;
+          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel: 1 });
+          if (c.options) comparisons++;
+          const errors = validateChallenge(c, settings, playerPosition);
+          if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind} ${String(c.options)}: ${errors.join('; ')}`);
+        }
+        expect(problems).toEqual([]);
+        expect(comparisons).toBeGreaterThan(settings.challengeTypes.numberLine ? SEEDS * 0.2 : SEEDS * 0.99);
+      });
+    }
+  });
+
   describe('US9 ranges, 10,000 seeds each (T148, FR-029, FR-067, SC-003, SC-013)', () => {
     function customSettings(min: number, max: number, patch: Partial<Settings> = {}): Settings {
       const base = defaultSettings();

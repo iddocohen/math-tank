@@ -236,3 +236,40 @@ describe('BattleOverlay in a guided search (T068, T215)', () => {
     expect(root.textContent).not.toContain(t().battle.near);
   });
 });
+
+describe('BattleOverlay comparison (US4, T091)', () => {
+  const onlyComparison = { challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
+
+  /** A guided round whose first search matches `accept`, rendered. */
+  function guided(accept: (s: RoundState) => boolean) {
+    for (let seed = 1; seed < 400; seed++) {
+      let now = 1000;
+      const controller = new BattleController({ settings: { ...defaultSettings(), ...onlyComparison }, progress: memoryProgressStore(), clock: () => now, seed });
+      controller.startRound('guided');
+      if (!accept(controller.getState())) continue;
+      render(<Overlay controller={controller} />);
+      return { controller, advance: (ms: number) => (now += ms) };
+    }
+    throw new Error('no seed found');
+  }
+
+  it('shows the reference number of an "equal" question', () => {
+    const { controller } = guided((s) => s.challenge?.kind === 'equal');
+    const n = controller.getState().challenge!.prompt.params.n!;
+    expect(screen.getByTestId('challenge-banner').textContent).toContain(t().challenge.equal(n));
+    expect(screen.getByTestId('reference-number').textContent).toBe(String(n));
+  });
+
+  it('order3: a typed number on no tank shows the hint until the next digit', () => {
+    const { controller, advance } = guided((s) => s.challenge?.kind === 'order3');
+    advance(1000);
+    const off = controller.getState().challenge!.options![0]! + 1;
+    act(() => {
+      for (const ch of String(off)) controller.typeDigit(Number(ch) as 0);
+      controller.confirm();
+    });
+    expect(screen.getByTestId('not-on-tank').textContent).toBe(t().battle.notOnTank);
+    act(() => controller.typeDigit(1));
+    expect(screen.queryByTestId('not-on-tank')).toBeNull();
+  });
+});

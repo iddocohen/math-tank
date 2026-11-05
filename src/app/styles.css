@@ -233,6 +233,17 @@ input:focus-visible {
   pointer-events: none;
 }
 
+/* "equal" comparison: the reference number, large next to the question (T091). */
+.reference-number {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 2rem;
+  color: #14203a;
+  background: #f4f6fb;
+}
+
 @media (max-width: 720px) {
   .challenge-banner {
     max-width: calc(100% - 32px);

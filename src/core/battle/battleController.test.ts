@@ -12,7 +12,7 @@ import { minEnemyGap } from '../math/gaps';
 import { settleY } from '../physics/terrain';
 import { BLAST_RADIUS } from '../physics/damage';
 import { solveArcToX } from '../physics/arc';
-import { SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
+import { COMPARISON_47_74, SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
 import { stepPath } from '../math/stepPath';
 
 function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
@@ -115,7 +115,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'enemyFound', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'orderTaps', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'shotsSinceEnemyFire', 'elapsedMs', 'lastEnemyHit', 'stepAnimation',
+        'lives', 'enemiesDestroyed', 'shotsSinceEnemyFire', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'notOnTank',
       ].sort(),
     );
   });
@@ -1534,5 +1534,227 @@ describe('BattleController step animation for addition and subtraction (US3, T08
     controller.requestHelp();
     expect(controller.getState().stepAnimation).toBeNull();
     expect(controller.getState().help.level).toBe(0);
+  });
+});
+
+describe('BattleController comparison with decoy tanks (US4, T087, decision D15)', () => {
+  const onlyComparison = COMPARISON_47_74.settings;
+
+  /** The fixture round: "Welche Zahl ist größer?" with 47 and 74, answerable. */
+  function fixtureRound() {
+    const g = guidedController(onlyComparison, COMPARISON_47_74.seed);
+    g.controller.startRound('guided');
+    g.advance(1_000);
+    return g;
+  }
+
+  function order3Round() {
+    const g = guidedRoundWhere((s) => s.challenge?.kind === 'order3', onlyComparison);
+    g.advance(1_000);
+    return g;
+  }
+
+  /** The tank ids of an order3 search, from the smallest number to the largest. */
+  function ascendingIds(s: RoundState): string[] {
+    return [enemyOf(s), ...s.decoys].sort((a, b) => a.position - b.position).map((t) => t.id);
+  }
+
+  it('a comparison search shows the enemy at the answer and a decoy at its own number, both labeled (FR-026, FR-027)', () => {
+    const s = fixtureRound().controller.getState();
+    const { min, max } = onlyComparison.range;
+    expect(s.challenge!.kind).toBe('greater');
+    expect(s.enemyFound).toBe(true);
+    expect(enemyOf(s).position).toBe(74);
+    expect(enemyOf(s).label).toBe(74);
+    expect(s.decoys).toHaveLength(1);
+    const decoy = s.decoys[0]!;
+    expect(decoy.kind).toBe('decoy');
+    expect(decoy.position).toBe(47);
+    expect(decoy.label).toBe(47);
+    expect(decoy.alive).toBe(true);
+    expect(decoy.x).toBe(numberToX(47, min, max));
+    expect(new Set([s.player.id, s.enemy.id, decoy.id]).size).toBe(3);
+  });
+
+  it('every comparison search has one tank per option, the enemy at the answer and the decoys at the other options', () => {
+    for (let seed = 1; seed < 60; seed++) {
+      const g = guidedController(onlyComparison, seed);
+      g.controller.startRound('guided');
+      const s = g.controller.getState();
+      const c = s.challenge!;
+      expect(enemyOf(s).position).toBe(c.answer);
+      expect([enemyOf(s), ...s.decoys].map((t) => t.label).sort((a, b) => a! - b!)).toEqual(c.options);
+      for (const d of s.decoys) expect(d.position).toBe(d.label);
+    }
+  });
+
+  it('tapTank on the correct tank fires at its number and destroys the enemy (US4 scenario 1, amendment 06)', () => {
+    const g = fixtureRound();
+    const enemy = enemyOf(g.controller.getState());
+    g.controller.tapTank(enemy.id);
+    expect(g.controller.getState().phase).toBe('playerShot');
+    expect(g.controller.getState().inputMethod).toBe('pointer');
+    g.controller.shotAnimationDone();
+    const s = g.controller.getState();
+    expect(s.lastShot).toMatchObject({ fired: 74, hit: true, hitTankId: enemy.id });
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.phase).toBe('challenge');
+  });
+
+  it('tapTank on a decoy destroys only the decoy and counts as a miss with help level 1 (US4 scenario 2, FR-027, FR-083)', () => {
+    const g = fixtureRound();
+    const decoy = g.controller.getState().decoys[0]!;
+    g.controller.tapTank(decoy.id);
+    g.controller.shotAnimationDone();
+    const s = g.controller.getState();
+    expect(s.lastShot).toMatchObject({ fired: 47, hit: false, nearMiss: false, hitTankId: decoy.id });
+    expect(s.decoys[0]!.alive).toBe(false);
+    expect(s.enemy.alive).toBe(true);
+    expect(s.enemiesDestroyed).toBe(0);
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(1);
+    expect(s.shotsSinceEnemyFire).toBe(1);
+    // The enemy does not take a turn after this first shot (FR-081).
+    expect(s.phase).toBe('challenge');
+    // A destroyed decoy cannot be tapped again.
+    g.controller.tapTank(decoy.id);
+    expect(g.controller.getState().phase).toBe('challenge');
+  });
+
+  it('typing a tank number and confirm acts like tapTank on it (FR-064, decision D15)', () => {
+    const g = fixtureRound();
+    typeNumber(g.controller, 47);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    let s = g.controller.getState();
+    expect(s.decoys[0]!.alive).toBe(false);
+    expect(s.lastShot!.hitTankId).toBe(s.decoys[0]!.id);
+    expect(s.inputMethod).toBe('keyboard');
+    typeNumber(g.controller, 74);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    if (g.controller.getState().phase === 'enemyTurn') g.controller.enemyShotAnimationDone();
+    s = g.controller.getState();
+    expect(s.enemiesDestroyed).toBe(1);
+  });
+
+  it('typing another number fires at it: a miss, and a near miss on the enemy tank body (edge case "typed number not on any tank")', () => {
+    const g = fixtureRound();
+    typeNumber(g.controller, 60);
+    g.controller.confirm();
+    expect(g.controller.getState().phase).toBe('playerShot');
+    g.controller.shotAnimationDone();
+    let s = g.controller.getState();
+    expect(s.lastShot).toMatchObject({ fired: 60, hit: false, nearMiss: false, hitTankId: null });
+    expect(s.decoys[0]!.alive).toBe(true);
+    expect(s.help.level).toBe(1);
+    const g2 = fixtureRound();
+    typeNumber(g2.controller, 73);
+    g2.controller.confirm();
+    g2.controller.shotAnimationDone();
+    s = g2.controller.getState();
+    expect(s.lastShot).toMatchObject({ fired: 73, hit: false, nearMiss: true });
+    expect(s.enemiesDestroyed).toBe(0);
+  });
+
+  it('the destroyed enemy is replaced by a new search with new tanks', () => {
+    const g = fixtureRound();
+    g.controller.tapTank(enemyOf(g.controller.getState()).id);
+    g.controller.shotAnimationDone();
+    const s = g.controller.getState();
+    expect(s.challenge!.options).toBeDefined();
+    expect(s.decoys.every((d) => d.alive)).toBe(true);
+    expect(s.decoys).toHaveLength(s.challenge!.options!.length - 1);
+    expect(enemyOf(s).position).toBe(s.challenge!.answer);
+  });
+
+  it('tapTank is ignored before the challenge is answerable, outside comparisons and for the player tank', () => {
+    const g = guidedController(onlyComparison, COMPARISON_47_74.seed);
+    g.controller.startRound('guided');
+    g.controller.tapTank(enemyOf(g.controller.getState()).id);
+    expect(g.controller.getState().phase).toBe('challenge');
+    g.advance(1_000);
+    g.controller.tapTank(g.controller.getState().player.id);
+    expect(g.controller.getState().phase).toBe('challenge');
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    controller.tapTank(enemyOf(controller.getState()).id);
+    expect(controller.getState().phase).toBe('aiming');
+  });
+
+  it('order3: taps place badges without firing; the correct third badge fires at the enemy (US4 scenario 3)', () => {
+    const g = order3Round();
+    const s0 = g.controller.getState();
+    expect(s0.decoys).toHaveLength(2);
+    expect(enemyOf(s0).position).toBe(Math.max(...s0.challenge!.options!));
+    const [a, b, c] = ascendingIds(s0);
+    g.controller.tapTank(a!);
+    g.controller.tapTank(b!);
+    let s = g.controller.getState();
+    expect(s.orderTaps).toEqual([a, b]);
+    expect(s.phase).toBe('challenge');
+    expect(s.shot).toBeNull();
+    expect(s.turn).toBe(0);
+    expect(s.shotsSinceEnemyFire).toBe(0);
+    // Tapping a badged tank again changes nothing.
+    g.controller.tapTank(b!);
+    expect(g.controller.getState().orderTaps).toEqual([a, b]);
+    g.controller.tapTank(c!);
+    s = g.controller.getState();
+    expect(s.phase).toBe('playerShot');
+    g.controller.shotAnimationDone();
+    s = g.controller.getState();
+    expect(s.lastShot).toMatchObject({ fired: enemyOf(s0).position, hit: true });
+    expect(s.enemiesDestroyed).toBe(1);
+  });
+
+  it('order3: typed numbers with confirm place badges; a typed number on no tank places none and shows the hint', () => {
+    const g = order3Round();
+    const s0 = g.controller.getState();
+    const sorted = [...s0.challenge!.options!];
+    const ids = ascendingIds(s0);
+    const offTank = sorted[0]! + 1;
+    typeNumber(g.controller, offTank);
+    g.controller.confirm();
+    let s = g.controller.getState();
+    expect(s.orderTaps).toEqual([]);
+    expect(s.notOnTank).toBe(true);
+    expect(s.phase).toBe('challenge');
+    expect(s.turn).toBe(0);
+    expect(s.entry.typed).toBe('');
+    typeNumber(g.controller, sorted[0]!);
+    s = g.controller.getState();
+    expect(s.notOnTank).toBe(false);
+    g.controller.confirm();
+    s = g.controller.getState();
+    expect(s.orderTaps).toEqual([ids[0]]);
+    expect(s.inputMethod).toBe('keyboard');
+    typeNumber(g.controller, sorted[1]!);
+    g.controller.confirm();
+    typeNumber(g.controller, sorted[2]!);
+    g.controller.confirm();
+    expect(g.controller.getState().phase).toBe('playerShot');
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().enemiesDestroyed).toBe(1);
+  });
+
+  it('order3: a wrong order resets the badges and counts as a miss, not as a shot', () => {
+    const g = order3Round();
+    const [a, b, c] = ascendingIds(g.controller.getState());
+    g.controller.tapTank(a!);
+    g.controller.tapTank(c!);
+    const s = g.controller.getState();
+    expect(s.orderTaps).toEqual([]);
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(1);
+    expect(s.phase).toBe('challenge');
+    expect(s.turn).toBe(0);
+    expect(s.shotsSinceEnemyFire).toBe(0);
+    expect(s.lastShot).toBeNull();
+    // Starting again in the right order still works.
+    g.controller.tapTank(a!);
+    g.controller.tapTank(b!);
+    g.controller.tapTank(c!);
+    expect(g.controller.getState().phase).toBe('playerShot');
   });
 });

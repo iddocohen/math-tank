@@ -55,7 +55,7 @@ export function muzzle(tank: TankState): Point {
   return { x: tank.x, y: tank.y + MUZZLE_HEIGHT };
 }
 
-function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
+export function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
   return { id, kind, position, x, y: settleY(terrain, x), alive: true };
 }
@@ -127,6 +127,7 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     elapsedMs: 0,
     lastEnemyHit: false,
     stepAnimation: null,
+    notOnTank: false,
     phase: 'aiming',
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),

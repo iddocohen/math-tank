@@ -43,8 +43,6 @@ export const SETTING_FIELDS = [
 export type SettingField = (typeof SETTING_FIELDS)[number];
 
 export const COMING_SOON: readonly SettingField[] = [
-  // Phase 18: comparison with decoy tanks.
-  'challengeTypes.comparison',
   // Phases 19 and 20: help steps.
   'help.nearestTen',
   'help.countSteps',
