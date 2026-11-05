@@ -8,18 +8,22 @@ import { migrate } from './migrate';
 
 const ALL_MODES = { mixed: true, ruler: true, math: true };
 
-/** The current defaults in the shape of settings before version 8: `freePlay` instead of `playModes` (amendment 17). */
+/**
+ * The current defaults in the shape of settings before version 8: `freePlay` instead of `playModes` (amendment 17) and
+ * no `pointAfterFullHelp` (amendment 18).
+ */
 function legacyDefaults(freePlay = false): Record<string, unknown> {
-  const { playModes: _modes, ...rest } = defaultSettings();
+  const { playModes: _modes, pointAfterFullHelp: _point, ...rest } = defaultSettings();
   void _modes;
+  void _point;
   return { ...rest, freePlay };
 }
 
-/** Settings `v` after every migration step: `freePlay` dropped, all play modes offered, version 8. */
+/** Settings `v` after every migration step: `freePlay` dropped, all play modes offered, a point after the full help, version 9. */
 function upgraded(v: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const { freePlay: _free, ...rest } = v;
   void _free;
-  return { ...rest, playModes: ALL_MODES, ...extra, version: 8 };
+  return { ...rest, playModes: ALL_MODES, pointAfterFullHelp: true, ...extra, version: 9 };
 }
 import { progressSchema } from './progressSchema';
 import { emptyRecords, type Records } from '../records/records';
@@ -209,7 +213,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(8);
+    expect(parsed.data?.version).toBe(9);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -230,7 +234,7 @@ describe('migrate', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(8);
+    expect(parsed.data?.version).toBe(9);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -250,7 +254,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(8);
+    expect(settings.version).toBe(9);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -276,7 +280,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(8);
+    expect(settings.version).toBe(9);
     expect(settings.roundLength).toBe(12);
   });
 
@@ -297,7 +301,7 @@ describe('migrate', () => {
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
     expect(migrated).toEqual(upgraded(v2, { roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 8, roundType: 'untilHearts', garage: true });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 9, roundType: 'untilHearts', garage: true });
   });
 
   it('turns version 3 settings into version 6: exactHit dropped, roundType, showClock, showRecords and garage added (amendments 06 and 11)', () => {
@@ -324,7 +328,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 8, roundType: 'untilHearts', playModes: ALL_MODES });
+    expect(settings).toMatchObject({ version: 9, roundType: 'untilHearts', playModes: ALL_MODES });
     expect('freePlay' in settings).toBe(false);
     expect('exactHit' in settings).toBe(false);
   });
@@ -334,7 +338,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 8, roundType: 'enemyCount', noDamage: true });
+    expect(settings).toMatchObject({ version: 9, roundType: 'enemyCount', noDamage: true });
   });
 
   it('turns version 4 settings into version 6 with garage on, and keeps a stored garage value (amendment 11)', () => {
@@ -344,7 +348,7 @@ describe('migrate', () => {
     const migrated = migrate(v4, 'settings');
     expect(migrated).toEqual(upgraded(v4, { garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 8, garage: false });
+    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 9, garage: false });
   });
 
   it('turns version 5 settings into version 6 with numberPad auto, and keeps a stored numberPad value (amendment 12)', () => {
@@ -353,7 +357,7 @@ describe('migrate', () => {
     const migrated = migrate(v5, 'settings');
     expect(migrated).toEqual(upgraded(v5, { numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 8, numberPad: 'always' });
+    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 9, numberPad: 'always' });
   });
 
   it('loadSettings upgrades stored version 5 settings without a reset (amendment 12)', () => {
@@ -363,7 +367,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v5));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 8, numberPad: 'auto', playModes: ALL_MODES });
+    expect(settings).toMatchObject({ version: 9, numberPad: 'auto', playModes: ALL_MODES });
   });
 
   it('version 6 becomes version 7 with reading aloud turned off once (PO1)', () => {
@@ -374,7 +378,7 @@ describe('migrate', () => {
   it('version 7 becomes version 8: free play becomes the play modes (amendment 17)', () => {
     const v7 = { ...legacyDefaults(), version: 7 };
     expect(migrate(v7, 'settings')).toEqual(upgraded(v7));
-    expect(migrate({ ...v7, freePlay: true }, 'settings')).toMatchObject({ version: 8, playModes: ALL_MODES });
+    expect(migrate({ ...v7, freePlay: true }, 'settings')).toMatchObject({ version: 9, playModes: ALL_MODES });
     const noTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
     const onlyFree = migrate({ ...v7, freePlay: true, challengeTypes: noTypes }, 'settings') as Record<string, unknown>;
     expect(onlyFree.playModes).toEqual({ mixed: false, ruler: true, math: false });
@@ -382,6 +386,23 @@ describe('migrate', () => {
     const parsed = settingsSchema.safeParse(onlyFree);
     expect(parsed.success).toBe(true);
     expect(validateSettings(parsed.data!)).toEqual({ ok: true });
+  });
+
+  it('version 8 becomes version 9: a point after the full help is added, on unless already set (amendment 18)', () => {
+    const { pointAfterFullHelp: _point, ...v8 } = { ...defaultSettings(), version: 8 };
+    void _point;
+    expect(migrate(v8, 'settings')).toEqual({ ...defaultSettings(), version: 9, pointAfterFullHelp: true });
+    expect(migrate({ ...v8, pointAfterFullHelp: false }, 'settings')).toMatchObject({ version: 9, pointAfterFullHelp: false });
+    // Version 0 and version 7 data go through every step and get the default.
+    expect(migrate({ ...legacyDefaults(), version: 7 }, 'settings')).toMatchObject({ version: 9, pointAfterFullHelp: true });
+    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 9, pointAfterFullHelp: true });
+  });
+
+  it('loadSettings keeps a stored point after the full help that is off (amendment 18)', () => {
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...defaultSettings(), pointAfterFullHelp: false }) });
+    const { settings, resetReason } = loadSettings(kv);
+    expect(resetReason).toBe('none');
+    expect(settings.pointAfterFullHelp).toBe(false);
   });
 
   it('loadSettings upgrades stored version 7 settings that offered only free play without a reset (amendment 17)', () => {

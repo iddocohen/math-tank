@@ -21,7 +21,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 8,
+      version: 9,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -44,6 +44,7 @@ describe('defaults', () => {
       showClock: false,
       showRecords: true,
       timeLimitSeconds: null,
+      pointAfterFullHelp: true,
       garage: true,
       numberPad: 'auto',
     });
@@ -307,6 +308,14 @@ describe('addition.maxOperand limit (review R5)', () => {
 });
 
 describe('whole numbers and one parse function (review T4)', () => {
+  it('the schema needs pointAfterFullHelp as a boolean (amendment 18, FR-129)', () => {
+    expect(settingsSchema.safeParse({ ...defaultSettings(), pointAfterFullHelp: false }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...defaultSettings(), pointAfterFullHelp: 'no' }).success).toBe(false);
+    const { pointAfterFullHelp: _drop, ...without } = defaultSettings();
+    void _drop;
+    expect(settingsSchema.safeParse(without).success).toBe(false);
+  });
+
   it('the schema accepts only whole numbers for roundLength and timeLimitSeconds', () => {
     expect(settingsSchema.safeParse({ ...defaultSettings(), roundLength: 5.5 }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...defaultSettings(), timeLimitSeconds: 30.5 }).success).toBe(false);
@@ -317,7 +326,7 @@ describe('whole numbers and one parse function (review T4)', () => {
     const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
     void _modes;
-    expect(parseSettings(v5)).toMatchObject({ version: 8, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true } });
+    expect(parseSettings(v5)).toMatchObject({ version: 9, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });

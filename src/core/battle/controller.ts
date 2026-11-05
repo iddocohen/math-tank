@@ -150,6 +150,7 @@ export class BattleController {
       turn: prev.turn,
       lives: prev.lives,
       enemiesDestroyed: prev.enemiesDestroyed,
+      enemiesHit: prev.enemiesHit,
       // A new landscape is no way around the misses in a row (amendment 13, FR-098).
       missStreak: prev.missStreak,
       elapsedMs: prev.elapsedMs,
@@ -289,7 +290,17 @@ export class BattleController {
       // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
       // The remaining decoys fold away with it (amendment 10).
       // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
-      const destroyed: RoundState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, missStreak: 0, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
+      // With "Punkt nach voller Hilfe" off, a hit after the shown solution destroys the enemy but does not count toward
+      // the score, the stars, "Gegner pro Runde" or the personal best (amendment 18, FR-129).
+      const counts = this.settings.pointAfterFullHelp || next.help.level < SOLUTION_HELP_LEVEL;
+      const destroyed: RoundState = {
+        ...next,
+        enemiesDestroyed: next.enemiesDestroyed + (counts ? 1 : 0),
+        enemiesHit: next.enemiesHit + 1,
+        lastShot: counts ? next.lastShot : { ...next.lastShot, uncounted: true },
+        missStreak: 0,
+        decoys: next.decoys.map((d) => ({ ...d, alive: false })),
+      };
       this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');

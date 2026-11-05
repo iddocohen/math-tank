@@ -289,7 +289,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.garage, L.numberPad,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.pointAfterFullHelp, L.garage, L.numberPad,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }
@@ -334,6 +334,26 @@ describe('SettingsPage', () => {
     expect(saved.beginnerAssist).toBe(false);
     expect(saved.timeLimitSeconds).toBe(45);
     expect(saved.addition).toEqual(stored.addition);
+  });
+
+  it('the group "Hilfe" holds "Zeitlimit", its seconds and "Punkt nach voller Hilfe", each with a one-line explanation (amendment 18)', () => {
+    setup({ timeLimitSeconds: 30 });
+    const help = within(screen.getByRole('group', { name: m.settings.groups.help }));
+    expect(help.getByLabelText(L.timeLimit)).toBeTruthy();
+    expect(help.getByLabelText(L.timeLimitSeconds)).toBeTruthy();
+    expect(help.getByLabelText(L.pointAfterFullHelp)).toBeTruthy();
+    expect(help.getByText(m.settings.explanations.timeLimit)).toBeTruthy();
+    expect(help.getByText(m.settings.explanations.pointAfterFullHelp)).toBeTruthy();
+    const round = within(screen.getByRole('group', { name: m.settings.groups.round }));
+    expect(round.queryByLabelText(L.timeLimit)).toBeNull();
+  });
+
+  it('"Punkt nach voller Hilfe" is on by default, and turning it off saves pointAfterFullHelp false (amendment 18, FR-129)', () => {
+    const { persistence } = setup();
+    expect(field(L.pointAfterFullHelp).checked).toBe(true);
+    toggle(L.pointAfterFullHelp);
+    fireEvent.click(saveButton());
+    expect(persistence.settings().pointAfterFullHelp).toBe(false);
   });
 
   it('"Schließen" calls onClose', () => {

@@ -388,11 +388,12 @@ export class BattleScene extends Phaser.Scene {
     const y = toScreenY(shot.impact.y, WORLD_HEIGHT);
     this.effects.explosion(shot.impact.x, y, BLAST_RADIUS);
     // The controller applies the crater and damage; its update redraws the terrain right away.
-    const before = this.controller.getState().enemiesDestroyed;
+    // Every destroyed enemy, also one that does not count (amendment 18).
+    const before = this.controller.getState().enemiesHit;
     if (shot.shooter === 'player') this.controller.shotAnimationDone();
     else this.controller.enemyShotAnimationDone();
     // The same soft boom for every explosion, a miss included, and the soft chime after a hit (FR-009, AC-07).
-    const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesDestroyed > before;
+    const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesHit > before;
     // A burst decoy plays only the light plopp (amendment 10, FR-066).
     const burstDecoy = shot.shooter === 'player' && this.controller.getState().lastShot?.decoyHit === true;
     for (const sound of landingSounds({ destroyedEnemy, burstDecoy })) this.sounds?.[sound]();

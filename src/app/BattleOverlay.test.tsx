@@ -382,6 +382,40 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
   });
 });
 
+describe('BattleOverlay point after the full help (amendment 18, FR-129)', () => {
+  function hitAfterHelp(over: Partial<Settings>, helpRequests: number) {
+    const g = setupGuided(over);
+    const n = g.controller.getState().challenge!.answer;
+    act(() => {
+      for (let i = 0; i < helpRequests; i++) g.controller.requestHelp();
+      g.advance(1_000);
+      g.controller.fireAt(n);
+      g.controller.shotAnimationDone();
+    });
+    return n;
+  }
+
+  it('with the setting off, a hit at the shown solution shows "Getroffen, mit Hilfe." with the number, and the tank counter stays', () => {
+    const n = hitAfterHelp({ pointAfterFullHelp: false }, 3);
+    expect(t().battle.hitWithHelp).toBe('Getroffen, mit Hilfe.');
+    expect(screen.getByTestId('hit-feedback').textContent).toBe(`${t().battle.hitWithHelp} ${t().battle.enemyStoodAt(n)}`);
+    expect(screen.getByTestId('score').textContent).toBe('0');
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-enemies-destroyed')).toBe('0');
+  });
+
+  it('with the setting off, a hit after help step 2 shows "Getroffen!" and counts', () => {
+    const n = hitAfterHelp({ pointAfterFullHelp: false }, 2);
+    expect(screen.getByTestId('hit-feedback').textContent).toBe(`${t().battle.hit} ${t().battle.enemyStoodAt(n)}`);
+    expect(screen.getByTestId('score').textContent).toBe('1');
+  });
+
+  it('with the setting on, a hit at the shown solution shows "Getroffen!" and counts', () => {
+    const n = hitAfterHelp({ pointAfterFullHelp: true }, 3);
+    expect(screen.getByTestId('hit-feedback').textContent).toBe(`${t().battle.hit} ${t().battle.enemyStoodAt(n)}`);
+    expect(screen.getByTestId('score').textContent).toBe('1');
+  });
+});
+
 describe('BattleOverlay comparison (US4, T091)', () => {
   const onlyComparison = { challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
 

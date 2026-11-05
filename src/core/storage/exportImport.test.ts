@@ -101,6 +101,20 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords(), garage: sampleGarage() });
   });
 
+  it('keeps a point after the full help that is off (amendment 18, FR-129)', () => {
+    const off: Settings = { ...sampleSettings(), pointAfterFullHelp: false };
+    const r = importData(exportData(off, sampleProgress(), sampleRecords(), sampleGarage()));
+    expect(r.ok && r.settings.pointAfterFullHelp).toBe(false);
+  });
+
+  it('a version 8 settings file (exported before amendment 18) imports with a point after the full help', () => {
+    const { pointAfterFullHelp: _point, ...v8 } = { ...sampleSettings(), version: 8 };
+    void _point;
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const r = importData(JSON.stringify({ ...file, settings: v8 }));
+    expect(r.ok && r.settings).toEqual(sampleSettings());
+  });
+
   it('round-trips the defaults, empty progress and empty records', () => {
     const r = importData(exportData(defaultSettings(), emptyProgress(), emptyRecords(), emptyGarage()));
     expect(r).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() });
@@ -190,7 +204,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(8);
+    expect(r.settings.version).toBe(9);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

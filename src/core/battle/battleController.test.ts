@@ -135,7 +135,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'elapsedMs', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
+        'lives', 'enemiesDestroyed', 'enemiesHit', 'elapsedMs', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
       ].sort(),
     );
   });
@@ -1959,6 +1959,96 @@ describe('BattleController help escalation (US5, T095)', () => {
     g.controller.tick();
     expect(g.controller.getState().phase).toBe('playerShot');
     expect(g.controller.getState().help.level).toBe(0);
+  });
+});
+
+describe('BattleController point after the full help (amendment 18, FR-129)', () => {
+  type Way = 'help requests' | 'misses' | 'the time limit';
+  /** Reaches help step 3 in the current search the given way; no damage, so the misses cost no heart. */
+  function reachFullHelp(g: Guided, way: Way): void {
+    const s0 = g.controller.getState();
+    if (way === 'help requests') for (let i = 0; i < 3; i++) g.controller.requestHelp();
+    else if (way === 'misses') for (let i = 0; i < 3; i++) answer(g, missNumber(s0));
+    else
+      for (let i = 0; i < 3; i++) {
+        g.advance(10_000);
+        g.controller.tick();
+      }
+    expect(g.controller.getState().help.level).toBe(3);
+  }
+  /** Fires at the shown solution (or the answer) and lands the shell. */
+  function hitAnswer(g: Guided): RoundState {
+    const answerNumber = g.controller.getState().challenge!.answer;
+    g.advance(1_000);
+    g.controller.fireAt(answerNumber);
+    g.controller.shotAnimationDone();
+    return g.controller.getState();
+  }
+  const off = { pointAfterFullHelp: false, noDamage: true, roundType: 'enemyCount', roundLength: 20, timeLimitSeconds: 10 } as const;
+
+  for (const way of ['help requests', 'misses', 'the time limit'] as const) {
+    it(`with the setting off, a hit after help step 3 reached by ${way} destroys the enemy but does not count`, () => {
+      const g = guidedRoundWhere(positionSearch, off);
+      const before = g.controller.getState();
+      reachFullHelp(g, way);
+      const s = hitAnswer(g);
+      expect(s.enemiesDestroyed).toBe(0);
+      expect(s.enemiesHit).toBe(1);
+      expect(s.lastShot).toMatchObject({ hit: true, uncounted: true });
+      expect(s.missStreak).toBe(0);
+      expect(s.phase).toBe('challenge');
+      expect(s.terrainSeed).not.toBe(before.terrainSeed);
+      expect(s.challenge!.id).not.toBe(before.challenge!.id);
+      expect(s.help.level).toBe(0);
+      // The learning record does not depend on the setting: the attempt is with help.
+      expect(g.progress.getProgress().attempts).toHaveLength(1);
+      expect(g.progress.getProgress().attempts[0]).toMatchObject({ helpLevel: 3, independent: false });
+    });
+  }
+
+  it('with the setting off, hits after help steps 1 and 2 count', () => {
+    const g = guidedRoundWhere(positionSearch, off);
+    g.controller.requestHelp();
+    let s = hitAnswer(g);
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.lastShot?.uncounted).toBeFalsy();
+    g.controller.requestHelp();
+    g.controller.requestHelp();
+    expect(g.controller.getState().help.level).toBe(2);
+    s = hitAnswer(g);
+    expect(s.enemiesDestroyed).toBe(2);
+    expect(s.enemiesHit).toBe(2);
+    expect(s.lastShot?.uncounted).toBeFalsy();
+  });
+
+  it('with the setting off, a hit after help step 3 does not count toward "Gegner pro Runde" (FR-082)', () => {
+    const g = guidedRoundWhere(positionSearch, { ...off, roundLength: 1 });
+    reachFullHelp(g, 'help requests');
+    let s = hitAnswer(g);
+    expect(s.phase).toBe('challenge');
+    expect(s.outcome).toBeNull();
+    s = hitAnswer(g);
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.outcome).toBe('goalReached');
+  });
+
+  it('with the setting on (the default), a hit after help step 3 counts like any other', () => {
+    expect(defaultSettings().pointAfterFullHelp).toBe(true);
+    const g = guidedRoundWhere(positionSearch, { ...off, pointAfterFullHelp: true });
+    reachFullHelp(g, 'help requests');
+    const s = hitAnswer(g);
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.enemiesHit).toBe(1);
+    expect(s.lastShot?.uncounted).toBeFalsy();
+  });
+
+  it('"Neue Landschaft" keeps both counts', () => {
+    const g = guidedRoundWhere(positionSearch, off);
+    reachFullHelp(g, 'help requests');
+    hitAnswer(g);
+    hitAnswer(g);
+    g.controller.newScene();
+    expect(g.controller.getState()).toMatchObject({ enemiesDestroyed: 1, enemiesHit: 2 });
   });
 });
 

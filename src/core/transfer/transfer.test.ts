@@ -156,6 +156,18 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     });
   }
 
+  it('carries a point after the full help that is off, and leaves the field out when it is on (amendment 18, FR-129)', async () => {
+    const off: ReturnType<typeof data> = { ...data(), settings: { ...settings(), pointAfterFullHelp: false } };
+    const plain = await encodeTransfer(off, PAGE, { codec: null });
+    const json = new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)));
+    expect((JSON.parse(json) as [Record<string, unknown>])[0].pointAfterFullHelp).toBe(false);
+    const dec = await decodeTransfer(codeOf(plain.link));
+    expect(dec.ok && dec.data.settings.pointAfterFullHelp).toBe(false);
+    const on = await encodeTransfer(data(), PAGE, { codec: null });
+    const onJson = new TextDecoder().decode(fromB64url(codeOf(on.link).slice(3)));
+    expect('pointAfterFullHelp' in (JSON.parse(onJson) as [Record<string, unknown>])[0]).toBe(false);
+  });
+
   it('the compressed link is shorter than the uncompressed one', async () => {
     const zipped = await encodeTransfer(data(), PAGE, { codec: browserCodec() });
     const plain = await encodeTransfer(data(), PAGE, { codec: null });
@@ -259,8 +271,9 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(8);
+    expect(dec.data.settings.version).toBe(9);
     expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
+    expect(dec.data.settings.pointAfterFullHelp).toBe(true);
     expect(dec.data.settings.numberPad).toBe('auto');
     expect(dec.data.settings.sound.speech).toBe(false);
     expect(dec.data.settings.range).toEqual(settings().range);
@@ -393,8 +406,9 @@ const V6_DEFAULTS = {
 };
 
 describe('frozen version 2 codes (review T1, P4)', () => {
-  it('the settings differences of version 2 codes are laid over the frozen version 6 defaults', () => {
-    expect(TRANSFER_V2_SETTINGS_BASE).toEqual(V6_DEFAULTS);
+  it('the settings differences of version 2 codes are laid over the frozen version 6 defaults and a point after the full help', () => {
+    // Amendment 18 adds pointAfterFullHelp: true, the value the version 8 to 9 step gives, so no existing code changes meaning.
+    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true });
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.sound)).toBe(true);
   });
@@ -417,6 +431,9 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       expect(dec.data.settings).toEqual(migrate(v6, 'settings'));
       expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
       expect('freePlay' in dec.data.settings).toBe(false);
+      // Made before amendment 18: the setting reads as on.
+      expect(dec.data.settings.pointAfterFullHelp).toBe(true);
+      expect(dec.data.settings.version).toBe(9);
       expect(dec.data.garage).toEqual({ version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } });
       expect(dec.data.records.best).toEqual({ '550-780|1|untilHearts': { enemies: 4, ms: 61000, at: 1700000000000 } });
       expect(dec.data.progress.skills).toEqual({
@@ -489,6 +506,7 @@ function randomSettings(seed: number): Settings {
     showClock: bool(),
     showRecords: bool(),
     timeLimitSeconds: bool() ? null : r.int(10, 120),
+    pointAfterFullHelp: bool(),
     garage: bool(),
     numberPad: r.pick(['auto', 'always', 'never'] as const),
   };

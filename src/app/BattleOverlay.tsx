@@ -168,9 +168,10 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
         ) : lastShot?.hit && freshHit ? (
           // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068);
-          // it fades and is gone after HIT_FEEDBACK_MS (T233).
+          // it fades and is gone after HIT_FEEDBACK_MS (T233). A hit that does not count reads "Getroffen, mit Hilfe."
+          // (amendment 18, FR-129).
           <span className="landed hit fade-out" data-testid="hit-feedback">
-            {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
+            {lastShot.uncounted ? m.battle.hitWithHelp : m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
         ) : showMiss && lastShot.nearMiss ? (
           // On a tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072). In a

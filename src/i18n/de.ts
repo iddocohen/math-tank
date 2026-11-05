@@ -81,6 +81,8 @@ export const de = {
     you: 'Du',
     /** Amendment 06: the exact number destroys the enemy (FR-066). */
     hit: 'Getroffen!',
+    /** Amendment 18 (FR-129): a hit after the shown solution with "Punkt nach voller Hilfe" off; it does not count. */
+    hitWithHelp: 'Getroffen, mit Hilfe.',
     /** Amendment 06: on the tank body but not at the number, a miss (FR-066, FR-072). */
     near: 'Ganz knapp! Triff die Linie.',
     /** Amendment 06: label of the tank counter at the top, for screen readers only (FR-083). */
@@ -361,6 +363,13 @@ export const de = {
       noDamage: 'Ohne Schaden spielen',
       timeLimit: 'Zeitlimit',
       timeLimitSeconds: 'Sekunden pro Aufgabe',
+      /** Amendment 18 (FR-129). */
+      pointAfterFullHelp: 'Punkt nach voller Hilfe',
+    },
+    /** Amendment 18 (FR-129): one line under each switch of the time limit and the point after the full help. */
+    explanations: {
+      timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
+      pointAfterFullHelp: 'Wenn aus: Ein Treffer nach der gezeigten Lösung bringt keinen Panzer, keinen Stern und zählt nicht für den Rekord.',
     },
   },
 

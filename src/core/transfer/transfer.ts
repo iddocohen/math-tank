@@ -194,6 +194,8 @@ function settingsDiff(value: Record<string, unknown>, base: Record<string, unkno
  * The base that version 2 codes store their settings differences against: the version 6 defaults, frozen (review T1).
  * Writer and reader both use it, whatever the current defaults are, so changing a default later never changes what an
  * existing code means. The settings version travels in the differences, and the reader migrates from it.
+ * Amendment 18 adds `pointAfterFullHelp: true`: older codes hold no such field and the version 8 to 9 step gives the same
+ * value, so no existing code changes meaning, and a code with the setting on leaves the field out.
  */
 export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   version: 6,
@@ -220,6 +222,7 @@ export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   timeLimitSeconds: null,
   garage: true,
   numberPad: 'auto',
+  pointAfterFullHelp: true,
 });
 
 function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {

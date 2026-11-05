@@ -177,8 +177,13 @@ export interface RoundState {
   turn: number;
   /** The child's hearts, LIVES at the start; 0 ends the round (amendment 06, FR-080). */
   lives: number;
-  /** The score: enemies destroyed this round (FR-083). */
+  /**
+   * The score: enemies destroyed this round that count (FR-083). With "Punkt nach voller Hilfe" off, an enemy destroyed
+   * after help step 3 does not count (amendment 18, FR-129). The stars, "Gegner pro Runde" and the personal best read it.
+   */
   enemiesDestroyed: number;
+  /** Every enemy destroyed this round, counted or not (amendment 18); the new hills are seeded from it (FR-101). */
+  enemiesHit: number;
   /** Time played up to the last pause, final once the round is over (FR-084); controller.elapsedMs() adds the running part. */
   elapsedMs: number;
   /**
@@ -285,6 +290,11 @@ export interface LastShot {
   distance: number;
   /** The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068). */
   enemyNumber: number;
+  /**
+   * A hit after help step 3 with "Punkt nach voller Hilfe" off: the enemy is destroyed but not counted, and the feedback
+   * reads "Getroffen, mit Hilfe." (amendment 18, FR-129). Absent otherwise.
+   */
+  uncounted?: boolean;
 }
 
 export interface ShotInFlight {

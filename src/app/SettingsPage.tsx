@@ -291,6 +291,14 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           <Check label={L.helpZoom} {...bind('help.zoom')} />
           <Check label={L.helpStepAnimation} {...bind('help.stepAnimation')} />
           <Check label={L.beginnerAssist} {...bind('beginnerAssist')} />
+          {/* The time limit and the point after the full help stand together, each with one line (amendment 18, FR-129). */}
+          <Check label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
+          <p className="hint">{m.settings.explanations.timeLimit}</p>
+          {draft.timeLimitSeconds !== null && (
+            <NumberInput label={L.timeLimitSeconds} value={draft.timeLimitSeconds} min={10} max={120} errors={errorsAt('timeLimitSeconds')} onChange={(n) => set('timeLimitSeconds', n)} />
+          )}
+          <Check label={L.pointAfterFullHelp} {...bind('pointAfterFullHelp')} />
+          <p className="hint">{m.settings.explanations.pointAfterFullHelp}</p>
         </Group>
 
         <Group title={m.settings.groups.enemy}>
@@ -346,10 +354,6 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
             onChange={(v) => set('numberPad', v as Settings['numberPad'])}
           />
           <Check label={L.adaptive} {...bind('adaptive')} />
-          <Check label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
-          {draft.timeLimitSeconds !== null && (
-            <NumberInput label={L.timeLimitSeconds} value={draft.timeLimitSeconds} min={10} max={120} errors={errorsAt('timeLimitSeconds')} onChange={(n) => set('timeLimitSeconds', n)} />
-          )}
         </Group>
 
         <Group title={m.settings.data.title}>

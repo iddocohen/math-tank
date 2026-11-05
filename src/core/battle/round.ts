@@ -87,6 +87,7 @@ export function createRound(
     turn: 0,
     lives: LIVES,
     enemiesDestroyed: 0,
+    enemiesHit: 0,
     elapsedMs: 0,
     missStreak: 0,
     stepAnimation: null,
@@ -114,11 +115,11 @@ export function createRound(
 
 /**
  * New hills after a destroyed enemy (amendment 13, FR-101): a new terrain seed from the round seed and the number of
- * destroyed enemies, new ground from it, and every tank moved to its number on the new ground. The round seed and every
+ * destroyed enemies (`enemiesHit`, counted or not, amendment 18), new ground from it, and every tank moved to its number on the new ground. The round seed and every
  * other field stay, so the challenges are the same as without the new ground.
  */
 export function renewTerrain(s: RoundState, settings: Settings): RoundState {
-  const terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed);
+  const terrainSeed = deriveSeed(s.seed, 8, s.enemiesHit);
   const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
   const settle = (tank: TankState): TankState => moveTank(tank, tank.position, settings, terrain);
   // The trail of the last shot belongs to the old ground and goes with it (bug report B1, FR-004).
