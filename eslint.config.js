@@ -12,7 +12,7 @@ const frameworkPatterns = [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dev-dist/', 'coverage/', 'node_modules/', 'playwright-report/', 'test-results/'] },
+  { ignores: ['dist/', 'dist-base/', 'dev-dist/', 'coverage/', 'node_modules/', 'playwright-report/', 'test-results/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

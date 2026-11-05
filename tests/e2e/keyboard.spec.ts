@@ -9,7 +9,7 @@
  * screen (amendment 11). Game state comes from the overlay's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { COMPARISON_47_74 } from '../../src/core/math/fixtures';
@@ -56,8 +56,8 @@ async function startWithEnter(page: Page, seed: number): Promise<Locator> {
 }
 
 async function typeAndFire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
   await page.keyboard.press('Enter');
@@ -85,26 +85,26 @@ test('a whole round with the keyboard only: wrong answers, help, solution, range
   // A wrong number, then H for the next help step, then two more wrong numbers.
   banners.push((await banner.textContent()) ?? '');
   await typeAndFire(page, overlay, await wrongNumber(overlay));
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-help-level', '1', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-help-level', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await page.keyboard.press('h');
   await expect(overlay).toHaveAttribute('data-help-level', '2');
   for (let i = 0; i < 2; i++) {
     const turn = Number(await overlay.getAttribute('data-turn'));
     await typeAndFire(page, overlay, await wrongNumber(overlay));
-    await expect(overlay).toHaveAttribute('data-turn', String(turn + 1), { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-turn', String(turn + 1), { timeout: GAME_WAIT });
   }
   // At the solution step Enter fires at the shown solution and destroys the enemy.
-  await expect(overlay).toHaveAttribute('data-help-level', '3', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-help-level', '3', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
 
   // 150 in the range 0 to 100: nothing fires and the range hint shows (FR-063).
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
   const turn = await overlay.getAttribute('data-turn');
   await page.keyboard.type('150');
   await page.keyboard.press('Enter');
@@ -124,15 +124,15 @@ test('a whole round with the keyboard only: wrong answers, help, solution, range
 
   // Play to the round end by typing the enemy's number.
   for (let destroyed = 1; destroyed < 3; destroyed++) {
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
     banners.push((await banner.textContent()) ?? '');
     await typeAndFire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed + 1), { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed + 1), { timeout: GAME_WAIT });
   }
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-phase', 'roundOver');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   banners.push((await banner.textContent()) ?? '');
 
@@ -159,7 +159,7 @@ test('a comparison is answered by typing the number: 47 oder 74, type 74 and Ent
   const overlay = await startWithEnter(page, COMPARISON_47_74.seed);
   await expect(page.getByTestId('challenge-banner')).toHaveText('Der Gegner steht bei der größeren Zahl: 47 oder 74');
   await typeAndFire(page, overlay, 74);
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expectNoPointerEvents(page);
 });

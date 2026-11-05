@@ -253,7 +253,7 @@ encodeTransfer(data: SaveData, pageHref: string, opts?: { codec?: Codec | null; 
   Promise<{ link: string; code: string; fits: boolean; sessionsDropped: number; windowLength: number }>
                                           // trims oldest sessions first, then the mastery windows, until the link fits
 decodeTransfer(code: string, opts?: { codec?: Codec | null }): Promise<{ ok: true; data: SaveData; summary: TransferSummary } | { ok: false }>
-                                          // code is 'v1.<data>'; the same schemas and migrations as storage (FR-120)
+                                          // code is 'v2.<data>' (or an older 'v1.<data>'); the same schemas and migrations as storage (FR-120)
 interface TransferSummary { stars: number; record: number; min: number; max: number }
 saveCodeFromHash(hash: string): string | null      // '#save=v1.abc' -> 'v1.abc'; null without a save fragment
 transferLink(pageHref: string, code: string): string   // the address without its fragment + '#save=' + code

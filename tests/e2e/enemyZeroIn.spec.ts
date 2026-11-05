@@ -7,7 +7,7 @@
  * heart. Game state comes from the data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import type { Settings } from '../../src/core/types';
@@ -33,7 +33,7 @@ async function start(page: Page, settings: Settings): Promise<Locator> {
 }
 
 async function fire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
   await page.keyboard.press('Enter');
@@ -44,9 +44,9 @@ async function miss(page: Page, overlay: Locator, settings: Settings): Promise<v
   const enemy = Number(await overlay.getAttribute('data-enemy-number'));
   const own = (await overlay.getAttribute('data-player-side')) === 'left' ? settings.range.min : settings.range.max;
   await fire(page, overlay, Math.round((own + enemy) / 2));
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
   // The enemy fires back, then the child chooses again.
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
 }
 
 test('"Normal": the enemy zeroes in, warns after the second miss and hits at the third; a destroyed enemy brings new hills', async ({ page }) => {
@@ -74,7 +74,7 @@ test('"Normal": the enemy zeroes in, warns after the second miss and hits at the
   const terrainSeed = (await canvas.getAttribute('data-terrain-seed'))!;
   const roundSeed = (await overlay.getAttribute('data-round-seed'))!;
   await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
   await expect(overlay).toHaveAttribute('data-round-seed', roundSeed);
   await expect(overlay).toHaveAttribute('data-lives', '2');
@@ -98,8 +98,8 @@ test('bug report B1: the trail of the last shot goes with the old hills', async 
   await expect(canvas).not.toHaveAttribute('data-trail-points', '0');
   const terrainSeed = (await canvas.getAttribute('data-terrain-seed'))!;
   await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await expect(canvas).toHaveAttribute('data-trail-points', '0');
 });

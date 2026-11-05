@@ -8,7 +8,7 @@
  * Keyboard only; state comes from data-* attributes (D4), ruler labels and pointer lines from the canvas.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
@@ -68,18 +68,18 @@ test('range 550 to 780: a shot 1 away is a near miss, the exact number destroys 
   // 1 away: on the tank body, a near miss with both numbers and the distance; nothing is destroyed (FR-066, FR-072).
   const near = nextTo(enemy);
   await fire(page, near);
-  await expect(overlay).toHaveAttribute('data-last-shot', 'near', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'near', { timeout: GAME_WAIT });
   await expect(page.getByTestId('hit-feedback')).toContainText(m.battle.near);
   await expect(page.getByTestId('compare')).toHaveText(m.battle.compare(near, enemy));
   await expect(page.getByTestId('compare')).toHaveText(`Du: ${near} · Gegner: ${enemy} · 1 Schritt`);
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   // The enemy fires back after the near miss, then the child aims again (amendment 07, FR-081).
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
   // The exact number destroys the enemy; a new enemy stands at a new number with its own pointer line (FR-066).
   await fire(page, enemy);
-  await expect(overlay).toHaveAttribute('data-last-shot', 'hit', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'hit', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(enemy)}`);
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
@@ -94,7 +94,7 @@ test('"Gegner pro Runde" 1: one exact hit ends the round with the score, the tim
   const overlay = await startFreePlay(page, { ...settings, roundType: 'enemyCount', roundLength: 1 });
   const enemy = Number(await overlay.getAttribute('data-enemy-number'));
   await fire(page, enemy);
-  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-outcome', 'goalReached');
   await expect(page.getByTestId('round-result')).toHaveText(/^1 Panzer getroffen in \d+:\d\d$/);
   await expect(page.getByTestId('new-record')).toHaveText(m.roundEnd.newRecord);
@@ -103,7 +103,7 @@ test('"Gegner pro Runde" 1: one exact hit ends the round with the score, the tim
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
   await fire(page, Number(await overlay.getAttribute('data-enemy-number')));
-  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: GAME_WAIT });
   await expect(page.getByTestId('record')).toHaveText(m.roundEnd.yourRecord(1));
   await expect(page.getByTestId('new-record')).toHaveCount(0);
 });

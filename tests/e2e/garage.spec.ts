@@ -8,7 +8,7 @@
  * the garage off: no button, no star total, and G does nothing.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage, lookKey } from '../../src/core/rewards/garage';
@@ -45,7 +45,7 @@ test('destroy an enemy for the tenth star, choose the rocket flag in the garage 
   await page.keyboard.press('Enter');
 
   // The end screen names the new item and shows the star total (FR-094, FR-095).
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
   await expect(page.getByTestId('unlocked')).toHaveText(m.roundEnd.unlocked(m.garage.items.rocket));
   await expect(page.getByTestId('star-total')).toContainText('10');
 

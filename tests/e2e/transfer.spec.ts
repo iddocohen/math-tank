@@ -81,8 +81,8 @@ async function stored(page: Page): Promise<Record<string, unknown>> {
 }
 
 /** Draws the QR code's SVG on a canvas in the page and returns its pixels, as a camera would see the screen. */
-async function qrPixels(page: Page): Promise<{ data: number[]; width: number }> {
-  return page.getByTestId('transfer-qr').evaluate(async (svg) => {
+async function qrPixels(page: Page, testId = 'transfer-qr'): Promise<{ data: number[]; width: number }> {
+  return page.getByTestId(testId).evaluate(async (svg) => {
     const size = Number(svg.getAttribute('data-qr-size'));
     const width = size * 4;
     const copy = svg.cloneNode(true) as SVGSVGElement;
@@ -122,11 +122,20 @@ async function linkFromFirstBrowser(browser: Browser, screenshot?: string): Prom
   const group = page.getByRole('group', { name: m.settings.transfer.title });
   await expect(group.getByTestId('transfer-qr')).toBeVisible();
   const link = (await page.getByTestId('transfer').getAttribute('data-transfer-link'))!;
-  expect(link).toMatch(/^http:\/\/localhost:4173\/#save=v1\.[A-Za-z0-9_-]+$/);
+  expect(link).toMatch(/^http:\/\/localhost:4173\/#save=v2\.[A-Za-z0-9_-]+$/);
 
   // The QR code on the page is scannable and holds the same link (FR-118).
   const { data, width } = await qrPixels(page);
   expect(jsQR(new Uint8ClampedArray(data), width, width)?.data).toBe(link);
+
+  // "QR groß anzeigen" (T305) shows the same scannable code full screen; "Schließen" closes it.
+  await group.getByRole('button', { name: m.settings.transfer.showLarge }).click();
+  const large = page.getByRole('dialog', { name: m.settings.transfer.qrLabel });
+  await expect(large).toBeVisible();
+  const big = await qrPixels(page, 'transfer-qr-large');
+  expect(jsQR(new Uint8ClampedArray(big.data), big.width, big.width)?.data).toBe(link);
+  await large.getByRole('button', { name: m.settings.transfer.closeLarge }).click();
+  await expect(large).toBeHidden();
 
   if (screenshot) {
     await group.scrollIntoViewIfNeeded();

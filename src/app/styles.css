@@ -195,7 +195,8 @@ input:focus-visible {
 }
 
 .readout-label {
-  font-size: 0.9rem;
+  /* T153 (FR-057): no text below 18 px on child screens. */
+  font-size: 1.125rem;
   font-weight: 700;
   opacity: 0.8;
 }
@@ -938,7 +939,8 @@ input:focus-visible {
   padding: 8px 10px;
   border: 3px solid transparent;
   border-radius: 14px;
-  font-size: 0.95rem;
+  /* T153 (FR-057): no text below 18 px on child screens. */
+  font-size: 1.125rem;
   background: #34446a;
   box-shadow: none;
 }
@@ -962,7 +964,7 @@ input:focus-visible {
   position: absolute;
   top: 4px;
   left: 8px;
-  font-size: 0.9rem;
+  font-size: 1.125rem;
   font-weight: 800;
   opacity: 0.85;
 }
@@ -973,7 +975,7 @@ input:focus-visible {
 }
 
 .garage-chosen {
-  font-size: 0.8rem;
+  font-size: 1.125rem;
   font-weight: 800;
   color: #ffd54a;
 }
@@ -1331,6 +1333,26 @@ input:focus-visible {
   font-family: monospace;
   font-size: 14px;
   user-select: all;
+}
+
+/* T305: "QR groß anzeigen", the QR code as large as the screen allows on white; the code carries its quiet zone. */
+.qr-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  background: #fff;
+}
+
+.qr-fullscreen-code {
+  width: min(100vw - 32px, 100vh - 120px);
+  height: auto;
+  aspect-ratio: 1;
 }
 
 /* Amendment 15 (FR-119): the dialog for a save link, over every screen. */

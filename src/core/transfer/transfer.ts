@@ -2,15 +2,21 @@
  * Moving a save to another browser with a link or a QR code (amendment 15, FR-115 to FR-120, data-model.md
  * "Transfer code"). Engine-free: no React, no Phaser, no storage access.
  *
- * The transfer is a compact JSON object (transfer version 1) with the settings, the garage, the personal bests and the
- * progress summary, without the attempt history. It is compressed with `deflate-raw` through the browser's
- * CompressionStream (or sent uncompressed when there is none), encoded as base64url and put into the link's fragment
- * as `#save=v1.<data>`. Browsers never send the fragment to the server.
+ * The transfer holds the settings, the garage, the personal bests and the progress summary, without the attempt
+ * history. It is compressed with `deflate-raw` through the browser's CompressionStream (or sent uncompressed when there
+ * is none), encoded as base64url and put into the link's fragment as `#save=v2.<data>`. Browsers never send the
+ * fragment to the server.
+ *
+ * Transfer version 2 (T305) is a JSON array that keeps the QR code small enough for a camera to read from another
+ * screen: settings only where they differ from the defaults, the garage, records, skills and sessions as arrays of
+ * numbers, no skill without progress, session times as differences, and session ids as their counter when they follow
+ * the "<start>-<n>" pattern. Version 1 codes (a JSON object, amendment 15) are still read.
  *
  * Receiving checks every part with the same schemas and migrations as loading from storage (FR-048), so a damaged or
  * foreign code is refused as a whole and changes nothing.
  */
 import { z } from 'zod';
+import { defaultSettings } from '../settings/defaults';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { parseGarage, type Garage } from '../rewards/garage';
 import type { Look } from '../rewards/items';
@@ -20,12 +26,14 @@ import { migrate } from '../storage/migrate';
 import { progressSchema } from '../storage/progressSchema';
 import type { Progress, RecentOutcome } from '../types';
 
-export const TRANSFER_VERSION = 1;
+/** The version this game writes; version 1 codes are still read. */
+export const TRANSFER_VERSION = 2;
 /** The whole link, in bytes: below the 2331 bytes of a version 40 QR code with error correction M (FR-118). */
 export const TRANSFER_MAX_LINK_BYTES = 2300;
 /** Longest stored mastery window (data-model.md SkillProgress). */
 const WINDOW_MAX = 10;
 const FRAGMENT = 'save=';
+const intMin0 = () => z.number().int().min(0);
 
 export interface SaveData {
   settings: Settings;
@@ -37,6 +45,7 @@ export interface SaveData {
 type SkillTuple = [step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string];
 type SessionTuple = [id: string, startedAt: number, lastActiveAt: number, attempts: number, independentCorrect: number, assisted: number];
 
+/** The full transfer, before it is made compact; it is also the shape of a version 1 code. */
 export interface TransferV1 {
   v: 1;
   settings: Settings;
@@ -85,7 +94,7 @@ export function toTransfer(data: SaveData): TransferV1 {
     skills[key] = [sp.step, sp.attempts, sp.independentCorrect, sp.assisted, sp.guesses, sp.masteryWindow.map((o) => LETTER[o]).join('')];
   }
   return {
-    v: TRANSFER_VERSION,
+    v: 1,
     settings: data.settings,
     garage: { stars: data.garage.stars, look: { ...data.garage.look } },
     records: data.records.best,
@@ -136,8 +145,92 @@ export function saveCodeFromHash(hash: string): string | null {
   return body.startsWith(FRAGMENT) ? body.slice(FRAGMENT.length) : null;
 }
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** The parts of `value` that differ from `base`, object by object; `version` always stays. */
+function settingsDiff(value: Record<string, unknown>, base: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value)) {
+    const b = base[key];
+    if (key === 'version') out[key] = v;
+    else if (isPlainObject(v) && isPlainObject(b)) {
+      const inner = settingsDiff(v, b);
+      if (Object.keys(inner).length > 0) out[key] = inner;
+    } else if (JSON.stringify(v) !== JSON.stringify(b)) out[key] = v;
+  }
+  return out;
+}
+
+/** `base` with every part of `diff` laid over it; keys that would change an object's prototype are skipped. */
+function withDiff(base: Record<string, unknown>, diff: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, v] of Object.entries(diff)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    const b = Object.hasOwn(base, key) ? base[key] : undefined;
+    out[key] = isPlainObject(v) && isPlainObject(b) ? withDiff(b, v) : v;
+  }
+  return out;
+}
+
+const EMPTY_WINDOW = '';
+
+/** Transfer version 2: `[settings, garage, records, skills, sessions]` (T305). */
+function compact(t: TransferV1): unknown[] {
+  const skills = Object.entries(t.skills)
+    .filter(([, s]) => s[0] !== 0 || s[1] !== 0 || s[2] !== 0 || s[3] !== 0 || s[4] !== 0 || s[5] !== EMPTY_WINDOW)
+    .map(([key, s]) => [key, ...s]);
+  let previous = 0;
+  const sessions = t.sessions.map(([id, startedAt, lastActiveAt, attempts, independentCorrect, assisted]) => {
+    const counter = id.startsWith(`${startedAt}-`) ? id.slice(String(startedAt).length + 1) : null;
+    const shortId = counter !== null && /^(0|[1-9]\d{0,5})$/.test(counter) ? Number(counter) : id;
+    const row = [startedAt - previous, lastActiveAt - startedAt, attempts, independentCorrect, assisted, shortId];
+    previous = startedAt;
+    return row;
+  });
+  const { color, flag, trail, hat } = t.garage.look;
+  return [
+    settingsDiff(t.settings as unknown as Record<string, unknown>, defaultSettings() as unknown as Record<string, unknown>),
+    [t.garage.stars, color, flag, trail, hat],
+    Object.entries(t.records).map(([key, r]) => [key, r.enemies, r.ms, r.at]),
+    skills,
+    sessions,
+  ];
+}
+
+const compactSchema = z.tuple([
+  z.record(z.string(), z.unknown()),
+  z.tuple([z.unknown(), z.string(), z.string(), z.string(), z.string()]),
+  z.array(z.tuple([z.string(), z.unknown(), z.unknown(), z.unknown()])),
+  z.array(z.tuple([z.string(), intMin0(), intMin0(), intMin0(), intMin0(), intMin0(), z.string()])),
+  z.array(z.tuple([z.number(), z.number(), intMin0(), intMin0(), intMin0(), z.union([intMin0(), z.string()])])),
+]);
+
+/**
+ * A version 2 payload in the shape of version 1. The settings differences are laid over the defaults of this game's
+ * settings version; a later settings version must keep the version 6 defaults for codes written with them.
+ */
+function expand(raw: unknown): unknown {
+  const parsed = compactSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+  const [diff, [stars, color, flag, trail, hat], records, skills, sessions] = parsed.data;
+  let startedAt = 0;
+  return {
+    v: 1,
+    settings: withDiff(defaultSettings() as unknown as Record<string, unknown>, diff),
+    garage: { stars, look: { color, flag, trail, hat } },
+    records: Object.fromEntries(records.map(([key, enemies, ms, at]) => [key, { enemies, ms, at }])),
+    skills: Object.fromEntries(skills.map(([key, ...s]) => [key, s])),
+    sessions: sessions.map(([startDelta, activeDelta, attempts, independentCorrect, assisted, id]) => {
+      startedAt += startDelta;
+      return [typeof id === 'number' ? `${startedAt}-${id}` : id, startedAt, startedAt + activeDelta, attempts, independentCorrect, assisted];
+    }),
+  };
+}
+
 async function codeOf(t: TransferV1, codec: Codec | null): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(t));
+  const json = new TextEncoder().encode(JSON.stringify(compact(t)));
   return `v${TRANSFER_VERSION}.${toBase64url(codec ? await codec.deflate(json) : json)}`;
 }
 
@@ -192,18 +285,18 @@ export async function encodeTransfer(
   return last;
 }
 
-const intMin0 = z.number().int().min(0);
 const transferSchema = z.object({
   v: z.literal(1),
   settings: z.unknown(),
   garage: z.object({ stars: z.unknown(), look: z.unknown() }),
   records: z.unknown(),
-  skills: z.record(z.string(), z.tuple([intMin0, intMin0, intMin0, intMin0, intMin0, z.string().regex(/^[icau]{0,10}$/)])),
-  sessions: z.array(z.tuple([z.string(), z.number(), z.number(), intMin0, intMin0, intMin0])),
+  skills: z.record(z.string(), z.tuple([intMin0(), intMin0(), intMin0(), intMin0(), intMin0(), z.string().regex(/^[icau]{0,10}$/)])),
+  sessions: z.array(z.tuple([z.string(), z.number(), z.number(), intMin0(), intMin0(), intMin0()])),
 });
 
-function isJsonObjectStart(bytes: Uint8Array): boolean {
-  return bytes.length > 0 && bytes[0] === 0x7b; // '{'
+/** Uncompressed data starts with '{' (version 1) or '[' (version 2). */
+function isJsonStart(bytes: Uint8Array): boolean {
+  return bytes.length > 0 && (bytes[0] === 0x7b || bytes[0] === 0x5b);
 }
 
 function parseObject(bytes: Uint8Array): unknown {
@@ -215,8 +308,8 @@ function parseObject(bytes: Uint8Array): unknown {
 }
 
 async function readJson(bytes: Uint8Array, codec: Codec | null): Promise<unknown> {
-  // Uncompressed data is a JSON object; anything else is compressed.
-  if (isJsonObjectStart(bytes)) {
+  // Uncompressed data is JSON; anything else is compressed.
+  if (isJsonStart(bytes)) {
     const plain = parseObject(bytes);
     if (plain !== undefined) return plain;
   }
@@ -228,14 +321,16 @@ async function readJson(bytes: Uint8Array, codec: Codec | null): Promise<unknown
   }
 }
 
-/** Reads `v1.<data>` with the same schemas and migrations as storage (FR-120); any failure refuses the whole code. */
+/** Reads `v1.<data>` or `v2.<data>` with the same schemas and migrations as storage (FR-120); any failure refuses the whole code. */
 export async function decodeTransfer(code: string, opts: { codec?: Codec | null } = {}): Promise<DecodedTransfer> {
   const codec = opts.codec === undefined ? browserCodec() : opts.codec;
   const m = /^v(\d+)\.(.+)$/.exec(code);
-  if (!m || Number(m[1]) !== TRANSFER_VERSION) return { ok: false };
+  const version = m ? Number(m[1]) : 0;
+  if (!m || (version !== 1 && version !== 2)) return { ok: false };
   const bytes = fromBase64url(m[2]!);
   if (!bytes) return { ok: false };
-  const parsed = transferSchema.safeParse(await readJson(bytes, codec));
+  const json = await readJson(bytes, codec);
+  const parsed = transferSchema.safeParse(version === 2 ? expand(json) : json);
   if (!parsed.success) return { ok: false };
   const t = parsed.data;
 

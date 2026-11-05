@@ -183,8 +183,8 @@ export class BattleScene extends Phaser.Scene {
       this.pendingFire?.remove();
       this.pendingFire = null;
       this.startedShot = null;
-      this.enemy.setAim(s.playerSide === 'left' ? 150 : 30);
-      this.player.setAim(fixedAngle(s));
+      this.enemy.setBarrelAngle(s.playerSide === 'left' ? 150 : 30);
+      this.player.setBarrelAngle(fixedAngle(s));
       this.enemy.setTarget(true);
       if (s.phase !== 'roundOver') this.showYouMarker();
       this.enemyWarnings = 0;
@@ -268,7 +268,7 @@ export class BattleScene extends Phaser.Scene {
       const created = !view;
       if (!view) {
         view = new TankView(this, 'decoy', WORLD_HEIGHT, () => this.controller.tapTank(decoy.id));
-        view.setAim(s.playerSide === 'left' ? 150 : 30);
+        view.setBarrelAngle(s.playerSide === 'left' ? 150 : 30);
         view.setTarget(true);
         this.decoyViews.set(decoy.id, view);
         if (searchAfterHit) view.appear(this.appearDelay);

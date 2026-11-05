@@ -4,7 +4,7 @@
  * offline, the page reloads from the cache, and a whole round (3 enemies) is played with the keyboard. Each answer is
  * the enemy's number, which the overlay reports (the enemy stands at the answer of every search, amendment 07).
  */
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -28,7 +28,7 @@ test('after one load the game starts and plays a whole round offline, also after
   // The service worker installs and precaches; after a reload it controls the page.
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await page.reload();
-  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), { timeout: GAME_WAIT }).toBe(true);
 
   await context.setOffline(true);
   await page.reload();
@@ -36,14 +36,14 @@ test('after one load the game starts and plays a whole round offline, also after
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   for (let destroyed = 0; destroyed < 3; destroyed++) {
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
     const enemy = (await overlay.getAttribute('data-enemy-number'))!;
     await page.keyboard.type(enemy);
     await expect(page.getByTestId('readout')).toHaveText(enemy);
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed + 1), { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed + 1), { timeout: GAME_WAIT });
   }
-  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: GAME_WAIT });
   await context.setOffline(false);
 });

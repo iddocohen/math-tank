@@ -4,7 +4,7 @@
  * (only where the browser allows fullscreen) puts the app root in fullscreen, and after leaving it the app root has
  * the focus again, so the keys keep working. Game state comes from the overlay's data-* attributes (D4).
  */
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -39,7 +39,7 @@ test('the pause button stops a shell in flight, and "Weiterspielen" lets it land
   await expect(overlay).not.toHaveAttribute('data-last-shot', /.+/);
   await page.getByRole('button', { name: m.battle.resume }).click();
   await expect(page.getByTestId('pause-screen')).toHaveCount(0);
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
 });
 
 test('the fullscreen button puts the app root in fullscreen; afterwards the keys still work', async ({ page, browserName }) => {

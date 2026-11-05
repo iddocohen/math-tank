@@ -11,6 +11,14 @@ import type { RoundState } from '../core/types';
 
 const SAMPLE_ARGS = [7, 13, 42, 100, 5];
 
+/**
+ * Child-facing texts allowed more than 9 words (T152, FR-057), with the reason. Paths as collectStrings writes them;
+ * functions are called with SAMPLE_ARGS.
+ */
+const ALLOWED_LONGER_TEXTS: Record<string, string> = {
+  'challenge.between()': 'names two numbers; comparison prompts with their options have their own limit of 10 words (amendment 09)',
+};
+
 /** Every child-facing string in the table, with its path. Functions are called with sample numbers. */
 function collectStrings(value: unknown, path: string, out: Array<{ path: string; text: string }>): void {
   if (typeof value === 'string') {
@@ -59,6 +67,25 @@ describe('de table', () => {
       forbiddenWords.some((w) => text.toLocaleLowerCase('de').includes(w.toLocaleLowerCase('de'))),
     );
     expect(flagged).toHaveLength(2);
+  });
+
+  it('every child-facing text has at most about 8 words: at most 9, apart from a short allowlist (T152, FR-057)', () => {
+    // Sections the child reads or hears: start screen, garage, battle (banner, feedback, range hint), phone hint,
+    // challenge banner, help steps, round end and the encouraging phrases.
+    const CHILD_SECTIONS = ['start', 'garage', 'battle', 'rotate', 'challenge', 'helpSteps', 'roundEnd', 'encouragements'] as const;
+    const ALLOWED_LONGER: Record<string, string> = ALLOWED_LONGER_TEXTS;
+    const child: Array<{ path: string; text: string }> = [];
+    for (const section of CHILD_SECTIONS) collectStrings(de[section], section, child);
+    expect(child.length).toBeGreaterThan(50);
+    const words = (text: string) => text.split(/\s+/).filter((w) => /\p{L}|\d/u.test(w)).length;
+    const tooLong = child.filter(({ path, text }) => words(text) > 9 && !(path in ALLOWED_LONGER)).map(({ path, text }) => `${path}: ${text}`);
+    expect(tooLong).toEqual([]);
+    // Every allowlist entry still exists and is still longer, so the list does not hide new long texts.
+    for (const path of Object.keys(ALLOWED_LONGER)) {
+      const found = child.find((c) => c.path === path);
+      expect(found, path).toBeDefined();
+      expect(words(found!.text), path).toBeGreaterThan(9);
+    }
   });
 
   it('has at least 8 encouragements, each at most 8 words (FR-057)', () => {

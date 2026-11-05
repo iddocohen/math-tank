@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ARC_ANGLE_STEP_DEG, FIXED_ANGLE_DEG, MAX_ARC_ANGLE_DEG, solveArcToX, type ArcInput } from './arc';
 import { generateTerrain, surfaceY } from './terrain';
+import { medianMs } from './timing.testutil';
 import { numberToX, xToNumber, DEFAULT_LAYOUT } from '../numberline/mapping';
 import type { Heightmap } from '../types';
 
@@ -118,20 +119,21 @@ describe('solveArcToX (FR-004, FR-065, SC-012)', () => {
     expect(b).toEqual(a);
   });
 
-  it('takes under 20 ms per call', () => {
+  it('takes under 20 ms per call (slowest input, median of 5 calls each)', () => {
     const terrain = generateTerrain(11, W, H);
     const blocked = wallTerrain(355, 362, 800);
-    // Warm up the JIT, then time the slowest of many calls.
+    // Warm up the JIT, then time every input.
     for (let n = 0; n <= 100; n += 10) solveArcToX(inputFor(terrain, 'left', n, 0, 100));
+    // P5 (T302): the slowest single call failed when other test files kept every core busy. Each input now counts
+    // with the median of 5 calls, which ignores a call slowed by the machine; the limit still holds for the slowest
+    // input, so one input that got slow still fails.
     let slowest = 0;
     for (let n = 0; n <= 1000; n += 25) {
-      const t0 = performance.now();
-      solveArcToX(inputFor(terrain, n % 50 === 0 ? 'left' : 'right', n, 0, 1000));
-      slowest = Math.max(slowest, performance.now() - t0);
+      const input = inputFor(terrain, n % 50 === 0 ? 'left' : 'right', n, 0, 1000);
+      slowest = Math.max(slowest, medianMs(5, () => solveArcToX(input)));
     }
-    const t0 = performance.now();
-    solveArcToX({ origin: { x: 80, y: 128 }, targetX: 380, towardRight: true, terrain: blocked, worldWidth: W, worldHeight: H, tolerance: 0.36 });
-    slowest = Math.max(slowest, performance.now() - t0);
+    const wall = { origin: { x: 80, y: 128 }, targetX: 380, towardRight: true, terrain: blocked, worldWidth: W, worldHeight: H, tolerance: 0.36 };
+    slowest = Math.max(slowest, medianMs(5, () => solveArcToX(wall)));
     expect(slowest).toBeLessThan(20);
   });
 });

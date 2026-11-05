@@ -30,7 +30,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
-      # Two timing tests can be slow on shared runners; retry before failing.
+      # The speed tests measure CPU time (T302), so a busy runner does not fail them; the retries stay as a guard
+      # for runners that are slower than a developer's computer.
       - run: pnpm test --retry=2
       - run: pnpm exec vite build --base=/math-tank/
       - run: touch dist/.nojekyll

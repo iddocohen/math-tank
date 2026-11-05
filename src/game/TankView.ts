@@ -283,7 +283,7 @@ export class TankView {
   }
 
   /** Physics angle (0 right, 90 up, 180 left); Phaser angles turn clockwise on screen. */
-  setAim(angleDeg: number): void {
+  setBarrelAngle(angleDeg: number): void {
     this.turretAngle = -angleDeg;
     this.turret.setAngle(-angleDeg);
   }

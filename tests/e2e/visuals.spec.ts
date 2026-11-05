@@ -10,7 +10,7 @@
  * equipped look, a fresh landscape, a landscape with craters, a firing moment and an explosion with debris.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage } from '../../src/core/rewards/garage';
@@ -41,7 +41,7 @@ async function count(canvas: Locator, name: string): Promise<number> {
 }
 
 async function type(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
 }
@@ -52,19 +52,19 @@ async function miss(page: Page, overlay: Locator): Promise<void> {
   const own = (await overlay.getAttribute('data-player-side')) === 'left' ? easy.range.min : easy.range.max;
   await type(page, overlay, Math.round((own + enemy) / 2));
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
 }
 
 async function destroyEnemy(page: Page, overlay: Locator, destroyed: number): Promise<void> {
   await type(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: GAME_WAIT });
 }
 
 /** Waits until the canvas attribute has grown above `from`, checked every animation frame. */
 async function grows(page: Page, name: string, from: number): Promise<void> {
-  await page.waitForFunction(([attr, n]) => Number(document.querySelector('canvas')?.getAttribute(attr)) > n, [name, from] as const, { polling: 'raf', timeout: 15_000 });
+  await page.waitForFunction(([attr, n]) => Number(document.querySelector('canvas')?.getAttribute(attr)) > n, [name, from] as const, { polling: 'raf', timeout: GAME_WAIT });
 }
 
 test('the textured ground is drawn once per landscape and crater, shots flash, and a destroyed enemy shakes the screen', async ({ page }, info) => {
@@ -180,5 +180,5 @@ test('screenshots of the garage looks, the landscape, a shot and an explosion', 
   await grows(page, 'data-explosions', explosions);
   await page.waitForTimeout(120);
   await page.screenshot({ path: `${dir}/explosion.png` });
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
 });

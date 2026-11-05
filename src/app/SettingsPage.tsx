@@ -20,8 +20,8 @@
  * Amendment 15 (FR-115, FR-118): "Spielstand übertragen" shows a QR code and "Link kopieren" for the saved data of
  * this browser; the link is built again after "Speichern" and after "Daten laden".
  */
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { qrMatrix, qrPath } from '../core/transfer/qr';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { qrMatrix, qrPath, type QrMatrix } from '../core/transfer/qr';
 import { encodeTransfer, type EncodedTransfer } from '../core/transfer/transfer';
 import type { RulerLevel } from '../core/numberline/ticks';
 import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/settings/defaults';
@@ -372,6 +372,7 @@ function TransferGroup({ persistence, savedCount }: { persistence: Persistence; 
   const T = t().settings.transfer;
   const [transfer, setTransfer] = useState<EncodedTransfer | null>(null);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [large, setLarge] = useState(false);
   useEffect(() => {
     let live = true;
     void buildTransfer(persistence).then((r) => {
@@ -398,20 +399,13 @@ function TransferGroup({ persistence, savedCount }: { persistence: Persistence; 
     <Group title={T.title}>
       <div className="transfer" data-testid="transfer" data-transfer-link={transfer?.link}>
         <p className="hint">{T.hint}</p>
+        {qr && <QrSvg qr={qr} className="transfer-qr" testId="transfer-qr" label={T.qrLabel} />}
         {qr && (
-          <svg
-            className="transfer-qr"
-            data-testid="transfer-qr"
-            data-qr-size={qr.size}
-            viewBox={`0 0 ${qr.size} ${qr.size}`}
-            shapeRendering="crispEdges"
-            role="img"
-            aria-label={T.qrLabel}
-          >
-            <rect width={qr.size} height={qr.size} fill="#fff" />
-            <path d={qrPath(qr)} fill="#000" />
-          </svg>
+          <button type="button" className="secondary-button" onClick={() => setLarge(true)}>
+            {T.showLarge}
+          </button>
         )}
+        {qr && large && <LargeQr qr={qr} onClose={() => setLarge(false)} />}
         {transfer && !transfer.fits && <p className="notice warn">{T.tooLarge}</p>}
         {transfer?.fits && trimmed && <p className="notice">{T.trimmed}</p>}
         <button type="button" className="secondary-button" onClick={() => void copyLink()} disabled={!transfer}>
@@ -428,6 +422,54 @@ function TransferGroup({ persistence, savedCount }: { persistence: Persistence; 
         )}
       </div>
     </Group>
+  );
+}
+
+/** A QR code with its white quiet zone (the matrix includes it), drawn with one square per dark module. */
+function QrSvg({ qr, className, testId, label }: { qr: QrMatrix; className: string; testId: string; label?: string }) {
+  return (
+    <svg
+      className={className}
+      data-testid={testId}
+      data-qr-size={qr.size}
+      viewBox={`0 0 ${qr.size} ${qr.size}`}
+      shapeRendering="crispEdges"
+      role="img"
+      aria-label={label}
+      aria-hidden={label === undefined ? true : undefined}
+    >
+      <rect width={qr.size} height={qr.size} fill="#fff" />
+      <path d={qrPath(qr)} fill="#000" />
+    </svg>
+  );
+}
+
+/**
+ * "QR groß anzeigen" (T305): the QR code as large as the screen allows, on white, so a phone or tablet camera can read
+ * it from another screen. "Schließen" or Escape closes it.
+ */
+function LargeQr({ qr, onClose }: { qr: QrMatrix; onClose: () => void }) {
+  const T = t().settings.transfer;
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => close.current?.focus(), []);
+  return (
+    <div
+      className="qr-fullscreen"
+      role="dialog"
+      aria-modal="true"
+      aria-label={T.qrLabel}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <QrSvg qr={qr} className="qr-fullscreen-code" testId="transfer-qr-large" />
+      <button ref={close} type="button" className="secondary-button" onClick={onClose}>
+        {T.closeLarge}
+      </button>
+    </div>
   );
 }
 

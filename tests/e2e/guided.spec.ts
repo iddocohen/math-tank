@@ -7,7 +7,7 @@
  * comes from the overlay's and the canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
@@ -85,12 +85,12 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   // Fire: the shell lands at the wrong number, the ruler shows "10 Schritte" to the enemy, and the enemy fires back
   // at once. Its first shot of a round always misses (amendment 07, FR-043, FR-072, FR-081).
   await page.getByRole('button', { name: m.battle.fire }).click();
-  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   await expect(overlay).toHaveAttribute('data-last-distance', '10');
   await expect(canvas).toHaveAttribute('data-steps-label', m.battle.steps(10));
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-turn', '1');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
@@ -110,7 +110,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await tapRuler(page, n);
   await expect(overlay).toHaveAttribute('data-selection', String(n));
   await page.getByRole('button', { name: m.battle.fire }).click();
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(n)}`);
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');

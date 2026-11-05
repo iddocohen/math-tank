@@ -6,7 +6,7 @@
  * tests/e2e/devices.spec.ts (T278). Game state comes from the overlay's data-* attributes (D4).
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
@@ -55,7 +55,7 @@ test('a tap on the ruler and on "Feuer!" fires at the tapped number; no ±1 butt
   }
   await expect(page.getByTestId('readout')).toHaveText('?');
   await page.locator('.fire-button').tap();
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-landing', String(n));
 
   const focused = await page.evaluate(() => {

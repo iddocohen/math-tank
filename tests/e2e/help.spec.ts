@@ -9,7 +9,7 @@
  * canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { forbiddenWords, t } from '../../src/i18n';
@@ -28,7 +28,7 @@ function wrongNumber(answer: number, offset: number): number {
 }
 
 async function typeAndFire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
   // Not a fast guess (FR-038 rule), so each miss adds 1 to the misses in a row (amendment 13).
   await page.waitForTimeout(1_600);
@@ -60,13 +60,13 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
     const wrong = wrongNumber(answer, offset);
     const lives = await overlay.getAttribute('data-lives');
     await typeAndFire(page, overlay, wrong);
-    await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
     await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
     // The enemy fires back after every shot that does not destroy it (amendment 07); below the limit of 4 misses in a
     // row on "Leicht" its shell lands beside the child's tank and takes no heart (amendment 13).
-    await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
     await expect(overlay).toHaveAttribute('data-miss-streak', String(i + 1));
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
     await expect(overlay).toHaveAttribute('data-lives', lives!);
     await expect(overlay).toHaveAttribute('data-help-level', String(i + 1));
 
@@ -93,12 +93,12 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
   await expect(page.locator('canvas')).toHaveAttribute('data-enemy-warnings', '1');
   await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expect(overlay).toHaveAttribute('data-miss-streak', '0');
 
   // A new search: H shows the next help step, and it is not a shot, so the enemy does not fire (FR-030, FR-081).
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-help-level', '0');
   const turn = await overlay.getAttribute('data-turn');
   const lives = await overlay.getAttribute('data-lives');

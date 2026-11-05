@@ -11,7 +11,7 @@
  * and a "Du" arrow points at the child's tank for 3 seconds at every round start.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { withRange } from '../../src/core/settings/validate';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -81,26 +81,26 @@ test('play a free-play round with the keyboard only and start another', async ({
   const wrong = enemy - 5 >= min ? enemy - 5 : enemy + 5;
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   await expect(overlay).toHaveAttribute('data-last-distance', '5');
   await expect(page.locator('canvas')).toHaveAttribute('data-steps-label', m.battle.steps(5));
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
   // The second shot that does not destroy the enemy: the enemy fires again.
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-turn', '2');
 
   // The enemy's number destroys it; a new enemy appears and the tank counter shows 1 (FR-066, FR-083).
   await typeNumber(page, overlay, enemy);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expect(page.getByTestId('score')).toHaveText('1');
   await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(enemy)}`);
@@ -111,7 +111,7 @@ test('play a free-play round with the keyboard only and start another', async ({
   // The second destroyed enemy ends the round (FR-082).
   await typeNumber(page, overlay, second);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-outcome', 'goalReached');
 
   // The round end: encouraging text, the score and the time, and the first record (FR-008, FR-033, FR-085, FR-086).
@@ -137,12 +137,12 @@ test('play a free-play round with the keyboard only and start another', async ({
 
   // The same result again is not a new record: the record is shown small and neutral (FR-086).
   for (let i = 0; i < 2; i++) {
-    await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
     await typeNumber(page, overlay, await enemyNumber(overlay));
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1), { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1), { timeout: GAME_WAIT });
   }
-  await expect(roundEnd).toBeVisible({ timeout: 15_000 });
+  await expect(roundEnd).toBeVisible({ timeout: GAME_WAIT });
   await expect(page.getByTestId('record')).toHaveText(m.roundEnd.yourRecord(2));
   await expect(page.getByTestId('new-record')).toHaveCount(0);
 });
@@ -175,7 +175,7 @@ test('the new scene button makes a new landscape in the same round, and no key p
   await page.keyboard.press('Enter');
   await expect(overlay).not.toHaveAttribute('data-phase', 'aiming');
   await expect(button).toBeDisabled();
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-turn', '1');
   await expect(button).toBeEnabled();
 
@@ -186,7 +186,7 @@ test('the new scene button makes a new landscape in the same round, and no key p
   await page.keyboard.press(' ');
   await expect(overlay).toHaveAttribute('data-round-seed', seed!);
   // Space is the fire key, so it may have fired the selection again; wait until the child aims again.
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   const lives = (await overlay.getAttribute('data-lives'))!;
   const destroyed = (await overlay.getAttribute('data-enemies-destroyed'))!;
   const turn = (await overlay.getAttribute('data-turn'))!;
@@ -226,7 +226,7 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   // run slower than the wall clock on a loaded test machine, so the wait for 'off' is generous.
   await expect(canvas).toHaveAttribute('data-you-marker', 'on');
   const shownAt = Date.now();
-  await expect(canvas).toHaveAttribute('data-you-marker', 'off', { timeout: 20_000 });
+  await expect(canvas).toHaveAttribute('data-you-marker', 'off', { timeout: GAME_WAIT });
   expect(Date.now() - shownAt).toBeGreaterThanOrEqual(2_000);
 
   // No −1 or +1 buttons and no corner health labels (FR-019, FR-078).
@@ -269,10 +269,10 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   // After firing, the landing number is shown.
   const chosen = await overlay.getAttribute('data-selection');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-landing', chosen!, { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-landing', chosen!, { timeout: GAME_WAIT });
 
   // A new scene shows the "Du" arrow again (FR-070, FR-077).
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
   const sceneSeed = await overlay.getAttribute('data-round-seed');
   await page.getByRole('button', { name: m.battle.newScene, exact: true }).click();
   await expect(overlay).not.toHaveAttribute('data-round-seed', sceneSeed!);

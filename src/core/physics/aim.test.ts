@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HIT_TOLERANCE, solveAim } from './aim';
 import { simulateShot } from './ballistics';
 import { generateTerrain, surfaceY } from './terrain';
+import { medianMs } from './timing.testutil';
 
 const W = 1600;
 const H = 900;
@@ -63,13 +64,13 @@ describe('solveAim', () => {
     expect(r.angleDeg).toBeLessThanOrEqual(90);
   });
 
-  it('takes under 50 ms per call', () => {
+  it('takes under 50 ms per call (median of 7 calls)', () => {
     const terrain = generateTerrain(9, W, H);
     const origin = { x: 300, y: surfaceY(terrain, 300) + 10 };
     const target = { x: 1300, y: surfaceY(terrain, 1300) };
     solveAim({ origin, target, terrain, worldWidth: W, worldHeight: H }); // warm-up
-    const start = performance.now();
-    solveAim({ origin, target, terrain, worldWidth: W, worldHeight: H });
-    expect(performance.now() - start).toBeLessThan(50);
+    // P5 (T302): one call alone failed when other test files kept every core busy. The median of 7 ignores a few
+    // calls slowed by the machine, but a solver that got slower makes most calls slow and still fails.
+    expect(medianMs(7, () => solveAim({ origin, target, terrain, worldWidth: W, worldHeight: H }))).toBeLessThan(50);
   });
 });

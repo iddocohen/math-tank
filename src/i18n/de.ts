@@ -260,6 +260,8 @@ export const de = {
       title: 'Spielstand übertragen',
       hint: 'Mit der Kamera des anderen Geräts scannen oder den Link dort öffnen.',
       qrLabel: 'QR-Code mit dem Spielstand',
+      showLarge: 'QR groß anzeigen',
+      closeLarge: 'Schließen',
       copy: 'Link kopieren',
       copied: 'Link kopiert.',
       copyFailed: 'Kopieren hat nicht geklappt. Bitte diesen Link kopieren:',

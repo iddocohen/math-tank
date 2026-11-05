@@ -122,7 +122,7 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
   ] as const) {
     it(`gives back the same save, ${name}`, async () => {
       const enc = await encodeTransfer(data(), PAGE + '#old', { codec });
-      expect(enc.link.startsWith(PAGE + '#save=v1.')).toBe(true);
+      expect(enc.link.startsWith(PAGE + '#save=v2.')).toBe(true);
       expect(enc.fits).toBe(true);
       expect(enc.sessionsDropped).toBe(0);
       expect(enc.windowLength).toBe(10);
@@ -212,7 +212,9 @@ describe('invalid codes change nothing (FR-120)', () => {
   it.each([
     ['empty', ''],
     ['no version', 'abc'],
-    ['unknown version', `v2.${b64url(JSON.stringify(validTransfer()))}`],
+    ['unknown version', `v3.${b64url(JSON.stringify(validTransfer()))}`],
+    ['version 2 payload that is an object', `v2.${b64url(JSON.stringify(validTransfer()))}`],
+    ['version 2 payload with a bad garage', `v2.${b64url(JSON.stringify([{ version: 6 }, [-1, 'blue', 'star', 'plain', 'none'], [], [], []]))}`],
     ['bad base64url', 'v1.@@@!!'],
     ['damaged compressed data', 'v1.AAECAwQFBgcICQ'],
     ['not a transfer', `v1.${b64url(JSON.stringify({ hello: 1 }))}`],
@@ -264,5 +266,78 @@ describe('saveCodeFromHash', () => {
     expect(saveCodeFromHash('#')).toBeNull();
     expect(saveCodeFromHash('#seed=3')).toBeNull();
     expect(saveCodeFromHash('#xsave=v1.abc')).toBeNull();
+  });
+});
+
+/** A save after about 50 attempts in 0 to 100: two changed settings, 3 records, 20 stars, 6 skills, 5 sessions (T305). */
+function typicalSave(): SaveData {
+  const t0 = 1_762_300_000_000;
+  const w: Progress['skills'][string]['masteryWindow'] = ['independent', 'independent', 'assisted', 'independent', 'close', 'independent', 'unsolved', 'independent'];
+  const skills: Progress['skills'] = {};
+  for (const s of ['positions', 'countForward', 'countBackward', 'addition', 'subtraction', 'comparison']) {
+    skills[`${s}|0-100`] = { step: 1, recent: [], masteryWindow: w, guesses: 0, attempts: 8, independentCorrect: 5, assisted: 2 };
+  }
+  const sessions = Array.from({ length: 5 }, (_, i) => {
+    const startedAt = t0 + i * 86_400_000 + i * 37_123;
+    return { id: `${startedAt}-${i}`, startedAt, lastActiveAt: startedAt + 812_345, attempts: 10, independentCorrect: 6, assisted: 3 };
+  });
+  return {
+    settings: { ...defaultSettings(), rulerLevelMax: 3, sound: { effects: true, music: false, speech: false } },
+    progress: { version: 1, attempts: Array.from({ length: 50 }, (_, i) => attempt(i)), skills, sessions },
+    records: {
+      version: 1,
+      best: {
+        '0-100|1|untilHearts': { enemies: 7, ms: 312_345, at: t0 + 1000 },
+        '0-20|1|untilHearts': { enemies: 4, ms: 100_000, at: t0 + 2000 },
+        '0-100|2|enemyCount': { enemies: 5, ms: 200_123, at: t0 + 3000 },
+      },
+    },
+    garage: { version: 1, stars: 20, look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } },
+  };
+}
+
+describe('compact transfer version 2 (T305)', () => {
+  it('a typical save gives a link of at most 800 bytes', async () => {
+    const r = await encodeTransfer(typicalSave(), PAGE);
+    expect(r.code.startsWith('v2.')).toBe(true);
+    const bytes = new TextEncoder().encode(r.link).length; // 399 bytes when written (version 1: 933)
+    expect(bytes).toBeLessThanOrEqual(800);
+  });
+
+  it('a typical save comes back unchanged, without the attempt history', async () => {
+    for (const codec of [browserCodec(), null]) {
+      const save = typicalSave();
+      const dec = await decodeTransfer((await encodeTransfer(save, PAGE, { codec })).code);
+      expect(dec.ok).toBe(true);
+      if (!dec.ok) return;
+      expect(dec.data).toEqual({ ...save, progress: { ...save.progress, attempts: [] } });
+    }
+  });
+
+  it('leaves out skills without any progress; a missing skill reads as empty', async () => {
+    const save = typicalSave();
+    save.progress.skills['tens|0-100'] = { step: 0, recent: [], masteryWindow: [], guesses: 0, attempts: 0, independentCorrect: 0, assisted: 0 };
+    const dec = await decodeTransfer((await encodeTransfer(save, PAGE)).code);
+    expect(dec.ok && Object.keys(dec.data.progress.skills)).not.toContain('tens|0-100');
+  });
+
+  it('keeps session ids that do not follow the "<start>-<n>" pattern', async () => {
+    const dec = await decodeTransfer((await encodeTransfer(data(), PAGE)).code);
+    expect(dec.ok && dec.data.progress.sessions.map((s) => s.id)).toEqual(['s0', 's1', 's2']);
+  });
+
+  it('ignores a "__proto__" key in the settings differences', async () => {
+    const raw = '[{"version":6,"__proto__":{"roundLength":7},"rulerLevelMax":3},[0,"blue","star","plain","none"],[],[],[]]';
+    const dec = await decodeTransfer(`v2.${b64url(raw)}`);
+    expect(dec.ok).toBe(true);
+    if (!dec.ok) return;
+    expect(dec.data.settings).toEqual({ ...defaultSettings(), rulerLevelMax: 3 });
+    expect(({} as Record<string, unknown>).roundLength).toBeUndefined();
+  });
+
+  it('still reads a version 1 code', async () => {
+    const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(toTransfer(data())))}`);
+    expect(dec.ok).toBe(true);
+    if (dec.ok) expect(dec.data.settings).toEqual(settings());
   });
 });

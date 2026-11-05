@@ -185,7 +185,7 @@ interface Garage { version: 1; stars: number; look: Look }   // stars: whole num
 
 ## Transfer code (not persisted, amendment 15)
 
-The link of "Spielstand übertragen" (FR-115 to FR-120). Transfer version 1:
+The link of "Spielstand übertragen" (FR-115 to FR-120). Transfer version 1 (the game writes version 2 since T305, see below; the content is the same):
 
 ```ts
 type Outcome = 'i' | 'c' | 'a' | 'u'   // independent, close, assisted, unsolved (RecentOutcome)
@@ -207,6 +207,22 @@ interface TransferV1 {
 - **Size**: the whole link is at most `TRANSFER_MAX_LINK_BYTES` = 2300 bytes, below the 2331 bytes of a version 40 QR code with error correction M. Too long: the oldest session totals are dropped one by one; when no session is left, every mastery window is cut to its newest 9, 8, ... 0 entries; the result reports `sessionsDropped` and `windowLength` (10 when untouched). When the link is still too long with empty windows, `fits` is false and the settings page shows no QR code.
 - **Receiving**: the transfer is turned back into storage values and checked like loading (FR-048, FR-120): `settings` through `migrate` and `settingsSchema` and `validateSettings`; the garage through `parseGarage` (version 1); the records through `recordsSchema`; the progress `{ version: 1, attempts: [], skills, sessions }` through `progressSchema`, each skill with `recent: []`. Any failure refuses the whole code. A transfer version 1 made by an older game carries older settings, which `migrate` upgrades like stored ones.
 - **Summary** for the dialog: `stars` from the garage, `record` the most `enemies` among the records (0 when there is none), `min` and `max` from `settings.range`.
+- **Transfer version 2** (T305, written since Phase 24; version 1 codes are still read): the same content as a JSON array, so a typical save gives a link of about 400 bytes instead of about 930 (a QR code a phone camera reads from another screen; target at most 800 bytes):
+
+```ts
+type TransferV2 = [
+  settings: Partial<Settings> & { version: number },   // only the values that differ from defaultSettings(), object by object; version always
+  garage: [stars: number, color: string, flag: string, trail: string, hat: string],
+  records: Array<[key: string, enemies: number, ms: number, at: number]>,
+  skills: Array<[key: string, step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string]>,
+                                              // skills with no progress at all are left out; a missing skill reads as empty
+  sessions: Array<[startDelta: number, activeMs: number, attempts: number, independentCorrect: number, assisted: number, id: number | string]>,
+                                              // startDelta from the previous session's startedAt (the first from 0); activeMs = lastActiveAt - startedAt;
+                                              // id is the counter n when the id is "<startedAt>-<n>", else the id itself
+];
+```
+
+  The code is `v2.<data>`. Decoding lays the settings differences over the defaults of settings version 6 and then checks everything exactly like version 1. A later settings version must keep the version 6 defaults to read version 2 codes.
 
 ## Screen layout (not persisted, amendment 12)
 

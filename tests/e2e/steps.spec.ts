@@ -4,7 +4,7 @@
  * 43 → 40 → 36 and costs no heart and no shot; typing 36 and Enter destroys the enemy. Game state comes from the
  * overlay's and the canvas's data-* attributes (D4).
  */
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { SUBTRACTION_43_MINUS_7 } from '../../src/core/math/fixtures';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -42,7 +42,7 @@ test('43 − 7: H shows the step animation 43, 40, 36, then 36 and Enter destroy
 
   await page.keyboard.type('36');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   // The new search has no step animation yet.
   await expect(canvas).toHaveAttribute('data-step-animation', '');

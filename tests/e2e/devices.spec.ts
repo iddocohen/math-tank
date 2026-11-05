@@ -9,7 +9,7 @@
  * With SCREENSHOT_DIR set, each case saves a screenshot of its size there.
  */
 import type { Locator, Page, TestInfo } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -162,8 +162,8 @@ test('one full guided round is played with taps on the number pad only, with no 
   const banner = page.getByTestId('challenge-banner');
 
   for (let destroyed = 0; destroyed < 2; destroyed++) {
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: 15_000 });
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
     expect(await banner.textContent()).not.toMatch(/^Finde /);
     const enemy = (await overlay.getAttribute('data-enemy-number'))!;
     expect(enemy).toMatch(/^\d+$/);
@@ -175,7 +175,7 @@ test('one full guided round is played with taps on the number pad only, with no 
     await expect(page.getByTestId('readout')).toHaveText(enemy);
     await page.locator('.fire-button').tap();
   }
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '2');
 });
 

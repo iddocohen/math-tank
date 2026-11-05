@@ -7,7 +7,7 @@
  * tanks that look like the enemy, `data-tank-taps` gives each tappable tank's tap point in world units,
  * `data-decoy-bursts` counts burst decoys and `data-help-tanks` names the tank marked by help step 3.
  */
-import { expect, test } from './fixtures';
+import { expect, GAME_WAIT, test } from './fixtures';
 import type { Page } from '@playwright/test';
 import { COMPARISON_47_74 } from '../../src/core/math/fixtures';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../../src/core/battle/round';
@@ -60,7 +60,7 @@ test('47 oder 74: two tanks; firing at 47 bursts the decoy as a miss, typing 74 
 
   await page.keyboard.type('47');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-landing', '47');
   // The decoy burst: one tank left, no pointer line and no tap area at 47, and no score.
   await expect(canvas).toHaveAttribute('data-decoy-bursts', '1');
@@ -69,14 +69,14 @@ test('47 oder 74: two tanks; firing at 47 bursts the decoy as a miss, typing 74 
   await expect(canvas).not.toHaveAttribute('data-tank-taps', /47@/);
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   // A decoy hit is a miss: the enemy fires back, then the search goes on with help step 1 (FR-031, FR-081).
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-help-level', '1');
   await expect(page.getByTestId('tens-digit')).toHaveText(['4', '7']);
 
   await page.keyboard.type('74');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
 });
 
@@ -87,9 +87,9 @@ test('tapping the tank at 47 bursts the decoy; help step 3 marks the tank at 74,
   const canvas = page.locator('canvas');
 
   await tapTank(page, 47);
-  await expect(canvas).toHaveAttribute('data-decoy-bursts', '1', { timeout: 15_000 });
+  await expect(canvas).toHaveAttribute('data-decoy-bursts', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-help-level', '1');
   await expect(canvas).toHaveAttribute('data-help-tanks', '');
 
@@ -99,7 +99,7 @@ test('tapping the tank at 47 bursts the decoy; help step 3 marks the tank at 74,
   await expect(canvas).toHaveAttribute('data-help-tanks', '74');
 
   await tapTank(page, 74);
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
 });
 
@@ -129,18 +129,18 @@ test('bug report B2: after a miss every standing tank fires from its own barrel;
   // A plain miss far from both tanks: both tanks fire together.
   await page.keyboard.type('20');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
   await expect.poll(() => volleyXs(page).then((xs) => xs.length), { timeout: 5_000 }).toBe(2);
   const xs = await volleyXs(page);
   xs.forEach((x, i) => expect(Math.abs(x - tanks[i]!)).toBeLessThanOrEqual(40));
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
 
   // The decoy bursts: the enemy fires alone, from its own tank at 74.
   await page.keyboard.type('47');
   await page.keyboard.press('Enter');
-  await expect(page.locator('canvas')).toHaveAttribute('data-decoy-bursts', '1', { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect(page.locator('canvas')).toHaveAttribute('data-decoy-bursts', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
   await expect.poll(() => volleyXs(page).then((v) => v.length), { timeout: 5_000 }).toBe(1);
   expect(Math.abs((await volleyXs(page))[0]! - tanks[1]!)).toBeLessThanOrEqual(40);
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
 });

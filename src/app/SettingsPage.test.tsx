@@ -400,10 +400,27 @@ describe('SettingsPage "Spielstand übertragen" (amendment 15, FR-115, FR-118)',
     expect(qr.querySelector('path')?.getAttribute('d')).toMatch(/^M\d+ \d+h1v1h-1z/);
     const section = screen.getByTestId('transfer');
     const link = section.getAttribute('data-transfer-link')!;
-    expect(link).toContain('#save=v1.');
+    expect(link).toContain('#save=v2.');
     const decoded = await decodeTransfer(link.slice(link.indexOf('#save=') + 6));
     expect(decoded.ok && decoded.data.settings.range).toEqual({ preset: 'custom', min: 550, max: 780 });
     expect(within(group).queryByText(T.trimmed)).toBeNull();
+  });
+
+  it('"QR groß anzeigen" shows the same QR code full screen on white, and "Schließen" or Escape closes it (T305)', async () => {
+    setup();
+    const small = await screen.findByTestId('transfer-qr');
+    fireEvent.click(screen.getByRole('button', { name: T.showLarge }));
+    const dialog = screen.getByRole('dialog', { name: T.qrLabel });
+    expect(dialog.className).toContain('qr-fullscreen');
+    const large = within(dialog).getByTestId('transfer-qr-large');
+    expect(large.querySelector('path')?.getAttribute('d')).toBe(small.querySelector('path')?.getAttribute('d'));
+    expect(large.getAttribute('data-qr-size')).toBe(small.getAttribute('data-qr-size'));
+    fireEvent.click(within(dialog).getByRole('button', { name: T.closeLarge }));
+    expect(screen.queryByRole('dialog', { name: T.qrLabel })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: T.showLarge }));
+    fireEvent.keyDown(screen.getByRole('dialog', { name: T.qrLabel }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: T.qrLabel })).toBeNull();
   });
 
   it('"Link kopieren" writes the link to the clipboard and says so', async () => {

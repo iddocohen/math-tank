@@ -10,7 +10,7 @@
  * pauses the game until the parent closes it (FR-045); "Fortschritt" lists a finished search after a reload (T133).
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { expect, silenceAudio, test } from './fixtures';
+import { expect, GAME_WAIT, silenceAudio, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
@@ -150,7 +150,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await page.waitForTimeout(2_800);
     for (const ch of enemy) await page.keyboard.press(ch);
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
 
     const P = m.progressPage;
     const openProgress = async () => {

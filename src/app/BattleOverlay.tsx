@@ -262,7 +262,8 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
       <div className="controls">
         <div className="readout" aria-label={m.battle.yourNumber}>
           <span className="readout-label">{m.battle.yourNumber}</span>
-          <span className="readout-value" data-testid="readout">
+          {/* T153 (FR-053): screen readers announce the typed digits; while pointing it shows "?" (amendment 05). */}
+          <span className="readout-value" data-testid="readout" aria-live="polite">
             {readout}
           </span>
         </div>
