@@ -1,0 +1,26 @@
+node_modules/
+dist/
+dev-dist/
+build/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+*.log
+*.tmp
+*.swp
+.env*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.vitest/
+
+# spec-kit tooling stays local
+.specify/
+.claude/
+
+# spec-kit tooling stays local
+.specify/
+.claude/
