@@ -177,3 +177,17 @@ The product owner said: "It must also run on a IPAD resolution and/or phone reso
 - Decisions of this update that the amendment does not state: the layout limits (a phone held sideways is at most 500 CSS pixels tall; a phone held upright is narrower than 600 pixels); "touch device" uses the main pointer (`pointer: fine`), so an iPad with a trackpad counts as a touch device unless its screen is at least 1100 pixels wide and the trackpad is the main pointer; with "Zahlenfeld" set to "Nie" every size uses the bar at the bottom; the pad's "Feuer!" key is the only fire button while the pad shows; the picture "Bitte dreh das Handy" also covers the start screen and the garage, with the gear on it so the parent can reach the settings upright; the smallest tested screen is 844 by 390.
 
 The spec (US8, Edge Cases, FR-046, FR-050, FR-053, FR-058, FR-076, new FR-102 to FR-106, Assumptions, Amendments), the data model (Settings version 6 with `numberPad`, the screen layout rule), the contracts (screens, layouts and the number pad, the keyboard map note, the input method), quickstart (scenario 12 and new scenarios 25 to 27) and tasks (Phases 22g and 22h, Phase 23 tasks T136 and T141) were updated to match.
+
+## Amendment 14
+
+**Date**: 2026-11-05
+
+The product owner asked whether the tanks and terrain could look better without too much complexity and whether it fits the garage (amendment 11); they accepted code-drawn tanks and effects with one CC0 ground texture. This is an intended change, not drift.
+
+- **PRD section 12 (technical requirements)** asks for smooth animation on typical desktop and tablet hardware. SC-002 stays: the textured ground is drawn once per landscape and per crater, not in every frame (FR-107).
+- **PRD section 11 (accessibility)**: the screen shake and the larger particle bursts follow the operating system's reduced-motion setting (FR-113). The amendment asks for this; the PRD does not mention motion sensitivity.
+- **The assumption "graphics are original and drawn by the game"** is changed for one asset: the dirt texture "dirt" by Drummyfish (CC0, https://opengameart.org/node/84103). Its OpenGameArt page states CC0 and "not required, you can credit drummyfish"; the README and the settings page credit it anyway (FR-114). The research decision R13 is changed to match.
+- **Amendment 05 item 6 and amendment 10** (the enemy and the decoys are red, angular, with a black flag) are kept (FR-109). **Amendment 11** is kept: the flag and hat anchor points do not move and the garage preview draws the same tank as the battle (FR-110).
+- Decisions of this update that the amendment does not state: the contrast rule is a CIE76 color difference of at least 30 between every garage color shade and every enemy shade and ground color (FR-109); "fewer particles" means at most 40 % of the usual number; a hit on any tank means the enemy destroyed, a heart of the child lost and a decoy burst, not a near miss, which already shakes the tank itself; the screen shake is 2.5 CSS pixels for 150 ms; the grass edge is at least 10 world units thick; the shell trails are 5 world units thick; the wheels, recoil, muzzle flash and smoke stay with reduced motion, because they are small and short.
+
+The spec (new FR-107 to FR-114, SC-002, Assumptions, Amendments), research R13, the contracts (battlefield look and effects, the test attributes, the settings credits), quickstart (scenario 28) and tasks (Phase 22i) were updated to match.

@@ -703,6 +703,27 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 
 ---
 
+## Phase 22i: Amendment 14 nicer tanks, terrain and effects
+
+**Goal**: The ground uses one bundled CC0 dirt texture with a thick grass edge, tufts, soil layers, pebbles and scorched crater edges, in front of a sun and two layers of distant hills; tanks are drawn in code with a highlight and a shadow from their color, turn their wheels and raise dust when they settle, and recoil with a flash and smoke when they fire; the garage anchor points stay and the garage preview uses the battle's drawing code; trails are thicker; explosions throw ground-colored debris with a ring and a small screen shake that follows the reduced-motion setting; the texture is credited ([amendment 14](./amendment-14-visual-upgrade.md)).
+
+**Independent Test**: `pnpm test` passes for `src/core/view/shade.test.ts`, `src/core/view/tankDrawing.test.ts`, `src/core/view/motion.test.ts`, `src/core/view/groundArt.test.ts`, `src/app/TankPreview.test.tsx` and `src/app/SettingsPage.test.tsx`; `tests/e2e/visuals.spec.ts` passes in Chromium, WebKit and Firefox: the canvas reports `data-ground-texture="dirt"`, one ground drawing per landscape and per crater, a muzzle flash per shot, one screen shake per destroyed enemy and none with reduced motion.
+
+- [ ] T285 [P] [US10] Write `src/core/view/shade.test.ts` before the code: `mixColor(a, b, k)` gives `a` at 0 and `b` at 1; `tankShades(color)` gives a `highlight` lighter and a `shadow` darker than `base` in CIE lightness, for every color; `deltaE76` is 0 for the same color, symmetric, and above 100 for black and white; for every garage color of `src/core/rewards/looks.ts` (`tankColor` of each `ColorId`), each of its base, highlight and shadow differs by at least `MIN_DELTA_E` (30) from each shade of the enemy color of `src/core/view/tankStyle.ts` and from every color in `GROUND_COLORS` (dirt, dark soil, grass, grass tuft, scorch, bedrock); the enemy's shades stay red (a* above 30); a slightly changed red (0xa8301e) fails the rule against the enemy, so the check can fail (FR-109)
+- [ ] T286 [P] [US10] Write `src/core/view/tankDrawing.test.ts` before the code: `TANK_ANCHORS` is antenna x -20, antenna foot 20, antenna top 64, dome top 28 and turret pivot 28, equal to `ANTENNA_X`, `ANTENNA_FOOT`, `ANTENNA_TOP` and `DOME_TOP` in `src/core/rewards/looks.ts`; for each of the 17 garage items applied to `STANDARD_LOOK`, `playerTankShapes(look)` puts the highest body point at the dome top, keeps every flag shape inside x -19 to 3 and y 49 to 64 and every hat shape at or above y 25, and its anchors equal `TANK_ANCHORS`; `tankBodyShapes('rounded', color)` uses the base, highlight and shadow of `tankShades(color)`; `tankBodyShapes('angular', enemyColor)` has no circle and uses the enemy's shades; the wheel spokes move with `wheelAngle` and repeat after a quarter turn; `turretShapes(color)` reaches `MUZZLE_LENGTH` (38) along the barrel; stripes appear only for `navyStripes` (FR-077, FR-093, FR-109, FR-110)
+- [ ] T287 [P] [US8] Write `src/core/view/motion.test.ts` before the code: `motionProfile(false)` shakes 2 to 3 CSS pixels (2.5) for less than 200 ms (150) with a particle factor of 1; `motionProfile(true)` does not shake and has a particle factor of at most 0.4; `particleCount(n, profile)` rounds and never gives less than 1 for n of at least 1 (FR-113)
+- [ ] T288 [P] [US1] Write `src/core/view/groundArt.test.ts` before the code: `scorchMarks(prev, next, marks)` marks the columns where `next` is lower than `prev` plus a 6-column border on each side, keeps earlier marks, and starts empty for a new landscape (`prev` null); `pebbles(seed, width)` is the same for the same seed, differs for another seed, gives 8 to 16 pebbles inside the width; `tufts(seed, width)` gives one tuft about every 14 world units, each 6 to 14 units tall; `distantHills(seed, width, worldHeight)` gives two layers whose points lie between y 300 and y 640 (screen), the far layer higher and lighter than the near one, the same for the same seed (FR-107, FR-108)
+- [ ] T289 Implement until T285 to T288 pass: new `src/core/view/shade.ts` (`mixColor`, `tankShades`, `deltaE76`, `MIN_DELTA_E`, `GROUND_COLORS` with the texture's average color 0xad7d44), new `src/core/view/tankDrawing.ts` (`TANK_ANCHORS`, `tankBodyShapes`, `turretShapes`, `playerTankShapes`, `MUZZLE_LENGTH`), new `src/core/view/motion.ts` (`motionProfile`, `particleCount`), new `src/core/view/groundArt.ts` (`scorchMarks`, `pebbles`, `tufts`, `distantHills`); an optional `alpha` on `Shape` in `src/core/rewards/looks.ts` (FR-107 to FR-110, FR-113)
+- [ ] T290 [P] [US10] Write component tests before the code: new `src/app/TankPreview.test.tsx` (for every garage color the preview has a body polygon in its base, highlight and shadow color from `tankShades`, the flag and hat shapes of the look, and the same number of body shapes as `playerTankShapes`; the trail lines in the preview are at least 4.5 units thick); `src/app/SettingsPage.test.tsx` (a credits line names "Drummyfish" and "CC0" and links to `https://opengameart.org/node/84103`, opened in a new tab with `rel="noopener noreferrer"`) (FR-109, FR-110, FR-112, FR-114)
+- [ ] T291 [US10] Implement until T290 passes: `src/app/TankPreview.tsx` draws the tank from `playerTankShapes` (no own body drawing) and thicker trail lines; the credits line at the end of `src/app/SettingsPage.tsx` with its text in `src/i18n/de.ts`; a "Credits" section in `README.md` (FR-109, FR-110, FR-112, FR-114)
+- [ ] T292 [P] [US1] Write `tests/e2e/visuals.spec.ts` before the view code, in Chromium, WebKit and Firefox, keyboard only, free play with `?seed=3&mode=free`: (a) the canvas has `data-ground-texture="dirt"` and `data-ground-draws="1"` at the round start, which stays the same over 1 second without input; each miss with the enemy's reply adds 1 or 2 (one per shell that carved a crater, never one per frame), and the count again stays the same over 1 second; `data-muzzle-flashes` grows by at least 1 per shot of the child and per enemy shot; destroying the enemy adds 1 to `data-screen-shakes` and `data-explosions`, and the new hills add 1 to `data-ground-draws`; `data-reduced-motion` is `false`; in Chromium `data-fps` during a shot is at least 30; (b) with `reducedMotion: 'reduce'`, `data-reduced-motion` is `true` and destroying the enemy leaves `data-screen-shakes` at 0; (c) the built files contain the dirt texture and no request leaves the origin; (d) with `SCREENSHOT_DIR` set, in Chromium only: the garage preview with each of the 13 unlockable items equipped in turn (130 stored stars), a battle with an equipped look, a fresh landscape, a landscape with 3 craters, a firing moment and an explosion with debris (FR-107 to FR-113, SC-002)
+- [ ] T293 [US1] Implement the view until T292 passes: bundle `src/assets/textures/dirt.png` ("dirt" by Drummyfish, CC0, https://opengameart.org/node/84103) and load it in `preload` of `src/game/BattleScene.ts`; `src/game/textures.ts` (the sun in the sky, the generated dirt pattern when the texture is missing, no more body and turret textures); `src/game/TerrainView.ts` (ground and distant hills drawn with the Canvas 2D API into a canvas texture once per landscape and per crater: texture pattern clipped to the hills, soil layers, pebbles, grass edge of 12 units with tufts, scorch marks; the cross-fade of amendment 13 between two such textures; `data-ground-texture` and `data-ground-draws`); `src/game/TankView.ts` (body and turret drawn from `src/core/view/tankDrawing.ts`, wheels turning while settling, dust puff on landing, `fire()` with recoil, white flash and grey smoke, the grey body of a destroyed tank and the white hit flash); `src/game/effects.ts` (debris in `GROUND_COLORS`, the drawn boom ring, camera shake from `motionProfile`, fewer particles with reduced motion, `data-explosions` and `data-screen-shakes`); `src/game/ProjectileView.ts` (trails 5 units thick, rainbow lines 4 apart); `src/game/BattleScene.ts` (`fire()` on the tank that fires and on each decoy of a volley, shake on a destroyed enemy, a lost heart and a burst decoy, `data-muzzle-flashes`, `data-reduced-motion` from `matchMedia('(prefers-reduced-motion: reduce)')`, `data-fps`) (FR-107 to FR-113, SC-002)
+- [ ] T294 [US1] Run lint, typecheck, unit tests, build and every e2e spec in all six projects; take the muted headless screenshots of T292 (d), stored in the session scratchpad, and check them for the texture, the grass and tufts, the distant hills and sun, the scorched craters, the tank shading, the flag and hat positions, the recoil, flash and smoke, and the debris (FR-107 to FR-114)
+
+**Checkpoint**: The battlefield, the tanks and the effects look richer, every garage look still fits, and motion follows the reduced-motion setting.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, with the keyboard alone, with pause, fullscreen and spoken challenges. Touch on tablets and phones, the number pad and the screen sizes are built and tested in Phases 22g and 22h (amendment 12).
@@ -746,7 +767,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - [ ] T152 [P] Extend `src/i18n/i18n.test.ts`: every child-facing message key (banner, feedback, help, round end, range hint) has at most about 8 words, checked as at most 9 words with an allowlist for prompts that need the numbers (FR-057)
 - [ ] T153 Accessibility pass on `src/app/*.tsx`: every icon-only button (gear, help, speaker, pause, fullscreen, new scene, fire) gets a German `aria-label` from `src/i18n/de.ts`; focus is visible on the app root; the readout of typed digits is announced with `aria-live="polite"` (it shows no number while pointing, amendment 05); no text below 18 px on child screens (FR-053, FR-057, FR-059)
 - [ ] T154 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e` and fix every failure. Done when all pass in Chromium, WebKit and Firefox, and `grep -rni "setAim\|aimCorrection\|charged\|labelLevel\|selectInterval\|nudge" src tests` finds nothing (FR-050)
-- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 27) against `pnpm preview`, including scenarios 12 and 25 to 27 on an iPad and an iPhone or with Playwright's device emulation, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
+- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 28) against `pnpm preview`, including scenarios 12 and 25 to 27 on an iPad and an iPhone or with Playwright's device emulation, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
 
 ---
 
@@ -781,6 +802,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - **Phase 22f (amendment 13)**: depends on Phases 18b, 22c and 22e. T265 runs before T266, T267 before T268, T266 before T267 (the controller uses the new enemy input), T269 before T270; T271 runs last.
 - **Phase 22g (amendment 12 core and components)**: depends on Phases 13 (settings page), 22e (settings version 5) and 22f. T272 and T273 run before T274, T275 before T276; T274 runs before T276 (the overlay reads the setting).
 - **Phase 22h (amendment 12 layouts and device tests)**: depends on Phase 22g. T277 and T278 run before T279; T280 runs last. Runs before Phase 23, whose touch spec T136 uses the device projects of T278.
+- **Phase 22i (amendment 14)**: depends on Phases 22e (garage looks), 22f (new hills and the cross-fade) and 23 (pause and the comparison volley of bug report B2), which are done. T285 to T288 run before T289; T290 before T291; T292 before T293; T289 runs before T291 and T293 (both draw from the new core modules); T294 runs last.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -818,6 +840,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - **Phase 22e**: T259, T260 and T261 together; then T262 and T263; T264 last.
 - **Phase 22g**: T272, T273 and T275 together; then T274; T276 last.
 - **Phase 22h**: T277 and T278 together; then T279; T280 last.
+- **Phase 22i**: T285, T286, T287, T288, T290 and T292 together; then T289; then T291 and T293; T294 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -955,8 +978,16 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-104 | T272, T274, T277, T278, T279 |
 | FR-105 | T278, T279, T280 |
 | FR-106 | T277, T279 |
+| FR-107 | T288, T289, T292, T293, T294 |
+| FR-108 | T288, T289, T292, T293, T294 |
+| FR-109 | T285, T286, T289, T290, T291, T293, T294 |
+| FR-110 | T286, T289, T290, T291, T293, T294 |
+| FR-111 | T292, T293, T294 |
+| FR-112 | T290, T291, T293, T294 |
+| FR-113 | T287, T289, T292, T293, T294 |
+| FR-114 | T290, T291, T294 |
 | SC-001 | T043, T046, T150, T165 |
-| SC-002 | T150 |
+| SC-002 | T150, T292, T293 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
 | SC-004 | T028, T136 |
 | SC-005 | T061, T095, T098, T208, T222 |
@@ -980,3 +1011,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-10 | T134, T142, T155 |
 | US10 | T252 to T264 |
 | Amendment 12 | T272 to T280; T136 and T141 changed |
+| Amendment 14 | T285 to T294 |

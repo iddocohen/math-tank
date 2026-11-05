@@ -22,7 +22,7 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 - Sky and battlefield: y 0 to 700. The battlefield spans exactly the configured range, for example 550 to 780.
 - Ruler: y 720 to 820, x 80 to 1520, same mapping as the battlefield (core-api `numberToX`), always on screen, lines and labels per the ruler level.
 - React overlay (HTML, positioned over the canvas): challenge banner at the top center; the pause button and the tank counter at the top left; gear, speaker (only when speech is available) and fullscreen (only where the browser allows it) at the top right, so the banner between the two groups covers none of them; the help button at the left of the control bar; while paused, a pause screen with "Weiterspielen" covers the battle (T138, T140, T141); the large readout of typed digits and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field, there are no −1 and +1 buttons, and there are no health bars or health labels in the corners (amendment 05). At the top left a small tank symbol and the number of destroyed enemies (no text); with "Uhr beim Spielen zeigen" an up-counting clock `m:ss` beside it (amendment 06, FR-083, FR-084).
-- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag. Decoy tanks in comparison turns look exactly like the enemy (amendment 10). Three hearts sit directly above the child's tank, with no text; a lost heart stays as an empty outline. The enemy has no health bar (amendment 06, FR-078, FR-080). At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
+- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag. Decoy tanks in comparison turns look exactly like the enemy (amendment 10). Three hearts sit directly above the child's tank, with no text; a lost heart stays as an empty outline. The enemy has no health bar (amendment 06, FR-078, FR-080). Amendment 14 (FR-109, FR-110) draws both in code with a highlight and a shadow from their color; the shapes and the flag and hat anchor points stay. At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
 
 ## Screen layouts and the number pad (amendment 12, FR-102 to FR-106)
 
@@ -106,6 +106,17 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 3. A battle draws the child's tank in the chosen color (dark blue with stripes adds light stripes on the body), with the chosen flag on the antenna and the chosen hat on the turret; the child's shells draw the chosen trail (sparkles: small white and yellow stars along the path; rainbow: several colored lines side by side; bubbles: light circles). With "Garage und Sterne" off, the standard look is used. The canvas carries `data-player-look` with `lookKey` of the look in use, for the end-to-end tests only (D4).
 4. The end screen compares the star total at the start of the round with the total now and names every item unlocked in between.
 
+## Battlefield look and effects (amendment 14, FR-107 to FR-114)
+
+1. **Ground**: the dirt texture `src/assets/textures/dirt.png` ("dirt" by Drummyfish, CC0, https://opengameart.org/node/84103) fills the hills, cut to their outline; when it fails to load, a generated dirt pattern is used. A grass edge at least 10 world units thick with tufts runs along the surface; soil layers darken the ground lower down; a few pebbles lie in it; crater edges are scorched and have no tufts. The bedrock strip and the ruler band below `FLOOR` are unchanged.
+2. **Sky**: the sky gradient with clouds and a sun stays the same all game; two layers of distant hills, made from the terrain seed, change only with a new landscape and cross-fade with the new ground (amendment 13).
+3. **Drawing cost**: the ground and the distant hills are drawn into one canvas texture once per landscape and once per crater; no frame redraws them.
+4. **Tanks**: drawn in code from `src/core/view/tankDrawing.ts`, the same shapes in battle (Phaser) and in the garage preview (SVG). Highlight and shadow come from `tankShades(color)` in `src/core/view/shade.ts`. The antenna (x -20, from y 20 to 64) and the dome top (y 28) do not move.
+5. **Tank motion**: while a tank settles onto new ground its wheels turn; on landing a dust puff rises. On firing, the barrel recoils, a white flash shows at the muzzle and a grey smoke puff drifts up. In a comparison volley every tank that fires shows this.
+6. **Explosions**: debris in the ground's colors and an expanding "boom" ring; a hit on any tank (enemy destroyed, child's heart lost, decoy burst) shakes the camera by 2 to 3 CSS pixels for less than 200 ms.
+7. **Reduced motion**: with `prefers-reduced-motion: reduce` there is no camera shake and explosions throw at most 40 % of the particles. The wheels, recoil, flash and smoke stay, because they are small and short.
+8. **Test attributes on the canvas** (D4, end-to-end tests only): `data-ground-texture` (`dirt` or `generated`), `data-ground-draws` (ground images drawn so far), `data-muzzle-flashes`, `data-explosions`, `data-screen-shakes`, `data-reduced-motion` (`true` or `false`) and `data-fps` (frames per second averaged over the last second).
+
 ## Keyboard map (FR-059 to FR-064)
 
 | Key | Start screen | Battle (`challenge`, `aiming`) | Solution step (help level 3) | Paused | Round end |
@@ -145,3 +156,4 @@ In the garage (amendment 11, FR-092): 0 to 9 type the number of an item (at most
 - A short note explains how to add the game to the Home Screen on iPad and Android.
 - A setting for a feature that is not built yet is shown disabled, with the note "kommt bald" (coming soon), instead of being hidden (amendment 05, FR-079).
 - A notice appears when stored data was reset or cannot be saved.
+- Credits (amendment 14, FR-114): at the end of the settings page a line names the ground texture, its author Drummyfish and its license CC0, with a link to its OpenGameArt page.

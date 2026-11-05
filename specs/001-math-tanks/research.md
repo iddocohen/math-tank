@@ -75,6 +75,7 @@ All decisions below resolve the Technical Context of [plan.md](./plan.md). R6, R
 
 - **Decision**: All graphics are drawn by code with Phaser Graphics objects and generated textures (tanks, terrain, sky gradient, explosion particles). Sound effects are generated at runtime with the Web Audio API (short synthesized booms and soft chimes), so there are no external asset files and no licensing questions. Music is a simple generated loop, off by default.
 - **Rationale**: Original assets, small bundle, works offline, and no negative sounds (FR-009).
+- **Changed by amendment 14**: one tileable CC0 dirt texture ("dirt" from "4 hand-painted ground textures" by Drummyfish, https://opengameart.org/node/84103, 512 by 512 PNG) is bundled from `src/assets/textures/dirt.png` and precached by the service worker. The ground, with the texture, grass, soil layers, pebbles, scorch marks and distant hills, is drawn with the Canvas 2D API into a canvas texture once per landscape and per crater (a texture pattern fill clipped to the hill outline), so no frame redraws it. Tanks stay code-drawn, now from shared shapes in `src/core/view/tankDrawing.ts` that both Phaser and the garage SVG draw. Alternatives considered: the Kenney "Tank pack" sprites (CC0), not used because of their military look and because every garage flag and hat would need refitting to every sprite; a Phaser geometry mask over a tile sprite, not used because the canvas pattern needs no mask support and is drawn only on change.
 
 ## R14. Speech
 
