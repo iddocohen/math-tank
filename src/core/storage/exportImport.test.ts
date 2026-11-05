@@ -114,9 +114,17 @@ describe('importData (FR-048, FR-048a)', () => {
   });
 
   it('keeps the wave size and the line style (amendment 21, FR-136)', () => {
-    const wave: Settings = { ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'tangled' };
+    const wave: Settings = { ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'none' };
     const r = importData(exportData(wave, sampleProgress(), sampleRecords(), sampleGarage()));
-    expect(r.ok && r.settings).toMatchObject({ enemiesAtOnce: 3, lineStyle: 'tangled' });
+    expect(r.ok && r.settings).toMatchObject({ enemiesAtOnce: 3, lineStyle: 'none' });
+  });
+
+  it('a version 11 settings file with a removed curved line style imports with straight lines (amendment 21 item 18)', () => {
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    for (const lineStyle of ['curved', 'tangled']) {
+      const r = importData(JSON.stringify({ ...file, settings: { ...sampleSettings(), version: 11, enemiesAtOnce: 3, lineStyle } }));
+      expect(r.ok && r.settings).toEqual({ ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'straight' });
+    }
   });
 
   it('a version 10 settings file (exported before amendment 21) imports with one enemy and straight lines', () => {
@@ -245,7 +253,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(11);
+    expect(r.settings.version).toBe(12);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

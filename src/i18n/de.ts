@@ -380,8 +380,7 @@ export const de = {
       enemiesAtOnce: 'Gegner gleichzeitig',
       lineStyle: 'Linien',
       lineStyleStraight: 'Gerade',
-      lineStyleCurved: 'Gebogen',
-      lineStyleTangled: 'Gebogen und verschlungen',
+      lineStyleNone: 'Keine Linien',
       adaptive: 'Schwierigkeit automatisch anpassen',
       playModeMixed: 'Spielart „Gemischt“ anbieten',
       playModeRuler: 'Spielart „Nur Zahlenstrahl“ anbieten',
@@ -396,7 +395,7 @@ export const de = {
     explanations: {
       aimCross: 'Das gelbe Kreuz mit der Linie zum Zahlenstrahl.',
       enemiesAtOnce: 'So viele Gegner stehen beim Zahlenstrahl auf einmal da.',
-      lineStyle: 'Gebogene Linien muss das Kind bis zum Zahlenstrahl verfolgen.',
+      lineStyle: 'Ohne Linien liest das Kind die Zahl genau unter dem Panzer ab.',
       timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
       pointAfterFullHelp: 'Wenn aus: Ein Treffer nach der gezeigten Lösung bringt keinen Panzer, keinen Stern und zählt nicht für den Rekord.',
     },

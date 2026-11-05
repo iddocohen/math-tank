@@ -61,6 +61,19 @@ export function startButton(page: Page): Locator {
 }
 
 /**
+ * Starts a round from the start screen with a key (Enter, or 1, 2 and 3 for a play mode) and waits on game state until
+ * the first search shows (`data-phase="challenge"` on the battle overlay), which it returns (T393). The app attaches its
+ * key listener before the start screen is painted, so the key is pressed once, as soon as the start button is visible.
+ */
+export async function startRound(page: Page, key = 'Enter'): Promise<Locator> {
+  await expect(startButton(page)).toBeVisible();
+  await page.keyboard.press(key);
+  const overlay = page.getByTestId('battle-overlay');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  return overlay;
+}
+
+/**
  * Waits like a calm child before typing an answer (amendment 17: every play mode is a search). The search accepts
  * answers 1 second after it appears (`data-challenge-answerable`), and an answer less than GUESS_RESPONSE_MS after that
  * is a fast guess, whose miss adds 2 to the misses in a row (FR-038, FR-098); so the wait is GUESS_RESPONSE_MS + 300 ms.

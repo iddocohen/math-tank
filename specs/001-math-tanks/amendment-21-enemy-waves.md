@@ -40,3 +40,7 @@ The curved styles always end straight below their tank, because every tank stand
 
 16. **"Keine Linien"** (no lines): no pointer line at all, for every enemy; the target ring stays on the tank. The child must judge which ruler number is straight below the tank. This is the hardest line level. Help step 1 shows the help target's straight pointer line briefly (about 2 seconds) and then hides it again; help steps 2 and 3 are unchanged.
 17. Settings migration: none needed beyond adding the new value to `lineStyle` (`'none'`); default stays "Gerade".
+
+## Removal of the curved styles (same day)
+
+18. **Removed by the product owner: curved and tangled line styles.** The product owner on "Gebogen" and "Gebogen und verschlungen": "it does not make sense". Both styles are removed, with their curve fairness rules (items 11 and 12), the colored lines and tank flags, and the moving highlight of help step 1 along a curve (item 13). "Linien" offers "Gerade" (the default) and "Keine Linien" (item 16) with any number of enemies at once. Settings version 12 turns a stored "Gebogen" or "Gebogen und verschlungen" into "Gerade"; export files and transfer codes made with settings version 11 read the same way. Enemy waves (items 1 to 10) do not change.

@@ -249,17 +249,9 @@ retarget(s: RoundState, target: TankState, settings: Settings, keepHelp: boolean
 
 `BattleController` (amendment 21): `startSearch` places the wave; `shotAnimationDone` destroys the enemy at the fired number among the standing enemies, records its attempt (FR-143), and while enemies stand retargets to the nearest one with help reset and no enemy shot (FR-138, FR-141); the last enemy of a wave renews the terrain and starts the next wave (FR-142). After a miss it retargets with the help kept, then `nextEnemyShot` picks the shooter among the standing enemies with `deriveSeed(seed, 9, shotIndex)` and sets `ShotInFlight.shooterId` (FR-140). `newScene` places a new wave of `enemiesAtOnce`.
 
-## `core/view/pointerCurve` (pure, amendment 21)
+## `core/view/pointerCurve` (removed by amendment 21 item 18)
 
-```ts
-effectiveLineStyle(settings: Settings): 'straight' | 'curved' | 'tangled'   // 'tangled' with enemiesAtOnce 1 -> 'curved' (FR-144)
-pointerCurves(tanks: TankState[], input: { style: 'curved' | 'tangled'; seed: number; range: { min: number; max: number }; worldHeight: number; others: TankState[] }): PointerCurve[]
-curveLength(points: Point[]): number
-pointAlong(points: Point[], fraction: number): Point     // the help step 1 highlight moves along the curve with it (FR-146)
-LINE_COLORS: readonly number[]                           // Okabe-Ito orange, sky blue, bluish green, reddish purple
-```
-
-Guarantees (FR-145): the last point of each curve is `(numberToX(number), AXIS_Y)` within 0.5 world units; every point with `y > RULER_TOP - 8` has the end x; every point is inside x 8 to 1592 and between the tank's center and `AXIS_Y`; no point lies within 6 world units of the body box of another tank in `tanks` or `others` (the child's tank); with `'curved'` no two curves cross; `bow` is from 8% to 20% of the ruler width unless no candidate meets the rules, then a smaller bow or 0 (straight). The result depends only on the input.
+The module was removed with the curved line styles. `NumberLineView` reads `settings.lineStyle` (`'straight'` or `'none'`) directly.
 
 ## `core/battle/entry` (pure)
 

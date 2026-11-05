@@ -403,22 +403,22 @@ describe('SettingsPage', () => {
     expect(persistence.settings().enemiesAtOnce).toBe(3);
   });
 
-  it('"Linien" offers "Gebogen und verschlungen" only with 2 or more enemies; 1 enemy switches it to "Gebogen" (amendment 21, FR-144)', () => {
+  it('"Linien" offers only "Gerade" and "Keine Linien" with any number of enemies, and saves the choice (amendment 21, FR-144, FR-147)', () => {
     const { persistence } = setup();
     const options = () => Array.from(field(L.lineStyle).options).map((o) => o.textContent);
     expect(field(L.lineStyle).value).toBe('straight');
-    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved]);
+    expect(L.lineStyleNone).toBe('Keine Linien');
+    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleNone]);
     expect(screen.getByRole('combobox', { name: L.lineStyle, description: m.settings.explanations.lineStyle })).toBeTruthy();
-    setValue(L.enemiesAtOnce, '2');
-    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved, L.lineStyleTangled]);
-    setValue(L.lineStyle, 'tangled');
-    fireEvent.click(saveButton());
-    expect(persistence.settings()).toMatchObject({ enemiesAtOnce: 2, lineStyle: 'tangled' });
+    for (const n of ['2', '3', '4']) {
+      setValue(L.enemiesAtOnce, n);
+      expect(options()).toEqual([L.lineStyleStraight, L.lineStyleNone]);
+    }
+    setValue(L.lineStyle, 'none');
     setValue(L.enemiesAtOnce, '1');
-    expect(field(L.lineStyle).value).toBe('curved');
-    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved]);
+    expect(field(L.lineStyle).value).toBe('none');
     fireEvent.click(saveButton());
-    expect(persistence.settings()).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'curved' });
+    expect(persistence.settings()).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'none' });
   });
 
   it('"Schließen" calls onClose', () => {

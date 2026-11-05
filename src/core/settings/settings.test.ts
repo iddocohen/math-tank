@@ -3,7 +3,6 @@ import { defaultSettings, RANGE_PRESETS } from './defaults';
 import { settingsSchema, type Settings } from './schema';
 import { validateSettings, withRange, type SettingsError } from './validate';
 import { parseSettings } from '../storage/migrate';
-import { effectiveLineStyle } from '../view/pointerCurve';
 
 function clone(s: Settings): Settings {
   return structuredClone(s);
@@ -22,7 +21,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 11,
+      version: 12,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -332,17 +331,15 @@ describe('whole numbers and one parse function (review T4)', () => {
     expect(settingsSchema.safeParse(without).success).toBe(false);
   });
 
-  it('the schema needs enemiesAtOnce 1 to 4 and a known lineStyle (amendment 21, FR-136, FR-144)', () => {
+  it('the schema needs enemiesAtOnce 1 to 4 and a lineStyle of "Gerade" or "Keine Linien" (amendment 21, FR-136, FR-144)', () => {
     for (const enemiesAtOnce of [1, 2, 3, 4]) expect(settingsSchema.safeParse({ ...defaultSettings(), enemiesAtOnce }).success).toBe(true);
     for (const enemiesAtOnce of [0, 5, 2.5, '2']) expect(settingsSchema.safeParse({ ...defaultSettings(), enemiesAtOnce }).success, String(enemiesAtOnce)).toBe(false);
-    for (const lineStyle of ['straight', 'curved', 'tangled']) expect(settingsSchema.safeParse({ ...defaultSettings(), lineStyle }).success).toBe(true);
-    expect(settingsSchema.safeParse({ ...defaultSettings(), lineStyle: 'wavy' }).success).toBe(false);
-    // A stored 'tangled' with one enemy stays valid; it is drawn as 'curved'.
-    expect(validateSettings({ ...defaultSettings(), lineStyle: 'tangled', enemiesAtOnce: 1 }).ok).toBe(true);
-    expect(effectiveLineStyle({ ...defaultSettings(), lineStyle: 'tangled', enemiesAtOnce: 1 })).toBe('curved');
-    expect(effectiveLineStyle({ ...defaultSettings(), lineStyle: 'tangled', enemiesAtOnce: 2 })).toBe('tangled');
-    expect(effectiveLineStyle({ ...defaultSettings(), lineStyle: 'curved' })).toBe('curved');
-    expect(effectiveLineStyle(defaultSettings())).toBe('straight');
+    for (const enemiesAtOnce of [1, 2, 3, 4] as const) {
+      for (const lineStyle of ['straight', 'none'] as const) expect(validateSettings({ ...defaultSettings(), lineStyle, enemiesAtOnce }).ok).toBe(true);
+    }
+    // The curved styles were removed by the product owner (amendment 21 item 18); only migration still reads them.
+    for (const lineStyle of ['curved', 'tangled', 'wavy']) expect(settingsSchema.safeParse({ ...defaultSettings(), lineStyle }).success, lineStyle).toBe(false);
+    expect(defaultSettings().lineStyle).toBe('straight');
   });
 
   it('the schema accepts only whole numbers for roundLength and timeLimitSeconds', () => {
@@ -355,7 +352,7 @@ describe('whole numbers and one parse function (review T4)', () => {
     const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
     void _modes;
-    expect(parseSettings(v5)).toMatchObject({ version: 11, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
+    expect(parseSettings(v5)).toMatchObject({ version: 12, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });

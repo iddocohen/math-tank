@@ -249,10 +249,6 @@ export class BattleScene extends Phaser.Scene {
     }
     this.drawDecoys(s, prev, newRound, searchAfterHit);
     this.numberLine.update(s);
-    // Amendment 21 (FR-144): in "Gebogen und verschlungen" each tank carries a flag in its line's color.
-    const colors = this.numberLine.lineColors();
-    for (const tank of [s.enemy, ...s.wave]) this.enemyView(tank.id)?.setLineFlag(tank.alive ? (colors.get(tank.id) ?? null) : null);
-    for (const decoy of s.decoys) this.decoyViews.get(decoy.id)?.setLineFlag(decoy.alive ? (colors.get(decoy.id) ?? null) : null);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
     // New ground has no trail: the controller clears it with new hills, "Neue Landschaft" and a new round (bug report B1).
     const trail = s.phase === 'playerShot' ? null : s.lastPlayerPath;

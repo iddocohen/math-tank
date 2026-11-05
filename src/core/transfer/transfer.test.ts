@@ -187,13 +187,24 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     expect('aimCross' in (JSON.parse(defJson) as [Record<string, unknown>])[0]).toBe(false);
   });
 
+  it('a code made with settings version 11 and a removed curved line style reads as straight lines (amendment 21 item 18)', async () => {
+    for (const lineStyle of ['curved', 'tangled']) {
+      const old = { ...data(), settings: { ...settings(), version: 11, enemiesAtOnce: 3, lineStyle } } as unknown as ReturnType<typeof data>;
+      for (const codec of [null, undefined]) {
+        const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
+        const dec = await decodeTransfer(codeOf(enc.link));
+        expect(dec.ok && dec.data.settings).toEqual({ ...settings(), enemiesAtOnce: 3, lineStyle: 'straight' });
+      }
+    }
+  });
+
   it('carries the wave size and the line style, and leaves the defaults out (amendment 21, FR-136)', async () => {
-    const wave: ReturnType<typeof data> = { ...data(), settings: { ...settings(), enemiesAtOnce: 4, lineStyle: 'curved' } };
+    const wave: ReturnType<typeof data> = { ...data(), settings: { ...settings(), enemiesAtOnce: 4, lineStyle: 'none' } };
     const plain = await encodeTransfer(wave, PAGE, { codec: null });
     const json = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)))) as [Record<string, unknown>];
-    expect(json[0]).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'curved' });
+    expect(json[0]).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'none' });
     const dec = await decodeTransfer(codeOf(plain.link));
-    expect(dec.ok && dec.data.settings).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'curved' });
+    expect(dec.ok && dec.data.settings).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'none' });
     const def = await encodeTransfer(data(), PAGE, { codec: null });
     const defJson = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(def.link).slice(3)))) as [Record<string, unknown>];
     expect('enemiesAtOnce' in defJson[0] || 'lineStyle' in defJson[0]).toBe(false);
@@ -305,7 +316,7 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(11);
+    expect(dec.data.settings.version).toBe(12);
     expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
     expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
     expect(dec.data.settings.pointAfterFullHelp).toBe(true);
@@ -481,7 +492,7 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
       // Made before amendment 21: one enemy at once and straight lines.
       expect(dec.data.settings).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'straight' });
-      expect(dec.data.settings.version).toBe(11);
+      expect(dec.data.settings.version).toBe(12);
       expect(dec.data.garage).toEqual({
         version: 2,
         balance: 0,
@@ -566,7 +577,7 @@ function randomSettings(seed: number): Settings {
     garage: bool(),
     numberPad: r.pick(['auto', 'always', 'never'] as const),
     enemiesAtOnce: r.int(1, 4) as Settings['enemiesAtOnce'],
-    lineStyle: r.pick(['straight', 'curved', 'tangled'] as const),
+    lineStyle: r.pick(['straight', 'none'] as const),
   };
   const fitted = withRange(base, range);
   const span = range.max - range.min;

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 11 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
- * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21).
+ * Structural schema for persisted settings, version 12 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -17,7 +17,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(11),
+  version: z.literal(12),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -92,10 +92,11 @@ export const settingsSchema = z.object({
    */
   enemiesAtOnce: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   /**
-   * "Linien" (amendment 21, FR-144): straight, curved, or curved and tangled pointer lines. A stored 'tangled' with one
-   * enemy at once is drawn as 'curved' (effectiveLineStyle in src/core/view/pointerCurve.ts).
+   * "Linien" (amendment 21, FR-144): "Gerade" ('straight', the dashed vertical pointer lines) or "Keine Linien"
+   * ('none': no pointer line; help step 1 shows the help target's straight line briefly). The curved styles were
+   * removed by the product owner (amendment 21 item 18); settings version 12 turns a stored one into 'straight'.
    */
-  lineStyle: z.enum(['straight', 'curved', 'tangled']),
+  lineStyle: z.enum(['straight', 'none']),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

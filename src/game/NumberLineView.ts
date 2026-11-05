@@ -40,12 +40,11 @@
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
  *   number from the ruler. The canvas carries `data-pointer-lines`, the numbers of those tanks, for the end-to-end
  *   tests only; nothing is drawn from it.
- * - Pointer line styles (amendment 21, FR-144 to FR-146): with "Gebogen" each line is a dashed curve from
- *   core/view/pointerCurve.ts, ending with the same triangle on the ruler; with "Gebogen und verschlungen" each curve has
- *   its own color (lineColors() gives them to the tank flags). At help step 1, once the child can choose again, a
- *   highlight moves along the help target's curve for CURVE_HIGHLIGHT_MS. The canvas carries `data-line-style`,
- *   `data-pointer-curves` (`number:endX:bow` per line, `;` between) and `data-curve-highlight` (the highlighted
- *   number, '' when none) for the end-to-end tests only.
+ * - "Linien" (amendment 21, FR-144, FR-147): "Gerade" draws the pointer lines above; "Keine Linien" draws none
+ *   (`data-pointer-lines` is empty). At help step 1, once the child can choose again, "Keine Linien" shows the help
+ *   target's straight line for HELP_LINE_MS and hides it again. The canvas carries `data-line-style` and `data-help-line`
+ *   (that number, '' when none) for the end-to-end tests only. The curved styles were removed by the product owner
+ *   (amendment 21 item 18).
  * - Addition and subtraction (US3, T082, T083): the starting number is highlighted on the ruler with a blue ring and
  *   its number on a chip, while the child chooses a number. After a help request (state.stepAnimation, stepPath) a
  *   small tank icon moves from the starting number one unit at a time (core/view/stepFrames.ts) and the count of
@@ -100,9 +99,7 @@ import {
   type Chip,
   type RulerLabelBox,
 } from '../core/view/rulerText';
-import { pointerLine, POINTER_DASH, POINTER_GAP, POINTER_TRIANGLE } from '../core/view/pointerLine';
-import { curveLength, effectiveLineStyle, pointAlong, pointerCurves } from '../core/view/pointerCurve';
-import type { Point } from '../core/types';
+import { pointerLine } from '../core/view/pointerLine';
 import { cssColor } from '../core/view/shade';
 import { stepFrames, stepMs, type StepFrame } from '../core/view/stepFrames';
 import { TEX } from './textures';
@@ -122,9 +119,8 @@ const LANDED = 0xff8a65;
 const POINTER = 0xf4f6fb;
 const PULSE = 0x9be89f;
 const PULSE_MS = 700;
-/** Help step 1 with curved lines (amendment 21, FR-146): the highlight runs along the help target's curve this long. */
-const CURVE_HIGHLIGHT_MS = 2000;
-const CURVE_HIGHLIGHT = 0xb9ff7a;
+/** Help step 1 with "Keine Linien" (amendment 21 item 16, FR-147): the help target's straight line shows this long. */
+const HELP_LINE_MS = 2000;
 /** A hit's landing marker fades out over the last HIT_FADE_MS of HIT_FEEDBACK_MS (T233). */
 const HIT_FADE_MS = 500;
 const HIT_FADE_DELAY_MS = HIT_FEEDBACK_MS - HIT_FADE_MS;
@@ -169,10 +165,10 @@ interface Drawn {
 export class NumberLineView {
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly marks: Phaser.GameObjects.Graphics;
-  /** The moving highlight of help step 1 on a curved line (amendment 21). */
-  private readonly curveGlow: Phaser.GameObjects.Graphics;
-  private curveGlowKey: string | null = null;
-  private colors = new Map<string, number>();
+  /** "Keine Linien" (FR-147): the straight line help step 1 shows briefly, the tank it belongs to, and the help it showed for. */
+  private readonly helpLine: Phaser.GameObjects.Graphics;
+  private helpLineTank: string | null = null;
+  private helpLineKey: string | null = null;
   private labels: Phaser.GameObjects.Text[] = [];
   /** The ruler's own labels by number and their boxes, so a chip can hide the labels under it (T228). */
   private labelByValue = new Map<number, Phaser.GameObjects.Text>();
@@ -227,8 +223,8 @@ export class NumberLineView {
   ) {
     this.ruler = scene.add.graphics().setDepth(10);
     this.marks = scene.add.graphics().setDepth(11);
-    this.curveGlow = scene.add.graphics().setDepth(12);
-    scene.game.canvas.dataset.curveHighlight = '';
+    this.helpLine = scene.add.graphics().setDepth(12);
+    scene.game.canvas.dataset.helpLine = '';
     this.zoom = scene.add.graphics().setDepth(13);
     this.pulse = scene.add.graphics().setDepth(12).setVisible(false);
     this.chipPlates = scene.add.graphics().setDepth(12);
@@ -669,12 +665,7 @@ export class NumberLineView {
     this.hideZoom();
     this.stopSteps();
     this.scene.tweens.killTweensOf(this.pulse);
-    this.scene.tweens.killTweensOf(this.curveGlow);
-  }
-
-  /** The color of each tank's line in "Gebogen und verschlungen", by tank id; empty for the other styles (amendment 21). */
-  lineColors(): ReadonlyMap<string, number> {
-    return this.colors;
+    this.scene.tweens.killTweensOf(this.helpLine);
   }
 
   /** "Nur Rechnen" (amendment 17, FR-123): no ruler band, lines or labels. */
@@ -866,101 +857,65 @@ export class NumberLineView {
 
   /**
    * Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073): the
-   * enemy and, in comparison turns, every standing decoy (amendment 10).
+   * enemy and, in comparison turns, every standing decoy (amendment 10). "Keine Linien" draws none (FR-147).
    */
   private drawPointerLines(s: RoundState): void {
-    const g = this.marks;
     const enemy = visibleEnemy(s);
     // "Nur Rechnen" has no ruler for the lines to point at (amendment 17).
     // Amendment 21: every standing enemy of a wave has its line too.
     const visible: TankState[] = !MODE_TRAITS[s.mode].showsRuler
       ? []
       : [...(enemy ? [enemy] : []), ...s.wave.filter((t) => t.alive), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
-    const settings = this.controller.getRoundSettings();
-    const style = effectiveLineStyle(settings);
+    const style = this.controller.getRoundSettings().lineStyle;
     const data = this.scene.game.canvas.dataset;
     data.lineStyle = style;
-    data.pointerLines = visible.map((tank) => tank.position).join(',');
-    this.colors = new Map();
     if (style === 'straight') {
-      g.lineStyle(2, POINTER, 0.8);
-      g.fillStyle(POINTER, 0.9);
-      for (const tank of visible) {
-        const c = tankCenter(tank);
-        const line = pointerLine({ x: c.x, y: toScreenY(c.y, this.worldHeight) }, AXIS_Y);
-        for (const d of line.dashes) g.lineBetween(d.x, d.y0, d.x, d.y1);
-        const [a, b, tip] = line.triangle;
-        g.fillTriangle(a.x, a.y, b.x, b.y, tip.x, tip.y);
-      }
-      data.pointerCurves = visible.map((tank) => `${tank.position}:${Math.round(tank.x)}:0`).join(';');
+      this.hideHelpLine();
+      data.pointerLines = visible.map((tank) => tank.position).join(',');
+      for (const tank of visible) this.drawStraightLine(this.marks, tank);
       return;
     }
-    // Amendment 21 (FR-144, FR-145): curved lines, colored in the tangled style.
-    const { min, max } = settings.range;
-    const curves = pointerCurves({ style, seed: s.seed, range: { min, max }, tanks: visible, others: [s.player], worldHeight: this.worldHeight });
-    for (const c of curves) {
-      const color = c.color ?? POINTER;
-      if (c.color !== null) this.colors.set(c.tankId, c.color);
-      if (c.color !== null) {
-        // A dark edge keeps the colored line readable over sky and ground.
-        g.lineStyle(6, 0x14203a, 0.55);
-        drawDashed(g, c.points);
-      }
-      g.lineStyle(c.color === null ? 2 : 3, color, c.color === null ? 0.8 : 1);
-      drawDashed(g, c.points);
-      const end = c.points.at(-1)!;
-      g.fillStyle(color, c.color === null ? 0.9 : 1);
-      g.fillTriangle(end.x - POINTER_TRIANGLE / 2, end.y - POINTER_TRIANGLE, end.x + POINTER_TRIANGLE / 2, end.y - POINTER_TRIANGLE, end.x, end.y);
-    }
-    data.pointerCurves = curves.map((c) => `${c.number}:${Math.round(c.points.at(-1)!.x)}:${Math.round(c.bow)}`).join(';');
-    // Help step 1 (FR-146): once the child can choose again, the help target's curve lights up once per help change.
-    const target = curves.find((c) => c.tankId === s.enemy.id);
-    const key = `${s.challenge?.id}|${s.enemy.id}|${s.help.wrongAnswers}|${s.help.level}`;
-    if (target && s.phase === 'challenge' && s.help.content?.step === 1 && key !== this.curveGlowKey) {
-      this.curveGlowKey = key;
-      this.glowAlong(target.points, s.enemy.position);
+    // "Keine Linien" (amendment 21 item 16, FR-147): the child reads the number straight below the tank. Help step 1
+    // shows the help target's line once per help change, once the child can choose again.
+    data.pointerLines = '';
+    const helpKey = `${s.challenge?.id}|${s.enemy.id}|${s.help.wrongAnswers}|${s.help.level}`;
+    const target = visible.find((tank) => tank.id === s.enemy.id);
+    if (target && s.phase === 'challenge' && s.help.content?.step === 1 && helpKey !== this.helpLineKey) {
+      this.helpLineKey = helpKey;
+      this.showHelpLine(target);
+    } else if (this.helpLineTank !== null && !visible.some((tank) => tank.id === this.helpLineTank)) {
+      this.hideHelpLine();
     }
   }
 
-  /** A bright stretch that runs along `points` from the tank to the ruler for CURVE_HIGHLIGHT_MS (FR-146). */
-  private glowAlong(points: Point[], n: number): void {
-    const g = this.curveGlow;
-    const data = this.scene.game.canvas.dataset;
+  /** One dashed pointer line with its end triangle from the tank's center down to the ruler (FR-073). */
+  private drawStraightLine(g: Phaser.GameObjects.Graphics, tank: TankState): void {
+    const c = tankCenter(tank);
+    const line = pointerLine({ x: c.x, y: toScreenY(c.y, this.worldHeight) }, AXIS_Y);
+    g.lineStyle(2, POINTER, 0.8);
+    g.fillStyle(POINTER, 0.9);
+    for (const d of line.dashes) g.lineBetween(d.x, d.y0, d.x, d.y1);
+    const [a, b, tip] = line.triangle;
+    g.fillTriangle(a.x, a.y, b.x, b.y, tip.x, tip.y);
+  }
+
+  /** "Keine Linien" (FR-147): the tank's straight pointer line for HELP_LINE_MS, fading out at the end. */
+  private showHelpLine(tank: TankState): void {
+    const g = this.helpLine;
     this.scene.tweens.killTweensOf(g);
-    data.curveHighlight = String(n);
-    const run = { f: 0 };
-    const draw = () => {
-      g.clear();
-      const steps = 12;
-      const from = Math.max(0, run.f - 0.2);
-      g.lineStyle(8, CURVE_HIGHLIGHT, 0.9);
-      g.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const p = pointAlong(points, from + ((run.f - from) * i) / steps);
-        if (i === 0) g.moveTo(p.x, p.y);
-        else g.lineTo(p.x, p.y);
-      }
-      g.strokePath();
-      const head = pointAlong(points, run.f);
-      g.fillStyle(CURVE_HIGHLIGHT, 1);
-      g.fillCircle(head.x, head.y, 8);
-    };
-    this.scene.tweens.add({
-      targets: run,
-      f: 1,
-      duration: CURVE_HIGHLIGHT_MS,
-      ease: 'Sine.easeInOut',
-      onStart: draw,
-      onUpdate: draw,
-      onComplete: () => {
-        g.clear();
-        data.curveHighlight = '';
-      },
-      onStop: () => {
-        g.clear();
-        data.curveHighlight = '';
-      },
-    });
+    g.clear().setAlpha(1);
+    this.drawStraightLine(g, tank);
+    this.helpLineTank = tank.id;
+    this.scene.game.canvas.dataset.helpLine = String(tank.position);
+    this.scene.tweens.add({ targets: g, alpha: 0, delay: HELP_LINE_MS - 300, duration: 300, onComplete: () => this.hideHelpLine() });
+  }
+
+  private hideHelpLine(): void {
+    if (this.helpLineTank === null) return;
+    this.scene.tweens.killTweensOf(this.helpLine);
+    this.helpLine.clear().setAlpha(1);
+    this.helpLineTank = null;
+    this.scene.game.canvas.dataset.helpLine = '';
   }
 
   private onDown(p: Phaser.Input.Pointer): void {
@@ -996,21 +951,4 @@ export class NumberLineView {
 function lineSize(size: TickSize): [number, number] {
   if (size === 'major') return [MAJOR_TICK, 4];
   return size === 'medium' ? [MEDIUM_TICK, 3] : [MINOR_TICK, 2];
-}
-
-/** A dashed line along a polyline, stopping where the end triangle starts (amendment 21). */
-function drawDashed(g: Phaser.GameObjects.Graphics, points: Point[]): void {
-  const total = curveLength(points);
-  const stop = total - POINTER_TRIANGLE;
-  for (let d = 0; d < stop; d += POINTER_DASH + POINTER_GAP) {
-    const steps = 4;
-    const to = Math.min(d + POINTER_DASH, stop);
-    g.beginPath();
-    for (let i = 0; i <= steps; i++) {
-      const p = pointAlong(points, (d + ((to - d) * i) / steps) / total);
-      if (i === 0) g.moveTo(p.x, p.y);
-      else g.lineTo(p.x, p.y);
-    }
-    g.strokePath();
-  }
 }

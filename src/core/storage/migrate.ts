@@ -22,7 +22,7 @@ export function parseSettings(raw: unknown): Settings | null {
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
  * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
  * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Version 9 becomes version 10
- * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Version 11 becomes version 12 (amendment 21 item 18: the removed `lineStyle` values 'curved' and 'tangled' become 'straight'). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -45,6 +45,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV9,
   migrateSettingsToV10,
   migrateSettingsToV11,
+  migrateSettingsToV12,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -162,6 +163,12 @@ function migrateSettingsToV10(raw: Record<string, unknown>): Record<string, unkn
 /** Version 10 to 11 (amendment 21): adds "Gegner gleichzeitig" as 1 and "Linien" as "Gerade", unless already set. */
 function migrateSettingsToV11(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, enemiesAtOnce: raw.enemiesAtOnce ?? 1, lineStyle: raw.lineStyle ?? 'straight', version: 11 };
+}
+
+/** Version 11 to 12 (amendment 21 item 18): the product owner removed "Gebogen" and "Gebogen und verschlungen"; both become "Gerade". */
+function migrateSettingsToV12(raw: Record<string, unknown>): Record<string, unknown> {
+  const removed = raw.lineStyle === 'curved' || raw.lineStyle === 'tangled';
+  return { ...raw, ...(removed ? { lineStyle: 'straight' } : {}), version: 12 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

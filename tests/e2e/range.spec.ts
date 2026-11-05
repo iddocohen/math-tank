@@ -8,7 +8,7 @@
  * Keyboard only; state comes from data-* attributes (D4), ruler labels and pointer lines from the canvas.
  */
 import type { Page } from '@playwright/test';
-import { enemyNumber, expect, seedStorage, startButton, test, typeAndFire } from './fixtures';
+import { enemyNumber, expect, seedStorage, startRound, test, typeAndFire } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
@@ -23,11 +23,7 @@ async function startFreePlay(page: Page, stored: Settings) {
   expect(validateSettings(stored)).toEqual({ ok: true });
   await seedStorage(page, { [SETTINGS_KEY]: stored });
   await page.goto('/?seed=5&mode=ruler');
-  await expect(startButton(page)).toBeVisible();
-  await page.keyboard.press('Enter');
-  const overlay = page.locator('[data-phase]');
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
-  return overlay;
+  return startRound(page);
 }
 
 /** 1 away from the enemy, inside the range. */

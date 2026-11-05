@@ -260,10 +260,11 @@ describe('help and feedback texts (US5, T097, FR-033, SC-006)', () => {
 });
 
 describe('amendment 21 settings texts (FR-136, FR-144)', () => {
-  it('names "Gegner gleichzeitig" and the three line styles, each with a one-line explanation', () => {
+  it('names "Gegner gleichzeitig" and the two line styles, each with a one-line explanation', () => {
     const L = t().settings.labels;
     expect(L.enemiesAtOnce).toBe('Gegner gleichzeitig');
-    expect([L.lineStyle, L.lineStyleStraight, L.lineStyleCurved, L.lineStyleTangled]).toEqual(['Linien', 'Gerade', 'Gebogen', 'Gebogen und verschlungen']);
+    expect([L.lineStyle, L.lineStyleStraight, L.lineStyleNone]).toEqual(['Linien', 'Gerade', 'Keine Linien']);
+    expect('lineStyleCurved' in L || 'lineStyleTangled' in L).toBe(false);
     expect(t().settings.explanations.enemiesAtOnce.length).toBeGreaterThan(0);
     expect(t().settings.explanations.lineStyle.length).toBeGreaterThan(0);
   });

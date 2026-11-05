@@ -6,7 +6,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `11` | `11` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; version 11 (amendment 21) adds `enemiesAtOnce` and `lineStyle`; `migrate` upgrades version 0 to 10 data (see below) |
+| `version` | `12` | `12` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; version 11 (amendment 21) adds `enemiesAtOnce` and `lineStyle`; version 12 (amendment 21 item 18) turns the removed `lineStyle` values `'curved'` and `'tangled'` into `'straight'`; `migrate` upgrades version 0 to 11 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -32,7 +32,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
 | `aimCross` | `{ mode: 'always' \| 'upToLevel' \| 'never'; level: 1 \| 2 \| 3 \| 4 \| 5 }` | `{ mode: 'always', level: 2 }` | "Zielkreuz" (amendment 19, FR-134): the yellow target marker, its guide line, the point on the ruler and the typed-number label on the ruler. `'always'` shows it ("Immer"); `'upToLevel'` shows it while the round's `rulerLevel` is at most `level` ("Bis Zahlenstrahl-Stufe N"); `'never'` hides it ("Nie"). `level` is kept when the mode is not `'upToLevel'`, so switching back restores it. `aimCrossShown(aimCross, rulerLevel)` in `src/core/battle/aimCross.ts` decides |
 | `enemiesAtOnce` | `1 \| 2 \| 3 \| 4` | `1` | "Gegner gleichzeitig" (amendment 21, FR-136): the size of a wave in "Nur Zahlenstrahl" and in the `readPosition` searches of "Gemischt" (FR-137). 1 keeps one enemy, as before |
-| `lineStyle` | `'straight' \| 'curved' \| 'tangled'` | `'straight'` | "Linien" (amendment 21, FR-144): "Gerade", "Gebogen", "Gebogen und verschlungen". The settings page offers `'tangled'` only when `enemiesAtOnce >= 2`, and setting `enemiesAtOnce` to 1 turns a chosen `'tangled'` into `'curved'`. A stored `'tangled'` with `enemiesAtOnce` 1 stays valid and is drawn as `'curved'` (`effectiveLineStyle`) |
+| `lineStyle` | `'straight' \| 'none'` | `'straight'` | "Linien" (amendment 21, FR-144, FR-147): "Gerade" or "Keine Linien", with any `enemiesAtOnce`. `'none'` draws no pointer line; help step 1 shows the help target's straight line for about 2 seconds. The values `'curved'` and `'tangled'` of settings version 11 were removed by the product owner (amendment 21 item 18) |
 | `numberPad` | `'auto' \| 'always' \| 'never'` | `'auto'` | "Zahlenfeld" (amendment 12, FR-102): `'auto'` shows the on-screen number pad in battle when the main pointer is not fine or the screen is narrower than 1100 CSS pixels; `'always'` shows it on every screen; `'never'` hides it |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
@@ -54,6 +54,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 9** (amendment 19): `aimCross` is added with `{ mode: 'always', level: 2 }` unless already set; `version` becomes 10. Version 0 to 8 data and version 2 transfer codes go through every step.
 
 **Migration from version 10** (amendment 21): `enemiesAtOnce` is added with `1` and `lineStyle` with `'straight'` unless already set; `version` becomes 11. Version 0 to 9 data and version 2 transfer codes go through every step. The frozen transfer base (`TRANSFER_V2_SETTINGS_BASE`) gains both defaults, so codes made before amendment 21 read as 1 and `'straight'`.
+
+**Migration from version 11** (amendment 21 item 18): a `lineStyle` of `'curved'` or `'tangled'` becomes `'straight'`; `'straight'` and `'none'` stay; `version` becomes 12. Export files and transfer codes carry the settings version, so a file or code made with version 11 and a curved style reads as `'straight'`. The frozen transfer base keeps `lineStyle: 'straight'`.
 
 **Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
@@ -442,22 +444,6 @@ In comparison turns (amendment 10, replacing amendment 09 item 1), one tank stan
 - **Enemy fire** (FR-140): `deriveSeed(seed, 9, shotIndexInRound)` picks the shooter among the standing enemies; the hit decision and the near miss come from `enemyShot` as before.
 - **Attempts** (FR-143): the hit help target is recorded with its help and wrong answers; another hit enemy is recorded with `helpLevel 0` and `wrongAnswers 0`, with the same `answerableAt`.
 
-## Pointer curves (not persisted, amendment 21)
+## Pointer curves (removed by amendment 21 item 18)
 
-`pointerCurves(tanks, input)` in `src/core/view/pointerCurve.ts` returns one curve per visible tank, in screen coordinates:
-
-```ts
-interface PointerCurve {
-  tankId: string;
-  number: number;
-  points: Point[];         // from the tank's center to the tip on the ruler line (AXIS_Y); the end x is numberToX(number)
-  bow: number;             // the largest sideways distance from the end x, in world units
-  shape: 'straight' | 'arc' | 's';
-  color: number | null;    // 'tangled' only: one of LINE_COLORS, by order from left to right; null otherwise
-}
-const LINE_COLORS = [0xe69f00, 0x56b4e9, 0x009e73, 0xcc79a7];   // Okabe-Ito orange, sky blue, bluish green, reddish purple
-```
-
-- The curve runs from the tank's center down to `RULER_TOP - 8` with the sideways offset `bow * f(u)` (arc: `sin(pi u)^2`; S: `sin(pi u)^2 cos(pi u)` scaled so its largest value is 1), and from there straight down to `AXIS_Y`.
-- Seeded per tank with `deriveSeed(seed, 11, number)`: shape, side and bow from 8% to 20% of the ruler width (1440 world units). In `'tangled'` the bow is at least 12% and turns toward the nearest other tank.
-- Fairness (FR-145): every point inside the battlefield (x from 8 to 1592); no point within 6 world units of another tank's body box; in `'curved'` no crossing with an earlier curve. Candidates in order: the seeded one, the other side, the other shape, then smaller bows down to 8%; when none fits, a straight line.
+The curved pointer lines (`pointerCurves` in `src/core/view/pointerCurve.ts`, `PointerCurve`, `LINE_COLORS`) were removed with the styles "Gebogen" and "Gebogen und verschlungen". Pointer lines are the straight lines of FR-073, or none with "Keine Linien" (FR-147).

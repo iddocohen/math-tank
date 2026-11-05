@@ -1,16 +1,17 @@
 /**
- * Amendment 14 end to end (T292, FR-107 to FR-113, SC-002), keyboard only, free play on "Leicht" so three misses in a
+ * Amendment 14 end to end (T292, FR-107 to FR-113), keyboard only, free play on "Leicht" so three misses in a
  * row never cost a heart. Game state comes from the canvas test attributes (D4):
  * - `data-ground-texture` is `dirt` once the bundled texture has loaded; `data-ground-draws` counts the ground
  *   images drawn, which grows once per landscape and per crater and never per frame;
  * - `data-muzzle-flashes` grows with every shell fired, `data-explosions` with every explosion, and
- *   `data-screen-shakes` with every screen shake (none with reduced motion, `data-reduced-motion`);
- * - `data-fps` is the frame rate over the last second.
+ *   `data-screen-shakes` with every screen shake (none with reduced motion, `data-reduced-motion`).
+ * The scene's frame rate (`data-fps`, SC-002) is checked in tests/e2e/performance.spec.ts, which runs alone after every
+ * other project (T393): a frame rate measured while a dozen browsers share the machine says nothing about the game.
  * With SCREENSHOT_DIR set, the Chromium run saves the garage preview of every item that is not basic, a battle with the
  * equipped look, a fresh landscape, a landscape with craters, a firing moment and an explosion with debris.
  */
 import type { Locator, Page } from '@playwright/test';
-import { enemyNumber, expect, GAME_WAIT, seedStorage, startButton, test, waitCalmly } from './fixtures';
+import { enemyNumber, expect, GAME_WAIT, seedStorage, startButton, startRound, test, waitCalmly } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage } from '../../src/core/rewards/garage';
@@ -21,11 +22,7 @@ const easy: Settings = { ...defaultSettings(), enemyDifficulty: 'easy', roundTyp
 
 async function start(page: Page): Promise<Locator> {
   await page.goto('/?seed=3&mode=ruler');
-  await expect(startButton(page)).toBeVisible();
-  await page.keyboard.press('Enter');
-  const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
-  return overlay;
+  return startRound(page);
 }
 
 async function count(canvas: Locator, name: string): Promise<number> {
@@ -59,7 +56,7 @@ async function grows(page: Page, name: string, from: number): Promise<void> {
   await page.waitForFunction(([attr, n]) => Number(document.querySelector('canvas')?.getAttribute(attr)) > n, [name, from] as const, { polling: 'raf', timeout: GAME_WAIT });
 }
 
-test('the textured ground is drawn once per landscape and crater, shots flash, and a destroyed enemy shakes the screen', async ({ page }, info) => {
+test('the textured ground is drawn once per landscape and crater, shots flash, and a destroyed enemy shakes the screen', async ({ page }) => {
   test.setTimeout(120_000);
   await seedStorage(page, { [SETTINGS_KEY]: easy });
   const overlay = await start(page);
@@ -82,12 +79,6 @@ test('the textured ground is drawn once per landscape and crater, shots flash, a
     expect((await count(canvas, 'data-muzzle-flashes')) - flashes).toBeGreaterThanOrEqual(2);
     await page.waitForTimeout(1000);
     expect(await count(canvas, 'data-ground-draws')).toBe(after);
-  }
-
-  if (info.project.name === 'chromium') {
-    // SC-002: the frame rate over a second, measured while the scene runs. The full e2e run shares the machine with
-    // many browsers, so any one-second sample within 10 seconds may show it.
-    await expect.poll(() => count(canvas, 'data-fps'), { timeout: 10_000, intervals: [250] }).toBeGreaterThanOrEqual(30);
   }
 
   const draws = await count(canvas, 'data-ground-draws');

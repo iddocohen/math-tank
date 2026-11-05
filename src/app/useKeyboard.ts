@@ -2,8 +2,11 @@
  * One `keydown` listener on window (research R22, FR-059 to FR-062). keyToAction decides what a key does on the
  * current screen; handled keys call preventDefault so the page does not scroll and no focused button is clicked.
  * `screen` null means keys do nothing, for example while a shell is in flight.
+ * The listener is attached in a layout effect, during the commit and before the browser paints (T393): a key pressed
+ * as soon as the start screen shows is never lost. A passive effect ran after the paint, and under load a fast Enter
+ * came before the listener.
  */
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { BattleController } from '../core/battle/controller';
 import { keyToAction, type KeyAction, type KeyScreen } from './keyboard';
 import type { PlayMode } from '../core/settings/schema';
@@ -22,7 +25,7 @@ export function useKeyboard({ screen, helpLevel = 0, garage = false, modes = [],
   const latest = useRef({ screen, helpLevel, garage, modes, onAction });
   latest.current = { screen, helpLevel, garage, modes, onAction };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const { screen: current, helpLevel: level, garage: garageOn, modes: offered, onAction: handle } = latest.current;
       if (current === null || isTextField(event.target)) return;

@@ -115,13 +115,12 @@ Amendments 09 and 10 (FR-026, FR-027, FR-031, FR-043a, FR-066): the banner asks 
 - When the last enemy of a wave is destroyed, the new hills fade in and the next wave fades in after them. "Neue Landschaft" replaces the whole wave.
 - For the end-to-end tests only (D4): the canvas carries `data-pointer-lines` (the numbers of all standing tanks, ascending, as before), `data-enemy-tanks` (standing tanks that look like the enemy) and `data-help-target` (the help target's number while 2 or more enemies stand, '' otherwise); the overlay's `data-enemy-number` is the help target's number.
 
-## Pointer line styles (amendment 21, FR-144 to FR-146)
+## Pointer line styles (amendment 21, FR-144, FR-147)
 
-- "Gerade": the dashed vertical line of FR-073, unchanged.
-- "Gebogen": a dashed curve from the tank's center to its number on the ruler, bowed sideways as one arc or an S shape (`pointerCurves`), ending with the same small triangle. No two curves cross.
-- "Gebogen und verschlungen": as "Gebogen", but curves may cross; each curve and a small flag on its tank have one color from the Okabe-Ito set (orange, sky blue, bluish green, reddish purple), assigned from left to right.
-- Help step 1 with a curved style: a bright highlight moves along the help target's curve from the tank to the ruler for about 2 seconds.
-- For the end-to-end tests only (D4): the canvas carries `data-line-style` (`straight`, `curved` or `tangled`, the style drawn), `data-pointer-curves` (one `number:endX:bow` entry per curve, separated by `;`, endX and bow rounded to whole world units) and `data-curve-highlight` (the number whose curve is highlighted, '' when none).
+- "Gerade" (the default): the dashed vertical line of FR-073 under every standing enemy and decoy.
+- "Keine Linien": no pointer line under any tank; each enemy keeps its target ring. At help step 1, once the child can choose again, the help target's straight line shows for about 2 seconds, fades out over its last 0.3 seconds and hides. Help steps 2 and 3 are unchanged.
+- "Gebogen" and "Gebogen und verschlungen" were removed by the product owner (amendment 21 item 18), with the colored tank flags and the highlight along a curve.
+- For the end-to-end tests only (D4): the canvas carries `data-line-style` (`straight` or `none`), `data-pointer-lines` (the numbers of the tanks with a drawn line; empty with "Keine Linien") and `data-help-line` (the number whose line help step 1 shows with "Keine Linien", '' when none).
 
 ## Free-play turn flow (replaced by amendment 17)
 
@@ -194,7 +193,7 @@ In the garage (amendment 11, changed by amendment 19, FR-092): 0 to 9 type the n
 - "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
 - "Daten sichern" also includes the personal bests, the stars and the chosen look (amendment 11).
 - "Garage und Sterne" switch in the group Runde (on), amendment 11.
-- "Gegner gleichzeitig" (1 to 4, default 1) and "Linien" ("Gerade", "Gebogen", "Gebogen und verschlungen"; the last only while "Gegner gleichzeitig" is 2 or more) in the group with the ruler levels, each with a one-line explanation (amendment 21, FR-136, FR-144). Choosing 1 enemy while "Gebogen und verschlungen" is chosen switches "Linien" to "Gebogen".
+- "Gegner gleichzeitig" (1 to 4, default 1) and "Linien" ("Gerade" or "Keine Linien", with any number of enemies) in the group with the ruler levels, each with a one-line explanation (amendment 21, FR-136, FR-144, FR-147).
 - "Zielkreuz" in the group with the ruler levels (amendment 19, FR-134): three choices "Immer" (default), "Bis Zahlenstrahl-Stufe" and "Nie", with a level field 1 to 5 (default 2) that shows only with "Bis Zahlenstrahl-Stufe", and a one-line explanation ("Das gelbe Kreuz mit der Linie zum Zahlenstrahl.").
 - The progress page shows the star balance and the total ever earned; "Sterne zurücksetzen" asks first and then sets the balance to 0 and keeps only the basic items (amendment 19, FR-096, FR-132).
 - The group Hilfe ends with "Zeitlimit" (switch, and the seconds field 10 to 120 while it is on; moved from the group Runde by amendment 18) and "Punkt nach voller Hilfe" (switch, on), each with a one-line explanation below it (amendment 18, FR-129).

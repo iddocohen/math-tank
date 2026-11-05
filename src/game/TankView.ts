@@ -110,9 +110,6 @@ export class TankView {
   private lastLives: number | null = null;
   private hidden = false;
   private pulsing = false;
-  /** Amendment 21: the small flag in the color of the tank's line in "Gebogen und verschlungen". */
-  private readonly lineFlag: Phaser.GameObjects.Graphics;
-  private lineFlagColor: number | null = null;
   private readonly tapZone: Phaser.GameObjects.Zone;
   private tappable = false;
   private readonly mark: Phaser.GameObjects.Graphics;
@@ -151,13 +148,12 @@ export class TankView {
     drawTarget(this.target);
     this.target.setY(-TANK_BODY_HEIGHT / 2);
     this.you = createYouMarker(scene).setVisible(false);
-    this.lineFlag = scene.add.graphics().setVisible(false);
     this.mark = scene.add.graphics().setVisible(false);
     this.mark.lineStyle(6, MARK_COLOR, 1);
     this.mark.strokeCircle(0, -TANK_BODY_HEIGHT / 2, MARK_R);
     this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
     if (onTap) this.tapZone.on('pointerdown', onTap);
-    this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.hat, this.lineFlag, this.target, this.hearts, this.you, this.tapZone]);
+    this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.hat, this.target, this.hearts, this.you, this.tapZone]);
   }
 
   /** Comparison turns (amendment 10): a tap on the tank fires at its number; off outside comparison searches. */
@@ -325,24 +321,6 @@ export class TankView {
     if (on) this.scene.tweens.add({ targets: this.target, scale: TARGET_PULSE_SCALE, duration: TARGET_PULSE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
-  /**
-   * Amendment 21 (FR-144): a small flag on a pole over the tank in the color of its line, so the tangled lines stay
-   * traceable; null hides it.
-   */
-  setLineFlag(color: number | null): void {
-    if (color === this.lineFlagColor) return;
-    this.lineFlagColor = color;
-    const g = this.lineFlag.clear().setVisible(color !== null);
-    if (color === null) return;
-    const top = -TANK_BODY_HEIGHT - 46;
-    g.lineStyle(3, 0x1b1f27, 1);
-    g.lineBetween(-4, -TANK_BODY_HEIGHT - 8, -4, top);
-    g.fillStyle(0x1b1f27, 1);
-    g.fillTriangle(-6, top - 2, 24, top + 9, -6, top + 20);
-    g.fillStyle(color, 1);
-    g.fillTriangle(-3, top + 1, 19, top + 9, -3, top + 17);
-  }
-
   /** A destroyed enemy of a wave fades out after `delayMs` (amendment 21); `appear` brings it back with the next wave. */
   fadeOut(delayMs: number): void {
     if (this.hidden) return;
@@ -440,7 +418,7 @@ export class TankView {
 
   destroy(): void {
     this.youTimer?.remove();
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.lineFlag, this.flag, this.hat, this.you, this.hearts, this.recoil]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you, this.hearts, this.recoil]);
     this.tapZone.removeAllListeners();
     this.container.destroy();
   }

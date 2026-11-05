@@ -7,10 +7,15 @@
  *
  * Frame rates depend on the machine being idle, so this spec runs in its own Playwright project `performance`, after
  * every other project has finished (playwright.config.ts). `pnpm e2e --project=performance --no-deps` runs it alone.
+ * Its tests run one after the other in one worker, so they never measure each other.
+ * - The scene's own frame counter (`data-fps`, frames in the last second, SC-002) reaches at least 30 while the battle
+ *   runs. It moved here from tests/e2e/visuals.spec.ts (T393), where the parallel run measured the shared machine.
  */
-import { enemyNumber, expect, seedStorage, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, startRound, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
+
+test.describe.configure({ mode: 'default' });
 
 declare global {
   interface Window {
@@ -67,4 +72,14 @@ test('the battlefield is ready within 3 s of Enter, and a shot flies at 55 frame
   expect(frames.length).toBeGreaterThan(10);
   const fps = ((frames.length - 1) * 1000) / (frames.at(-1)! - frames[0]!);
   expect(fps).toBeGreaterThanOrEqual(55);
+});
+
+test('the battle scene reports at least 30 frames per second while it runs (SC-002)', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 } });
+  await page.goto('/?seed=3&mode=ruler');
+  await startRound(page);
+  const canvas = page.locator('canvas');
+  await expect(canvas).toHaveAttribute('data-fps', /^\d+$/);
+  // Any one-second sample within 10 seconds; the first second after the start includes loading the scene.
+  await expect.poll(async () => Number(await canvas.getAttribute('data-fps')), { timeout: 10_000, intervals: [250] }).toBeGreaterThanOrEqual(30);
 });
