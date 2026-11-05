@@ -15,10 +15,8 @@ import { LAST_STEPS } from '../progress/ladders';
 /** Logical world size (research R5). */
 export const WORLD_WIDTH = 1600;
 export const WORLD_HEIGHT = 900;
-/** Height of the tank body above the ground; the hit circle sits on its center. */
+/** Height of the tank body above the ground. */
 export const TANK_HEIGHT = 24;
-/** Radius of the circle a shell must enter to hit a tank directly. */
-export const TANK_HIT_RADIUS = 30;
 /** The shell starts this far above the tank base. */
 const MUZZLE_HEIGHT = TANK_HEIGHT + 4;
 

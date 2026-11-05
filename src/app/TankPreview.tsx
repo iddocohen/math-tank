@@ -11,14 +11,14 @@ import type { GarageItem, Look, TrailId } from '../core/rewards/items';
 import { STRIPE_COLOR, colorStripes, flagShapes, hatShapes, tankColor, trailStyle, type Shape } from '../core/rewards/looks';
 import { playerTankShapes } from '../core/view/tankDrawing';
 import { lookKey } from '../core/rewards/garage';
+import { cssColor } from '../core/view/shade';
 
 const SILHOUETTE = 0x8a9099;
 const OUTLINE = 0x1b1f27;
 
-const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 function ShapeSvg({ shape, grey }: { shape: Shape; grey?: boolean }): ReactElement {
-  const fill = (c: number) => hex(grey ? SILHOUETTE : c);
+  const fill = (c: number) => cssColor(grey ? SILHOUETTE : c);
   switch (shape.type) {
     case 'poly':
       return (
@@ -56,7 +56,7 @@ function TrailSvg({ trail, x0, y0, grey }: { trail: TrailId; x0: number; y0: num
     const tt = i / 12;
     pts.push([x0 + 70 * tt, y0 + 40 * tt - 30 * tt * tt]);
   }
-  const color = (c: number) => hex(grey ? SILHOUETTE : c);
+  const color = (c: number) => cssColor(grey ? SILHOUETTE : c);
   const offset = (k: number) => (k - (style.line.length - 1) / 2) * 3;
   return (
     <g>
@@ -117,8 +117,8 @@ export function ItemIcon({ item, grey }: { item: GarageItem; grey: boolean }): R
       viewBox = '-12 -12 24 24';
       content = (
         <g>
-          <circle r={10} fill={hex(grey ? SILHOUETTE : tankColor(id))} stroke={hex(OUTLINE)} strokeWidth={1} />
-          {colorStripes(id) && !grey && <path d="M-6,-6 L6,6 M-9,0 L0,9 M0,-9 L9,0" stroke={hex(STRIPE_COLOR)} strokeWidth={1.6} />}
+          <circle r={10} fill={cssColor(grey ? SILHOUETTE : tankColor(id))} stroke={cssColor(OUTLINE)} strokeWidth={1} />
+          {colorStripes(id) && !grey && <path d="M-6,-6 L6,6 M-9,0 L0,9 M0,-9 L9,0" stroke={cssColor(STRIPE_COLOR)} strokeWidth={1.6} />}
         </g>
       );
       break;
@@ -146,7 +146,7 @@ export function ItemIcon({ item, grey }: { item: GarageItem; grey: boolean }): R
       viewBox = '-17 -3 34 24';
       content =
         shapes.length === 0 ? (
-          <circle cx={0} cy={9} r={8} fill="none" stroke={hex(grey ? SILHOUETTE : OUTLINE)} strokeWidth={1.5} strokeDasharray="3 2" />
+          <circle cx={0} cy={9} r={8} fill="none" stroke={cssColor(grey ? SILHOUETTE : OUTLINE)} strokeWidth={1.5} strokeDasharray="3 2" />
         ) : (
           <g transform="translate(0 44) scale(1 -1)">
             {shapes.map((s, i) => (

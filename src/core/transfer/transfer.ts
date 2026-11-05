@@ -19,9 +19,8 @@ import { z } from 'zod';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { parseGarage, type Garage } from '../rewards/garage';
 import type { Look } from '../rewards/items';
-import { settingsSchema, type Settings } from '../settings/schema';
-import { validateSettings } from '../settings/validate';
-import { migrate } from '../storage/migrate';
+import type { Settings } from '../settings/schema';
+import { migrate, parseSettings } from '../storage/migrate';
 import { progressSchema } from '../storage/progressSchema';
 import type { Progress, RecentOutcome } from '../types';
 
@@ -387,7 +386,7 @@ async function readJson(bytes: Uint8Array, codec: Codec | null): Promise<unknown
 }
 
 /**
- * Reads `v1.<data>` or `v2.<data>` with the same schemas and migrations as storage (FR-120); any failure refuses the
+ * Reads `v1.<data>` (still accepted) or `v2.<data>` (written since T305) with the same schemas and migrations as storage (FR-120); any failure refuses the
  * whole code. Codes longer than 8192 characters, and compressed data that unpacks to more than 64 KB, are refused
  * (review R3).
  */
@@ -404,8 +403,8 @@ export async function decodeTransfer(code: string, opts: { codec?: Codec | null 
   if (!parsed.success) return { ok: false };
   const t = parsed.data;
 
-  const settings = settingsSchema.safeParse(migrate(t.settings, 'settings'));
-  if (!settings.success || !validateSettings(settings.data).ok) return { ok: false };
+  const settings = parseSettings(t.settings);
+  if (!settings) return { ok: false };
 
   const garage = parseGarage({ version: 1, stars: t.garage.stars, look: t.garage.look });
   if (!garage) return { ok: false };
@@ -428,7 +427,7 @@ export async function decodeTransfer(code: string, opts: { codec?: Codec | null 
   const progress = progressSchema.safeParse(migrate({ version: 1, attempts: [], skills, sessions }, 'progress'));
   if (!progress.success) return { ok: false };
 
-  const data: SaveData = { settings: settings.data, progress: progress.data, records: records.data, garage };
+  const data: SaveData = { settings, progress: progress.data, records: records.data, garage };
   return { ok: true, data, summary: transferSummary(data) };
 }
 

@@ -66,4 +66,28 @@ describe('canApplyUpdate (review R2)', () => {
     expect(canApplyUpdate({ screen: 'start', parentOpen: true, transferOpen: false })).toBe(false);
     expect(canApplyUpdate({ screen: 'start', parentOpen: false, transferOpen: true })).toBe(false);
   });
+
+  it('a failed update is tried again the next time the start screen shows, without an unhandled rejection (review L4)', async () => {
+    let fail = true;
+    let needRefresh: (() => void) | undefined;
+    let calls = 0;
+    const register: RegisterSW = (options) => {
+      needRefresh = options.onNeedRefresh;
+      expect(options.onRegisterError).toBeTypeOf('function');
+      return () => {
+        calls++;
+        return fail ? Promise.reject(new Error('offline')) : Promise.resolve();
+      };
+    };
+    const sw = createSwUpdate();
+    sw.install(register);
+    sw.setStartScreen(true);
+    needRefresh?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    fail = false;
+    sw.setStartScreen(false);
+    sw.setStartScreen(true);
+    expect(calls).toBe(2);
+  });
 });

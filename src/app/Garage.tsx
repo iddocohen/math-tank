@@ -44,7 +44,10 @@ export function Garage({ garage, onEquip, onBack }: Props): ReactElement {
     onAction: (action: KeyAction) => {
       switch (action.type) {
         case 'digit':
-          setTyped((s) => (s.length >= MAX_DIGITS ? s : s === '0' ? String(action.digit) : s + String(action.digit)));
+          setTyped((s) => {
+            if (s.length >= MAX_DIGITS) return s;
+            return s === '0' ? String(action.digit) : s + String(action.digit);
+          });
           return;
         case 'backspace':
           setTyped((s) => s.slice(0, -1));

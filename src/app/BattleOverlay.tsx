@@ -1,8 +1,8 @@
 /**
  * Battle overlay (FR-003, FR-019, FR-053, FR-063): at the bottom right the large readout of typed digits and the
  * fire button. There are no angle or power controls (amendment 01). Amendment 05 removed the −1 and +1 buttons
- * (no stepping toward the answer) and the corner health bars: each tank's health bar is drawn above it in the
- * canvas (FR-078). While the child points on the ruler the readout shows no number (FR-019), and the fire button
+ * (no stepping toward the answer) and the corner health bars; amendment 06 removed health altogether, and the
+ * child's hearts are drawn above its tank in the canvas. While the child points on the ruler the readout shows no number (FR-019), and the fire button
  * counts as pointer input (FR-076).
  * At the right side, the "Neue Landschaft" button makes a new landscape with one new enemy in the same round
  * (amendment 03, amendment 08, FR-070). It is for mouse and

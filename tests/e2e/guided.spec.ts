@@ -7,7 +7,7 @@
  * comes from the overlay's and the canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, recordPhases, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
@@ -73,6 +73,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
 
   // Tap a wrong number, 10 away (off the enemy's body): the selection moves, but no number is shown (amendment 05).
   const wrong = n - 10 >= min ? n - 10 : n + 10;
+  const phases = await recordPhases(page);
   await tapRuler(page, wrong);
   await expect(overlay).toHaveAttribute('data-selection', String(wrong));
   await expect(page.getByTestId('readout')).toHaveText('?');
@@ -81,6 +82,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await page.waitForTimeout(500);
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-turn', '0');
+  expect(await phases()).not.toContain('playerShot');
 
   // Fire: the shell lands at the wrong number, the ruler shows "10 Schritte" to the enemy, and the enemy fires back
   // at once. Its first shot of a round always misses (amendment 07, FR-043, FR-072, FR-081).

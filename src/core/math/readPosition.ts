@@ -1,13 +1,11 @@
 /**
  * "Read the ruler" challenges (amendment 02, FR-067, FR-068, data-model.md "readPosition placement").
  * The enemy is visible and no number is given; the child fires at the number under the enemy.
- * Whether a shot hits follows the tank-body rule in core/battle/hitRule.ts (amendment 04); there is no tolerance.
+ * Only the exact number hits the enemy (amendment 06, core/battle/hitRule.ts); there is no tolerance.
  */
-import { ticksFor, type RulerLevel } from '../numberline/ticks';
+import { isMultiple, ticksFor, type RulerLevel } from '../numberline/ticks';
 import type { Settings } from '../types';
 import type { Builder } from './numberLine';
-
-const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
 
 /** Ruler level used when a difficulty step does not name one. */
 export const DEFAULT_RULER_LEVEL: RulerLevel = 1;

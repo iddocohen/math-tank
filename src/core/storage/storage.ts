@@ -1,11 +1,10 @@
 import { defaultSettings } from '../settings/defaults';
-import { settingsSchema, type Settings } from '../settings/schema';
-import { validateSettings } from '../settings/validate';
+import type { Settings } from '../settings/schema';
 import type { Progress } from '../types';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { emptyGarage, parseGarage, type Garage } from '../rewards/garage';
 import type { KeyValue } from './keyValue';
-import { migrate } from './migrate';
+import { migrate, parseSettings } from './migrate';
 import { progressSchema } from './progressSchema';
 
 /** Storage keys (research R11). */
@@ -74,11 +73,8 @@ export function loadSettings(kv: KeyValue): { settings: Settings; resetReason: R
   const json = parseJson(r.text);
   if (!json.ok) return { settings: defaultSettings(), resetReason: 'invalid' };
   if (isNewer(json.value, defaultSettings().version)) return { settings: defaultSettings(), resetReason: 'newer' };
-  const parsed = settingsSchema.safeParse(migrate(json.value, 'settings'));
-  if (!parsed.success || !validateSettings(parsed.data).ok) {
-    return { settings: defaultSettings(), resetReason: 'invalid' };
-  }
-  return { settings: parsed.data, resetReason: 'none' };
+  const settings = parseSettings(json.value);
+  return settings ? { settings, resetReason: 'none' } : { settings: defaultSettings(), resetReason: 'invalid' };
 }
 
 export function saveSettings(kv: KeyValue, s: Settings): { ok: boolean } {

@@ -78,9 +78,13 @@ function names(kinds: DataKind[]): string {
   return kinds.map((k) => t().parent.dataNames[k]).join(', ');
 }
 
+/** The local date as YYYY-MM-DD, the day the parent sees on the device (review R6). */
 function today(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** iOS Safari may cancel a download whose address is revoked at once; a minute is long enough to start it (review L3). */
+const REVOKE_AFTER_MS = 60_000;
 
 /** The OpenGameArt page of the bundled dirt texture (amendment 14, FR-114). */
 const TEXTURE_PAGE = 'https://opengameart.org/node/84103';
@@ -130,13 +134,17 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   };
 
   const exportFile = () => {
-    const text = persistence.exportText(now());
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mathe-panzer-${today(now())}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    try {
+      const text = persistence.exportText(now());
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mathe-panzer-${today(now())}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+    } catch {
+      setDataNotice({ kind: 'warn', text: m.settings.data.exportFailed });
+    }
   };
 
   const importFile = async (file: File | undefined) => {

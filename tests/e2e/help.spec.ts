@@ -9,7 +9,8 @@
  * canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, recordPhases, test } from './fixtures';
+import { GUESS_RESPONSE_MS } from '../../src/core/progress/classify';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { forbiddenWords, t } from '../../src/i18n';
@@ -30,8 +31,9 @@ function wrongNumber(answer: number, offset: number): number {
 async function typeAndFire(page: Page, overlay: Locator, n: number): Promise<void> {
   await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
-  // Not a fast guess (FR-038 rule), so each miss adds 1 to the misses in a row (amendment 13).
-  await page.waitForTimeout(1_600);
+  // Not a fast guess (FR-038 rule), so each miss adds 1 to the misses in a row (amendment 13). The margin covers
+  // typing and the time between the page's clock and this wait (review P10).
+  await page.waitForTimeout(GUESS_RESPONSE_MS + 400);
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
   await page.keyboard.press('Enter');
@@ -102,6 +104,7 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
   await expect(overlay).toHaveAttribute('data-help-level', '0');
   const turn = await overlay.getAttribute('data-turn');
   const lives = await overlay.getAttribute('data-lives');
+  const phases = await recordPhases(page);
   await page.keyboard.press('h');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
   await expect(page.getByTestId('help-text')).toBeVisible();
@@ -109,4 +112,6 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-turn', turn!);
   await expect(overlay).toHaveAttribute('data-lives', lives!);
+  // Neither the child nor the enemy fired at any moment of the wait (review P9).
+  expect(await phases()).toEqual([]);
 });

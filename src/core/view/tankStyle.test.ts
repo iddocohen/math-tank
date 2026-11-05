@@ -49,12 +49,6 @@ describe('tankStyle (amendment 05, FR-077, FR-078)', () => {
     expect(luminance(enemy.color)).toBeLessThan(luminance(player.color));
   });
 
-  it('every health bar has the color of its tank', () => {
-    for (const kind of ['player', 'enemy'] as const) {
-      expect(tankStyle(kind).barColor).toBe(tankStyle(kind).color);
-    }
-  });
-
   it('the "Du" arrow shows for 3 seconds', () => {
     expect(YOU_MARKER_MS).toBe(3000);
   });

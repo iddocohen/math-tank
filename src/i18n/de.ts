@@ -91,14 +91,12 @@ export const de = {
     /** Amendment 04: both numbers and the distance after a near miss on the body (FR-072). */
     compare: (you: number, enemy: number) => {
       const d = Math.abs(you - enemy);
-      return `Du: ${you} · Gegner: ${enemy} · ${d === 1 ? '1 Schritt' : `${d} Schritte`}`;
+      return `Du: ${you} · Gegner: ${enemy} · ${stepCount(d)}`;
     },
     enemyStoodAt: (n: number) => `Der Gegner stand bei ${n}.`,
     landedAt: (n: number) => `Gelandet bei ${n}`,
-    steps: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
+    steps: stepCount,
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
-    /** Order of three numbers (decision D15): the typed number is on no tank, so no badge was placed. */
-    turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
     /** Amendment 12 (FR-102): the on-screen number pad and its keys, for screen readers. */
     numberPad: 'Zahlenfeld',
     backspace: 'Löschen',
@@ -143,7 +141,7 @@ export const de = {
     nearestTen: (n: number) => `Schau zuerst zur ${n}.`,
     countSteps: (n: number) => `Zähle ${n} Schritte.`,
     /** Step 2: the count from the landing number (or the nearest major line) to the answer. */
-    countFrom: (from: number, n: number) => `Zähle von ${from} aus ${n === 1 ? '1 Schritt' : `${n} Schritte`}.`,
+    countFrom: (from: number, n: number) => `Zähle von ${from} aus ${stepCount(n)}.`,
     zoom: 'Schau genau auf diesen Zehner.',
     /** Step 2 of addition and subtraction: the marker moves along the step path. */
     stepAnimation: 'Zähl mit, Schritt für Schritt.',
@@ -232,7 +230,7 @@ export const de = {
     resetNo: 'Abbrechen',
     resetDone: 'Der Fortschritt wurde zurückgesetzt.',
     /** Amendment 11 (FR-096): the stars of the tank garage, reset only here. */
-    stars: (n: number) => (n === 1 ? 'Sterne in der Garage: 1' : `Sterne in der Garage: ${n}`),
+    stars: (n: number) => `Sterne in der Garage: ${n}`,
     starsReset: 'Sterne zurücksetzen',
     starsResetConfirm: 'Alle Sterne löschen? Die Garage ist dann wieder leer.',
     starsResetYes: 'Ja, Sterne zurücksetzen',
@@ -248,7 +246,7 @@ export const de = {
     persistDenied: 'Der Browser darf gespeicherte Daten löschen. Bitte die Daten ab und zu sichern.',
     presetCustom: 'Eigener Zahlenraum',
     levelOption: (n: number) => `Stufe ${n}`,
-    stepsOption: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
+    stepsOption: stepCount,
     preview: (min: number, max: number, level: number) => `Vorschau: Zahlenstrahl von ${min} bis ${max}, Stufe ${level}`,
     /** Captions of the two ruler previews (FR-069, T218). */
     previewStart: 'Am Anfang',
@@ -271,6 +269,8 @@ export const de = {
         notSaved: 'Die Datei ist in Ordnung, aber Speichern hat nicht geklappt. Es wurde nichts geändert.',
       },
       readFailed: 'Die Datei konnte nicht gelesen werden.',
+      /** Review L3: the browser refused the download. */
+      exportFailed: 'Die Sicherung konnte nicht heruntergeladen werden.',
       /** FR-048a: the Home Screen keeps stored data on Safari. */
       homeScreen:
         'Tipp: Auf dem Home-Bildschirm behält der Browser die Daten sicherer. iPad: in Safari auf „Teilen“ und dann „Zum Home-Bildschirm“ tippen. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“ wählen.',

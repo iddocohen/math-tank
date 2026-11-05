@@ -121,7 +121,3 @@ export function midpointAnswers(settings: Settings): number[] {
 export const answerCandidates: Partial<Record<NumberLineKind, (settings: Settings, step: DifficultyStep) => number[]>> = {
   midpoint: midpointAnswers,
 };
-
-export function isNumberLineKind(kind: string): kind is NumberLineKind {
-  return (NUMBER_LINE_KINDS as readonly string[]).includes(kind);
-}

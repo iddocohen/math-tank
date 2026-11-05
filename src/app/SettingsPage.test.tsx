@@ -333,6 +333,45 @@ describe('SettingsPage', () => {
 });
 
 describe('SettingsPage data section (FR-048a)', () => {
+  it('"Daten sichern" names the file with the local date and keeps the address until the download started (review R6, L3)', () => {
+    vi.useFakeTimers();
+    try {
+      const kv = memoryKeyValue();
+      const persistence = createPersistence({ kv, storage: undefined });
+      // A local time whose UTC date is another day: 23:30 west of UTC, 00:30 on 6 November east of it.
+      const west = new Date(2026, 10, 5, 12).getTimezoneOffset() > 0;
+      const late = west ? new Date(2026, 10, 5, 23, 30) : new Date(2026, 10, 6, 0, 30);
+      const localDay = west ? '2026-11-05' : '2026-11-06';
+      render(<SettingsPage persistence={persistence} onSaved={vi.fn()} onClose={vi.fn()} now={() => late} />);
+      const revokeObjectURL = vi.fn();
+      Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:test'), revokeObjectURL });
+      const names: string[] = [];
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        names.push(this.download);
+      });
+      fireEvent.click(screen.getByRole('button', { name: m.parent.exportData }));
+      expect(names).toEqual([`mathe-panzer-${localDay}.json`]);
+      vi.advanceTimersByTime(100);
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(60_000);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('"Daten sichern" says so when the download cannot start (review L3)', () => {
+    setup();
+    Object.assign(URL, {
+      createObjectURL: vi.fn(() => {
+        throw new Error('blocked');
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    fireEvent.click(screen.getByRole('button', { name: m.parent.exportData }));
+    expect(screen.getByText(m.settings.data.exportFailed)).toBeTruthy();
+  });
+
   it('"Daten sichern" downloads the export as mathe-panzer-<date>.json', () => {
     setup();
     const created: Blob[] = [];

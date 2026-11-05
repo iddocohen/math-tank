@@ -1,7 +1,6 @@
-import { settingsSchema, type Settings } from '../settings/schema';
-import { validateSettings } from '../settings/validate';
+import type { Settings } from '../settings/schema';
 import type { Progress } from '../types';
-import { migrate } from './migrate';
+import { migrate, parseSettings } from './migrate';
 import { progressSchema } from './progressSchema';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { parseGarage, type Garage } from '../rewards/garage';
@@ -40,8 +39,8 @@ export function importData(text: string): ImportResult {
   const file = raw as Record<string, unknown>;
   if (file.app !== EXPORT_APP) return { ok: false, reason: 'wrongApp' };
 
-  const settings = settingsSchema.safeParse(migrate(file.settings, 'settings'));
-  if (!settings.success || !validateSettings(settings.data).ok) return { ok: false, reason: 'invalidSettings' };
+  const settings = parseSettings(file.settings);
+  if (!settings) return { ok: false, reason: 'invalidSettings' };
 
   const progress = progressSchema.safeParse(migrate(file.progress, 'progress'));
   if (!progress.success) return { ok: false, reason: 'invalidProgress' };
@@ -61,5 +60,5 @@ export function importData(text: string): ImportResult {
     if (garage === null) return { ok: false, reason: 'invalidGarage' };
   }
 
-  return { ok: true, settings: settings.data, progress: progress.data, records, garage };
+  return { ok: true, settings, progress: progress.data, records, garage };
 }

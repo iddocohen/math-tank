@@ -19,6 +19,7 @@ export interface RegisterOptions {
   immediate?: boolean;
   onNeedRefresh?: () => void;
   onOfflineReady?: () => void;
+  onRegisterError?: (error: unknown) => void;
 }
 
 /** The shape of registerSW from virtual:pwa-register: returns the function that applies the waiting version. */
@@ -37,7 +38,10 @@ export function createSwUpdate(): SwUpdate {
   const applyIfAllowed = () => {
     if (!waiting || !onStart || !update) return;
     waiting = false;
-    void update(true);
+    // Review L4: a failed update (for example offline) waits for the next time the start screen shows.
+    update(true).catch(() => {
+      waiting = true;
+    });
   };
 
   return {
@@ -48,6 +52,10 @@ export function createSwUpdate(): SwUpdate {
         onNeedRefresh() {
           waiting = true;
           applyIfAllowed();
+        },
+        onRegisterError(error) {
+          // The game still works from the network; offline play and updates wait for the next load (review L4).
+          console.warn('Service worker registration failed', error);
         },
       });
     },

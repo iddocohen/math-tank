@@ -33,8 +33,14 @@ export function createSpeaker(speech: SpeechLike | null = browserSpeech()): Brow
   const germanVoice = (): SpeechSynthesisVoice | null => {
     if (!speech) return null;
     try {
-      const voices = speech.synth.getVoices();
-      return voices.find((v) => isGerman(v) && /^de[-_]DE$/i.test(v.lang)) ?? voices.find(isGerman) ?? null;
+      // Review R7: a voice on the device first, so the challenge text is not sent to a speech server.
+      const all = speech.synth.getVoices();
+      const local = all.filter((v) => v.localService);
+      for (const voices of [local, all]) {
+        const found = voices.find((v) => isGerman(v) && /^de[-_]DE$/i.test(v.lang)) ?? voices.find(isGerman);
+        if (found) return found;
+      }
+      return null;
     } catch {
       return null;
     }

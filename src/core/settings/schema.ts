@@ -54,7 +54,7 @@ export const settingsSchema = z.object({
   /** How a round ends (amendment 06, FR-082): until the 3 hearts are gone, or after `roundLength` destroyed enemies. */
   roundType: z.enum(['untilHearts', 'enemyCount']),
   /** Enemies per round for `roundType: 'enemyCount'`, 1 to 20. */
-  roundLength: z.number(),
+  roundLength: z.number().int(),
   adaptive: z.boolean(),
   freePlay: z.boolean(),
   noDamage: z.boolean(),
@@ -62,7 +62,7 @@ export const settingsSchema = z.object({
   showClock: z.boolean(),
   /** "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086). */
   showRecords: z.boolean(),
-  timeLimitSeconds: z.number().nullable(),
+  timeLimitSeconds: z.number().int().nullable(),
   /** "Garage und Sterne" (amendment 11, FR-096): the garage, the star total, the unlock line and the chosen look. */
   garage: z.boolean(),
   /** "Zahlenfeld" (amendment 12, FR-102): the on-screen number pad in battle, automatic, always or never. */

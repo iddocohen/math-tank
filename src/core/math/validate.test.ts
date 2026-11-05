@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
 import type { Challenge, Settings } from '../types';
-import { checkAnswer, validateChallenge } from './validate';
+import { validateChallenge } from './validate';
 
 const settings: Settings = defaultSettings(); // range 0 to 100, minEnemyGap 15
 
@@ -192,15 +192,5 @@ describe('validateChallenge comparison rules (T086, FR-027, amendment 09)', () =
   it('reports an order answer, which no kind has since amendment 09', () => {
     const c = { ...greater([47, 74], 74), orderAnswer: [47, 74] } as Challenge;
     expect(validateChallenge(c, settings, 100).some((e) => e.includes('order'))).toBe(true);
-  });
-});
-
-describe('checkAnswer (FR-029)', () => {
-  it('accepts only the exact answer', () => {
-    const c = challenge({});
-    expect(checkAnswer(c, 50)).toBe(true);
-    expect(checkAnswer(c, 49)).toBe(false);
-    expect(checkAnswer(c, 51)).toBe(false);
-    expect(checkAnswer(c, 50.4)).toBe(false);
   });
 });

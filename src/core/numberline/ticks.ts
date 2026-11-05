@@ -54,7 +54,10 @@ export function labelFontSize(t: Tick, labelRows: 1 | 2, view: { min: number; ma
   return labelRows === 2 ? LABEL_FONT.small : LABEL_FONT.minor;
 }
 
-const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
+/** True when v is a whole multiple of step, also for negative v. */
+export function isMultiple(v: number, step: number): boolean {
+  return ((v % step) + step) % step === 0;
+}
 
 /** FR-016 width table (amended by amendment 02). */
 export function stepsFor(view: { min: number; max: number }): { majorStep: number; minorStep: number } {
@@ -114,7 +117,11 @@ export function ticksFor(
   // Medium lines (T235): half of each major step, on levels 1 to 3, when that half lies on the minor grid.
   const half = majorStep / 2;
   const hasMedium = level <= 3 && Number.isInteger(half) && isMultiple(half, minorStep);
-  const sizeOf = (value: number): TickSize => (isMultiple(value, majorStep) ? 'major' : hasMedium && isMultiple(value, half) ? 'medium' : 'minor');
+  const sizeOf = (value: number): TickSize => {
+    if (isMultiple(value, majorStep)) return 'major';
+    if (hasMedium && isMultiple(value, half)) return 'medium';
+    return 'minor';
+  };
   const ticks: Tick[] = lineValues(min, max, majorStep, minorStep).map((value) => ({
     value,
     major: isMultiple(value, majorStep),

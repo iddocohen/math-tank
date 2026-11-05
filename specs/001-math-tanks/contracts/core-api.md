@@ -84,7 +84,6 @@ carveCrater(t: Heightmap, cx: number, cy: number, radius: number, floor: number)
 surfaceY(t: Heightmap, x: number): number
 simulateShot(input: { origin: Point; angleDeg: number; power: number; terrain: Heightmap; targets: Array<{ id: string; x: number; y: number; radius: number }>; worldWidth: number; worldHeight: number }): { path: Point[]; impact: Point; hitTargetId: string | null; outOfBounds: boolean }
 BLAST_RADIUS = 60   // crater size; damageAt and MAX_DAMAGE are removed by amendment 06 (no health)
-solveAim(input: { origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number; hits: boolean; missDistance: number }   // enemy only (R18)
 
 // amendment 01: the player's fixed cannon
 FIXED_ANGLE_DEG = 65; MAX_ARC_ANGLE_DEG = 85; ARC_ANGLE_STEP_DEG = 5
@@ -92,7 +91,7 @@ solveArcToX(input: { origin: Point; targetX: number; towardRight: boolean; terra
   { angleDeg: number; power: number; path: Point[]; impact: Point; lifted: boolean }
 ```
 
-Guarantees: fixed timestep (1/120 s); identical output for identical input; terrain never below `floor`; `solveAim` always returns the shot whose impact is closest to the target, taking terrain into account; `hits` is true when that impact is within 10 units of the target. `solveArcToX` tries 65 degrees, then 70, 75, 80 and 85, and for each angle searches the power by bisection until `|impact.x - targetX| <= tolerance` (the caller passes a quarter of one unit's width, so `xToNumber(impact.x)` is the chosen number). It ignores tank hit boxes in flight. When no angle clears the terrain, it returns the 85-degree arc lifted over the highest terrain between muzzle and target (`lifted: true`) and ending at `targetX` on the surface. One call takes under 20 ms. `CHARGED_BLAST_RADIUS` is removed (FR-011 removed).
+Guarantees: fixed timestep (1/120 s); identical output for identical input; terrain never below `floor`; `solveAim` was removed in the review fixes (T325): nothing used it after amendment 07. `solveArcToX` tries 65 degrees, then 70, 75, 80 and 85, and for each angle searches the power by bisection until `|impact.x - targetX| <= tolerance` (the caller passes a quarter of one unit's width, so `xToNumber(impact.x)` is the chosen number). It ignores tank hit boxes in flight. When no angle clears the terrain, it returns the 85-degree arc lifted over the highest terrain between muzzle and target (`lifted: true`) and ending at `targetX` on the surface. One call takes under 20 ms. `CHARGED_BLAST_RADIUS` is removed (FR-011 removed).
 
 ## `core/ai`
 

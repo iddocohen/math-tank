@@ -7,6 +7,11 @@
  * at a glance, also for the darker shadow shades against the dark soil.
  */
 
+/** A color number (0xRRGGBB) as a CSS color string (#rrggbb). */
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
 export interface TankShades {
   base: number;
   /** Lighter shade on the top of the body. */

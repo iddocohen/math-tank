@@ -11,10 +11,11 @@
  * and starts a new search with a new enemy.
  *
  * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
- * Amendment 07: the enemy fires once right after every shot of the child that does not destroy it; a seeded draw
- * decides whether its shell hits (ai/enemy.ts). Amendment 13: the enemy zeroes in on the child's misses in a row
- * (RoundState.missStreak, FR-098, FR-099) and every destroyed enemy brings new hills (renewTerrain, FR-101). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
- * roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
+ * Amendment 07: the enemy fires once right after every shot of the child that does not destroy it. Amendment 13: there
+ * is no random hit chance; the enemy zeroes in on the child's misses in a row and hits once the streak reaches the
+ * difficulty's limit (RoundState.missStreak, ai/enemy.ts, FR-098, FR-099), and every destroyed enemy brings new hills
+ * (renewTerrain, FR-101). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are
+ * gone, or with roundType 'enemyCount' after roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
 import { createRng, deriveSeed } from '../rng';
 import type { BattleState, InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';

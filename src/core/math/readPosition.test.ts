@@ -6,7 +6,7 @@ import { withRange } from '../settings/validate';
 import type { Settings } from '../types';
 import { minEnemyGap } from './gaps';
 import { generateChallenge } from './generate';
-import { checkAnswer, validateChallenge } from './validate';
+import { validateChallenge } from './validate';
 
 /** The top ladder step per skill: the generator follows the parent settings unchanged. */
 const PARENT_STEPS = LAST_STEPS;
@@ -90,25 +90,13 @@ describe('readPosition challenge (FR-067, FR-068, US9 scenario 5)', () => {
     }
   });
 
-  it('challenges carry no hit tolerance: the tank-body rule decides hits (amendment 04)', () => {
+  it('challenges carry no hit tolerance: only the exact number hits (amendment 06)', () => {
     for (const [min, max] of ranges) {
       const settings = rangeSettings(min, max);
       for (const level of LEVELS) {
         for (let seed = 0; seed < 50; seed++) {
           expect(readPosition(settings, level, seed, min)).not.toHaveProperty('hitTolerance');
         }
-      }
-    }
-  });
-
-  it('checkAnswer accepts only the exact answer on every ruler level', () => {
-    const settings = rangeSettings(0, 100);
-    for (const level of LEVELS) {
-      for (let seed = 0; seed < 50; seed++) {
-        const c = readPosition(settings, level, seed, 0);
-        expect(checkAnswer(c, c.answer)).toBe(true);
-        expect(checkAnswer(c, c.answer + 1)).toBe(false);
-        expect(checkAnswer(c, c.answer - 1)).toBe(false);
       }
     }
   });

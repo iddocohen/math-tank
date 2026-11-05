@@ -5,7 +5,7 @@
  * All e2e specs import `test` and `expect` from here instead of @playwright/test. A spec that opens its own
  * browser context adds `silenceAudio` to that context with `context.addInitScript(silenceAudio)`.
  */
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
 export function silenceAudio(): void {
   const w = window as unknown as Record<string, unknown>;
@@ -37,6 +37,20 @@ export function silenceAudio(): void {
  * slowdowns are caught by tests/e2e/performance.spec.ts (start time and frame rate), not by these waits.
  */
 export const GAME_WAIT = 30_000;
+
+/**
+ * Records every `data-phase` the battle overlay takes from now on (review P9). A check that something did not happen
+ * (no shot after a tap or a help request) then reads every phase of the waiting time, not only the last one, so a shot
+ * that started and ended within the wait still fails the check.
+ */
+export async function recordPhases(page: Page): Promise<() => Promise<string[]>> {
+  await page.getByTestId('battle-overlay').evaluate((el) => {
+    const w = window as unknown as { __phases: string[] };
+    w.__phases = [];
+    new MutationObserver(() => w.__phases.push(el.getAttribute('data-phase') ?? '')).observe(el, { attributes: true, attributeFilter: ['data-phase'] });
+  });
+  return () => page.evaluate(() => (window as unknown as { __phases: string[] }).__phases);
+}
 
 export const test = base.extend({
   page: async ({ page }, use) => {

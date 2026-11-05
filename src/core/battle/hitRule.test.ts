@@ -62,7 +62,7 @@ describe('shotKind (amendment 06, FR-066)', () => {
 describe('enemyHitsPlayer (amendment 06, FR-006)', () => {
   const player: TankState = { id: 'player', kind: 'player', position: 0, x: 200, y: 300, alive: true };
 
-  it('a shell that entered the player\'s hit circle hits', () => {
+  it('an enemy shot decided as a hit (hitTargetId) hits the player', () => {
     expect(enemyHitsPlayer({ x: 900, y: 300 }, 'player', player)).toBe(true);
   });
 

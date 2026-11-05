@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultSettings, RANGE_PRESETS } from './defaults';
 import { settingsSchema, type Settings } from './schema';
 import { validateSettings, withRange, type SettingsError } from './validate';
+import { parseSettings } from '../storage/migrate';
 
 function clone(s: Settings): Settings {
   return structuredClone(s);
@@ -290,6 +291,22 @@ describe('addition.maxOperand limit (review R5)', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors).toContainEqual({ key: 'additionMaxOperand', path: 'addition.maxOperand' });
     expect(validateSettings({ ...s, addition: { ...s.addition, maxOperand: 20 } })).toEqual({ ok: true });
+  });
+});
+
+describe('whole numbers and one parse function (review T4)', () => {
+  it('the schema accepts only whole numbers for roundLength and timeLimitSeconds', () => {
+    expect(settingsSchema.safeParse({ ...defaultSettings(), roundLength: 5.5 }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...defaultSettings(), timeLimitSeconds: 30.5 }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...defaultSettings(), timeLimitSeconds: 30 }).success).toBe(true);
+  });
+
+  it('parseSettings migrates, checks the schema and the rules, and gives null for anything invalid', () => {
+    const { numberPad: _drop, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
+    void _drop;
+    expect(parseSettings(v5)).toMatchObject({ version: 7, numberPad: 'auto', freePlay: true });
+    expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
+    expect(parseSettings('nope')).toBeNull();
   });
 });
 

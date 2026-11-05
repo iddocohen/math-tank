@@ -8,7 +8,7 @@ interface Spoken {
 }
 
 /** A stand-in for window.speechSynthesis that records what is spoken and cancelled. */
-function fakeSpeech(voices: Array<{ lang: string; name: string }>) {
+function fakeSpeech(voices: Array<{ lang: string; name: string; localService?: boolean }>) {
   const log: Array<Spoken | 'cancel'> = [];
   const synth = {
     getVoices: () => voices as unknown as SpeechSynthesisVoice[],
@@ -74,5 +74,14 @@ describe('Speaker (FR-055, research R14)', () => {
     expect(spoken[0]!.text.length).toBeGreaterThan(0);
     expect(spoken[0]!.text.split(' ').length).toBeLessThanOrEqual(3);
     expect(spoken[0]!.lang).toBe('de-DE');
+  });
+
+  it('prefers a German voice on the device to a network voice, so no challenge text leaves the device (review R7)', () => {
+    const { speech, log } = fakeSpeech([
+      { lang: 'de-DE', name: 'Google Deutsch', localService: false },
+      { lang: 'de-DE', name: 'Anna', localService: true },
+    ]);
+    createSpeaker(speech).speak('Finde 7');
+    expect(log).toContainEqual({ text: 'Finde 7', lang: 'de-DE', voice: 'Anna' });
   });
 });

@@ -1,4 +1,4 @@
-/** Challenge validation and answer checking (FR-029, data-model.md "Validation"). */
+/** Challenge validation (FR-029, data-model.md "Validation"). */
 import type { Challenge, Settings } from '../types';
 import { arithmeticErrors } from './arithmetic';
 import { comparisonErrors } from './comparison';
@@ -97,12 +97,4 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
   }
 
   return errors;
-}
-
-/**
- * Accepts only the exact answer, for every kind (amendment 09 removed the order3 sequence).
- * Whether a shot damages the enemy is decided by core/battle/hitRule.ts (amendment 04).
- */
-export function checkAnswer(c: Challenge, answer: number): boolean {
-  return answer === c.answer;
 }

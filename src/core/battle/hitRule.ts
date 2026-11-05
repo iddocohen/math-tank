@@ -31,8 +31,9 @@ export function shotKind(fired: number, target: number, range: { min: number; ma
 }
 
 /**
- * An enemy shell hits the child's tank when it entered the tank's hit circle (`hitTargetId`) or landed on the
- * tank's body: within half the tank width of its x. A shell next to the tank does nothing.
+ * An enemy shell hits the child's tank when the enemy's shot was decided as a hit (`hitTargetId`, set by the
+ * misses-in-a-row rule of amendment 13 in ai/enemy.ts) or landed on the tank's body: within half the tank width of its
+ * x. A shell next to the tank does nothing.
  */
 export function enemyHitsPlayer(impact: Point, hitTargetId: string | null, player: TankState): boolean {
   if (hitTargetId !== null) return hitTargetId === player.id;

@@ -18,7 +18,7 @@ import type { Heightmap } from '../core/types';
 import { FLOOR } from '../core/physics/terrain';
 import { terrainPolygon, toScreenY } from '../core/view/geometry';
 import { distantHills, pebbles, scorchMarks, tufts, type Pebble, type Tuft } from '../core/view/groundArt';
-import { GROUND_COLORS } from '../core/view/shade';
+import { cssColor, GROUND_COLORS } from '../core/view/shade';
 import { TEX } from './textures';
 
 const BEDROCK_EDGE = '#2a1d13';
@@ -43,7 +43,6 @@ interface Slot {
   image: Phaser.GameObjects.Image;
 }
 
-const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 export class TerrainView {
   private current: Slot;
@@ -149,7 +148,7 @@ export class TerrainView {
       for (const [x, y] of layer.points) ctx.lineTo(x, y);
       ctx.lineTo(w, floorY);
       ctx.closePath();
-      ctx.fillStyle = hex(layer.color);
+      ctx.fillStyle = cssColor(layer.color);
       ctx.fill();
     }
 
@@ -160,7 +159,7 @@ export class TerrainView {
     outline.closePath();
     ctx.save();
     ctx.clip(outline);
-    ctx.fillStyle = this.pattern ?? hex(GROUND_COLORS.dirt);
+    ctx.fillStyle = this.pattern ?? cssColor(GROUND_COLORS.dirt);
     ctx.fillRect(0, 0, w, h);
     // A warm shade so the texture sits with the grass and the sky.
     ctx.fillStyle = 'rgba(70, 40, 15, 0.22)';
@@ -184,7 +183,7 @@ export class TerrainView {
       const y = sy(p.x) + p.depth;
       ctx.beginPath();
       ctx.ellipse(p.x, y, p.rx, p.ry, 0, 0, Math.PI * 2);
-      ctx.fillStyle = hex(p.color);
+      ctx.fillStyle = cssColor(p.color);
       ctx.fill();
       ctx.beginPath();
       ctx.ellipse(p.x - p.rx * 0.3, y - p.ry * 0.35, p.rx * 0.45, p.ry * 0.35, 0, 0, Math.PI * 2);
@@ -228,13 +227,13 @@ export class TerrainView {
     strokeRuns(scorched, SCORCH_WIDTH * 2, 'rgba(43, 29, 18, 0.35)', 10);
     strokeRuns(scorched, SCORCH_WIDTH, 'rgba(43, 29, 18, 0.85)', 4);
     ctx.restore();
-    strokeRuns(grass, GRASS_WIDTH, hex(GROUND_COLORS.grass));
+    strokeRuns(grass, GRASS_WIDTH, cssColor(GROUND_COLORS.grass));
     strokeRuns(grass, 3, '#82c35a', -4);
     for (const tuft of this.tufts) {
       const x = Math.round(tuft.x);
       if (x >= terrain.length || marks?.[x] === 1) continue;
       const y = sy(x) - 3;
-      ctx.fillStyle = hex(GROUND_COLORS.tuft);
+      ctx.fillStyle = cssColor(GROUND_COLORS.tuft);
       for (const dx of [-3, 0, 3]) {
         ctx.beginPath();
         ctx.moveTo(x + dx - 1.6, y);
@@ -246,7 +245,7 @@ export class TerrainView {
     }
 
     // Bedrock strip from the floor line down, the full width of the world.
-    ctx.fillStyle = hex(GROUND_COLORS.bedrock);
+    ctx.fillStyle = cssColor(GROUND_COLORS.bedrock);
     ctx.fillRect(0, floorY, w, h - floorY);
     ctx.lineWidth = 4;
     ctx.lineCap = 'butt';

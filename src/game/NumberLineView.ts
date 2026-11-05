@@ -82,6 +82,7 @@ import {
   type RulerLabelBox,
 } from '../core/view/rulerText';
 import { pointerLine } from '../core/view/pointerLine';
+import { cssColor } from '../core/view/shade';
 import { stepFrames, stepMs, type StepFrame } from '../core/view/stepFrames';
 import { TEX } from './textures';
 import { t } from '../i18n';
@@ -295,7 +296,7 @@ export class NumberLineView {
   /** A help number on a dark chip under the ruler line; the ruler labels under it are hidden (T228). */
   private helpChip(key: string, x: number, n: number, priority: number): void {
     const help = this.chipSources.help.filter((c) => c.chip.key !== key);
-    help.push({ chip: { key, x, text: String(n), priority }, style: { fg: hex(HELP), bg: RULER_BG } });
+    help.push({ chip: { key, x, text: String(n), priority }, style: { fg: cssColor(HELP), bg: RULER_BG } });
     this.setChips('help', help);
   }
 
@@ -434,7 +435,7 @@ export class NumberLineView {
 
   private helpText(x: number, y: number, text: string, size: number, color: number): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: hex(color), stroke: '#14203a', strokeThickness: 7 })
+      .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: cssColor(color), stroke: '#14203a', strokeThickness: 7 })
       .setDepth(14);
     this.helpTexts.push(t);
     return t;
@@ -532,7 +533,7 @@ export class NumberLineView {
   /** A stop's number on a dark chip under the ruler line; the ruler labels under it are hidden (T228). */
   private stepLabel(n: number, min: number, max: number): void {
     const chip: Chip = { key: `stop:${n}`, x: numberToX(n, min, max), text: String(n), priority: CHIP_PRIORITY.stop };
-    this.setChips('steps', [...this.chipSources.steps, { chip, style: { fg: hex(START), bg: RULER_BG } }]);
+    this.setChips('steps', [...this.chipSources.steps, { chip, style: { fg: cssColor(START), bg: RULER_BG } }]);
   }
 
   private stopSteps(): void {
@@ -843,7 +844,3 @@ function lineSize(size: TickSize): [number, number] {
   return size === 'medium' ? [MEDIUM_TICK, 3] : [MINOR_TICK, 2];
 }
 
-/** A colour number as a CSS colour for Phaser text. */
-function hex(color: number): string {
-  return `#${color.toString(16).padStart(6, '0')}`;
-}

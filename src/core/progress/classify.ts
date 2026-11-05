@@ -45,6 +45,8 @@ export function isFastGuess(a: Pick<ClassifyInput, 'responseMs' | 'wrongAnswerTi
 export function classifyAttempt(a: ClassifyInput): Classification {
   const independent = a.solved && a.exact && a.helpLevel === 0 && a.wrongAnswers === 0;
   const guess = a.solved && isFastGuess(a);
-  const outcome: RecentOutcome = !a.solved ? 'unsolved' : independent ? 'independent' : 'assisted';
+  let outcome: RecentOutcome = 'assisted';
+  if (!a.solved) outcome = 'unsolved';
+  else if (independent) outcome = 'independent';
   return { independent, guess, outcome };
 }

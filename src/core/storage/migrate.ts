@@ -1,4 +1,15 @@
 import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings/defaults';
+import { settingsSchema, type Settings } from '../settings/schema';
+import { validateSettings } from '../settings/validate';
+
+/**
+ * Settings from storage, an export file or a transfer code (review T4): migrated to the current version, checked by
+ * the schema and by every settings rule. Null when anything fails; the caller decides what that means.
+ */
+export function parseSettings(raw: unknown): Settings | null {
+  const parsed = settingsSchema.safeParse(migrate(raw, 'settings'));
+  return parsed.success && validateSettings(parsed.data).ok ? parsed.data : null;
+}
 
 /**
  * Upgrades older stored versions to the current one before schema validation (research R11).
