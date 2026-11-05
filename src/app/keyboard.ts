@@ -2,6 +2,7 @@
  * Keyboard map (contracts/ui-flows.md, FR-059 to FR-062, research R22).
  * Pure: keyToAction turns one key event into an action for the current screen, or null when the key does nothing.
  * Keys with Ctrl, Alt or Meta stay with the browser, repeated Enter and Space are ignored, and no key opens the parent gate.
+ * Amendment 05: the arrow keys do nothing; only digits, Minus, Backspace, Enter, Space, H and Escape act.
  */
 import type { Digit } from '../core/battle/entry';
 
@@ -24,7 +25,6 @@ export type KeyAction =
   | { type: 'minus' }
   | { type: 'backspace' }
   | { type: 'confirm' }
-  | { type: 'nudge'; delta: 1 | -1 | 10 | -10 }
   | { type: 'help' }
   | { type: 'pause' }
   | { type: 'resume' }
@@ -35,8 +35,6 @@ export interface KeyContext {
   /** Help level of the current challenge; 3 is the solution step. */
   helpLevel?: number;
 }
-
-const NUDGES: Record<string, 1 | -1 | 10 | -10> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: 10, ArrowDown: -10 };
 
 export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyContext = {}): KeyAction | null {
   if (event.ctrlKey || event.altKey || event.metaKey) return null;
@@ -62,8 +60,6 @@ export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyConte
   if (key === 'Backspace') return { type: 'backspace' };
   if (isEnter) return { type: 'confirm' };
   if (isSpace) return solutionStep ? { type: 'confirm' } : null;
-  const delta = NUDGES[key];
-  if (delta !== undefined) return { type: 'nudge', delta };
   if (key === 'h' || key === 'H') return solutionStep ? null : { type: 'help' };
   if (key === 'Escape') return { type: 'pause' };
   return null;

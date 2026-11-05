@@ -62,12 +62,27 @@ describe('keyToAction: Enter and Space (FR-061, FR-062)', () => {
 });
 
 describe('keyToAction: arrows, help and pause', () => {
-  it('maps arrows to nudges of plus and minus 1 and 10 in battle', () => {
-    expect(keyToAction(key('ArrowLeft'), 'battle')).toEqual({ type: 'nudge', delta: -1 });
-    expect(keyToAction(key('ArrowRight'), 'battle')).toEqual({ type: 'nudge', delta: 1 });
-    expect(keyToAction(key('ArrowUp'), 'battle')).toEqual({ type: 'nudge', delta: 10 });
-    expect(keyToAction(key('ArrowDown'), 'battle')).toEqual({ type: 'nudge', delta: -10 });
-    expect(keyToAction(key('ArrowLeft'), 'start')).toBeNull();
+  it('arrow keys do nothing on any screen or help level (amendment 05, FR-061)', () => {
+    for (const screen of SCREENS) {
+      for (const level of [0, 1, 2, 3]) {
+        for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) {
+          expect(keyToAction(key(k), screen, { helpLevel: level }), `${screen} ${level} ${k}`).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('in battle only digits, minus, Backspace, Enter, Space at the solution step, H and Escape act (amendment 05, FR-062)', () => {
+    const acting = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', 'Backspace', 'Enter', ' ', 'h', 'H', 'Escape']);
+    const printable = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i));
+    const named = ['Tab', 'Home', 'End', 'PageUp', 'PageDown', 'Delete', 'Insert', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Enter', 'Escape'];
+    const fKeys = Array.from({ length: 12 }, (_, i) => `F${i + 1}`);
+    for (const k of [...printable, ...named, ...fKeys]) {
+      // Space acts only at the solution step and H only before it, so both levels are asked.
+      const action = keyToAction(key(k), 'battle', { helpLevel: 3 }) ?? keyToAction(key(k), 'battle');
+      if (acting.has(k)) expect(action, JSON.stringify(k)).not.toBeNull();
+      else expect(action, JSON.stringify(k)).toBeNull();
+    }
   });
 
   it('maps h and H to help in battle, but not at the solution step', () => {
@@ -103,7 +118,7 @@ describe('keyToAction: ignored keys (research R22, FR-045)', () => {
   });
 
   it('no key returns an action that opens the parent gate', () => {
-    const allowed: KeyAction['type'][] = ['digit', 'minus', 'backspace', 'confirm', 'nudge', 'help', 'pause', 'resume', 'start', 'newRound'];
+    const allowed: KeyAction['type'][] = ['digit', 'minus', 'backspace', 'confirm', 'help', 'pause', 'resume', 'start', 'newRound'];
     const keys = ['g', 'G', 'p', 'P', 'e', 's', 'Enter', ' ', 'Escape', 'Tab', 'F1', 'Home', 'End', 'Delete', '1', '-', 'h', 'ArrowUp'];
     for (const screen of SCREENS) {
       for (const k of keys) {

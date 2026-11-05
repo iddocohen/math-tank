@@ -1,6 +1,9 @@
 /**
- * Battle overlay (FR-003, FR-019, FR-053, FR-063): health bars at the top; at the bottom right the large number
- * readout, −1 and +1 buttons and the fire button. There are no angle or power controls (amendment 01).
+ * Battle overlay (FR-003, FR-019, FR-053, FR-063): at the bottom right the large readout of typed digits and the
+ * fire button. There are no angle or power controls (amendment 01). Amendment 05 removed the −1 and +1 buttons
+ * (no stepping toward the answer) and the corner health bars: each tank's health bar is drawn above it in the
+ * canvas (FR-078). While the child points on the ruler the readout shows no number (FR-019), and the fire button
+ * counts as pointer input (FR-076).
  * At the right side, the "Neue Landschaft" button starts a new scene (amendment 03, FR-070). It is for mouse and
  * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
@@ -28,13 +31,10 @@ export function BattleOverlay({ controller, state }: Props) {
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
   const answerable = state.challenge !== null && state.answerableAt !== null && state.phase === 'challenge';
   const enemyVisible = state.enemyFound && state.enemy.alive;
-  // Typed digits are shown exactly as typed (a lone "-" too); otherwise the previewed number.
-  const readout = state.entry.typed !== '' ? state.entry.typed : state.selection !== null ? String(state.selection) : '?';
+  // Typed digits are shown exactly as typed (a lone "-" too). A number chosen by pointing is not shown (FR-019).
+  const readout = state.entry.typed !== '' ? state.entry.typed : '?';
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
-
-  const playerBar = <HealthBar label={m.battle.playerHealth} health={state.player.health} kind="player" />;
-  const enemyBar = <HealthBar label={m.battle.enemyHealth} health={state.enemy.health} kind="enemy" />;
 
   return (
     <div
@@ -52,11 +52,6 @@ export function BattleOverlay({ controller, state }: Props) {
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemyVisible ? state.enemy.position : undefined}
     >
-      <div className="top-bars">
-        {state.playerSide === 'left' ? playerBar : enemyBar}
-        {state.playerSide === 'left' ? enemyBar : playerBar}
-      </div>
-
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
@@ -98,15 +93,7 @@ export function BattleOverlay({ controller, state }: Props) {
             {readout}
           </span>
         </div>
-        <div className="nudge-row">
-          <button type="button" className="step-button" aria-label={m.battle.minusOneLabel} disabled={!choosing || state.selection === min} onClick={() => controller.nudge(-1)}>
-            {m.battle.minusOne}
-          </button>
-          <button type="button" className="step-button" aria-label={m.battle.plusOneLabel} disabled={!choosing || state.selection === max} onClick={() => controller.nudge(1)}>
-            {m.battle.plusOne}
-          </button>
-        </div>
-        <button type="button" className="fire-button" disabled={!choosing} onClick={() => controller.confirm()}>
+        <button type="button" className="fire-button" disabled={!choosing} onClick={() => controller.confirm('pointer')}>
           {m.battle.fire}
         </button>
       </div>
@@ -118,16 +105,4 @@ function lastShotKind(shot: LastShot): 'bullseye' | 'body' | 'close' | 'miss' {
   if (shot.bullseye && shot.hit) return 'bullseye';
   if (shot.bodyHit) return shot.hit ? 'body' : 'close';
   return 'miss';
-}
-
-function HealthBar({ label, health, kind }: { label: string; health: number; kind: 'player' | 'enemy' }) {
-  const value = Math.max(0, Math.round(health));
-  return (
-    <div className={`health health-${kind}`}>
-      <span className="health-label">{label}</span>
-      <div className="health-track" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
-        <div className="health-fill" style={{ width: `${value}%` }} />
-      </div>
-    </div>
-  );
 }

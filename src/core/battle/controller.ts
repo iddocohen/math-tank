@@ -7,7 +7,7 @@
  * so the shell always lands at the chosen number. This phase covers free play; guided mode arrives later.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { RoundState, Settings, ShotInFlight, TankState } from '../types';
+import type { InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
 import { simulateShot } from '../physics/ballistics';
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
@@ -97,7 +97,8 @@ export class BattleController {
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
     this.firedNumber = null;
-    this.set(createRound(this.settings, seed, side, mode));
+    // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
+    this.set({ ...createRound(this.settings, seed, side, mode), inputMethod: this.state.inputMethod });
   }
 
   /**
@@ -110,19 +111,14 @@ export class BattleController {
     this.startRound(mode);
   }
 
-  /** Pointer preview: clears typed digits and never fires. */
+  /**
+   * Pointer preview: clears typed digits and never fires. There is no way to step the preview by 1 or 10
+   * (amendment 05: no shortcut toward the answer).
+   */
   selectNumber(n: number): void {
     if (!this.acceptsInput()) return;
     const { min, max } = this.settings.range;
-    this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry() });
-  }
-
-  /** +1 / -1 buttons and arrow keys; starts from the player tank's number when nothing is selected. */
-  nudge(delta: 1 | -1 | 10 | -10): void {
-    if (!this.acceptsInput()) return;
-    const { min, max } = this.settings.range;
-    const from = this.state.selection ?? this.state.player.position;
-    this.set({ ...this.state, selection: clamp(from + delta, min, max), entry: emptyEntry() });
+    this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry(), inputMethod: 'pointer' });
   }
 
   typeDigit(d: Digit): void {
@@ -137,16 +133,23 @@ export class BattleController {
     this.applyEntryKey('backspace');
   }
 
-  /** Enter or the fire button: fires at the selection; an out-of-range entry fires nothing (FR-063). */
-  confirm(): void {
+  /**
+   * Enter (method 'keyboard') or the fire button ('pointer'): fires at the selection; an out-of-range entry fires
+   * nothing (FR-063). A fired shot records the method (FR-076).
+   */
+  confirm(method: InputMethod = 'keyboard'): void {
     if (!this.acceptsInput()) return;
     const { selection, entry } = this.state;
     if (selection === null || entry.outOfRange) return;
-    this.fireAt(selection);
+    this.shoot(selection, method);
   }
 
   /** Fires at n with the fixed cannon (FR-065); the renderer replays the path and then calls shotAnimationDone. */
   fireAt(n: number): void {
+    this.shoot(n, this.state.inputMethod);
+  }
+
+  private shoot(n: number, inputMethod: InputMethod | null): void {
     if (!this.acceptsInput()) return;
     const { min, max } = this.settings.range;
     if (!Number.isInteger(n) || n < min || n > max) return;
@@ -166,7 +169,7 @@ export class BattleController {
     });
     const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS };
     this.firedNumber = n;
-    this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry() });
+    this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
   }
 
   shotAnimationDone(): void {
@@ -211,7 +214,7 @@ export class BattleController {
     this.set({ ...this.state, phase });
   }
 
-  /** Digits, Enter, arrows and pointer selection work only while the player chooses a number. */
+  /** Digits, Enter and pointer selection work only while the player chooses a number. */
   private acceptsInput(): boolean {
     const phase = this.state.phase;
     return phase === 'aiming' || phase === 'challenge';
@@ -220,7 +223,7 @@ export class BattleController {
   private applyEntryKey(key: EntryKey): void {
     if (!this.acceptsInput()) return;
     const r = applyKey(this.state.entry, key, this.settings.range);
-    this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection });
+    this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection, inputMethod: 'keyboard' });
   }
 
   /**

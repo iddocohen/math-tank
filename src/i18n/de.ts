@@ -21,15 +21,13 @@ export const de = {
     continue: 'Weiter',
     pause: 'Pause',
     resume: 'Weiterspielen',
-    plusOne: '+1',
-    minusOne: '−1',
-    plusOneLabel: 'Eins mehr',
-    minusOneLabel: 'Eins weniger',
     yourNumber: 'Deine Zahl',
     yourTurn: 'Du bist dran.',
     enemyTurn: 'Der Gegner ist dran.',
     enemyFound: 'Gefunden!',
     newScene: 'Neue Landschaft',
+    /** Amendment 05: the bouncing arrow over the child's tank at the start of every round (FR-077). */
+    you: 'Du',
     /** Amendment 04: the exact number (FR-071). */
     bullseye: 'Volltreffer!',
     /** Amendment 04: a hit on the tank body that is not exact (FR-066). */
@@ -45,8 +43,6 @@ export const de = {
     landedAt: (n: number) => `Gelandet bei ${n}`,
     steps: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
-    playerHealth: 'Dein Panzer',
-    enemyHealth: 'Gegner',
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
   },
 

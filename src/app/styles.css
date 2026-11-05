@@ -145,56 +145,6 @@ input:focus-visible {
   pointer-events: auto;
 }
 
-/* Health bars at the top, each on its tank's side. */
-.top-bars {
-  position: absolute;
-  top: max(8px, env(safe-area-inset-top));
-  left: 88px;
-  right: 88px;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  pointer-events: none;
-}
-
-.health {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: min(36%, 260px);
-}
-
-.health-enemy {
-  align-items: flex-end;
-}
-
-.health-label {
-  font-size: 1rem;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
-}
-
-.health-track {
-  width: 100%;
-  height: 16px;
-  border-radius: 8px;
-  background: rgb(0 0 0 / 0.35);
-  overflow: hidden;
-}
-
-.health-fill {
-  height: 100%;
-  transition: width 0.3s ease-out;
-}
-
-.health-player .health-fill {
-  background: #4fc3f7;
-}
-
-.health-enemy .health-fill {
-  background: #ff8a65;
-}
-
 /* "Neue Landschaft" at the right side, vertically centered over the battlefield (amendment 03). */
 .new-scene-button {
   position: absolute;
@@ -208,7 +158,7 @@ input:focus-visible {
   opacity: 0.4;
 }
 
-/* Control bar below the battlefield: number readout, −1 and +1, fire button (FR-019, FR-053). */
+/* Control bar below the battlefield: readout of typed digits and the fire button (FR-019, FR-053; no −1 and +1, amendment 05). */
 .controls {
   position: absolute;
   left: 0;
@@ -245,19 +195,6 @@ input:focus-visible {
   color: #ffd54a;
 }
 
-.nudge-row {
-  display: flex;
-  gap: 12px;
-}
-
-.step-button {
-  width: 64px;
-  height: 64px;
-  font-size: 1.5rem;
-  line-height: 1;
-  background: #4a5a80;
-}
-
 .fire-button {
   min-width: 140px;
   min-height: 80px;
@@ -267,12 +204,12 @@ input:focus-visible {
   box-shadow: 0 6px 0 #9e2522;
 }
 
-/* Range hint and landing number, at the top center below the health bars. */
+/* Range hint and landing number, at the top center. */
 .status-line {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(max(8px, env(safe-area-inset-top)) + 56px);
+  top: calc(max(8px, env(safe-area-inset-top)) + 8px);
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -306,11 +243,6 @@ input:focus-visible {
 
   .readout-value {
     font-size: 2.25rem;
-  }
-
-  .step-button {
-    width: 52px;
-    height: 52px;
   }
 
   .fire-button {

@@ -3,7 +3,7 @@
  * The answer is a battlefield position at least minEnemyGap from the player; the question is built to produce it.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { Challenge, ChallengeKind, DifficultyStep, RulerLevel, Settings, Skill } from '../types';
+import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { answerCandidates, NUMBER_LINE_KINDS, numberLineBuilders, type Builder, type ChallengeDraft } from './numberLine';
 import { buildReadPosition, readPositionAnswers } from './readPosition';
@@ -23,6 +23,11 @@ export interface GenerateInput {
   rulerLevel: RulerLevel;
   /** Restricts the kinds, whatever the challenge-type switches say; free play passes ['readPosition']. */
   kindsAllowed?: ChallengeKind[];
+  /**
+   * Latest input method (amendment 05, FR-076). With 'keyboard', findNumber is skipped, because typing a given
+   * number needs no thinking, and the fallback is readPosition. Omitted: no restriction.
+   */
+  inputMethod?: InputMethod;
 }
 
 /** Answers tried per kind before the generator moves on to another kind (research R10). */
@@ -54,7 +59,7 @@ function enabledKinds(settings: Settings): ChallengeKind[] {
 }
 
 /**
- * The difficulty step a builder works with. Until the ladders exist (Phase 17), every skill uses the
+ * The difficulty step a builder works with. Until the ladders exist (Phase 21), every skill uses the
  * whole range and the parent settings.
  */
 function stepFor(settings: Settings, rulerLevel: RulerLevel): DifficultyStep {
@@ -111,13 +116,20 @@ export function generateChallenge(input: GenerateInput): Challenge {
     return validateChallenge(challenge, settings, playerPosition).length === 0 ? challenge : null;
   };
 
-  let kinds = (input.kindsAllowed ?? enabledKinds(settings)).filter((k) => BUILDERS[k] !== undefined);
+  const keyboard = input.inputMethod === 'keyboard';
+  let kinds = (input.kindsAllowed ?? enabledKinds(settings)).filter((k) => BUILDERS[k] !== undefined && !(keyboard && k === 'findNumber'));
 
   while (kinds.length > 0) {
     const kind = rng.pick(kinds);
     const challenge = tryKind(kind, answers, input, rng, finish);
     if (challenge) return challenge;
     kinds = kinds.filter((k) => k !== kind);
+  }
+
+  // Keyboard input: "read the ruler" instead of "find N" (FR-076).
+  if (keyboard) {
+    const challenge = tryKind('readPosition', answers, input, rng, finish);
+    if (challenge) return challenge;
   }
 
   // Fallback: "find N" always works for an allowed answer (FR-029).

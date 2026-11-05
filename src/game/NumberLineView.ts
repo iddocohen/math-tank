@@ -5,13 +5,16 @@
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
  * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
  *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap;
- *   ticksFor then sets labelsNearPreview, and the minor lines next to the preview marker get labels (FR-018).
+ *   ticksFor then sets labelsNearPreview, and the minor lines next to the preview marker get labels (FR-018), but only
+ *   for a typed number: while the child points on the ruler no number is shown (amendment 05, FR-019).
  * - showZoom(view) draws a zoomed ten above the ruler with all its lines and labels, and connector lines from
  *   its two ends to the matching part of the ruler, for the help steps (FR-020, FR-031). hideZoom removes it.
  * - The game canvas carries `data-ruler-labels`, the drawn ruler labels from left to right, for the end-to-end
  *   tests (tasks.md D4: the labels are canvas text, so the DOM has no other way to read them).
  * - Tapping or dragging anywhere on the ruler calls selectNumber; releasing only previews (FR-019).
- * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler.
+ * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler, and no
+ *   number (amendment 05). The canvas carries `data-preview-text`, the text drawn next to the preview marker ('' when
+ *   none), for the end-to-end tests only.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
  *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
  * - After a hit on the tank body that is not exact, a bracket from the child's number to the number the enemy
@@ -73,7 +76,6 @@ export class NumberLineView {
   private ticks: Tick[] = [];
   private minorStep = 1;
   private labelsNearPreview = false;
-  private readonly selectionText: Phaser.GameObjects.Text;
   private readonly landedText: Phaser.GameObjects.Text;
   private readonly stepsText: Phaser.GameObjects.Text;
   private drawn: Drawn | null = null;
@@ -89,7 +91,6 @@ export class NumberLineView {
     this.marks = scene.add.graphics().setDepth(11);
     this.zoom = scene.add.graphics().setDepth(13);
     const big = { fontFamily: FONT, fontSize: '56px', fontStyle: 'bold', color: '#ffd54a', stroke: '#14203a', strokeThickness: 8 };
-    this.selectionText = scene.add.text(0, 0, '', big).setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.landedText = scene.add.text(0, 0, '', { ...big, color: '#ff8a65' }).setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.stepsText = scene.add
       .text(0, 0, '', { fontFamily: FONT, fontSize: '28px', fontStyle: 'bold', color: '#ffffff', stroke: '#14203a', strokeThickness: 6 })
@@ -207,11 +208,15 @@ export class NumberLineView {
       .join(',');
   }
 
-  /** Level 1 on a crowded ruler: labels for the unlabeled lines within one minor step of the preview (FR-018). */
-  private drawPreviewLabels(selection: number | null, min: number, max: number): void {
+  /**
+   * Level 1 on a crowded ruler: labels for the unlabeled lines within one minor step of a typed preview (FR-018).
+   * A pointer preview gets none, so pointing never shows a number (amendment 05).
+   */
+  private drawPreviewLabels(selection: number | null, typed: boolean, min: number, max: number): void {
     for (const label of this.previewLabels) label.destroy();
     this.previewLabels = [];
-    if (!this.labelsNearPreview || selection === null) return;
+    this.scene.game.canvas.dataset.previewText = '';
+    if (!this.labelsNearPreview || selection === null || !typed) return;
     for (const tick of this.ticks) {
       if (!tick.visible || tick.labeled || Math.abs(tick.value - selection) > this.minorStep) continue;
       const label = this.scene.add
@@ -220,6 +225,7 @@ export class NumberLineView {
         .setDepth(12);
       this.previewLabels.push(label);
     }
+    this.scene.game.canvas.dataset.previewText = this.previewLabels.map((l) => l.text).join(',');
   }
 
   private drawMarks(s: RoundState, min: number, max: number): void {
@@ -253,11 +259,8 @@ export class NumberLineView {
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
     const choosing = s.phase === 'aiming' || s.phase === 'challenge' || s.phase === 'paused';
-    this.drawPreviewLabels(choosing ? s.selection : null, min, max);
-    if (s.selection === null || !choosing) {
-      this.selectionText.setVisible(false);
-      return;
-    }
+    this.drawPreviewLabels(choosing ? s.selection : null, s.entry.typed !== '', min, max);
+    if (s.selection === null || !choosing) return;
     const x = numberToX(s.selection, min, max);
     const groundY = toScreenY(surfaceY(s.terrain, x), this.worldHeight);
     g.lineStyle(3, SELECT, 0.9);
@@ -268,8 +271,6 @@ export class NumberLineView {
     g.lineBetween(x, groundY - 30, x, groundY + 22);
     g.fillStyle(SELECT, 1);
     g.fillCircle(x, AXIS_Y, 10);
-    // While dragging, the chosen number shows in large digits above the finger.
-    this.selectionText.setText(String(s.selection)).setPosition(x, Math.min(groundY - 40, RULER_TOP - 70)).setVisible(this.dragging);
   }
 
   /** Bracket below the ruler from x0 to x1 with a text under its middle. */

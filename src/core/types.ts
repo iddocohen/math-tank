@@ -167,6 +167,9 @@ export interface TankState {
   alive: boolean;
 }
 
+/** How the child chose the last number: keyboard (digits, Enter) or pointer (ruler, fire button); amendment 05. */
+export type InputMethod = 'pointer' | 'keyboard';
+
 export interface RoundState {
   seed: number;
   mode: 'guided' | 'freePlay';
@@ -193,6 +196,8 @@ export interface RoundState {
   entry: { typed: string; outOfRange: boolean };
   /** order3: tank ids badged so far. */
   orderTaps: string[];
+  /** Latest input method (FR-076); keyboard input gets no findNumber search. Kept across rounds; null before any input. */
+  inputMethod: InputMethod | null;
   /** Ruler detail level for this round (FR-018). */
   rulerLevel: RulerLevel;
   /** The player's last shot: landed number shown large; distance in steps shown in free play. */

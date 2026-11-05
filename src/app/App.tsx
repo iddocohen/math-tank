@@ -59,7 +59,7 @@ export function App() {
     return () => handle.destroy();
   }, [screen, controller, sfx]);
 
-  // Until Phase 13, "Spielen", Enter on the start screen and "Nochmal" start free play (tasks.md D3).
+  // Until Phase 15, "Spielen", Enter on the start screen and "Nochmal" start free play (tasks.md D3).
   const startRound = useCallback(() => controller.startRound('freePlay'), [controller]);
   const play = useCallback(() => {
     startRound();

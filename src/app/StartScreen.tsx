@@ -1,6 +1,6 @@
 /**
  * Start screen (SC-001, FR-053, FR-062): one tap on "Spielen", or Enter or Space (handled by the app's keyboard
- * listener), starts a round. Until Phase 13 "Spielen" starts free play (tasks.md D3).
+ * listener), starts a round. Until Phase 15 "Spielen" starts free play (tasks.md D3).
  * The gear opens the parent gate in a later phase. It is left out of the tab order and ignores keys,
  * so no key opens the parent gate.
  */

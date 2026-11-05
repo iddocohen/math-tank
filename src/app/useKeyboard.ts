@@ -46,9 +46,6 @@ export function applyBattleAction(controller: BattleController, action: KeyActio
     case 'confirm':
       controller.confirm();
       return true;
-    case 'nudge':
-      controller.nudge(action.delta);
-      return true;
     case 'pause':
       controller.pause();
       return true;

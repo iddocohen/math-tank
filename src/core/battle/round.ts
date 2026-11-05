@@ -39,7 +39,7 @@ function makeTank(id: string, kind: TankState['kind'], position: number, setting
   return { id, kind, position, x, y: settleY(terrain, x), health: 100, alive: true };
 }
 
-/** Until the difficulty ladders exist (Phase 17), every skill is on step 0. */
+/** Until the difficulty ladders exist (Phase 21), every skill is on step 0. */
 const FIRST_STEPS: Record<Skill, number> = {
   positions: 0,
   countForward: 0,
@@ -113,6 +113,7 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     selection: null,
     entry: emptyEntry(),
     orderTaps: [],
+    inputMethod: null,
     rulerLevel,
     lastShot: null,
     lastPlayerPath: null,

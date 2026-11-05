@@ -99,7 +99,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(Object.keys(s).sort()).toEqual(
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'enemyFound', 'challenge', 'answerableAt',
-        'help', 'selection', 'entry', 'orderTaps', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
+        'help', 'selection', 'entry', 'orderTaps', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
       ].sort(),
     );
   });
@@ -179,15 +179,15 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(controller.getState().shot).toBe(shot);
   });
 
-  it('typeDigit, backspace, nudge and selectNumber change only selection and entry', () => {
+  it('typeDigit, backspace and selectNumber change only selection, entry and inputMethod', () => {
     const { controller } = makeController();
     controller.startRound('freePlay');
-    const base = without(controller.getState(), 'selection', 'entry');
+    const base = without(controller.getState(), 'selection', 'entry', 'inputMethod');
     const check = (selection: number | null, typed: string, outOfRange = false) => {
       const s = controller.getState();
       expect(s.selection).toBe(selection);
       expect(s.entry).toEqual({ typed, outOfRange });
-      expect(without(s, 'selection', 'entry')).toEqual(base);
+      expect(without(s, 'selection', 'entry', 'inputMethod')).toEqual(base);
     };
 
     controller.typeDigit(3);
@@ -199,18 +199,10 @@ describe('BattleController free play (US1, amendment 01)', () => {
     controller.backspace();
     check(3, ''); // an empty entry keeps the last selection
     controller.typeDigit(5);
-    controller.nudge(1);
-    check(6, '');
-    controller.nudge(10);
-    check(16, '');
-    controller.nudge(-10);
-    controller.nudge(-10);
-    check(0, '');
-    controller.nudge(-1);
-    check(0, '');
+    check(5, '5');
     controller.selectNumber(98);
     check(98, '');
-    controller.nudge(10);
+    controller.selectNumber(140);
     check(100, '');
     controller.typeDigit(4);
     controller.selectNumber(55);
@@ -223,12 +215,9 @@ describe('BattleController free play (US1, amendment 01)', () => {
     check(100, '150', true);
   });
 
-  it('nudge without a selection starts from the player tank number', () => {
+  it('has no nudge: there is no way to step the preview by 1 or 10 (amendment 05, FR-019)', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
-    const s = controller.getState();
-    controller.nudge(s.playerSide === 'left' ? 10 : -10);
-    expect(controller.getState().selection).toBe(s.playerSide === 'left' ? 10 : 90);
+    expect((controller as unknown as Record<string, unknown>).nudge).toBeUndefined();
   });
 
   it('accepts a minus key only when the range has negative numbers', () => {
@@ -267,7 +256,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(controller.getState().phase).toBe('aiming');
   });
 
-  it('ignores digits, Backspace, nudges, selections and confirm in playerShot and enemyTurn', () => {
+  it('ignores digits, Backspace, selections and confirm in playerShot and enemyTurn', () => {
     const { controller } = makeController();
     controller.startRound('freePlay');
     controller.selectNumber(20);
@@ -278,7 +267,6 @@ describe('BattleController free play (US1, amendment 01)', () => {
       controller.typeDigit(5);
       controller.typeMinus();
       controller.backspace();
-      controller.nudge(1);
       controller.selectNumber(70);
       controller.confirm();
       controller.fireAt(70);
@@ -652,7 +640,7 @@ describe('BattleController newScene (amendment 03, FR-070)', () => {
     expect(before.turn).toBeGreaterThan(0);
     expect(before.enemy.health).toBeLessThan(100);
     // An unfinished choice is pending when the scene is replaced.
-    controller.nudge(1);
+    controller.selectNumber(before.enemy.position);
 
     controller.newScene();
     const after = controller.getState();
@@ -794,12 +782,13 @@ describe('BattleController any number range (US9, T145)', () => {
     expect(controller.getState().lastShot).toMatchObject({ fired: 437, landed: 437 });
   });
 
-  it('range 0 to 1000: nudge(1) from 436 reaches 437', () => {
+  it('range 0 to 1000: selectNumber(437) after typing 436 selects 437 and clears the typed digits', () => {
     const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } });
     controller.startRound('freePlay');
-    controller.selectNumber(436);
-    controller.nudge(1);
+    for (const d of [4, 3, 6] as const) controller.typeDigit(d);
+    controller.selectNumber(437);
     expect(controller.getState().selection).toBe(437);
+    expect(controller.getState().entry.typed).toBe('');
   });
 
   it('range 0 to 1000: selectNumber from a pointer x snaps to the nearest whole number', () => {
@@ -828,5 +817,79 @@ describe('BattleController any number range (US9, T145)', () => {
     expect(pos.getState().entry.typed).toBe('');
     pos.typeDigit(5);
     expect(pos.getState().selection).toBe(5);
+  });
+});
+
+describe('BattleController input method (amendment 05, FR-076)', () => {
+  it('is null before any input in the first round', () => {
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    expect(controller.getState().inputMethod).toBeNull();
+  });
+
+  it('typeDigit, typeMinus and backspace set keyboard; selectNumber sets pointer', () => {
+    const { controller } = makeController({ range: { preset: 'custom', min: -20, max: 30 } });
+    controller.startRound('freePlay');
+    controller.selectNumber(5);
+    expect(controller.getState().inputMethod).toBe('pointer');
+    controller.typeMinus();
+    expect(controller.getState().inputMethod).toBe('keyboard');
+    controller.selectNumber(5);
+    controller.typeDigit(3);
+    expect(controller.getState().inputMethod).toBe('keyboard');
+    controller.selectNumber(5);
+    controller.backspace();
+    expect(controller.getState().inputMethod).toBe('keyboard');
+  });
+
+  it('confirm() fires and sets keyboard; confirm(pointer) fires at the same number and sets pointer', () => {
+    const a = makeController();
+    a.controller.startRound('freePlay');
+    a.controller.selectNumber(42);
+    a.controller.confirm();
+    expect(a.controller.getState().phase).toBe('playerShot');
+    expect(a.controller.getState().inputMethod).toBe('keyboard');
+
+    const b = makeController();
+    b.controller.startRound('freePlay');
+    b.controller.typeDigit(4);
+    b.controller.typeDigit(2);
+    b.controller.confirm('pointer');
+    const s = b.controller.getState();
+    expect(s.phase).toBe('playerShot');
+    expect(xToNumber(s.shot!.impact.x, 0, 100)).toBe(42);
+    expect(s.inputMethod).toBe('pointer');
+  });
+
+  it('ignored calls in playerShot, enemyTurn and paused do not change it', () => {
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    controller.selectNumber(20);
+    controller.confirm('pointer');
+    expect(controller.getState().inputMethod).toBe('pointer');
+    controller.typeDigit(5);
+    controller.confirm();
+    expect(controller.getState().inputMethod).toBe('pointer');
+    controller.shotAnimationDone();
+    expect(controller.getState().phase).toBe('enemyTurn');
+    controller.typeDigit(5);
+    expect(controller.getState().inputMethod).toBe('pointer');
+    controller.enemyShotAnimationDone();
+    controller.pause();
+    controller.typeDigit(5);
+    controller.backspace();
+    controller.confirm();
+    expect(controller.getState().inputMethod).toBe('pointer');
+  });
+
+  it('is kept by startRound and newScene', () => {
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    controller.typeDigit(5);
+    controller.newScene();
+    expect(controller.getState().inputMethod).toBe('keyboard');
+    controller.selectNumber(50);
+    controller.startRound('freePlay');
+    expect(controller.getState().inputMethod).toBe('pointer');
   });
 });

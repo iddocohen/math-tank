@@ -7,6 +7,8 @@ import Phaser from 'phaser';
 
 export const TEX = {
   tankBody: 'tank-body',
+  /** Amendment 05 (FR-077): the enemy and decoys get an angular body, so shape tells them from the child's tank. */
+  tankBodyAngular: 'tank-body-angular',
   turret: 'tank-turret',
   sky: 'sky',
   shell: 'shell',
@@ -38,6 +40,24 @@ export function ensureTextures(scene: Phaser.Scene, worldWidth: number, worldHei
     // Dome
     g.fillCircle(w / 2, h - 18, 10);
     g.generateTexture(TEX.tankBody, w, h);
+    g.destroy();
+  }
+
+  if (!tex.exists(TEX.tankBodyAngular)) {
+    const g = scene.make.graphics({}, false);
+    const w = TANK_BODY_WIDTH;
+    const h = TANK_BODY_HEIGHT;
+    // Tracks: a straight-edged band with square road wheels.
+    g.fillStyle(0x2a2d33, 1);
+    g.fillPoints(vecs([{ x: 0, y: h - 10 }, { x: w, y: h - 10 }, { x: w - 5, y: h }, { x: 5, y: h }]), true);
+    g.fillStyle(0x55595f, 1);
+    for (let x = 7; x < w - 6; x += 11) g.fillRect(x, h - 8, 6, 6);
+    // Hull (white, tinted per tank kind): a wedge with sharp corners.
+    g.fillStyle(0xffffff, 1);
+    g.fillPoints(vecs([{ x: 2, y: h - 10 }, { x: w - 2, y: h - 10 }, { x: w - 9, y: h - 19 }, { x: 9, y: h - 19 }]), true);
+    // Angular turret base: a trapezoid instead of the round dome.
+    g.fillPoints(vecs([{ x: w / 2 - 13, y: h - 19 }, { x: w / 2 + 13, y: h - 19 }, { x: w / 2 + 8, y: h - 28 }, { x: w / 2 - 8, y: h - 28 }]), true);
+    g.generateTexture(TEX.tankBodyAngular, w, h);
     g.destroy();
   }
 
@@ -106,4 +126,8 @@ export function ensureTextures(scene: Phaser.Scene, worldWidth: number, worldHei
       canvas.refresh();
     }
   }
+}
+
+function vecs(points: Array<{ x: number; y: number }>): Phaser.Math.Vector2[] {
+  return points.map((p) => new Phaser.Math.Vector2(p.x, p.y));
 }

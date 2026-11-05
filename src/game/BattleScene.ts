@@ -9,6 +9,9 @@
  *   raised or lifted shot (FR-065). The enemy shakes when the player's shell lands near it without damage
  *   (lastShot.nearMiss), and a Volltreffer gets a larger explosion at the enemy (amendment 04, FR-071).
  * - With "Genau treffen" on, the enemy shows a bullseye on its center line (FR-074).
+ * - At the start of every round, which includes "Neue Landschaft", a bouncing "Du" arrow points at the child's tank
+ *   for YOU_MARKER_MS (amendment 05, FR-077). The canvas attribute `data-you-marker` is `on` while it shows and `off`
+ *   after, for the end-to-end tests only (tasks.md D4).
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  */
 import Phaser from 'phaser';
@@ -18,6 +21,7 @@ import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import type { RoundState, ShotInFlight, TankState } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
+import { YOU_MARKER_MS } from '../core/view/tankStyle';
 import { Effects } from './effects';
 import { NumberLineView } from './NumberLineView';
 import { ProjectileView } from './ProjectileView';
@@ -103,6 +107,7 @@ export class BattleScene extends Phaser.Scene {
       this.enemy.setAim(s.player.x < s.enemy.x ? 150 : 30);
       this.player.setAim(fixedAngle(s));
       this.enemy.setBullseye(this.controller.getRoundSettings().exactHit);
+      if (s.phase !== 'roundOver') this.showYouMarker();
     }
 
     this.terrain.update(s.terrain);
@@ -126,6 +131,14 @@ export class BattleScene extends Phaser.Scene {
 
     if (s.phase === 'paused' && !this.scene.isPaused()) this.scene.pause();
     else if (s.phase !== 'paused' && this.scene.isPaused()) this.scene.resume();
+  }
+
+  private showYouMarker(): void {
+    const canvas = this.game.canvas;
+    canvas.dataset.youMarker = 'on';
+    this.player.showYouMarker(YOU_MARKER_MS, () => {
+      canvas.dataset.youMarker = 'off';
+    });
   }
 
   private syncTank(view: TankView, tank: TankState, before: TankState | undefined, newRound: boolean): void {
