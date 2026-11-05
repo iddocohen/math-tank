@@ -1,6 +1,6 @@
 # Contract: engine-free core modules (`src/core/`)
 
-These functions are the boundary between the learning logic, the physics, and the two user interfaces (Phaser and React). They are pure unless stated otherwise and never import Phaser, React or DOM APIs. Types are defined in [data-model.md](../data-model.md). Changed by [amendment 01](../amendment-01-number-aiming.md) and [amendment 02](../amendment-02-ruler-ranges-and-detail.md).
+These functions are the boundary between the learning logic, the physics, and the two user interfaces (Phaser and React). They are pure unless stated otherwise and never import Phaser, React or DOM APIs. Types are defined in [data-model.md](../data-model.md). Changed by [amendment 01](../amendment-01-number-aiming.md), [amendment 02](../amendment-02-ruler-ranges-and-detail.md) and [amendment 04](../amendment-04-hit-rule.md).
 
 ## `core/rng`
 
@@ -43,7 +43,7 @@ minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
 
 validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[]   // empty when valid
-checkAnswer(c: Challenge, answer: number | number[]): boolean   // exact, except readPosition within c.hitTolerance (FR-068)
+checkAnswer(c: Challenge, answer: number | number[]): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance); whether a shot damages the enemy is decided by core/battle/hitRule
 stepPath(c: Challenge, beginnerAssist: boolean): number[]   // positions for the step animation, e.g. [43, 40, 36]
 crossesTen(a: number, b: number): boolean
 crossesHundred(a: number, b: number): boolean
@@ -56,7 +56,9 @@ Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for ever
 ## `core/progress`
 
 ```ts
-classifyAttempt(a: { solved: boolean; helpLevel: number; wrongAnswers: number; responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): { independent: boolean; guess: boolean; outcome: RecentOutcome }
+classifyAttempt(a: { solved: boolean; exact: boolean; helpLevel: number; wrongAnswers: number; responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): { independent: boolean; guess: boolean; outcome: RecentOutcome }
+// outcome: 'independent' when solved, exact, helpLevel 0 and wrongAnswers 0; 'close' when solved without help or misses but not exact (amendment 04);
+// 'assisted' when solved after help or misses; 'unsolved' when the solution was shown. 'close' never raises or lowers a step and never counts toward mastery
 // guess: solved and responseMs < 1500, or solved and 3+ wrongAnswerTimes within 5000 ms before submittedAt
 startOrContinueSession(p: Progress, now: number): Progress   // 30-minute idle and new-day rules
 recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule
@@ -112,7 +114,8 @@ class BattleController {
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
   tapTank(tankId: string): void            // comparison: fires at the tank's number; order3 places a badge without firing
   requestHelp(): void                      // help button or H key: next help step
-  shotAnimationDone(): void                // after replaying the path: crater, exact-hit damage or near-miss shake, miss -> help, hit -> enemy turn
+  shotAnimationDone(): void                // after replaying the path: crater, damage by the hit rule (body hit, Volltreffer double,
+                                           // exactHit), near-miss shake, miss -> help, hit -> enemy turn; sets lastShot
   enemyShotAnimationDone(): void
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
@@ -123,6 +126,18 @@ class BattleController {
 Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Digits, Enter and arrow keys are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
 
 Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
+
+## `core/battle/hitRule` (pure, amendment 04)
+
+```ts
+type ShotKind = 'bullseye' | 'body' | 'miss';
+bodyHalfWidth(min: number, max: number, layout?: Layout): number      // half of TANK_WIDTH (60) in numbers for the range
+shotKind(fired: number, target: number, range: { min: number; max: number }): ShotKind
+                                                                      // 'bullseye' when fired === target; 'body' when the x distance is at most TANK_WIDTH / 2
+enemyDamage(kind: ShotKind, exactHit: boolean): number                // 'bullseye' 2 * MAX_DAMAGE; 'body' MAX_DAMAGE, or 0 with exactHit; 'miss' 0
+```
+
+Guarantees: `shotKind(n, n, r)` is `'bullseye'` for every range; in 0 to 100 a shot 2 away is `'body'` and 3 away is `'miss'`; in 0 to 10 a shot 1 away is `'miss'`; in 0 to 1000 a shot 20 away is `'body'`.
 
 ## `core/battle/entry` (pure)
 
@@ -139,7 +154,7 @@ loadSettings(kv: KeyValue): { settings: Settings; resetReason: 'none' | 'invalid
 saveSettings(kv: KeyValue, s: Settings): { ok: boolean }
 loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid' | 'unavailable' }
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
-migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 1 -> 2 per data-model.md
+migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 per data-model.md
 exportData(settings: Settings, progress: Progress): string        // JSON text for download
 importData(text: string): { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: string }
 ```

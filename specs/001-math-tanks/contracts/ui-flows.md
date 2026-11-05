@@ -1,6 +1,6 @@
 # Contract: screens and player flows
 
-Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) and [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler").
+Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") and [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen").
 
 ## Screens
 
@@ -27,11 +27,25 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 2. The fire button or Enter fires at the previewed number. The cannon stays at its fixed angle (65 degrees, raised up to 85 degrees when a hill blocks the arc), and the shell lands at the chosen number.
 3. After landing: crater; the landing number shown large; the previous path kept as a faint trail.
 
+## Hit feedback (amendment 04, FR-066, FR-071, FR-072, FR-074)
+
+| Where the shell lands | Enemy | Status line | Ruler |
+|-----------------------|-------|-------------|-------|
+| Exact number | loses twice the hit damage; larger explosion | "Volltreffer!" and, for "read the ruler", "Der Gegner stand bei 637." | landing marker |
+| On the tank body, not exact | loses the hit damage | "Treffer!" | bracket from the child's number to the enemy's number with "Du: 30 · Gegner: 31 · 1 Schritt" |
+| On the tank body, not exact, "Genau treffen" on | shakes, no damage | "Ganz knapp!" | same bracket and text as the row above |
+| Off the tank body, inside the blast radius | shakes, no damage | landing number | free play: bracket with the step count |
+| Elsewhere | nothing | landing number | free play: bracket with the step count |
+
+- The overlay root carries `data-last-shot`: `bullseye`, `body`, `close` (body hit without damage under "Genau treffen") or `miss`, for the end-to-end tests.
+- Pointer line (FR-073): whenever a tank is visible (the enemy in free play, in "read the ruler" and after a guided search reveals it; every numbered tank in comparison turns), a thin vertical line runs from the tank's center down to the ruler. A hidden enemy has no line.
+- With "Genau treffen" on, the enemy tank shows a bullseye (two rings and a dot) on its center line.
+
 ## Guided turn flow (one search per player turn)
 
 1. Search starts: for position challenges the enemy fades out completely and nothing is drawn at its new position; for "read the ruler" the enemy is visible and no number is given. The challenge banner appears and is spoken if speech is on. Fires are accepted after 1 second.
 2. The child chooses a number and fires (see above). Every fire is an answer.
-3. Hit (the number equals the enemy's number, or within the read-the-ruler tolerance): short cheerful sound, the enemy is revealed and loses health; feedback shows the exact number, for example "Treffer! Der Gegner stand bei 637."
+3. Hit (the shell lands on the enemy tank's body; the exact number is a Volltreffer): short cheerful sound, the enemy is revealed and loses health; feedback as in the hit feedback table above. With "Genau treffen" on, a body hit that is not exact is a miss with the message "Ganz knapp!" and the step count.
    Miss: the landing number is shown large, an encouraging phrase, and the next help step (FR-031). The enemy takes no turn; health does not change; the child chooses again. A shell inside the enemy's blast radius makes the enemy shake.
 4. After the hit (or the shot at the shown solution), the enemy takes its turn with a visible arc. Then round end, or the enemy hides and moves and a new search starts (step 1).
 
@@ -39,11 +53,11 @@ The player's tank stands at the left or right end for the whole round and switch
 
 ## Comparison turns
 
-Numbered tanks are visible, each at its own number. Tapping a tank, or typing its number and pressing Enter, fires at it. A decoy is destroyed and the shot counts as a miss. For `order3`, taps or typed numbers (Enter after each) place order badges 1, 2, 3 without firing; after a correct third badge the cannon fires at the enemy (the largest number); a wrong order resets the badges with an encouraging phrase and the next help step. A typed number that is on no tank places no badge and shows a hint.
+Numbered tanks are visible, each at its own number, each with a pointer line to the ruler. Tapping a tank (a Volltreffer on that tank), or typing its number and pressing Enter, fires at it. A decoy is destroyed and the shot counts as a miss. For `order3`, taps or typed numbers (Enter after each) place order badges 1, 2, 3 without firing; after a correct third badge the cannon fires at the enemy (the largest number); a wrong order resets the badges with an encouraging phrase and the next help step. A typed number that is on no tank places no badge and shows a hint.
 
 ## Free-play turn flow
 
-Started from the "Freies Spiel" button, shown only when the parent has made free play available. Every turn is a "read the ruler" challenge: the enemy is visible, the child reads the ruler and fires. Every shot is followed by an enemy turn. A miss shows the distance to the enemy in steps on the ruler. After a hit the enemy moves to a new visible position. Free play has no other challenge and no bonus.
+Started from the "Freies Spiel" button, shown only when the parent has made free play available. Every turn is a "read the ruler" challenge: the enemy is visible, the child reads the ruler and fires. Every shot is followed by an enemy turn. A miss shows the distance to the enemy in steps on the ruler; a body hit that is not exact shows both numbers and the distance. After a hit the enemy moves to a new visible position. Free play has no other challenge and no bonus.
 
 ## Keyboard map (FR-059 to FR-064)
 
@@ -74,6 +88,7 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 ## Settings page extras
 
 - Ruler preview: a small ruler drawn with `ticksFor` for the chosen range and starting level, updated as the parent changes them.
+- "Genau treffen" (aim exactly) switch with a one-line explanation: "Nur die genaue Zahl trifft." (only the exact number hits).
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.
 - A notice appears when stored data was reset or cannot be saved.

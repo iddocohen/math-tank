@@ -1,12 +1,12 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) and [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler").
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") and [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `2` | `2` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; `migrate` upgrades version 1 data (see below) |
+| `version` | `3` | `3` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; `migrate` upgrades version 0, 1 and 2 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max` |
@@ -24,11 +24,14 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `adaptive` | `boolean` | `true` | |
 | `freePlay` | `boolean` | `false` | When `true`, the start screen also offers "Freies Spiel"; guided stays the default |
 | `noDamage` | `boolean` | `false` | FR-044 |
+| `exactHit` | `boolean` | `false` | "Genau treffen" (FR-074): only the exact number damages the enemy, and the enemy tank shows a bullseye. Adaptive difficulty never changes it |
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
 
 **Migration from version 1**: `aimCorrection` is dropped; `rulerLevelStart` comes from `labelLevel` (1 → 1, 2 → 2, 3 → 3, 4 → 5, because old level 4 showed only the end points); `rulerLevelMax` is 5; `version` becomes 2.
+
+**Migration from version 2**: `exactHit` is added with `false`; `version` becomes 3. Version 0 and 1 data go through both steps.
 
 `withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 
@@ -65,7 +68,6 @@ interface Challenge {
   steps?: number[];           // intermediate positions for the step animation, e.g. [43, 40, 36]
   // readPosition only:
   rulerLevel?: 1 | 2 | 3 | 4 | 5;   // level the challenge was built for
-  hitTolerance?: number;            // 0 when the enemy stands on a visible line; otherwise half the smallest visible step (FR-068)
 }
 ```
 
@@ -73,7 +75,9 @@ interface Challenge {
 
 **Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`. When the range cannot fit 2 options at `minTankGap` on the side away from the player, comparison is skipped for that configuration.
 
-**readPosition placement**: on ruler levels 1 to 3 the answer is a multiple of the minor step (a number with a visible line); on levels 4 and 5 any whole number. `checkAnswer` accepts `|answer - fired| <= hitTolerance`. On level 5 the step used for the tolerance is the major step, see spec Assumptions.
+**Hit rule** (amendment 04, FR-066, FR-071, FR-074; `src/core/battle/hitRule.ts`): `bodyHalfWidth(min, max) = (TANK_WIDTH / 2) / (layout.right - layout.left) * (max - min)` in numbers (about 2.1 in 0 to 100, 4.8 in 550 to 780, 20.8 in 0 to 1000). `shotKind(fired, target, range)` is `'bullseye'` when `fired === target`, `'body'` when `|numberToX(fired) - numberToX(target)| <= TANK_WIDTH / 2`, otherwise `'miss'`. Damage to the enemy: `'bullseye'` 2 × `MAX_DAMAGE` (80); `'body'` `MAX_DAMAGE` (40), or 0 when `exactHit` is on; `'miss'` 0.
+
+**readPosition placement**: on ruler levels 1 to 3 the answer is a multiple of the minor step (a number with a visible line); on levels 4 and 5 any whole number. The placement rule is unchanged by amendment 04, but `hitTolerance` is removed: whether a shot hits follows the tank-body rule below, the same for every challenge kind.
 
 **Main skill per kind**: `findNumber`, `missingBetween`, `midpoint`, `readPosition` → `positions`; `after`, `stepsRight` → `countForward`; `before`, `stepsLeft` → `countBackward`; `addition` → `addition`; `subtraction` → `subtraction`; all comparison kinds → `comparison`. `tens` and `crossTens` are secondary skills added when a challenge involves a multiple of ten or crosses a ten boundary.
 
@@ -88,9 +92,10 @@ interface Challenge {
 | `rangeKey` | `string` | e.g. `0-100` or `15-45` |
 | `difficultyStep` | `number` | |
 | `solved` | `boolean` | `true` if a correct answer was given before the solution was shown |
-| `independent` | `boolean` | Hit on the first shot without help (`solved`, `helpLevel` 0, `wrongAnswers` 0) |
+| `independent` | `boolean` | Exact number on the first shot without help (`solved`, `exact`, `helpLevel` 0, `wrongAnswers` 0). A body hit that is not exact is never independent (FR-075) |
+| `exact` | `boolean` | The shot that ended the search was at the enemy's exact number (Volltreffer). Optional when loading; missing means `true`, because attempts recorded before amendment 04 needed the exact number |
 | `helpLevel` | `0 \| 1 \| 2 \| 3` | Highest help step reached; 3 means the solution was shown |
-| `wrongAnswers` | `number` | Misses: fired numbers that did not hit, decoys hit, and wrong `order3` sequences |
+| `wrongAnswers` | `number` | Misses: fired numbers off the tank body, decoys hit, wrong `order3` sequences, and with `exactHit` on body hits that are not exact |
 | `responseMs` | `number` | From challenge answerable to final answer |
 | `guess` | `boolean` | FR-038 |
 | `sessionId` | `string` | |
@@ -103,12 +108,14 @@ Keyed by `${skill}|${rangeKey}`.
 | Field | Type | Notes |
 |-------|------|-------|
 | `step` | `number` | Current difficulty step for this skill (index into the skill's step ladder) |
-| `recent` | `RecentOutcome[]` (max 6) | Non-guess outcomes since the last step change, `'independent' \| 'assisted' \| 'unsolved'`, newest last. Used only by the adaptive rule; cleared on a step change |
+| `recent` | `RecentOutcome[]` (max 6) | Non-guess outcomes since the last step change, `'independent' \| 'close' \| 'assisted' \| 'unsolved'`, newest last. Used only by the adaptive rule; cleared on a step change |
 | `masteryWindow` | `RecentOutcome[]` (max 10) | Last 10 non-guess outcomes in this skill and range; never cleared by step changes |
 | `guesses` | `number` | Count of attempts flagged as guesses |
 | `attempts` | `number` | |
 | `independentCorrect` | `number` | |
 | `assisted` | `number` | |
+
+**RecentOutcome**: `'independent'` (exact number, no help, no misses), `'close'` (body hit that is not exact, no help, no misses; amendment 04), `'assisted'` (hit after help or misses), `'unsolved'` (the solution was shown). `'close'` counts neither toward raising (5 of 6 `'independent'`) nor toward lowering (3 of 5 `'assisted'` or `'unsolved'`), and not toward mastery.
 
 `status(sp)`: `'mastered'` when `sp.independentCorrect >= 10`, `masteryWindow` holds 10 outcomes, and at least 8 of them are `'independent'`; otherwise `'developing'` (FR-039).
 
@@ -191,11 +198,22 @@ interface RoundState {
   entry: { typed: string; outOfRange: boolean };   // keyboard digits typed so far ('' when none, may start with '-'); outOfRange shows the range hint (FR-063)
   orderTaps: string[];             // order3: tank ids badged so far
   rulerLevel: 1 | 2 | 3 | 4 | 5;   // for this round (FR-018)
-  lastShot: { fired: number; landed: number; hit: boolean; nearMiss: boolean; hitTankId: string | null; distance: number | null } | null;
-                                   // landed number shown large; distance in steps shown in free play
+  lastShot: LastShot | null;       // landed number shown large; distance in steps shown in free play
   lastPlayerPath: Point[] | null;  // FR-004 trail
   shot: ShotInFlight | null;       // shell in flight for the renderer to replay
   outcome: 'playerWon' | 'enemyWon' | 'turnsUsed' | null;
+}
+
+interface LastShot {
+  fired: number;                   // the number the player fired at
+  landed: number;                  // the number under the impact point
+  hit: boolean;                    // the enemy took damage (body hit, or only the exact number with exactHit)
+  bodyHit: boolean;                // the landing point was on the enemy tank's body, exact or not (amendment 04)
+  bullseye: boolean;               // Volltreffer: fired === enemyNumber (FR-071)
+  nearMiss: boolean;               // the enemy shook without damage: inside the blast radius, not a damaging hit
+  hitTankId: string | null;        // the damaged enemy or the destroyed decoy, or null
+  distance: number | null;         // steps from the landed number to the enemy's number
+  enemyNumber: number;             // the enemy's number when the shell landed; feedback shows it after the enemy moved
 }
 
 interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: number /* number on the line */; x: number; y: number; health: number /* 0..100 */; label?: number; alive: boolean; }
@@ -214,8 +232,8 @@ challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot 
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
 challenge --tapTank (single choice)--> playerShot at that tank's number
 challenge --tapTank (order3)--> challenge (badge placed) ; third correct badge --> playerShot at the enemy ; wrong order --> challenge (badges reset, miss)
-playerShot (guided) --hit--> enemyTurn (enemyFound = true, enemy damaged, attempt recorded)
-playerShot (guided) --miss--> challenge (help.level + 1, lastShot shown, no enemy turn, no health change)
+playerShot (guided) --hit (bullseye or body)--> enemyTurn (enemyFound = true, enemy damaged, attempt recorded: 'independent' only for an exact first shot, 'close' for a body hit without help)
+playerShot (guided) --miss (off the body, or a body hit with exactHit)--> challenge (help.level + 1, lastShot shown, no enemy turn, no health change)
 challenge --help (button or H) or time limit--> challenge (help.level + 1)
 challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
 playerShot (freePlay) --hit or miss--> enemyTurn
@@ -225,7 +243,7 @@ next player turn (freePlay): new readPosition challenge; after a hit the enemy m
 any (except roundOver) --pause (button or Escape)--> paused --resume--> previous phase
 ```
 
-Round over when `player.health == 0` (`enemyWon`), `enemy.health == 0` (`playerWon`), or `turn == roundLength` after the enemy turn (`turnsUsed`); `turn` counts searches in guided mode and shots in free play. In `noDamage` mode the player's health never drops. The player's shell damages only the tank whose number equals the fired number (or within `hitTolerance` for readPosition): the enemy loses the direct-hit damage, a decoy is destroyed; a shell inside the enemy's blast radius that does not hit sets `nearMiss` (the enemy shakes, no damage). The player's own shell never damages the player.
+Round over when `player.health == 0` (`enemyWon`), `enemy.health == 0` (`playerWon`), or `turn == roundLength` after the enemy turn (`turnsUsed`); `turn` counts searches in guided mode and shots in free play. In `noDamage` mode the player's health never drops. The player's shell follows the hit rule above (amendment 04): a shell on the enemy's body costs it `MAX_DAMAGE`, a Volltreffer twice that, and with `exactHit` only the Volltreffer counts; a decoy is destroyed only at its exact number; a shell inside the enemy's blast radius that does not damage it sets `nearMiss` (the enemy shakes, no damage). The player's own shell never damages the player.
 
 The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the enemy hides (fades out) and the next challenge's answer becomes its position; it is drawn again only when `enemyFound` becomes `true` (at once for readPosition). The answer is always at least `minEnemyGap` from the player tank.
 
