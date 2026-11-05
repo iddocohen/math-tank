@@ -9,7 +9,8 @@ import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue } from '../core/storage/keyValue';
-import { SETTINGS_KEY } from '../core/storage/storage';
+import { PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { decodeTransfer } from '../core/transfer/transfer';
 import { t } from '../i18n';
 import { COMING_SOON, SETTING_FIELDS } from './comingSoon';
 import { emptyRecords } from '../core/records/records';
@@ -366,5 +367,75 @@ describe('SettingsPage data section (FR-048a)', () => {
     expect(link.href).toBe('https://opengameart.org/node/84103');
     expect(link.target).toBe('_blank');
     expect(link.rel).toBe('noopener noreferrer');
+  });
+});
+
+/** A clipboard whose writeText resolves or rejects, put on `navigator` for one test. */
+function mockClipboard(fails = false) {
+  const writeText = fails ? vi.fn().mockRejectedValue(new Error('denied')) : vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  return writeText;
+}
+
+/** Many sessions with irregular numbers, so even the compressed link is longer than one QR code holds. */
+function manySessions(n: number) {
+  let x = 12345;
+  const next = () => (x = (x * 1103515245 + 12345) % 2147483648);
+  return {
+    version: 1,
+    attempts: [],
+    skills: {},
+    sessions: Array.from({ length: n }, (_, i) => ({ id: `s${next()}`, startedAt: next(), lastActiveAt: next(), attempts: i, independentCorrect: next() % 50, assisted: next() % 50 })),
+  };
+}
+
+describe('SettingsPage "Spielstand übertragen" (amendment 15, FR-115, FR-118)', () => {
+  const T = m.settings.transfer;
+
+  it('shows a QR code and the link of the saved data', async () => {
+    setup({ range: { preset: 'custom', min: 550, max: 780 }, addition: { maxOperand: 10, maxResult: 780, steps: 1 } });
+    const group = screen.getByRole('group', { name: T.title });
+    const qr = await within(group).findByTestId('transfer-qr');
+    expect(qr.tagName.toLowerCase()).toBe('svg');
+    expect(qr.querySelector('path')?.getAttribute('d')).toMatch(/^M\d+ \d+h1v1h-1z/);
+    const section = screen.getByTestId('transfer');
+    const link = section.getAttribute('data-transfer-link')!;
+    expect(link).toContain('#save=v1.');
+    const decoded = await decodeTransfer(link.slice(link.indexOf('#save=') + 6));
+    expect(decoded.ok && decoded.data.settings.range).toEqual({ preset: 'custom', min: 550, max: 780 });
+    expect(within(group).queryByText(T.trimmed)).toBeNull();
+  });
+
+  it('"Link kopieren" writes the link to the clipboard and says so', async () => {
+    const writeText = mockClipboard();
+    setup();
+    await screen.findByTestId('transfer-qr');
+    const link = screen.getByTestId('transfer').getAttribute('data-transfer-link');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: T.copy }));
+    });
+    expect(writeText).toHaveBeenCalledWith(link);
+    expect(await screen.findByText(T.copied)).toBeTruthy();
+  });
+
+  it('when the clipboard fails, the link is shown as text', async () => {
+    mockClipboard(true);
+    setup();
+    await screen.findByTestId('transfer-qr');
+    const link = screen.getByTestId('transfer').getAttribute('data-transfer-link')!;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: T.copy }));
+    });
+    expect(await screen.findByText(T.copyFailed)).toBeTruthy();
+    expect(screen.getByTestId('transfer-link-text').textContent).toBe(link);
+  });
+
+  it('a save too large for one QR code leaves out old sessions and says that only "Daten sichern" moves the whole history', async () => {
+    setup(undefined, { [PROGRESS_KEY]: JSON.stringify(manySessions(400)) });
+    const group = screen.getByRole('group', { name: T.title });
+    expect(await within(group).findByText(T.trimmed)).toBeTruthy();
+    const link = screen.getByTestId('transfer').getAttribute('data-transfer-link')!;
+    expect(new TextEncoder().encode(link).length).toBeLessThanOrEqual(2300);
+    expect(within(group).getByTestId('transfer-qr')).toBeTruthy();
   });
 });

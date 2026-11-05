@@ -244,3 +244,37 @@ describe('stars and the chosen look through persistence (amendment 11, FR-089, F
     expect(p.garage()).toEqual(emptyGarage());
   });
 });
+
+describe('saveData and applyTransfer (amendment 15, FR-119)', () => {
+  it('saveData gives the current settings, progress, records and garage', () => {
+    const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
+    p.saveSettings(changedSettings());
+    const d = p.saveData();
+    expect(d.settings).toEqual(changedSettings());
+    expect(d.progress).toEqual(emptyProgress());
+    expect(d.records).toEqual(emptyRecords());
+    expect(d.garage).toEqual(emptyGarage());
+  });
+
+  it('applyTransfer replaces and saves settings, progress without attempts, records and garage', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    const progress = { ...emptyProgress(), skills: { 'positions|0-20': { step: 1, recent: [], masteryWindow: ['independent' as const], guesses: 0, attempts: 4, independentCorrect: 3, assisted: 1 } } };
+    const records = { version: 1 as const, best: { '0-20|3|untilHearts': { enemies: 6, ms: 90_000, at: 5 } } };
+    const garage = { version: 1 as const, stars: 23, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+    expect(p.applyTransfer({ settings: changedSettings(), progress, records, garage })).toEqual({ ok: true });
+    for (const loaded of [p, createPersistence({ kv, storage: undefined })]) {
+      expect(loaded.settings()).toEqual(changedSettings());
+      expect(loaded.progress()).toEqual(progress);
+      expect(loaded.records()).toEqual(records);
+      expect(loaded.garage()).toEqual(garage);
+    }
+  });
+
+  it('applyTransfer reports a failed save', () => {
+    const p = createPersistence({ kv: failingWrites(memoryKeyValue()), storage: undefined });
+    expect(p.applyTransfer({ settings: changedSettings(), progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() })).toEqual({ ok: false });
+    expect(p.status().saveFailed).toBe(true);
+    expect(p.settings()).toEqual(changedSettings());
+  });
+});

@@ -8,11 +8,11 @@
  * "Einstellungen" and `onProgress` when the parent picks "Fortschritt" (the menu closes and the app shows that page,
  * which resumes the game when it closes).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { t } from '../i18n';
+import { useHold } from './useHold';
 
-export const HOLD_MS = 2000;
-const TICK_MS = 50;
+export { HOLD_MS } from './useHold';
 const RING_RADIUS = 30;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
@@ -25,36 +25,11 @@ interface Props {
 
 export function ParentGate({ onOpen, onClose, onSettings, onProgress }: Props) {
   const m = t();
-  const [progress, setProgress] = useState(0);
   const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stop = () => {
-    if (timer.current !== null) clearInterval(timer.current);
-    timer.current = null;
-    setProgress(0);
-  };
-
-  useEffect(() => () => {
-    if (timer.current !== null) clearInterval(timer.current);
-  }, []);
-
-  const start = (e: React.PointerEvent) => {
-    if (e.button !== 0 || open) return;
-    stop();
-    // Measured with the clock, not by counting ticks: a busy page (the battle canvas) delays interval callbacks.
-    const startedAt = Date.now();
-    timer.current = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed >= HOLD_MS) {
-        stop();
-        setOpen(true);
-        onOpen();
-        return;
-      }
-      setProgress(elapsed / HOLD_MS);
-    }, TICK_MS);
-  };
+  const { progress, handlers } = useHold(() => {
+    setOpen(true);
+    onOpen();
+  }, !open);
 
   const close = () => {
     setOpen(false);
@@ -80,14 +55,7 @@ export function ParentGate({ onOpen, onClose, onSettings, onProgress }: Props) {
         aria-label={m.start.gear}
         title={m.start.parentHint}
         tabIndex={-1}
-        onPointerDown={start}
-        onPointerUp={stop}
-        onPointerLeave={stop}
-        onPointerCancel={stop}
-        onContextMenu={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
-        onKeyDown={(e) => e.preventDefault()}
-        onKeyUp={(e) => e.preventDefault()}
+        {...handlers}
       >
         <svg className="parent-gate-ring" data-testid="parent-gate-ring" data-progress={progress} viewBox="0 0 64 64" aria-hidden="true">
           <circle cx="32" cy="32" r={RING_RADIUS} strokeDasharray={RING_LENGTH} strokeDashoffset={RING_LENGTH * (1 - progress)} />

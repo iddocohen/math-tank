@@ -255,6 +255,17 @@ export const de = {
       homeScreen:
         'Tipp: Auf dem Home-Bildschirm behält der Browser die Daten sicherer. iPad: in Safari auf „Teilen“ und dann „Zum Home-Bildschirm“ tippen. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“ wählen.',
     },
+    /** Amendment 15 (FR-115 to FR-118): move the save to another browser. Shown to parents. */
+    transfer: {
+      title: 'Spielstand übertragen',
+      hint: 'Mit der Kamera des anderen Geräts scannen oder den Link dort öffnen.',
+      qrLabel: 'QR-Code mit dem Spielstand',
+      copy: 'Link kopieren',
+      copied: 'Link kopiert.',
+      copyFailed: 'Kopieren hat nicht geklappt. Bitte diesen Link kopieren:',
+      trimmed: 'Ältere Sitzungen fehlen im Code. Den ganzen Verlauf überträgt nur „Daten sichern“.',
+      tooLarge: 'Der Spielstand ist zu groß für einen QR-Code. Bitte den Link kopieren. Den ganzen Verlauf überträgt nur „Daten sichern“.',
+    },
     /** Amendment 14 (FR-114): credits for the ground texture, although CC0 does not require them. */
     credits: {
       text: 'Bodentextur „dirt“ von Drummyfish, Lizenz CC0.',
@@ -320,6 +331,18 @@ export const de = {
       timeLimit: 'Zeitlimit',
       timeLimitSeconds: 'Sekunden pro Aufgabe',
     },
+  },
+
+  /** Amendment 15 (FR-119, FR-120): the dialog when the game opens with a save link. Shown to parents. */
+  transfer: {
+    title: 'Spielstand übernehmen?',
+    summary: (stars: number, record: number, min: number, max: number) => `Sterne: ${stars}, Rekord: ${record}, Zahlenraum: ${min} bis ${max}`,
+    replaces: 'Ersetzt Einstellungen, Sterne, Rekorde und Fortschritt in diesem Browser.',
+    holdHint: 'Zum Übernehmen 2 Sekunden gedrückt halten.',
+    accept: 'Übernehmen',
+    cancel: 'Abbrechen',
+    invalid: 'Dieser Code passt nicht',
+    close: 'Schließen',
   },
 
   /** Keys match SETTINGS_ERROR_KEYS in src/core/settings/validate.ts. Shown to parents. */

@@ -33,6 +33,11 @@
  * speaker button repeats it. The music loop plays during a running round only with "Musik" on. A waiting new version
  * of the game is applied only while the start screen shows (swUpdate). After leaving fullscreen the app root gets the
  * focus back, so the keys keep working.
+ *
+ * Amendment 15 (FR-119, FR-120): when the address has `#save=` (on load, or when only the fragment changes), the code
+ * is decoded and TransferDialog asks the parent; "Übernehmen" (a 2-second hold) replaces the settings, progress,
+ * records and garage, "Abbrechen" changes nothing. Closing the dialog removes the fragment with history.replaceState.
+ * While the dialog shows, keys do nothing in the game.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -58,6 +63,11 @@ import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
 import { RotateScreen } from './RotateScreen';
 import { useScreen } from './useScreen';
+import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
+import { TransferDialog, type TransferDialogState } from './TransferDialog';
+
+/** A save link being read, or its dialog (amendment 15). */
+type Transfer = { kind: 'reading' } | (TransferDialogState & { data?: SaveData });
 
 type Screen = 'start' | 'garage' | 'battle';
 
@@ -107,6 +117,7 @@ export function App() {
   const seenDestroyed = useRef(0);
   const roundStartStars = useRef(garage.stars);
   const gameParent = useRef<HTMLDivElement>(null);
+  const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
   const { layout, numberPad } = useScreen(persistence.settings().numberPad);
   // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
   const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
@@ -176,6 +187,42 @@ export function App() {
     }
   }, [destroyed, persistence]);
 
+  // A save link (FR-119): decode it on load and whenever only the fragment changes.
+  useEffect(() => {
+    let live = true;
+    const decode = (code: string) =>
+      void decodeTransfer(code).then((r) => {
+        if (live) setTransfer(r.ok ? { kind: 'ready', summary: r.summary, data: r.data } : { kind: 'invalid' });
+      });
+    // The initial state is already 'reading' when the page opened with a save link.
+    const first = saveCodeFromHash(window.location.hash);
+    if (first !== null) decode(first);
+    const onHash = () => {
+      const code = saveCodeFromHash(window.location.hash);
+      if (code === null) return;
+      setTransfer({ kind: 'reading' });
+      decode(code);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      live = false;
+      window.removeEventListener('hashchange', onHash);
+    };
+  }, []);
+  const closeTransfer = useCallback(() => {
+    setTransfer(null);
+    // The link does not stay in the address bar, and a reload does not ask again (FR-119).
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+  }, []);
+  const acceptTransfer = useCallback(() => {
+    if (transfer?.kind === 'ready' && transfer.data) {
+      persistence.applyTransfer(transfer.data);
+      controller.updateSettings(persistence.settings());
+      setGarage(persistence.garage());
+    }
+    closeTransfer();
+  }, [transfer, persistence, controller, closeTransfer]);
+
   // A waiting new version is applied only on the start screen, never during a round (FR-051a).
   useEffect(() => {
     swUpdate.setStartScreen(screen === 'start');
@@ -244,7 +291,7 @@ export function App() {
   );
 
   // While a parent screen is open, keys do nothing in the game (FR-045, T115).
-  const keyScreen = parent === 'closed' && !rotate ? keyScreenFor(screen, state.phase) : null;
+  const keyScreen = parent === 'closed' && !rotate && transfer === null ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
       if (action.type === 'start') play(keyStartMode(window.location.search, persistence.settings().freePlay));
@@ -306,6 +353,7 @@ export function App() {
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
       )}
       {parent === 'progress' && <ProgressPage persistence={persistence} onClose={closeParent} />}
+      {transfer !== null && transfer.kind !== 'reading' && <TransferDialog state={transfer} onAccept={acceptTransfer} onCancel={closeTransfer} />}
     </div>
   );
 }

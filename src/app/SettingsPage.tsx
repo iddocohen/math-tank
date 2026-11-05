@@ -17,8 +17,12 @@
  * The data section (FR-048a): "Daten sichern" downloads the export file, "Daten laden" reads one, and a note
  * explains how to add the game to the Home Screen.
  * Amendment 14 (FR-114): a line at the end credits the ground texture and links its OpenGameArt page.
+ * Amendment 15 (FR-115, FR-118): "Spielstand übertragen" shows a QR code and "Link kopieren" for the saved data of
+ * this browser; the link is built again after "Speichern" and after "Daten laden".
  */
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { qrMatrix, qrPath } from '../core/transfer/qr';
+import { encodeTransfer, type EncodedTransfer } from '../core/transfer/transfer';
 import type { RulerLevel } from '../core/numberline/ticks';
 import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/settings/defaults';
 import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
@@ -83,6 +87,8 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   const [limits, setLimits] = useState<Limits>(() => limitsOf(persistence.settings()));
   const [notice, setNotice] = useState<Notice>(null);
   const [dataNotice, setDataNotice] = useState<Notice>(null);
+  // Counts saves and imports, so the transfer link is built again from the saved data (FR-115).
+  const [savedCount, setSavedCount] = useState(0);
   const status = persistence.status();
 
   const errors = collectErrors(draft);
@@ -114,6 +120,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     const r = persistence.saveSettings(draft);
     onSaved(structuredClone(draft));
     setLimits(limitsOf(draft));
+    setSavedCount((n) => n + 1);
     setNotice(r.ok ? { kind: 'ok', text: m.settings.saved } : { kind: 'warn', text: m.settings.saveFailed });
   };
 
@@ -145,6 +152,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     setLimits(limitsOf(r.settings));
     setNotice(persistence.status().saveFailed ? { kind: 'warn', text: m.settings.saveFailed } : null);
     onSaved(structuredClone(r.settings));
+    setSavedCount((n) => n + 1);
     setDataNotice({ kind: 'ok', text: m.settings.data.imported });
   };
 
@@ -337,6 +345,8 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           </div>
           <p className="hint">{m.settings.data.homeScreen}</p>
         </Group>
+
+        <TransferGroup persistence={persistence} savedCount={savedCount} />
       </div>
       <p className="hint credits" data-testid="credits">
         {m.settings.credits.text}{' '}
@@ -345,6 +355,79 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
         </a>
       </p>
     </div>
+  );
+}
+
+/** The link for the saved data; when the browser's compression fails, the uncompressed link (FR-117). */
+async function buildTransfer(persistence: Persistence): Promise<EncodedTransfer> {
+  try {
+    return await encodeTransfer(persistence.saveData(), window.location.href);
+  } catch {
+    return encodeTransfer(persistence.saveData(), window.location.href, { codec: null });
+  }
+}
+
+/** "Spielstand übertragen" (amendment 15, FR-115, FR-118): a QR code of the transfer link and "Link kopieren". */
+function TransferGroup({ persistence, savedCount }: { persistence: Persistence; savedCount: number }) {
+  const T = t().settings.transfer;
+  const [transfer, setTransfer] = useState<EncodedTransfer | null>(null);
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  useEffect(() => {
+    let live = true;
+    void buildTransfer(persistence).then((r) => {
+      if (live) setTransfer(r);
+    });
+    return () => {
+      live = false;
+    };
+  }, [persistence, savedCount]);
+  const qr = useMemo(() => (transfer?.fits ? qrMatrix(transfer.link) : null), [transfer]);
+  const trimmed = transfer !== null && (transfer.sessionsDropped > 0 || transfer.windowLength < 10);
+
+  const copyLink = async () => {
+    if (!transfer) return;
+    try {
+      await navigator.clipboard.writeText(transfer.link);
+      setCopy('copied');
+    } catch {
+      setCopy('failed');
+    }
+  };
+
+  return (
+    <Group title={T.title}>
+      <div className="transfer" data-testid="transfer" data-transfer-link={transfer?.link}>
+        <p className="hint">{T.hint}</p>
+        {qr && (
+          <svg
+            className="transfer-qr"
+            data-testid="transfer-qr"
+            data-qr-size={qr.size}
+            viewBox={`0 0 ${qr.size} ${qr.size}`}
+            shapeRendering="crispEdges"
+            role="img"
+            aria-label={T.qrLabel}
+          >
+            <rect width={qr.size} height={qr.size} fill="#fff" />
+            <path d={qrPath(qr)} fill="#000" />
+          </svg>
+        )}
+        {transfer && !transfer.fits && <p className="notice warn">{T.tooLarge}</p>}
+        {transfer?.fits && trimmed && <p className="notice">{T.trimmed}</p>}
+        <button type="button" className="secondary-button" onClick={() => void copyLink()} disabled={!transfer}>
+          {T.copy}
+        </button>
+        <div role="status" aria-live="polite">
+          {copy === 'copied' && <p className="notice ok">{T.copied}</p>}
+          {copy === 'failed' && <p className="notice warn">{T.copyFailed}</p>}
+        </div>
+        {copy === 'failed' && transfer && (
+          <p className="transfer-link-text" data-testid="transfer-link-text">
+            {transfer.link}
+          </p>
+        )}
+      </div>
+    </Group>
   );
 }
 

@@ -3,6 +3,8 @@
  * FR-096, research R11). The garage (stars and the chosen look, amendment 11) has its own key, so saving an empty
  * progress ("Fortschritt zurücksetzen") never touches it.
  *
+ * Amendment 15 (FR-115, FR-119): `saveData` feeds the transfer link and `applyTransfer` takes over a transferred save.
+ *
  * Loads them once, saves settings on request, asks the browser once to keep stored data permanently, and reports
  * what the settings page must show: why stored data was reset (`resetReason`) and whether the last save failed
  * (edge cases "Stored data is missing or damaged" and "Browser storage full or blocked").
@@ -15,6 +17,7 @@ import { addStars, equip, resetStars, type Garage } from '../core/rewards/garage
 import type { GarageItem } from '../core/rewards/items';
 import { submitResult, type BestResult, type Records } from '../core/records/records';
 import type { Progress } from '../core/types';
+import type { SaveData } from '../core/transfer/transfer';
 
 /** The part of `navigator.storage` this module uses. */
 export interface StorageManagerLike {
@@ -63,6 +66,13 @@ export interface Persistence {
    * on failure changes nothing.
    */
   importText(text: string): ImportResult;
+  /** The current settings, progress, records and garage, for the transfer link (amendment 15, FR-115). */
+  saveData(): SaveData;
+  /**
+   * "Übernehmen" of a transferred save (FR-119): replaces and saves settings, progress, records and garage. The data
+   * was checked by decodeTransfer; its progress has no attempt history.
+   */
+  applyTransfer(data: SaveData): { ok: boolean };
 }
 
 export interface PersistenceDeps {
@@ -160,6 +170,15 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       return request;
     },
     exportText: (now) => exportData(settings, progress, records, garage, now),
+    saveData: () => ({ settings, progress, records, garage }),
+    applyTransfer(data) {
+      settings = structuredClone(data.settings);
+      progress = structuredClone(data.progress);
+      records = structuredClone(data.records);
+      garage = structuredClone(data.garage);
+      const results = [saveSettings(kv, settings), saveProgress(kv, progress), saveRecords(kv, records), saveGarage(kv, garage)];
+      return record({ ok: results.every((r) => r.ok) });
+    },
     importText(text) {
       const r = importData(text);
       if (!r.ok) return r;
