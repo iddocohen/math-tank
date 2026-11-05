@@ -14,7 +14,7 @@ Follow-up answers: the refresh should make new hills; exactly one enemy at a new
 
 1. Pressing "Neue Landschaft" during a round:
    - generates a new landscape (new terrain seed);
-   - places exactly one enemy tank at a new position, with its pointer line, and starts a new challenge for it whose kind is not a comparison kind (no decoys right after a refresh; later searches may be comparisons again);
+   - places exactly one enemy tank at a new position, with its pointer line, and starts a new challenge for it of any enabled kind. *(Phase 22b, task T243: the earlier rule "not a comparison kind right after a refresh" was removed, because since amendment 09 a comparison turn also has exactly one enemy and no decoys.)*
    - keeps the round going: hearts, the destroyed-tank counter, the round time, the round type progress and the personal-best tracking continue unchanged;
    - may place the child's tank on the other side, as for a new round.
 2. An unfinished challenge is discarded without an attempt, as before (amendment 03 item 4). The enemy does not fire because of a refresh.

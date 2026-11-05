@@ -116,7 +116,7 @@ class BattleController {
 
   startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
-                                           // position with a new challenge that is not a comparison; hearts, enemiesDestroyed,
+                                           // position with a new challenge of any enabled kind (T243); hearts, enemiesDestroyed,
                                            // turn, round time and enemy shot index stay; no enemy shot; an unfinished challenge is dropped
                                            // without an attempt; ignored in 'playerShot', 'enemyTurn', 'paused' and 'roundOver'
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)

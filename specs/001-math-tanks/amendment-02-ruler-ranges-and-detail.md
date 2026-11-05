@@ -23,6 +23,8 @@
    - **Stufe 4**: major lines only, no minor lines; major lines labeled.
    - **Stufe 5**: only the two end points, labeled; no other lines.
    - Minor and major steps follow FR-016 for the range width (for 550 to 780, width 230: major every 50, minor every 10; the enemy stands on a minor line at levels 1 to 3).
+   - **Medium lines on levels 1 to 3** (product owner, Phase 22b, task T235): "For level 1 to 3 on the ruler, I would like for every major step to have the half line a bit larger, e.g. 0 10 20 30 ... I would like to see 5, 15, 25 lines larger than the lines 1 2 3 4 6 etc." The line at half of each major step is drawn longer than a minor line and shorter than a major line when that half is a multiple of the minor step (0 to 100: 5, 15, 25 and so on; major 100 and minor 10: 50, 150 and so on; major 50 and minor 10: none). Labels do not change. Levels 4 and 5 are unchanged. The game ruler, the zoomed help view and both settings previews draw them.
+   - **Gap between small and large labels on level 1** (Phase 22b, task T231): a small label keeps a clear gap to a large label in the same row; a small label with room in neither row only because of a large label stays without a label, and its line is still drawn.
 5. **Who decides the level.**
    - The parent sets a starting level and a hardest allowed level (default: start at 1, hardest 5). Setting both to the same value locks the level.
    - With adaptive difficulty on, the level follows the `positions` skill: it goes one level harder after repeated independent hits, and one level easier when the child struggles, within the parent's two limits.

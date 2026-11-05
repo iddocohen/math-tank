@@ -753,7 +753,7 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
     throw new Error('no seed with a lost heart');
   });
 
-  it('in guided mode starts one new search whose kind is never a comparison, with one enemy and no attempt (amendment 08)', () => {
+  it('in guided mode starts one new search of any enabled kind, with one enemy and no attempt (amendment 08, T243)', () => {
     const allTypes = { numberLine: true, addition: true, subtraction: true, comparison: true };
     for (let seed = 1; seed <= 40; seed++) {
       const g = guidedController({ noDamage: true, challengeTypes: allTypes }, seed);
@@ -766,7 +766,6 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
       const after = g.controller.getState();
       expect(after.phase).toBe('challenge');
       expect(after.challenge!.id).not.toBe(before.challenge!.id);
-      expect(after.challenge!.options, `seed ${seed} ${after.challenge!.kind}`).toBeUndefined();
       expect('label' in after.enemy).toBe(false);
       expect(after.enemy).toMatchObject({ alive: true, position: after.challenge!.answer });
       expect(after.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null });
@@ -775,12 +774,15 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
     }
   });
 
-  it('with only comparison on, the search after a refresh is still not a comparison', () => {
+  it('with only comparison on, the search after a refresh is a comparison with one enemy at the answer (T243, P10)', () => {
     const g = guidedController({ challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } });
     g.controller.startRound('guided');
     g.controller.newScene();
     const after = g.controller.getState();
-    expect(after.challenge!.options).toBeUndefined();
+    expect(after.challenge!.options!.length).toBeGreaterThanOrEqual(2);
+    expect(after.challenge!.options).toContain(after.challenge!.answer);
+    expect(after.enemy).toMatchObject({ alive: true, position: after.challenge!.answer });
+    expect('decoys' in after).toBe(false);
   });
 
   it('the refresh causes no enemy shot', () => {

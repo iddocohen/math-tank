@@ -135,8 +135,8 @@ export class BattleController {
 
   /**
    * "Neue Landschaft" button (amendment 03, amendment 08, FR-070): a new landscape in the same round. New terrain from a
-   * new seed, the child's tank on the other side, exactly one enemy at a new position with a new challenge that is
-   * never a comparison. Hearts, destroyed enemies, turn, the round time and the enemy's shot count stay; the enemy
+   * new seed, the child's tank on the other side, exactly one enemy at a new position with a new challenge of any
+   * enabled kind (T243: a comparison too, since it has one enemy since amendment 09). Hearts, destroyed enemies, turn, the round time and the enemy's shot count stay; the enemy
    * does not fire. An unfinished challenge is dropped without recording an attempt. Ignored while a shell is in
    * flight, while paused and once the round is over (a new round starts from the round-end screen).
    */
@@ -157,7 +157,7 @@ export class BattleController {
       elapsedMs: prev.elapsedMs,
       inputMethod: prev.inputMethod,
     };
-    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true) : scene);
+    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty) : scene);
   }
 
   /**

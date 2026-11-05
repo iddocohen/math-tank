@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { numberToX } from './mapping';
 import {
   LABEL_GAP,
+  LARGE_LABEL_GAP,
   MIN_LABEL_SPACING,
   labelFontSize,
   labelWidth,
@@ -29,9 +30,12 @@ const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0
 const values = (ticks: Tick[]) => ticks.map((t) => t.value);
 const isEnd = (t: Tick, v: { min: number; max: number }) => t.value === v.min || t.value === v.max;
 
+/** A large label: a major line or an end point (T217). */
+const isLarge = (t: Tick, v: { min: number; max: number }) => t.major || isEnd(t, v);
+
 /**
  * No two labels in the same row are closer than MIN_LABEL_SPACING (center to center), and their estimated text
- * widths keep at least LABEL_GAP between them (T217).
+ * widths keep at least LABEL_GAP between them (T217); a small label and a large label keep LARGE_LABEL_GAP (T231).
  */
 function expectRowsApart(view: { min: number; max: number }, r: ReturnType<typeof ticksFor>): void {
   for (const row of [0, 1]) {
@@ -41,10 +45,30 @@ function expectRowsApart(view: { min: number; max: number }, r: ReturnType<typeo
       .sort((a, b) => a.x - b.x);
     for (let i = 1; i < inRow.length; i++) {
       const a = inRow[i - 1]!;
+      // (T231) the gap between a small and a large label is checked with LARGE_LABEL_GAP.
       const b = inRow[i]!;
       expect(b.x - a.x, `${a.t.value} and ${b.t.value} in row ${row}`).toBeGreaterThanOrEqual(MIN_LABEL_SPACING - 1e-9);
-      expect(b.x - a.x - (a.w + b.w) / 2, `${a.t.value} and ${b.t.value} in row ${row}`).toBeGreaterThanOrEqual(LABEL_GAP - 1e-9);
+      const gap = isLarge(a.t, view) !== isLarge(b.t, view) && r.labelRows === 2 ? LARGE_LABEL_GAP : LABEL_GAP;
+      expect(b.x - a.x - (a.w + b.w) / 2, `${a.t.value} and ${b.t.value} in row ${row}`).toBeGreaterThanOrEqual(gap - 1e-9);
     }
+  }
+}
+
+/**
+ * Level 1 (T217, T231): every line is labeled, except a small label that has room in neither row only because of a
+ * large label next to it; that one stays without a label and its line is still drawn.
+ */
+function expectLabeledOrBesideLarge(view: { min: number; max: number }, r: ReturnType<typeof ticksFor>): void {
+  const x = (t: Tick) => numberToX(t.value, view.min, view.max) + t.shift;
+  const w = (t: Tick) => labelWidth(t.value, labelFontSize(t, r.labelRows, view));
+  const large = r.ticks.filter((t) => isLarge(t, view));
+  for (const t of r.ticks) {
+    expect(t.visible).toBe(true);
+    if (t.labeled) continue;
+    expect(r.labelRows, `${t.value} unlabeled with one row`).toBe(2);
+    expect(isLarge(t, view)).toBe(false);
+    const crowded = large.some((l) => Math.abs(x(l) - numberToX(t.value, view.min, view.max)) < (w(l) + w(t)) / 2 + LARGE_LABEL_GAP);
+    expect(crowded, `${t.value} unlabeled but not beside a large label`).toBe(true);
   }
 }
 
@@ -140,7 +164,7 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
       if (r.labelTypedNumber) {
         for (const t of r.ticks) expect(t.labeled).toBe(t.major || isEnd(t, view));
       } else {
-        expect(r.ticks.every((t) => t.labeled)).toBe(true);
+        expectLabeledOrBesideLarge(view, r);
         expectRowsApart(view, r);
       }
     });
@@ -242,13 +266,16 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
     expect(r.ticks.every((t) => t.labeled && t.row === 0)).toBe(true);
   });
 
-  it('level 1 on 0 to 100 labels all 101 numbers in two staggered rows (T217, FR-017)', () => {
+  it('level 1 on 0 to 100 labels the numbers in two staggered rows, leaving out the small labels crowding a large one (T217, T231, FR-017)', () => {
     const view = { min: 0, max: 100 };
     const r = ticksFor(view, 1, 1);
     expect(r.labelTypedNumber).toBe(false);
     expect(r.labelRows).toBe(2);
     const labeled = r.ticks.filter((t) => t.visible && t.labeled).map((t) => t.value);
-    expect(labeled).toEqual(Array.from({ length: 101 }, (_, i) => i));
+    // 28 and 32 sit in the first row two units from 30: too close to its large label (P4), so they stay unlabeled.
+    const besideMajor = [12, 18, 22, 28, 32, 38, 42, 48, 52, 58, 62, 68, 72, 78, 82, 88, 92];
+    expect(labeled).toEqual(Array.from({ length: 101 }, (_, i) => i).filter((v) => !besideMajor.includes(v)));
+    expect(r.ticks.every((t) => t.visible)).toBe(true);
     // Major lines and end points keep the large font in the first row; minor labels are smaller.
     for (const t of r.ticks) {
       if (t.major) {
@@ -279,7 +306,7 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
         const view = { min, max: min + width };
         const r = ticksFor(view, 1, 1);
         if (r.labelTypedNumber) continue;
-        expect(r.ticks.every((t) => t.labeled)).toBe(true);
+        expectLabeledOrBesideLarge(view, r);
         expectRowsApart(view, r);
       }
     }
@@ -309,6 +336,46 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
         expect(ticks[ticks.length - 1]).toMatchObject({ value: view.max, visible: true, labeled: true });
       }
     }
+  });
+});
+
+describe('medium lines at half of each major step (T235, FR-016, amendment 02 item 4)', () => {
+  const sizes = (view: { min: number; max: number }, level: RulerLevel, size: Tick['size']) =>
+    ticksFor(view, level, 1)
+      .ticks.filter((t) => t.size === size)
+      .map((t) => t.value);
+
+  it('on 0 to 100, levels 1 to 3 have medium lines at 5, 15, 25 … 95; 10, 20 … stay major and the rest minor', () => {
+    for (const level of [1, 2, 3] as RulerLevel[]) {
+      expect(sizes({ min: 0, max: 100 }, level, 'medium')).toEqual([5, 15, 25, 35, 45, 55, 65, 75, 85, 95]);
+      expect(sizes({ min: 0, max: 100 }, level, 'major')).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+      for (const t of ticksFor({ min: 0, max: 100 }, level, 1).ticks) expect(t.major).toBe(t.size === 'major');
+    }
+  });
+
+  it('on 0 to 1000 (major 100, minor 10) the medium lines are 50, 150 … 950', () => {
+    expect(sizes({ min: 0, max: 1000 }, 1, 'medium')).toEqual([50, 150, 250, 350, 450, 550, 650, 750, 850, 950]);
+  });
+
+  it('has no medium lines when the half of the major step is off the minor grid (550 to 780: major 50, minor 10)', () => {
+    expect(sizes({ min: 550, max: 780 }, 1, 'medium')).toEqual([]);
+  });
+
+  it('levels 4 and 5 have no medium lines and draw the same lines as before', () => {
+    for (const level of [4, 5] as RulerLevel[]) {
+      expect(sizes({ min: 0, max: 100 }, level, 'medium')).toEqual([]);
+      for (const t of ticksFor({ min: 0, max: 100 }, level, 1).ticks) expect(t.size).toBe(t.major ? 'major' : 'minor');
+    }
+  });
+
+  it('medium lines do not change the labels', () => {
+    const r = ticksFor({ min: 0, max: 100 }, 2, 1);
+    expect(r.ticks.filter((t) => t.labeled).map((t) => t.value)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  });
+
+  it('the zoomed help view follows the same rule for its own steps', () => {
+    const zoom = ticksFor({ min: 20, max: 50 }, 1, 1, { allLines: true });
+    expect(zoom.ticks.filter((t) => t.size === 'medium').map((t) => t.value)).toEqual([25, 35, 45]);
   });
 });
 

@@ -6,8 +6,7 @@
  */
 import { deriveSeed } from '../rng';
 import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, Skill, TankState } from '../types';
-import { enabledKinds, generateChallenge } from '../math/generate';
-import { isComparisonKind } from '../math/comparison';
+import { generateChallenge } from '../math/generate';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { nextHelp } from './help';
@@ -35,10 +34,7 @@ export function searchChallenge(
   inputMethod: InputMethod | null,
   avoid: number | null = null,
   skillSteps: Record<Skill, number> = parentDifficulty(settings).skillSteps,
-  noComparison = false,
 ): Challenge {
-  // Amendment 08 (FR-070): right after "Neue Landschaft" no comparison.
-  const kindsAllowed = noComparison ? enabledKinds(settings).filter((k) => !isComparisonKind(k)) : undefined;
   let challenge: Challenge | null = null;
   for (let i = 0; i < NEW_POSITION_TRIES; i++) {
     challenge = generateChallenge({
@@ -49,7 +45,6 @@ export function searchChallenge(
       playerPosition,
       rulerLevel,
       inputMethod: inputMethod ?? 'keyboard',
-      ...(kindsAllowed ? { kindsAllowed } : {}),
     });
     if (challenge.answer !== avoid) break;
   }
@@ -65,7 +60,6 @@ export function searchChallenge(
  * like in every other challenge; the other options are not on the battlefield.
  *
  * `difficulty` (US7, FR-018, FR-037): the skill steps the challenge is built with and the ruler level of the search.
- * `noComparison` (amendment 08): the search right after "Neue Landschaft" is never a comparison.
  */
 export function startSearch(
   s: BattleState,
@@ -73,10 +67,9 @@ export function startSearch(
   now: number,
   avoid: number | null,
   difficulty: Difficulty = { ...parentDifficulty(settings), rulerLevel: s.rulerLevel },
-  noComparison = false,
 ): BattleState {
   const rulerLevel = difficulty.rulerLevel;
-  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps, noComparison);
+  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps);
   const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
   return {
     ...s,

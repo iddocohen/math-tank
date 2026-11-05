@@ -1,6 +1,7 @@
 /** Ruler preview on the settings page (FR-017, FR-069): the same tick rules as the game. */
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ticksFor } from '../core/numberline/ticks';
 import { RulerPreview } from './RulerPreview';
 
 afterEach(cleanup);
@@ -40,9 +41,11 @@ describe('RulerPreview', () => {
     expect(labels()).toEqual([550, 780]);
   });
 
-  it('0 to 100 at level 1 labels all 101 numbers in two rows, minor labels smaller (T217, T218)', () => {
+  it('0 to 100 at level 1 labels the numbers in two rows, minor labels smaller, none crowding a large label (T217, T218, T231)', () => {
     render(<RulerPreview range={{ min: 0, max: 100 }} level={1} />);
-    expect(labels()).toEqual(Array.from({ length: 101 }, (_, i) => i));
+    expect(labels()).toEqual(ticksFor({ min: 0, max: 100 }, 1, 0).ticks.filter((t) => t.labeled).map((t) => t.value));
+    expect(labels()).not.toContain(28);
+    expect(lines()).toHaveLength(101);
     const els = screen.getAllByTestId('preview-label');
     const rows = new Set(els.map((el) => el.dataset.row));
     expect(rows).toEqual(new Set(['0', '1']));
@@ -67,5 +70,26 @@ describe('RulerPreview', () => {
     const svg = screen.getByTestId('ruler-preview');
     expect(svg.getAttribute('aria-label')).toContain('550');
     expect(svg.getAttribute('aria-label')).toContain('3');
+  });
+
+  it('each line carries its size; the level 1 and level 3 previews of 0 to 100 have the 10 medium lines 5, 15 … 95 (T235)', () => {
+    for (const level of [1, 3] as const) {
+      const { unmount } = render(<RulerPreview range={{ min: 0, max: 100 }} level={level} />);
+      const medium = lines().filter((l) => l.dataset.size === 'medium');
+      expect(medium.map((l) => l.dataset.value)).toEqual(['5', '15', '25', '35', '45', '55', '65', '75', '85', '95']);
+      expect(lines().filter((l) => l.dataset.size === 'major')).toHaveLength(11);
+      // Medium lines are longer than minor lines and shorter than major lines.
+      const len = (l: HTMLElement) => Number(l.getAttribute('y2')) - Number(l.getAttribute('y1'));
+      const minor = lines().find((l) => l.dataset.size === 'minor')!;
+      const major = lines().find((l) => l.dataset.size === 'major')!;
+      expect(len(medium[0]!)).toBeGreaterThan(len(minor));
+      expect(len(medium[0]!)).toBeLessThan(len(major));
+      unmount();
+    }
+  });
+
+  it('level 4 has no medium lines', () => {
+    render(<RulerPreview range={{ min: 0, max: 100 }} level={4} />);
+    expect(lines().filter((l) => l.dataset.size === 'medium')).toHaveLength(0);
   });
 });

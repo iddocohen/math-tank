@@ -7,9 +7,15 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { ticksFor } from '../../src/core/numberline/ticks';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
+
+/** The labels of the 0 to 100 ruler on level 1 (T217, T231): every number except the ones crowding a large label. */
+const LEVEL1_LABELS = ticksFor({ min: 0, max: 100 }, 1, 0)
+  .ticks.filter((tk) => tk.labeled)
+  .map((tk) => tk.value);
 
 const m = t();
 const L = m.settings.labels;
@@ -43,10 +49,13 @@ test('both ruler previews change with the levels and the range, and fill the pag
   await expect(start.getByText(m.settings.previewStart, { exact: true })).toBeVisible();
   await expect(hardest.getByText(m.settings.previewMax, { exact: true })).toBeVisible();
 
-  // Defaults: 0 to 100, starting level 1 labels every number, hardest level 5 shows only the end points.
+  // Defaults: 0 to 100, starting level 1 labels every number except the small labels crowding a large one (T231),
+  // hardest level 5 shows only the end points.
   const start1 = await counts(start);
   const max5 = await counts(hardest);
-  expect(start1).toMatchObject({ lines: 101, labels: 101 });
+  expect(start1).toMatchObject({ lines: 101, labels: LEVEL1_LABELS.length });
+  // Medium lines at 5, 15 … 95 on level 1 (T235).
+  await expect(start.locator('[data-testid="preview-line"][data-size="medium"]')).toHaveCount(10);
   expect(max5).toMatchObject({ lines: 2, labels: 2, text: '0,100' });
 
   // Both previews are as wide as the settings page.
@@ -85,7 +94,7 @@ test('both ruler previews change with the levels and the range, and fill the pag
   await page.locator('.settings-group-wide').screenshot({ path: test.info().outputPath('previews-550-780.png') });
 });
 
-test('the game ruler at 0 to 100, level 1, labels every number in two rows (T217, FR-017)', async ({ page }) => {
+test('the game ruler at 0 to 100, level 1, labels the numbers in two rows, none crowding a large label (T217, T231, FR-017)', async ({ page }) => {
   const settings = { ...defaultSettings(), freePlay: true };
   expect(settings.range).toMatchObject({ min: 0, max: 100 });
   expect(settings.rulerLevelStart).toBe(1);
@@ -94,7 +103,6 @@ test('the game ruler at 0 to 100, level 1, labels every number in two rows (T217
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase', 'aiming');
-  const all = Array.from({ length: 101 }, (_, i) => i).join(',');
-  await expect(page.locator('canvas')).toHaveAttribute('data-ruler-labels', all);
+  await expect(page.locator('canvas')).toHaveAttribute('data-ruler-labels', LEVEL1_LABELS.join(','));
   await page.screenshot({ path: test.info().outputPath('game-ruler-0-100-level-1.png') });
 });

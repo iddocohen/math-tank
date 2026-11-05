@@ -96,7 +96,7 @@ The spec (Overview, US1, US2, US4 scenario 2, US5, Edge Cases, FR-002, FR-010, F
 
 The product owner reported that "Neue Landschaft" put several numbered tanks on the field and reset the round, which was not the idea of the button. This is an intended change, not drift.
 
-- **[Amendment 08](./amendment-08-refresh-keeps-round.md)** keeps the round going when the child presses "Neue Landschaft": new hills and exactly one enemy at a new position, with a new challenge that is not a comparison. Hearts, the destroyed-tank counter, the round time and the personal-best tracking continue, and the enemy does not fire because of the press. It replaces amendment 03 item 2 (the button started a new round). A new round starts only from the round-end screen or the start screen.
+- **[Amendment 08](./amendment-08-refresh-keeps-round.md)** keeps the round going when the child presses "Neue Landschaft": new hills and exactly one enemy at a new position, with a new challenge of any enabled kind (since Phase 22b, T243, a comparison is allowed, because a comparison turn has one enemy since amendment 09). Hearts, the destroyed-tank counter, the round time and the personal-best tracking continue, and the enemy does not fire because of the press. It replaces amendment 03 item 2 (the button started a new round). A new round starts only from the round-end screen or the start screen.
 - PRD section 7.3 is kept: a refresh cannot be used to reset a lost heart or the time, so the score and the personal best still count only exact hits within one round.
 
 The spec (FR-070), contracts and tasks (T232 in Phase 22) were updated to match.

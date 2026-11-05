@@ -36,15 +36,34 @@
  * challenge is shown, so a parent-set time limit brings the next help step; only with such a limit a thin bar shows
  * the time until then (`data-testid="help-timer"`), with no number and no warning colour.
  *
+ * One message line (T230, FR-057): the status line shows at most one child message: the range hint; else the hit text
+ * while it is shown; else, after a miss, the encouraging phrase (or the near-miss line with both numbers) until
+ * MISS_MESSAGE_MS after the child can choose again, then the help step's text; else the help step's text. There is no
+ * "Gelandet bei N" message: the ruler shows the landing number.
+ *
+ * Old results leave the screen (T233, FR-004, FR-066): the hit text fades and is gone HIT_FEEDBACK_MS after the hit,
+ * and at once when a later challenge starts; the near-miss line stays until the next shot.
+ *
+ * The challenge card (T234, FR-088): each new challenge first shows the banner large in the middle of the sky
+ * (`data-placement="center"`) for CARD_CENTER_MS or until the first input (a digit, a tap on the ruler, a help
+ * request, a shot), then large at the top center (`data-placement="top"`).
+ *
  * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
  * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
 import { visibleEnemy } from '../core/battle/round';
 import type { LastShot, PromptSpec, RoundState } from '../core/types';
 import { comparisonPrompt, helpText, messageText, promptText, t } from '../i18n';
+
+/** The hit text is shown this long after the hit (T233). */
+export const HIT_FEEDBACK_MS = 2000;
+/** After a miss the phrase stays this long after the child can choose again, then the help text follows (T230). */
+export const MISS_MESSAGE_MS = 2000;
+/** A new challenge stays in the middle of the sky this long unless the child starts earlier (T234). */
+export const CARD_CENTER_MS = 3000;
 
 interface Props {
   controller: BattleController;
@@ -66,10 +85,15 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
   const inSearch = state.mode === 'guided' && state.challenge !== null && state.phase !== 'roundOver';
-  // The near-miss line is already shown with both numbers, so only an encouraging phrase gets its own line.
-  const encouragement = inSearch && lastShot !== null && !lastShot.hit && state.message?.key === 'encouragement' ? messageText(state.message) : null;
   const content = inSearch && state.phase !== 'playerShot' ? state.help.content : null;
   const hint = content ? helpText(content) : null;
+  const freshHit = useFreshHit(state);
+  const missMessageOn = useMissMessage(state);
+  const missed = lastShot !== null && !lastShot.hit;
+  // One message line (T230): the miss message gives way to the help text once its time is over.
+  const showMiss = missed && (hint === null || missMessageOn);
+  const encouragement = showMiss && inSearch && !lastShot.nearMiss && state.message?.key === 'encouragement' ? messageText(state.message) : null;
+  const placement = useCardPlacement(state);
   const solution = state.help.level === 3 && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
   useHelpTick(controller, state);
 
@@ -93,7 +117,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-enemy-number={enemy?.position}
     >
       {state.challenge && (
-        <div className="challenge-banner" data-testid="challenge-banner">
+        <div className={`challenge-banner placement-${placement}`} data-testid="challenge-banner" data-placement={placement}>
           <BannerText prompt={state.challenge.prompt} tens={state.help.content?.tensDigits === true} />
         </div>
       )}
@@ -101,29 +125,26 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
-        ) : lastShot?.hit ? (
-          // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
-          <span className="landed hit" data-testid="hit-feedback">
+        ) : lastShot?.hit && freshHit ? (
+          // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068);
+          // it fades and is gone after HIT_FEEDBACK_MS (T233).
+          <span className="landed hit fade-out" data-testid="hit-feedback">
             {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
-        ) : lastShot?.nearMiss ? (
+        ) : showMiss && lastShot.nearMiss ? (
           // On the tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072).
           <span className="landed near" data-testid="hit-feedback">
             {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
           </span>
-        ) : lastShot ? (
-          <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
-        ) : null}
-        {encouragement && (
+        ) : encouragement ? (
           <span className="encouragement" data-testid="encouragement">
             {encouragement}
           </span>
-        )}
-        {hint && (
+        ) : hint ? (
           <span className="help-text" data-testid="help-text">
             {hint}
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className="top-left">
@@ -182,6 +203,60 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * True while the latest hit's text is shown (T233): for HIT_FEEDBACK_MS after the hit, and only as long as the
+ * challenge that came with the hit is still the current one.
+ */
+function useFreshHit(state: RoundState): boolean {
+  const shot = state.lastShot?.hit ? state.lastShot : null;
+  // The hit belongs to the challenge shown after it; the controller passes the shot phase first.
+  const seen = useRef<{ shot: LastShot; challenge: RoundState['challenge'] | undefined } | null>(null);
+  if (shot && seen.current?.shot !== shot) seen.current = { shot, challenge: undefined };
+  if (shot && seen.current && seen.current.challenge === undefined && state.phase !== 'playerShot') seen.current.challenge = state.challenge;
+  const [expired, setExpired] = useState<LastShot | null>(null);
+  useEffect(() => {
+    if (!shot) return;
+    const id = setTimeout(() => setExpired(shot), HIT_FEEDBACK_MS);
+    return () => clearTimeout(id);
+  }, [shot]);
+  return shot !== null && expired !== shot && seen.current?.challenge === state.challenge;
+}
+
+/**
+ * True while the message of the latest miss is shown (T230): from the miss until MISS_MESSAGE_MS after the child can
+ * choose again (phase 'challenge' or 'aiming').
+ */
+function useMissMessage(state: RoundState): boolean {
+  const shot = state.lastShot && !state.lastShot.hit ? state.lastShot : null;
+  const choosing = state.phase === 'challenge' || state.phase === 'aiming';
+  const [expired, setExpired] = useState<LastShot | null>(null);
+  useEffect(() => {
+    if (!shot || !choosing) return;
+    const id = setTimeout(() => setExpired(shot), MISS_MESSAGE_MS);
+    return () => clearTimeout(id);
+  }, [shot, choosing]);
+  return shot !== null && expired !== shot;
+}
+
+/**
+ * Where the challenge card stands (T234): 'center' for a new challenge, 'top' after CARD_CENTER_MS or from the first
+ * input on (a typed digit, a chosen number, a help request, a shot).
+ */
+function useCardPlacement(state: RoundState): 'center' | 'top' {
+  const challenge = state.challenge;
+  const input = state.entry.typed !== '' || state.selection !== null || state.help.level > 0 || state.phase === 'playerShot' || state.phase === 'enemyTurn';
+  const moved = useRef<{ challenge: RoundState['challenge']; top: boolean }>({ challenge: null, top: false });
+  if (moved.current.challenge !== challenge) moved.current = { challenge, top: false };
+  if (input) moved.current.top = true;
+  const [timedOut, setTimedOut] = useState<RoundState['challenge']>(null);
+  useEffect(() => {
+    if (!challenge) return;
+    const id = setTimeout(() => setTimedOut(challenge), CARD_CENTER_MS);
+    return () => clearTimeout(id);
+  }, [challenge]);
+  return moved.current.top || timedOut === challenge ? 'top' : 'center';
 }
 
 /** True once the current challenge accepts answers; re-renders when the 1-second wait ends (edge case "Rapid tapping"). */

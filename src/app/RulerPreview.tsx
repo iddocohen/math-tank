@@ -3,6 +3,7 @@
  * ruler drawn with the game's tick and label rules (`ticksFor`, `labelFontSize`, the label rows of T217) and the
  * game's layout (`DEFAULT_LAYOUT`, `numberToX`), so it shows what the game ruler shows. The SVG fills the width of
  * its container; `width` is the logical width the layout is scaled to (the game's world width by default).
+ * Medium lines at half of each major step on levels 1 to 3 (T235) are drawn between the minor and major lengths.
  */
 import { DEFAULT_LAYOUT, numberToX } from '../core/numberline/mapping';
 import { labelFontSize, ticksFor, type RulerLevel } from '../core/numberline/ticks';
@@ -18,6 +19,7 @@ interface Props {
 /** Vertical positions in game units, matching src/game/NumberLineView.ts (axis 742, label rows 772 and 798). */
 const AXIS_Y = 20;
 const MAJOR_TICK = 26;
+const MEDIUM_TICK = 20;
 const MINOR_TICK = 14;
 const ROW_Y = [AXIS_Y + 30, AXIS_Y + 56] as const;
 const HEIGHT = 96;
@@ -41,17 +43,20 @@ export function RulerPreview({ range, level, width = DEFAULT_LAYOUT.worldWidth }
       <line x1={layout.left} x2={layout.right} y1={AXIS_Y * k} y2={AXIS_Y * k} strokeWidth={4 * k} />
       {visible.map((tk) => {
         const big = tk.major || isEnd(tk.value);
-        const len = (big ? MAJOR_TICK : MINOR_TICK) * k;
+        const size = big ? 'major' : tk.size;
+        const len = (size === 'major' ? MAJOR_TICK : size === 'medium' ? MEDIUM_TICK : MINOR_TICK) * k;
         return (
           <line
             key={`l${tk.value}`}
             data-testid="preview-line"
             data-major={tk.major}
+            data-size={size}
+            data-value={tk.value}
             x1={x(tk.value)}
             x2={x(tk.value)}
             y1={AXIS_Y * k - len / 2}
             y2={AXIS_Y * k + len / 2}
-            strokeWidth={(big ? 4 : 2) * k}
+            strokeWidth={(size === 'major' ? 4 : size === 'medium' ? 3 : 2) * k}
           />
         );
       })}

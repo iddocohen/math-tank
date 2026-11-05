@@ -55,6 +55,9 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   const canvas = page.locator('canvas');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
+  // A new challenge first stands large in the middle of the sky, then moves to the top center (T234, FR-088).
+  await expect(page.getByTestId('challenge-banner')).toHaveAttribute('data-placement', 'center');
+  await expect(page.getByTestId('challenge-banner')).toHaveAttribute('data-placement', 'top', { timeout: 6_000 });
   // The enemy and its pointer line are visible from the start of the search (amendment 07, FR-010, FR-073).
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
   await expect(canvas).toHaveAttribute('data-pointer-lines', (await overlay.getAttribute('data-enemy-number'))!);
@@ -91,9 +94,14 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-turn', '1');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
-  await expect(page.getByText(m.battle.landedAt(wrong))).toBeVisible();
+  // One message line (T230): the ruler shows the landing number, the status line the phrase and then the help text.
+  await expect(canvas).toHaveAttribute('data-landing', String(wrong));
+  await expect(page.getByText(m.battle.landedAt(wrong))).toHaveCount(0);
   await expect(page.getByTestId('encouragement')).toBeVisible();
   expect(m.encouragements).toContain(await page.getByTestId('encouragement').textContent());
+  await expect(page.getByRole('status').locator(':scope > *')).toHaveCount(1);
+  await expect(page.getByTestId('help-text')).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId('encouragement')).toHaveCount(0);
   // The enemy stays visible at its number, and the step count stays on the ruler until the next fire.
   await expect(overlay).toHaveAttribute('data-enemy-number', String(n));
   await expect(canvas).toHaveAttribute('data-steps-label', m.battle.steps(10));
@@ -109,6 +117,12 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await expect(overlay).toHaveAttribute('data-help-level', '0');
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
   await expect(page.getByTestId('score')).toHaveText('1');
+  // The next challenge starts as a centered card; the hit text and the hit's landing marker are gone within about
+  // 2 seconds while it runs (T233, T234, P7).
+  await expect(page.getByTestId('challenge-banner')).toHaveAttribute('data-placement', 'center');
+  await expect(page.getByTestId('hit-feedback')).toHaveCount(0, { timeout: 3_000 });
+  await expect(canvas).toHaveAttribute('data-landing', '', { timeout: 3_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
 
   // After a page reload the new round shows the enemy and its pointer line again (amendment 07, product owner report).
   await page.reload();

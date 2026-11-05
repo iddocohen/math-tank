@@ -216,22 +216,45 @@ input:focus-visible {
   box-shadow: 0 6px 0 #9e2522;
 }
 
-/* Challenge banner at the top center (T068); the status line sits below it. */
+/*
+ * Challenge card (T068, T234, FR-088): a new challenge first stands large in the middle of the sky, then moves to the
+ * top center and stays large there; the status line sits below it. It never takes pointer input.
+ */
 .challenge-banner {
   position: absolute;
   left: 50%;
   top: calc(max(8px, env(safe-area-inset-top)) + 8px);
-  transform: translateX(-50%);
+  transform: translate(-50%, 0);
   width: max-content;
-  max-width: min(860px, calc(100% - 320px));
-  padding: 8px 20px;
-  border-radius: 14px;
-  font-size: 1.6rem;
+  max-width: min(980px, calc(100% - 240px));
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: 2.2rem;
+  line-height: 1.2;
   font-weight: 800;
   text-align: center;
   color: #fff;
-  background: rgb(20 28 48 / 0.88);
+  background: rgb(20 28 48 / 0.9);
   pointer-events: none;
+  transition:
+    top 450ms ease-in-out,
+    transform 450ms ease-in-out,
+    font-size 450ms ease-in-out,
+    padding 450ms ease-in-out;
+}
+
+.challenge-banner.placement-center {
+  top: 30%;
+  transform: translate(-50%, -50%);
+  padding: 20px 36px;
+  font-size: 3rem;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .challenge-banner {
+    transition: none;
+  }
 }
 
 /* Comparison options in the banner (amendment 09); help step 1 highlights each tens digit (FR-031). */
@@ -250,16 +273,20 @@ input:focus-visible {
   .challenge-banner {
     max-width: calc(100% - 32px);
     top: calc(max(8px, env(safe-area-inset-top)) + 64px);
-    font-size: 1.25rem;
+    font-size: 1.5rem;
+  }
+
+  .challenge-banner.placement-center {
+    font-size: 2rem;
   }
 }
 
-/* Range hint, landing number and encouragement, at the top center below the banner. */
+/* One message line (T230, FR-057): range hint, hit text, phrase or help text, at the top center below the banner. */
 .status-line {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(max(8px, env(safe-area-inset-top)) + 72px);
+  top: calc(max(8px, env(safe-area-inset-top)) + 84px);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -269,7 +296,7 @@ input:focus-visible {
 
 @media (max-width: 720px) {
   .status-line {
-    top: calc(max(8px, env(safe-area-inset-top)) + 120px);
+    top: calc(max(8px, env(safe-area-inset-top)) + 124px);
   }
 }
 
@@ -282,7 +309,23 @@ input:focus-visible {
   background: rgb(20 28 48 / 0.8);
 }
 
-/* US5 help step text (FR-031): next to the encouraging phrase. */
+/* The hit text fades out over HIT_FEEDBACK_MS (T233). */
+.fade-out {
+  animation: fade-out 2000ms ease-in forwards;
+}
+
+@keyframes fade-out {
+  0%,
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* US5 help step text (FR-031): the message line after the phrase (T230). */
 .help-text {
   padding: 6px 16px;
   border-radius: 12px;

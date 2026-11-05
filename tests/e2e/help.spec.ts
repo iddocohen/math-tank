@@ -1,7 +1,7 @@
 /**
  * US5 help end to end (T098, AC-07, SC-005, SC-006, FR-030, FR-031, FR-062, FR-081): in a guided search the child
- * types and fires three wrong numbers. After each one the landing number and an encouraging phrase are shown, with no
- * forbidden word, and the enemy fires back (amendment 07). After the first the direction is shown, after the third the
+ * types and fires three wrong numbers. After each one the ruler shows the landing number and the one message line
+ * shows an encouraging phrase and then the help text (T230), with no forbidden word, and the enemy fires back (amendment 07). After the first the direction is shown, after the third the
  * solution; one press of Enter fires at it and destroys the enemy. A miss never removes a heart by itself. In the next
  * search H shows the first help step, and the enemy does not fire. Game state comes from the overlay's and the
  * canvas's data-* attributes (D4).
@@ -64,11 +64,15 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
     await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
     await expect(overlay).toHaveAttribute('data-help-level', String(i + 1));
 
-    await expect(page.getByText(m.battle.landedAt(wrong))).toBeVisible();
+    // One message line (T230): the landing number is on the ruler; the phrase comes first, then the help text.
+    await expect(page.locator('canvas')).toHaveAttribute('data-landing', String(wrong));
+    await expect(page.getByText(m.battle.landedAt(wrong))).toHaveCount(0);
     const encouragement = page.getByTestId('encouragement');
     await expect(encouragement).toBeVisible();
     const phrase = (await encouragement.textContent()) ?? '';
     expect(m.encouragements).toContain(phrase);
+    await expect(page.getByTestId('help-text')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('status').locator(':scope > *')).toHaveCount(1);
     const help = (await page.getByTestId('help-text').textContent()) ?? '';
     for (const text of [phrase, help, (await page.getByRole('status').textContent()) ?? '']) expect(hasForbiddenWord(text)).toBe(false);
 

@@ -112,9 +112,9 @@ describe('SettingsPage', () => {
     expect(screen.getByText(m.settings.previewStart)).toBeTruthy();
     expect(screen.getByText(m.settings.previewMax)).toBeTruthy();
 
-    // Defaults: 0 to 100, starting level 1 (every number labeled), hardest level 5 (only the end points).
+    // Defaults: 0 to 100, starting level 1 (every number labeled except the 17 small labels crowding a large one, T231), hardest level 5 (only the end points).
     expect(start().getAttribute('aria-label')).toBe(m.settings.preview(0, 100, 1));
-    expect(labelsOf(start())).toHaveLength(101);
+    expect(labelsOf(start())).toHaveLength(84);
     expect(labelsOf(hardest())).toEqual([0, 100]);
     expect(linesOf(hardest())).toBe(2);
 

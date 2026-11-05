@@ -577,6 +577,27 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
+## Phase 22b: UI polish from product-owner testing
+
+**Goal**: Texts on the battle screen never overlap each other or a tank, the child reads one message at a time, old results leave the screen, the challenge is large and easy to read, and the ruler on levels 1 to 3 has a medium line at each half of a major step. Items P7, P8 and P9 come from the product owner's demo test; P1 to P4 come from the screenshot review of help steps 1 to 3 for 43 − 7; P10 follows amendment 09.
+
+**Independent Test**: In a guided 43 − 7 search, help steps 1 to 3 show no two texts on top of each other and no number over a tank; after a hit the next challenge appears large in the middle of the sky, then moves to the top, and the hit text and landing marker are gone after about 2 seconds; the 0 to 100 ruler on level 1 shows longer lines at 5, 15, 25 and so on.
+
+- [X] T228 [P] Help labels never overlap the ruler labels (P1, FR-017, FR-031): tests first in a new `src/core/view/rulerText.test.ts` (text boxes estimated from the font size and the digit count, as in `labelWidth`): for 43 − 7 and 24 + 8 in 0 to 100 at ruler levels 1 to 5 and help steps 1 to 3 (from `nextHelp`, landed 31 and 30), no two drawn text boxes overlap: the visible ruler labels, the help chips (nearest major line, option markers, solution chip), the starting-number chip, the step labels at the stops of the step path, the landing number and the solution number; then implement `src/core/view/rulerText.ts` (`chipBox`, `rulerLabelBoxes`, `coveredLabels`) and use it in `src/game/NumberLineView.ts`: every ruler label under a help chip, the starting-number chip, a step label or the typed-number chip is hidden while that chip is shown and shown again when it goes; step labels get the same dark chip as help chips
+- [X] T229 The solution number and the step count never cover a tank (P2, FR-024, FR-031): tests first in `src/core/view/rulerText.test.ts`: `solutionNumberBox` places the large solution number above the ruler band beside the enemy's pointer line, never overlapping either tank's box, the pointer line or the landing number, for enemies at every number of 0 to 100 standing on ground from the lowest allowed height up; `stepCountBox` places the step count beside the walking icon, behind it in the walking direction, inside the ruler band and above the axis; then use both in `src/game/NumberLineView.ts` (`helpSolution`, `showStep`)
+- [X] T230 One message line at a time (P3, FR-057, FR-031, FR-072): tests first in `src/app/BattleOverlay.test.tsx`: the status line shows at most one child message: the range hint; else the hit text while it is shown (T233); else, after a miss, the encouraging phrase (or "Ganz knapp! Triff die Linie." with both numbers after a near miss) until 2 seconds after the child can choose again, then the help step text; else the help step text after a help request; "Gelandet bei N" is no longer shown, because the ruler shows the landing number; then implement in `src/app/BattleOverlay.tsx` and `src/app/styles.css`; update `tests/e2e/help.spec.ts` and `tests/e2e/guided.spec.ts`, which read the landing chip, the phrase and the help text at the same time
+- [X] T231 [P] Small labels keep a clear gap to large labels (P4, FR-017): tests first in `src/core/numberline/ticks.test.ts`: on level 1 in two rows, a small label and a large label (major line or end point) in the same row keep at least `LARGE_LABEL_GAP` (6 units) between their estimated widths; a small label that fits in neither row only because of a large label is left without a label, its line still drawn; 0 to 100 keeps every major and end label and labels every other number except the ones crowding a large label in the same row (12, 18, 22, 28 and so on); every width from 5 to 1000 still labels every line or falls back to the typed number as before; then implement in `src/core/numberline/ticks.ts`
+- [X] T233 Old results leave the screen (P7, FR-004, FR-066, FR-072): tests first in `src/app/BattleOverlay.test.tsx` (the hit text fades and is gone 2 seconds after the hit, and is gone at once when a later challenge starts, for example after "Neue Landschaft"; the near-miss line and the miss feedback stay until the next shot) and in `tests/e2e/guided.spec.ts` (after a hit the canvas `data-landing` and the overlay `hit-feedback` are gone within 3 seconds while the next challenge runs); then implement in `src/app/BattleOverlay.tsx`, `src/app/styles.css` (fade) and `src/game/NumberLineView.ts` (after a hit the landing marker and its number fade out after about 2 seconds and are removed at once when a later challenge starts; after a miss they stay until the next shot; the canvas carries `data-landing`, the landing number shown, '' when none)
+- [X] T234 The challenge as a large card (P8, FR-010, FR-053, FR-088): tests first in `src/app/BattleOverlay.test.tsx`: a new challenge shows the banner with `data-placement="center"`, large in the middle of the sky; after 3 seconds, or at once on the first input (a digit, a tap on the ruler, a help request, a shot), it gets `data-placement="top"` and stays large at the top center; a new challenge starts centered again; then implement in `src/app/BattleOverlay.tsx` and `src/app/styles.css` (centered card at least 2.6 rem, top banner at least 2.2 rem, both with a smooth move, never over the tanks after the move: the top banner and the status line stay within the top 160 pixels of a 720-pixel screen); `tests/e2e/guided.spec.ts` checks both placements; speech is built in T138
+- [X] T235 [P] Medium lines at half of each major step (P9, FR-016, FR-017, FR-069, [amendment 02](./amendment-02-ruler-ranges-and-detail.md) item 4): tests first in `src/core/numberline/ticks.test.ts` (`Tick.size` is `'major'`, `'medium'` or `'minor'`; on levels 1 to 3 a line at half of a major step is `'medium'` when that half is a multiple of the minor step: 5, 15, 25 … in 0 to 100, 50, 150 … in 0 to 1000, none in 0 to 230 with major 50 and minor 10; levels 4 and 5 have no medium lines; labels unchanged) and `src/app/RulerPreview.test.tsx` (each preview line carries `data-size`, and the level 1 preview of 0 to 100 has 10 medium lines); then implement `size` in `src/core/numberline/ticks.ts` and draw medium lines between the minor and major lengths in `src/game/NumberLineView.ts` (ruler and zoomed ten) and `src/app/RulerPreview.tsx` (both settings previews)
+- [X] T243 [US1] A comparison may follow "Neue Landschaft" (P10, FR-070, [amendment 08](./amendment-08-refresh-keeps-round.md) item 1): amendment 09 left one enemy in comparison turns, so the rule "no comparison right after Neue Landschaft" has no purpose. Tests first in `src/core/battle/battleController.test.ts` (with only comparison turned on, the search after `newScene()` is a comparison with one enemy at the answer); then remove the `noComparison` parameter from `startSearch` and `searchChallenge` in `src/core/battle/guided.ts` and its use in `src/core/battle/controller.ts`; update FR-070, amendment 08 item 1 and the `newScene` doc in contracts/core-api.md
+
+Verification for the whole phase: muted headless Chromium screenshots (outside Playwright test: `--mute-audio`, `speechSynthesis.speak` stubbed) of the 0 to 100 ruler on level 1 and level 3 with medium lines, a 43 − 7 search at help steps 1 to 3, and a hit followed by the next challenge (the large centered card, and about 2 seconds later no hit text and no landing marker), stored in the session scratchpad; then lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox.
+
+**Checkpoint**: The battle screen shows one message at a time, with no overlapping texts, and the challenge is easy to read.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
@@ -635,6 +656,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **Phases 19 and 20 (US5)**: depend on Phase 15; Phase 20 needs Phase 11 (`showZoom`); comparison help needs Phase 18; step-path help needs Phase 17.
 - **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 13, 14 and 21.
 - **Phase 22a (amendment 09)**: depends on Phases 18, 18b, 20 and 22. Blocks Phase 23, whose keyboard spec T183 types the comparison answer. T236 runs before T237, T238 before T239, T240 before T241, and T242 last.
+- **Phase 22b (UI polish)**: depends on Phase 22a. Runs before Phase 23. T228 runs before T229 (same test file); T231 and T235 both change `src/core/numberline/ticks.ts`; T230 runs before T233 and T234 (same overlay code). Task IDs T228 to T231 and T233 to T235 are new; T232 was already used by amendment 08, so P10 is T243.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -697,35 +719,35 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-001 | T018, T022, T032, T035, T036, T043, T165 |
 | FR-002 | T032, T034, T041, T043, T060, T158, T163, T165, T208, T209, T222 |
 | FR-003 | T032, T041, T043, T047, T158, T163, T165, T169, T170 |
-| FR-004 | T019, T023, T032, T039, T041, T043, T066, T156, T158, T160, T165, T168 |
+| FR-004 | T019, T023, T032, T039, T041, T043, T066, T156, T158, T160, T165, T168, T233 |
 | FR-005 | T018, T022, T032, T037, T043, T158, T165 |
 | FR-006 | T020, T024, T032, T038, T043, T158, T159, T162, T165, T181, T186, T204, T208, T209 |
 | FR-007 | T018, T022, T032, T038, T043, T158, T165 |
 | FR-008 | T032, T034, T043, T048, T158, T165, T208, T209, T214 |
 | FR-009 | T040, T042, T102, T142 |
-| FR-010 | T060, T062, T065, T066, T067, T068, T070, T222, T223, T225, T226 |
+| FR-010 | T060, T062, T065, T066, T067, T068, T070, T222, T223, T225, T226, T234 |
 | FR-010a | T030, T060, T061, T062, T222 |
 | FR-011 | Removed by amendment 01 |
 | FR-012 | Removed by amendment 01 |
 | FR-013 | T060, T061, T062, T065, T066, T095, T096, T208, T222 |
 | FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181, T190, T193, T214 |
 | FR-015 | T028, T029, T168, T184 |
-| FR-016 | T051, T052, T147, T149, T173, T174 |
-| FR-017 | T051, T052, T147, T173, T174, T182, T201 |
+| FR-016 | T051, T052, T147, T149, T173, T174, T235 |
+| FR-017 | T051, T052, T147, T173, T174, T182, T201, T228, T231, T235 |
 | FR-018 | T064, T082, T099, T118, T122, T129, T130, T143, T147, T173, T175 |
 | FR-019 | T060, T062, T065, T068, T168, T170, T195, T197, T199, T201, T202 |
 | FR-020 | T143, T144, T145, T146, T147 |
 | FR-021 | T053, T057, T059, T177, T178 |
 | FR-022 | T071, T072, T076 |
 | FR-023 | T071, T073, T077 |
-| FR-024 | T074, T078, T080, T081, T082 |
+| FR-024 | T074, T078, T080, T081, T082, T229 |
 | FR-025 | T057, T059, T062, T072, T073, T076, T077 |
 | FR-026 | T084, T085, T087, T088, T089, T091, T236, T237, T238, T239, T240, T241 |
 | FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237 |
 | FR-028 | T002, T004, T008, T009, T053, T059, T164 |
 | FR-029 | T054, T055, T058, T059, T079, T086, T107, T148, T178, T196, T197 |
 | FR-030 | T080, T095, T096, T101 |
-| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143, T238, T239, T240, T241 |
+| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143, T238, T239, T240, T241, T228, T229, T230 |
 | FR-032 | T093, T094 |
 | FR-033 | T014, T015, T049, T097, T172 |
 | FR-034 | T095, T096, T101 |
@@ -750,11 +772,11 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-051 | T003, T134, T139 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
-| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201 |
+| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234 |
 | FR-054 | T032, T041, T111, T140, T141 |
 | FR-055 | T137, T138 |
 | FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179 |
-| FR-057 | T014, T049, T069, T083, T152, T153, T172, T179 |
+| FR-057 | T014, T049, T069, T083, T152, T153, T172, T179, T230 |
 | FR-058 | T029, T035, T050, T136, T184 |
 | FR-059 | T141, T153, T163, T165, T166, T167, T171, T183 |
 | FR-060 | T145, T146, T157, T161, T163, T165, T166, T167, T183 |
@@ -763,13 +785,13 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-063 | T157, T158, T161, T170, T183 |
 | FR-064 | T087, T088, T145, T146, T183, T238 |
 | FR-065 | T156, T160, T163, T169 |
-| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224 |
+| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224, T233 |
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
-| FR-069 | T112, T113, T182 |
-| FR-070 | T185, T200, T208 |
+| FR-069 | T112, T113, T182, T235 |
+| FR-070 | T185, T200, T208, T243 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
-| FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226 |
+| FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233 |
 | FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226 |
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
@@ -785,6 +807,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-085 | T206, T210, T211, T214 |
 | FR-086 | T205, T206, T207, T210, T211, T213, T214 |
 | FR-087 | T127, T128, T132, T133 |
+| FR-088 | T234 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242 |

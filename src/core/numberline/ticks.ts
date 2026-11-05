@@ -6,9 +6,14 @@
 import { createRng } from '../rng';
 import { DEFAULT_LAYOUT } from './mapping';
 
+/** Line length class (T235): major lines, medium lines at half of a major step on levels 1 to 3, and minor lines. */
+export type TickSize = 'major' | 'medium' | 'minor';
+
 export interface Tick {
   value: number;
   major: boolean;
+  /** How long and bold the line is drawn (T235, FR-016). */
+  size: TickSize;
   /** Drawn at this ruler level. */
   visible: boolean;
   labeled: boolean;
@@ -31,6 +36,9 @@ export const LABEL_FONT = { large: 26, minor: 20, small: 16 } as const;
 
 /** Space kept between the estimated text widths of two labels in the same row (logical units). */
 export const LABEL_GAP = 4;
+
+/** Space kept between a small label and a large label (major line or end point) in the same row of two (T231). */
+export const LARGE_LABEL_GAP = 6;
 
 /** Estimated width of a bold digit (or minus sign) as a share of the font size: Arial and Helvetica bold digits are 0.556 em. */
 const DIGIT_WIDTH = 0.56;
@@ -103,9 +111,14 @@ export function ticksFor(
 ): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean; labelRows: 1 | 2 } {
   const { min, max } = view;
   const { majorStep, minorStep } = stepsFor(view);
+  // Medium lines (T235): half of each major step, on levels 1 to 3, when that half lies on the minor grid.
+  const half = majorStep / 2;
+  const hasMedium = level <= 3 && Number.isInteger(half) && isMultiple(half, minorStep);
+  const sizeOf = (value: number): TickSize => (isMultiple(value, majorStep) ? 'major' : hasMedium && isMultiple(value, half) ? 'medium' : 'minor');
   const ticks: Tick[] = lineValues(min, max, majorStep, minorStep).map((value) => ({
     value,
     major: isMultiple(value, majorStep),
+    size: sizeOf(value),
     visible: false,
     labeled: false,
     row: 0,
@@ -126,9 +139,11 @@ export function ticksFor(
   let labelRows: 1 | 2 = 1;
   switch (level) {
     case 1: {
-      // Every line labeled in one row; else in two staggered rows; else only the typed number (T203, T217).
-      if (placeLabels(ticks, view, 1)) labelRows = 1;
-      else if (placeLabels(ticks, view, 2)) labelRows = 2;
+      // Every line labeled in one row; else in two staggered rows, leaving out small labels that crowd a large one
+      // (T231); else only the typed number (T203, T217).
+      let skipped = placeLabels(ticks, view, 1);
+      if (skipped) labelRows = 1;
+      else if ((skipped = placeLabels(ticks, view, 2))) labelRows = 2;
       else {
         labelTypedNumber = true;
         for (const t of ticks) {
@@ -136,7 +151,7 @@ export function ticksFor(
           t.shift = 0;
         }
       }
-      for (const t of ticks) mark(t, true, !labelTypedNumber || t.major);
+      for (const t of ticks) mark(t, true, labelTypedNumber ? t.major : !skipped!.has(t));
       break;
     }
     case 2:
@@ -166,14 +181,20 @@ export function ticksFor(
  * numbers alternate rows, or to the other row if that one has no room. Two labels in a row fit when they are at least
  * MIN_LABEL_SPACING apart and their estimated widths keep LABEL_GAP between them; an end point's label may move
  * outward by up to half its width to make room. Sets `row` and `shift` on every tick.
+ *
+ * With two rows (T231), a small label and a large label (major line or end point) keep LARGE_LABEL_GAP between them,
+ * and a small label that fits in neither row, and in its preferred row only because of large labels, is left out:
+ * its line is still drawn. Returns the left-out ticks, or null when the labels do not fit.
  */
-function placeLabels(ticks: Tick[], view: { min: number; max: number }, rows: 1 | 2): boolean {
+function placeLabels(ticks: Tick[], view: { min: number; max: number }, rows: 1 | 2): Set<Tick> | null {
   const scale = (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / (view.max - view.min);
   const { minorStep } = stepsFor(view);
   const isEnd = (t: Tick) => t.value === view.min || t.value === view.max;
   const xOf = (t: Tick) => (t.value - view.min) * scale;
   const widthOf = (t: Tick) => labelWidth(t.value, labelFontSize(t, rows, view));
   const placed: Tick[][] = [[], []];
+  const skipped = new Set<Tick>();
+  const isLarge = (t: Tick) => t.major || isEnd(t);
   for (const t of ticks) {
     t.row = 0;
     t.shift = 0;
@@ -182,12 +203,15 @@ function placeLabels(ticks: Tick[], view: { min: number; max: number }, rows: 1 
   /** The end point's outward shift that lets `t` share a row with `other`, or null when they do not fit. */
   const fits = (t: Tick, other: Tick): { end: Tick; shift: number } | null | true => {
     const dist = Math.abs(xOf(t) - xOf(other));
-    const need = Math.max(MIN_LABEL_SPACING, (widthOf(t) + widthOf(other)) / 2 + LABEL_GAP);
+    const gap = rows === 2 && isLarge(t) !== isLarge(other) ? LARGE_LABEL_GAP : LABEL_GAP;
+    const need = Math.max(MIN_LABEL_SPACING, (widthOf(t) + widthOf(other)) / 2 + gap);
     if (dist >= need) return true;
     const end = isEnd(t) ? t : isEnd(other) ? other : null;
     if (!end || need - dist > widthOf(end) / 2) return null;
     return { end, shift: need - dist };
   };
+  /** The labels in `row` that leave no room for `t`. */
+  const blockers = (t: Tick, row: 0 | 1): Tick[] => placed[row]!.filter((other) => fits(t, other) === null);
   const tryRow = (t: Tick, row: 0 | 1): boolean => {
     const shifts: { end: Tick; shift: number }[] = [];
     for (const other of placed[row]!) {
@@ -205,14 +229,19 @@ function placeLabels(ticks: Tick[], view: { min: number; max: number }, rows: 1 
   };
 
   const first = ticks.filter((t) => t.major || isEnd(t));
-  for (const t of first) if (!tryRow(t, 0)) return false;
+  for (const t of first) if (!tryRow(t, 0)) return null;
   for (const t of ticks) {
     if (t.major || isEnd(t)) continue;
     const preferred: 0 | 1 = rows === 2 && Math.abs(Math.round(t.value / minorStep)) % 2 === 1 ? 1 : 0;
     const order: (0 | 1)[] = rows === 2 ? [preferred, preferred === 0 ? 1 : 0] : [0];
-    if (!order.some((row) => tryRow(t, row))) return false;
+    if (order.some((row) => tryRow(t, row))) continue;
+    if (rows === 2 && blockers(t, preferred).every(isLarge)) {
+      skipped.add(t);
+      continue;
+    }
+    return null;
   }
-  return true;
+  return skipped;
 }
 
 /**

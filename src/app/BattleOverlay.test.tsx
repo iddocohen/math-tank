@@ -127,16 +127,63 @@ describe('BattleOverlay (amendment 06)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-last-shot')).toBe('near');
   });
 
-  it('a plain miss sets data-last-shot miss and shows the landing number', () => {
+  it('a plain miss sets data-last-shot miss and shows no "Gelandet bei N" message: the ruler shows the landing number (T230)', () => {
     const { controller } = setup();
     const p = controller.getState().player.position;
     act(() => {
       controller.fireAt(p);
       controller.shotAnimationDone();
     });
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-last-landing')).toBe(String(p));
     expect(screen.getByTestId('battle-overlay').getAttribute('data-last-shot')).toBe('miss');
     expect(screen.queryByTestId('hit-feedback')).toBeNull();
-    expect(screen.getByTestId('battle-overlay').textContent).toContain(t().battle.landedAt(p));
+    expect(screen.getByTestId('battle-overlay').textContent).not.toContain(t().battle.landedAt(p));
+  });
+
+  it('the hit text fades and is gone 2 seconds after the hit (T233, P7)', () => {
+    vi.useFakeTimers();
+    const { controller } = setup();
+    const n = enemyOf(controller.getState()).position;
+    act(() => {
+      controller.fireAt(n);
+      controller.shotAnimationDone();
+    });
+    expect(screen.getByTestId('hit-feedback').classList.contains('fade-out')).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(1900);
+    });
+    expect(screen.getByTestId('hit-feedback')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(screen.queryByTestId('hit-feedback')).toBeNull();
+  });
+
+  it('the hit text is gone at once when a later challenge starts ("Neue Landschaft") (T233, P7)', () => {
+    const { controller } = setup();
+    act(() => {
+      controller.fireAt(enemyOf(controller.getState()).position);
+      controller.shotAnimationDone();
+    });
+    expect(screen.getByTestId('hit-feedback')).toBeTruthy();
+    act(() => controller.newScene());
+    expect(screen.queryByTestId('hit-feedback')).toBeNull();
+  });
+
+  it('a near miss line stays until the next shot (T233)', () => {
+    vi.useFakeTimers();
+    const { controller } = setup();
+    const e = enemyOf(controller.getState()).position;
+    const near = e + (e < 100 ? 1 : -1);
+    act(() => {
+      controller.fireAt(near);
+      controller.shotAnimationDone();
+      controller.enemyShotAnimationDone();
+    });
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, e));
   });
 
   it('shows no clock by default', () => {
@@ -175,6 +222,11 @@ function setupGuided(over: Partial<Settings> = {}) {
   throw new Error('no seed found');
 }
 
+/** The child messages in the status line: at most one (T230, FR-057). */
+function messages(): Element[] {
+  return [...screen.getByRole('status').children];
+}
+
 describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
   it('shows the challenge banner at the top with the prompt text', () => {
     const { controller } = setupGuided();
@@ -202,7 +254,7 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
     expect(root.getAttribute('data-help-level')).toBe('1');
   });
 
-  it('after a miss shows the landing number and an encouraging phrase, with the enemy number and the step count in the data attributes', () => {
+  it('after a miss shows one message, the encouraging phrase, with the enemy number and the step count in the data attributes', () => {
     const { controller, advance } = setupGuided();
     const s = controller.getState();
     const miss = Math.round((s.player.position + s.challenge!.answer) / 2);
@@ -212,8 +264,9 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
       controller.shotAnimationDone();
     });
     const root = screen.getByTestId('battle-overlay');
-    expect(root.textContent).toContain(t().battle.landedAt(miss));
+    expect(root.textContent).not.toContain(t().battle.landedAt(miss));
     expect(encouragements).toContain(screen.getByTestId('encouragement').textContent);
+    expect(messages()).toHaveLength(1);
     expect(root.getAttribute('data-enemy-number')).toBe(String(s.challenge!.answer));
     expect(root.getAttribute('data-last-distance')).toBe(String(Math.abs(miss - s.challenge!.answer)));
     expect(root.hasAttribute('data-shots-since-enemy-fire')).toBe(false);
@@ -238,7 +291,91 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
     expect(root.getAttribute('data-last-shot')).toBe('near');
     expect(screen.getByTestId('hit-feedback').textContent).toContain(t().battle.near);
     expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, answer));
+    expect(messages()).toHaveLength(1);
     expect(t().battle).not.toHaveProperty('nearHidden');
+  });
+
+  it('after a miss the phrase stays until 2 seconds after the child can choose again, then the help text replaces it (T230, P3)', () => {
+    vi.useFakeTimers();
+    const { controller, advance } = setupGuided({ challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } });
+    const s = controller.getState();
+    advance(1000);
+    act(() => {
+      controller.fireAt(s.challenge!.answer > 50 ? s.challenge!.answer - 20 : s.challenge!.answer + 20);
+      controller.shotAnimationDone();
+    });
+    // While the enemy fires back, only the phrase.
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(messages()).toHaveLength(1);
+    expect(screen.getByTestId('encouragement')).toBeTruthy();
+    act(() => controller.enemyShotAnimationDone());
+    expect(controller.getState().phase).toBe('challenge');
+    act(() => {
+      vi.advanceTimersByTime(1900);
+    });
+    expect(messages()).toHaveLength(1);
+    expect(screen.getByTestId('encouragement')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(messages()).toHaveLength(1);
+    expect(screen.queryByTestId('encouragement')).toBeNull();
+    expect(screen.getByTestId('help-text').textContent).not.toBe('');
+  });
+
+  it('a help request without a miss shows only the help text (T230)', () => {
+    const { controller } = setupGuided();
+    act(() => controller.requestHelp());
+    expect(messages()).toHaveLength(1);
+    expect(screen.getByTestId('help-text')).toBeTruthy();
+  });
+
+  it('a new challenge shows the banner as a large card in the middle, then at the top after 3 seconds (T234, P8)', () => {
+    vi.useFakeTimers();
+    setupGuided();
+    const banner = screen.getByTestId('challenge-banner');
+    expect(banner.getAttribute('data-placement')).toBe('center');
+    act(() => {
+      vi.advanceTimersByTime(2900);
+    });
+    expect(banner.getAttribute('data-placement')).toBe('center');
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(banner.getAttribute('data-placement')).toBe('top');
+  });
+
+  for (const [name, input] of [
+    ['a digit', (c: BattleController) => c.typeDigit(4)],
+    ['a tap on the ruler', (c: BattleController) => c.selectNumber(12)],
+    ['a help request', (c: BattleController) => c.requestHelp()],
+  ] as const) {
+    it(`the card moves to the top at once on the first input: ${name} (T234)`, () => {
+      const { controller } = setupGuided();
+      expect(screen.getByTestId('challenge-banner').getAttribute('data-placement')).toBe('center');
+      act(() => input(controller));
+      expect(screen.getByTestId('challenge-banner').getAttribute('data-placement')).toBe('top');
+    });
+  }
+
+  it('the next challenge after a hit starts centered again, and the hit text goes once it is replaced (T233, T234)', () => {
+    vi.useFakeTimers();
+    const { controller, advance } = setupGuided();
+    act(() => controller.typeDigit(1));
+    expect(screen.getByTestId('challenge-banner').getAttribute('data-placement')).toBe('top');
+    advance(1000);
+    act(() => {
+      controller.fireAt(controller.getState().challenge!.answer);
+      controller.shotAnimationDone();
+    });
+    expect(screen.getByTestId('challenge-banner').getAttribute('data-placement')).toBe('center');
+    expect(screen.getByTestId('hit-feedback')).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+    expect(screen.queryByTestId('hit-feedback')).toBeNull();
   });
 });
 

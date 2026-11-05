@@ -3,7 +3,8 @@
  *
  * - Drawn in the ruler band (core/view/layout.ts, screen y 720 to 820) on the bedrock strip below the ground,
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
- * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
+ * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn. On levels
+ *   1 to 3 the line at half of each major step is a medium line, between the minor and major lengths (T235, FR-016).
  *   On level 1 every line is labeled: when the minor labels do not fit in one row, ticksFor puts them in two staggered
  *   rows (tick.row) and they are drawn with a smaller font; major lines and end points keep the large font in the
  *   first row, and an end point's label may sit slightly outward (tick.shift) (T217, FR-017). Only when two rows do
@@ -18,7 +19,9 @@
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler, and no
  *   number (amendment 05). The canvas carries `data-preview-text`, the typed number's label under the preview marker ('' when
  *   none), for the end-to-end tests only.
- * - After each player shot: a landing marker with the landing number in large digits (FR-004); after a miss, in
+ * - After each player shot: a landing marker with the landing number in large digits (FR-004); after a hit it fades
+ *   out after about 2 seconds and goes at once when a later challenge starts (T233). The canvas carries
+ *   `data-landing`, the landing number shown ('' when none), for the end-to-end tests only. After a miss, in
  *   every mode, a bracket from the landing number to the enemy's number with the step count (amendment 07, FR-072).
  *   The canvas carries `data-steps-label`, the bracket's text ('' when
  *   none), for the end-to-end tests only.
@@ -54,23 +57,39 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
-import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
+import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick, type TickSize } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
-import { tankCenter, visibleEnemy } from '../core/battle/round';
+import { tankCenter, visibleEnemy, WORLD_WIDTH } from '../core/battle/round';
 import type { HelpContent, RoundState, TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
+import {
+  AXIS_Y,
+  CHIP_FONT,
+  CHIP_PRIORITY,
+  chipBox,
+  COUNT_HEAD_HALF,
+  helpTextScene,
+  LABEL_ROW_2_Y,
+  LABEL_Y,
+  LANDED_BOTTOM,
+  layoutChips,
+  rulerLabelBoxes,
+  stepCountBox,
+  STEP_COUNT_FONT,
+  STEP_COUNT_STROKE,
+  type Chip,
+  type RulerLabelBox,
+} from '../core/view/rulerText';
 import { pointerLine } from '../core/view/pointerLine';
 import { stepFrames, stepMs, type StepFrame } from '../core/view/stepFrames';
 import { TEX } from './textures';
 import { t } from '../i18n';
 
-const AXIS_Y = 742;
 const MAJOR_TICK = 26;
+/** Medium lines at half of each major step on levels 1 to 3 (T235, FR-016). */
+const MEDIUM_TICK = 20;
 const MINOR_TICK = 14;
-const LABEL_Y = 772;
-/** The second row of level 1 labels (T217), below the first row's large labels. */
-const LABEL_ROW_2_Y = 798;
 /** Presses this far above or below the ruler still count as on the line. */
 const GRAB_MARGIN = 24;
 
@@ -81,6 +100,9 @@ const LANDED = 0xff8a65;
 const POINTER = 0xf4f6fb;
 const PULSE = 0x9be89f;
 const PULSE_MS = 700;
+/** A hit's landing marker starts to fade after this long and is gone HIT_FADE_MS later (T233, about 2 seconds). */
+const HIT_FADE_DELAY_MS = 1500;
+const HIT_FADE_MS = 500;
 /** The starting number of an addition or subtraction, and the step animation's marker (US3). */
 const START = 0x7ec8ff;
 /** The step animation pauses this long at each stop (a crossed ten, the intermediate result). */
@@ -99,6 +121,15 @@ const ARROW_FROM = 44;
 const ARROW_TO = 140;
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
+/** A chip's colours: the number's colour and the plate's. */
+interface ChipStyle {
+  fg: string;
+  bg: number;
+}
+
+/** Where a chip comes from; each source is replaced as a whole. */
+type ChipSource = 'help' | 'start' | 'steps' | 'typed';
+
 interface Drawn {
   min: number;
   max: number;
@@ -110,14 +141,25 @@ export class NumberLineView {
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly marks: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
-  /** The typed number's label under the preview marker on a crowded level 1 ruler, and its dark chip. */
-  private readonly typedChip: Phaser.GameObjects.Graphics;
-  private readonly typedText: Phaser.GameObjects.Text;
+  /** The ruler's own labels by number and their boxes, so a chip can hide the labels under it (T228). */
+  private labelByValue = new Map<number, Phaser.GameObjects.Text>();
+  private labelBoxes: RulerLabelBox[] = [];
+  /**
+   * Chips (T228): numbers on a plate on the first label row, from the help steps, the starting number, the stops of
+   * the step animation and the typed number on a crowded ruler. layoutChips keeps the ones that do not overlap and
+   * hides the ruler labels under them.
+   */
+  private readonly chipSources: Record<ChipSource, { chip: Chip; style: ChipStyle }[]> = { help: [], start: [], steps: [], typed: [] };
+  private readonly chipPlates: Phaser.GameObjects.Graphics;
+  private chipTexts: Phaser.GameObjects.Text[] = [];
   private readonly zoom: Phaser.GameObjects.Graphics;
   private zoomLabels: Phaser.GameObjects.Text[] = [];
   /** The ruler's lines as drawn, and whether a typed number gets its own label under the marker. */
   private ruled: { ticks: Tick[]; labelTypedNumber: boolean } = { ticks: [], labelTypedNumber: false };
   private readonly landedText: Phaser.GameObjects.Text;
+  /** A hit's landing marker, which fades out (T233), and the hit it belongs to. */
+  private readonly hitMarkGraphics: Phaser.GameObjects.Graphics;
+  private hitMark: { shot: NonNullable<RoundState['lastShot']>; challenge: RoundState['challenge'] | undefined; done: boolean } | null = null;
   private readonly stepsText: Phaser.GameObjects.Text;
   private drawn: Drawn | null = null;
   private dragging = false;
@@ -125,14 +167,12 @@ export class NumberLineView {
   /** The ring that pulses on the ruler at the destroyed enemy's number after a hit. */
   private readonly pulse: Phaser.GameObjects.Graphics;
   private pulsedShot: RoundState['lastShot'] = null;
-  /** The starting number's chip on the ruler (US3, T083). */
+  /** The starting number's ring on the ruler (US3, T083); its number is a chip. */
   private readonly startChip: Phaser.GameObjects.Graphics;
-  private readonly startText: Phaser.GameObjects.Text;
   /** Step animation (T082): passed lines and stops, the tank icon, the step count and the stop labels. */
   private readonly stepLines: Phaser.GameObjects.Graphics;
   private readonly stepIcon: Phaser.GameObjects.Image;
   private readonly stepCount: Phaser.GameObjects.Text;
-  private stepLabels: Phaser.GameObjects.Text[] = [];
   private stepTimer: Phaser.Time.TimerEvent | null = null;
   /** The stepAnimation array being shown, so a state update never starts it twice. */
   private animated: number[] | null = null;
@@ -156,12 +196,8 @@ export class NumberLineView {
     this.marks = scene.add.graphics().setDepth(11);
     this.zoom = scene.add.graphics().setDepth(13);
     this.pulse = scene.add.graphics().setDepth(12).setVisible(false);
-    this.typedChip = scene.add.graphics().setDepth(12).setVisible(false);
-    this.typedText = scene.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: '#ffd54a' })
-      .setOrigin(0.5, 0)
-      .setDepth(12)
-      .setVisible(false);
+    this.chipPlates = scene.add.graphics().setDepth(12);
+    this.hitMarkGraphics = scene.add.graphics().setDepth(11).setVisible(false);
     const big = { fontFamily: FONT, fontSize: '56px', fontStyle: 'bold', color: '#ffd54a', stroke: '#14203a', strokeThickness: 8 };
     this.landedText = scene.add.text(0, 0, '', { ...big, color: '#ff8a65' }).setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.stepsText = scene.add
@@ -171,16 +207,11 @@ export class NumberLineView {
       .setVisible(false);
 
     this.startChip = scene.add.graphics().setDepth(12).setVisible(false);
-    this.startText = scene.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: '#14203a' })
-      .setOrigin(0.5, 0)
-      .setDepth(12)
-      .setVisible(false);
     this.stepLines = scene.add.graphics().setDepth(12);
     this.stepIcon = scene.add.image(0, 0, TEX.tankBody).setOrigin(0.5, 1).setScale(0.7).setTint(START).setDepth(14).setVisible(false);
     this.stepCount = scene.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: '#14203a', strokeThickness: 6 })
-      .setOrigin(0.5, 1)
+      .text(0, 0, '', { fontFamily: FONT, fontSize: `${STEP_COUNT_FONT}px`, fontStyle: 'bold', color: '#ffffff', stroke: '#14203a', strokeThickness: STEP_COUNT_STROKE })
+      .setOrigin(0.5, 0.5)
       .setDepth(14)
       .setVisible(false);
 
@@ -256,20 +287,49 @@ export class NumberLineView {
     g.lineStyle(7, HELP, 1);
     g.lineBetween(0, -MAJOR_TICK, 0, MAJOR_TICK * 0.6);
     g.strokeCircle(0, 0, 20);
-    this.helpChip(x, n, HELP);
+    this.helpChip('nearestMajor', x, n, CHIP_PRIORITY.nearestMajor);
     this.scene.tweens.add({ targets: g, alpha: 0.3, duration: HELP_PULSE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.scene.game.canvas.dataset.helpHighlight = String(n);
   }
 
-  /** A number on a dark chip under the ruler line, over the ruler's own label (help labels, whatever the level). */
-  private helpChip(x: number, n: number, color: number): void {
-    const text = this.scene.add
-      .text(x, LABEL_Y, String(n), { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: hex(color) })
-      .setOrigin(0.5, 0)
-      .setDepth(13);
-    const w = text.width + 16;
-    this.helpLines.fillStyle(RULER_BG, 1).fillRoundedRect(x - w / 2, LABEL_Y - 3, w, text.height + 6, 8);
-    this.helpTexts.push(text);
+  /** A help number on a dark chip under the ruler line; the ruler labels under it are hidden (T228). */
+  private helpChip(key: string, x: number, n: number, priority: number): void {
+    const help = this.chipSources.help.filter((c) => c.chip.key !== key);
+    help.push({ chip: { key, x, text: String(n), priority }, style: { fg: hex(HELP), bg: RULER_BG } });
+    this.setChips('help', help);
+  }
+
+  /** Replaces the chips of one source and draws all chips again. */
+  private setChips(source: ChipSource, chips: { chip: Chip; style: ChipStyle }[]): void {
+    const old = this.chipSources[source];
+    const same = old.length === chips.length && old.every((c, i) => c.chip.key === chips[i]!.chip.key && c.chip.x === chips[i]!.chip.x && c.chip.text === chips[i]!.chip.text);
+    this.chipSources[source] = chips;
+    if (!same) this.renderChips();
+  }
+
+  /** Draws the kept chips and hides the ruler labels under them (T228, FR-017, FR-031). */
+  private renderChips(): void {
+    const all = [...this.chipSources.typed, ...this.chipSources.start, ...this.chipSources.steps, ...this.chipSources.help];
+    const { shown, hiddenLabels } = layoutChips(
+      this.labelBoxes,
+      all.map((c) => c.chip),
+    );
+    for (const text of this.chipTexts) text.destroy();
+    this.chipTexts = [];
+    const g = this.chipPlates.clear();
+    for (const chip of shown) {
+      const style = all.find((c) => c.chip === chip)!.style;
+      const b = chipBox(chip.x, chip.text, chip.fontSize);
+      g.fillStyle(style.bg, 1).fillRoundedRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, 8);
+      const text = this.scene.add
+        .text(chip.x, LABEL_Y, chip.text, { fontFamily: FONT, fontSize: `${chip.fontSize ?? CHIP_FONT}px`, fontStyle: 'bold', color: style.fg })
+        .setOrigin(0.5, 0)
+        .setDepth(13);
+      this.chipTexts.push(text);
+    }
+    for (const [value, label] of this.labelByValue) label.setVisible(!hiddenLabels.has(value));
+    this.scene.game.canvas.dataset.hiddenLabels = [...hiddenLabels].sort((a, b) => a - b).join(',');
+    this.scene.game.canvas.dataset.chips = shown.map((c) => c.text).join(',');
   }
 
   /**
@@ -281,7 +341,13 @@ export class NumberLineView {
     const dir = Math.sign(to - from);
     const ms = stepMs(steps);
     const x0 = numberToX(from, min, max);
-    const running = this.helpText(x0, RULER_TOP - 70, '0', 34, 0xffffff).setOrigin(0.5, 1);
+    // The running count stands beside the head of the counted stretch, inside the ruler band (T229).
+    const placeCount = (x: number, text: string) => {
+      const b = stepCountBox(x, dir, text, COUNT_HEAD_HALF);
+      running.setText(text).setPosition((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2);
+    };
+    const running = this.helpText(x0, AXIS_Y, '0', STEP_COUNT_FONT, 0xffffff).setOrigin(0.5, 0.5);
+    placeCount(x0, '0');
     const data = this.scene.game.canvas.dataset;
     data.helpCount = '0';
     let count = 0;
@@ -294,7 +360,7 @@ export class NumberLineView {
       g.lineBetween(numberToX(value - dir, min, max), AXIS_Y, x, AXIS_Y);
       g.lineStyle(3, HELP, 1);
       g.lineBetween(x, AXIS_Y - MINOR_TICK / 2, x, AXIS_Y + MINOR_TICK / 2);
-      running.setText(String(count)).setX(x);
+      placeCount(x, String(count));
       const z = this.zoomed;
       if (z && value >= z.view.min && value <= z.view.max) {
         const pop = this.helpText(z.zx(value), z.axisY - 14, String(count), 24, HELP).setOrigin(0.5, 1).setScale(0.2);
@@ -315,21 +381,26 @@ export class NumberLineView {
       g.fillTriangle(x - 14, RULER_TOP - 14, x + 14, RULER_TOP - 14, x, AXIS_Y - 6);
       g.lineStyle(5, HELP, 1);
       g.lineBetween(x, AXIS_Y - MAJOR_TICK / 2, x, AXIS_Y + MAJOR_TICK / 2);
-      this.helpChip(x, n, HELP);
+      this.helpChip(`option:${n}`, x, n, CHIP_PRIORITY.option);
     }
     this.scene.game.canvas.dataset.helpOptions = options.join(',');
   }
 
-  /** Step 3: a marker moves along the ruler to the solution, which is then shown in large digits. */
+  /**
+   * Step 3: a marker moves along the ruler to the solution, which is then shown in large digits beside the enemy's
+   * pointer line, never over a tank (T229, helpTextScene).
+   */
   private helpSolution(n: number, from: number | null, min: number, max: number): void {
     const x = numberToX(n, min, max);
+    const s = this.last;
+    const place = s ? helpTextScene(this.sceneInput(s, min, max)).solution : null;
     const start = numberToX(from ?? (min + max) / 2, min, max);
     const g = this.helpMarker.setPosition(start, 0).setVisible(true);
     g.fillStyle(HELP, 1);
     g.fillTriangle(-18, RULER_TOP - 20, 18, RULER_TOP - 20, 0, AXIS_Y - 4);
     g.lineStyle(6, HELP, 1);
     g.strokeCircle(0, AXIS_Y, 16);
-    const big = this.helpText(x, RULER_TOP - 80, String(n), 72, HELP).setOrigin(0.5, 1).setAlpha(0);
+    const big = (place ? this.helpText((place.x0 + place.x1) / 2, place.y1, String(n), 72, HELP) : this.helpText(x, LANDED_BOTTOM, String(n), 72, HELP)).setOrigin(0.5, 1).setAlpha(0);
     this.scene.tweens.add({
       targets: g,
       x,
@@ -337,10 +408,28 @@ export class NumberLineView {
       ease: 'Quad.easeInOut',
       onComplete: () => {
         big.setAlpha(1);
-        this.helpChip(x, n, HELP);
+        this.helpChip('solution', x, n, CHIP_PRIORITY.solution);
       },
     });
     this.scene.game.canvas.dataset.helpSolution = String(n);
+  }
+
+  /** The inputs of helpTextScene from the round state: tanks on screen, the step path and the landing number. */
+  private sceneInput(s: RoundState, min: number, max: number): Parameters<typeof helpTextScene>[0] {
+    const enemy = visibleEnemy(s);
+    const ground = (tank: TankState) => ({ x: tank.x, groundY: toScreenY(tank.y, this.worldHeight) });
+    return {
+      range: { min, max },
+      level: s.rulerLevel,
+      seed: s.seed,
+      challenge: s.challenge,
+      help: s.help.content,
+      stepPath: s.stepAnimation,
+      landed: s.help.wrongAnswers > 0 && s.lastShot && !s.lastShot.hit ? s.lastShot.landed : null,
+      enemy: enemy ? ground(enemy) : null,
+      player: ground(s.player),
+      worldWidth: WORLD_WIDTH,
+    };
   }
 
   private helpText(x: number, y: number, text: string, size: number, color: number): Phaser.GameObjects.Text {
@@ -359,6 +448,7 @@ export class NumberLineView {
       g.clear().setVisible(false).setPosition(0, 0).setAlpha(1);
     }
     this.helpLines.clear();
+    this.setChips('help', []);
     for (const text of this.helpTexts) {
       this.scene.tweens.killTweensOf(text);
       text.destroy();
@@ -385,18 +475,16 @@ export class NumberLineView {
     const choosing = s.phase === 'challenge' || s.phase === 'paused';
     const start = choosing && c && (c.kind === 'addition' || c.kind === 'subtraction') ? c.operands[0] : undefined;
     this.startChip.clear().setVisible(false);
-    this.startText.setVisible(false);
     this.scene.game.canvas.dataset.startHighlight = start === undefined ? '' : String(start);
-    if (start === undefined) return;
+    if (start === undefined) {
+      this.setChips('start', []);
+      return;
+    }
     const x = numberToX(start, min, max);
-    this.startText.setText(String(start)).setPosition(x, LABEL_Y).setVisible(true);
-    const w = this.startText.width + 16;
-    const h = this.startText.height + 6;
     const g = this.startChip.setVisible(true);
     g.lineStyle(5, START, 1);
     g.strokeCircle(x, AXIS_Y, 14);
-    g.fillStyle(START, 1);
-    g.fillRoundedRect(x - w / 2, LABEL_Y - 3, w, h, 8);
+    this.setChips('start', [{ chip: { key: 'start', x, text: String(start), priority: CHIP_PRIORITY.start }, style: { fg: '#14203a', bg: START } }]);
   }
 
   /** Starts the step animation along `path`, or clears it when path is null (T082, FR-024). */
@@ -434,18 +522,17 @@ export class NumberLineView {
     const len = frame.stop ? MAJOR_TICK : MINOR_TICK;
     g.lineBetween(x, AXIS_Y - len / 2, x, AXIS_Y + len / 2);
     this.stepIcon.setPosition(x, AXIS_Y - 2);
-    this.stepCount.setText(String(frame.count)).setPosition(x, RULER_TOP - 2).setVisible(true);
+    // The count stands beside the walking marker, behind it, never over a tank (T229).
+    const b = stepCountBox(x, Math.sign(frame.value - start), String(frame.count));
+    this.stepCount.setText(String(frame.count)).setPosition((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2).setVisible(true);
     if (frame.stop) this.stepLabel(frame.value, min, max);
     this.scene.game.canvas.dataset.stepCount = String(frame.count);
   }
 
-  /** A stop's number under the ruler line, over the ruler's own label for it. */
+  /** A stop's number on a dark chip under the ruler line; the ruler labels under it are hidden (T228). */
   private stepLabel(n: number, min: number, max: number): void {
-    const label = this.scene.add
-      .text(numberToX(n, min, max), LABEL_Y, String(n), { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#7ec8ff', stroke: '#14203a', strokeThickness: 6 })
-      .setOrigin(0.5, 0)
-      .setDepth(14);
-    this.stepLabels.push(label);
+    const chip: Chip = { key: `stop:${n}`, x: numberToX(n, min, max), text: String(n), priority: CHIP_PRIORITY.stop };
+    this.setChips('steps', [...this.chipSources.steps, { chip, style: { fg: hex(START), bg: RULER_BG } }]);
   }
 
   private stopSteps(): void {
@@ -454,8 +541,7 @@ export class NumberLineView {
     this.stepLines.clear();
     this.stepIcon.setVisible(false);
     this.stepCount.setVisible(false);
-    for (const label of this.stepLabels) label.destroy();
-    this.stepLabels = [];
+    this.setChips('steps', []);
   }
 
   /** A short pulse on the ruler where the destroyed enemy stood, once per hit (T066). */
@@ -511,8 +597,8 @@ export class NumberLineView {
     g.lineBetween(zx(view.min), axisY, zx(view.max), axisY);
     for (const tick of ticks) {
       const x = zx(tick.value);
-      const len = tick.major ? MAJOR_TICK : MINOR_TICK;
-      g.lineStyle(tick.major ? 4 : 2, LINE, 1);
+      const [len, width] = lineSize(tick.size);
+      g.lineStyle(width, LINE, 1);
       g.lineBetween(x, axisY - len / 2, x, axisY + len / 2);
       const label = this.scene.add
         .text(x, axisY + 22, String(tick.value), { fontFamily: FONT, fontSize: tick.major ? '26px' : '22px', fontStyle: 'bold', color: '#f4f6fb' })
@@ -544,6 +630,7 @@ export class NumberLineView {
   private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
     for (const label of this.labels) label.destroy();
     this.labels = [];
+    this.labelByValue.clear();
     const g = this.ruler;
     const x0 = numberToX(min, min, max);
     const x1 = numberToX(max, min, max);
@@ -559,8 +646,8 @@ export class NumberLineView {
       if (!tick.visible) continue;
       const x = numberToX(tick.value, min, max);
       const end = tick.value === min || tick.value === max;
-      const len = tick.major || end ? MAJOR_TICK : MINOR_TICK;
-      g.lineStyle(tick.major || end ? 4 : 2, LINE, 1);
+      const [len, width] = lineSize(end ? 'major' : tick.size);
+      g.lineStyle(width, LINE, 1);
       g.lineBetween(x, AXIS_Y - len / 2, x, AXIS_Y + len / 2);
       if (!tick.labeled) continue;
       const size = labelFontSize(tick, labelRows, { min, max });
@@ -569,7 +656,10 @@ export class NumberLineView {
         .setOrigin(0.5, 0)
         .setDepth(10);
       this.labels.push(label);
+      this.labelByValue.set(tick.value, label);
     }
+    this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, seed);
+    this.renderChips();
     this.scene.game.canvas.dataset.rulerLabels = ticks
       .filter((tick) => tick.visible && tick.labeled)
       .map((tick) => tick.value)
@@ -583,17 +673,13 @@ export class NumberLineView {
    */
   private drawTypedLabel(selection: number | null, typed: boolean, min: number, max: number): void {
     const [n] = typedNumberLabels(this.ruled, selection, typed);
-    this.typedChip.clear().setVisible(false);
-    this.typedText.setVisible(false);
     this.scene.game.canvas.dataset.previewText = n === undefined ? '' : String(n);
-    if (n === undefined) return;
-    const x = numberToX(n, min, max);
-    this.typedText.setText(String(n)).setPosition(x, LABEL_Y).setVisible(true);
-    const padX = 8;
-    const padY = 3;
-    const w = this.typedText.width + 2 * padX;
-    const h = this.typedText.height + 2 * padY;
-    this.typedChip.fillStyle(RULER_BG, 1).fillRoundedRect(x - w / 2, LABEL_Y - padY, w, h, 8).setVisible(true);
+    if (n === undefined) {
+      this.setChips('typed', []);
+      return;
+    }
+    const chip: Chip = { key: 'typed', x: numberToX(n, min, max), text: String(n), priority: CHIP_PRIORITY.typed, fontSize: 22 };
+    this.setChips('typed', [{ chip, style: { fg: '#ffd54a', bg: RULER_BG } }]);
   }
 
   private drawMarks(s: RoundState, min: number, max: number): void {
@@ -601,13 +687,16 @@ export class NumberLineView {
     g.clear();
     const inFlight = s.phase === 'playerShot';
 
-    // Landing marker and distance bracket, until the next player shot.
+    // Landing marker and distance bracket: after a miss until the next player shot; after a hit it fades out after
+    // about 2 seconds and goes at once when a later challenge starts (T233, FR-004).
     const shot = s.lastShot;
-    if (shot && !inFlight) {
+    const hitShown = shot?.hit ? this.hitMarkShown(shot, s, min, max) : (this.clearHitMark(), false);
+    if (shot && !inFlight && !shot.hit) {
       const lx = numberToX(shot.landed, min, max);
       g.fillStyle(LANDED, 1);
       g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
-      this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
+      this.landedText.setAlpha(1).setText(String(shot.landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
+      this.scene.game.canvas.dataset.landing = String(shot.landed);
 
       const to = shot.hit ? null : shot.enemyNumber;
       if (shot.nearMiss) {
@@ -620,7 +709,10 @@ export class NumberLineView {
         this.hideSteps();
       }
     } else {
-      this.landedText.setVisible(false);
+      if (!hitShown) {
+        this.landedText.setVisible(false);
+        this.scene.game.canvas.dataset.landing = '';
+      }
       this.hideSteps();
     }
 
@@ -640,6 +732,45 @@ export class NumberLineView {
     g.lineBetween(x, groundY - 30, x, groundY + 22);
     g.fillStyle(SELECT, 1);
     g.fillCircle(x, AXIS_Y, 10);
+  }
+
+  /**
+   * The landing marker of a hit (T233): shown when the hit is first seen, faded out from HIT_FADE_DELAY_MS over
+   * HIT_FADE_MS, and removed at once when a later challenge starts. Returns whether it is still shown.
+   */
+  private hitMarkShown(shot: NonNullable<RoundState['lastShot']>, s: RoundState, min: number, max: number): boolean {
+    if (this.hitMark?.shot !== shot) {
+      this.clearHitMark();
+      const lx = numberToX(shot.landed, min, max);
+      const g = this.hitMarkGraphics.clear().setAlpha(1).setVisible(true);
+      g.fillStyle(LANDED, 1);
+      g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
+      this.landedText.setAlpha(1).setText(String(shot.landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
+      // The hit belongs to the challenge shown after it (the controller passes the shot phase first).
+      this.hitMark = { shot, challenge: s.phase === 'playerShot' ? undefined : s.challenge, done: false };
+      this.scene.game.canvas.dataset.landing = String(shot.landed);
+      this.scene.tweens.add({
+        targets: [g, this.landedText],
+        alpha: 0,
+        delay: HIT_FADE_DELAY_MS,
+        duration: HIT_FADE_MS,
+        onComplete: () => this.clearHitMark(true),
+      });
+    }
+    if (this.hitMark.challenge === undefined && s.phase !== 'playerShot') this.hitMark.challenge = s.challenge;
+    if (!this.hitMark.done && this.hitMark.challenge !== undefined && this.hitMark.challenge !== s.challenge) this.clearHitMark(true);
+    return !this.hitMark.done;
+  }
+
+  /** Removes a hit's landing marker; `keep` remembers the hit, so it is not shown again. */
+  private clearHitMark(keep = false): void {
+    if (!this.hitMark) return;
+    this.scene.tweens.killTweensOf([this.hitMarkGraphics, this.landedText]);
+    this.hitMarkGraphics.clear().setVisible(false).setAlpha(1);
+    this.landedText.setVisible(false).setAlpha(1);
+    this.scene.game.canvas.dataset.landing = '';
+    if (keep) this.hitMark.done = true;
+    else this.hitMark = null;
   }
 
   /** Bracket below the ruler from x0 to x1 with a text under its middle. */
@@ -700,6 +831,12 @@ export class NumberLineView {
     if (n !== this.controller.getState().selection) this.controller.selectNumber(n);
     else if (this.last) this.update(this.last);
   }
+}
+
+/** Length and stroke width of a ruler line by its size (T235): major, medium (half a major step) or minor. */
+function lineSize(size: TickSize): [number, number] {
+  if (size === 'major') return [MAJOR_TICK, 4];
+  return size === 'medium' ? [MEDIUM_TICK, 3] : [MINOR_TICK, 2];
 }
 
 /** A colour number as a CSS colour for Phaser text. */
