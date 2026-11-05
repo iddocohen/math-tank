@@ -38,6 +38,7 @@ export const SETTING_FIELDS = [
   'showRecords',
   'adaptive',
   'timeLimitSeconds',
+  'garage',
 ] as const;
 
 export type SettingField = (typeof SETTING_FIELDS)[number];

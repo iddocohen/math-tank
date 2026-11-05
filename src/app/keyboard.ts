@@ -3,6 +3,8 @@
  * Pure: keyToAction turns one key event into an action for the current screen, or null when the key does nothing.
  * Keys with Ctrl, Alt or Meta stay with the browser, repeated Enter and Space are ignored, and no key opens the parent gate.
  * Amendment 05: the arrow keys do nothing; only digits, Minus, Backspace, Enter, Space, H and Escape act.
+ * Amendment 11 (FR-062, FR-092): G on the start screen opens the garage when it is on; in the garage, digits type an
+ * item number, Backspace deletes a digit, Enter chooses and Escape goes back.
  */
 import type { Digit } from '../core/battle/entry';
 
@@ -18,7 +20,7 @@ export interface KeyLike {
 }
 
 /** `battle` covers the phases in which the child chooses a number (`aiming`, `challenge`). */
-export type KeyScreen = 'start' | 'battle' | 'paused' | 'roundEnd';
+export type KeyScreen = 'start' | 'battle' | 'paused' | 'roundEnd' | 'garage';
 
 export type KeyAction =
   | { type: 'digit'; digit: Digit }
@@ -29,11 +31,15 @@ export type KeyAction =
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'start' }
-  | { type: 'newRound' };
+  | { type: 'newRound' }
+  | { type: 'garage' }
+  | { type: 'back' };
 
 export interface KeyContext {
   /** Help level of the current challenge; 3 is the solution step. */
   helpLevel?: number;
+  /** The parent's "Garage und Sterne" setting: G opens the garage only when it is on. */
+  garage?: boolean;
 }
 
 export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyContext = {}): KeyAction | null {
@@ -46,7 +52,13 @@ export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyConte
 
   switch (screen) {
     case 'start':
-      return isEnter || isSpace ? { type: 'start' } : null;
+      if (isEnter || isSpace) return { type: 'start' };
+      return (key === 'g' || key === 'G') && context.garage === true ? { type: 'garage' } : null;
+    case 'garage':
+      if (/^[0-9]$/.test(key)) return { type: 'digit', digit: Number(key) as Digit };
+      if (key === 'Backspace') return { type: 'backspace' };
+      if (isEnter) return { type: 'confirm' };
+      return key === 'Escape' ? { type: 'back' } : null;
     case 'roundEnd':
       return isEnter || isSpace ? { type: 'newRound' } : null;
     case 'paused':

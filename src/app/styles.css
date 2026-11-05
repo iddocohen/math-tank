@@ -531,10 +531,35 @@ input:focus-visible {
   }
 }
 
+/* "Neu freigeschaltet: ..." (amendment 11, FR-094): the same pop and sparkles as a new record, in blue. */
+.unlocked {
+  margin: 0;
+  max-width: 720px;
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 900;
+  color: #10213f;
+  background: #9fd8ff;
+  animation: record-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.unlocked::before,
+.unlocked::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 12px;
+  color: #ffffff;
+  animation: record-sparkle 900ms ease-in-out 3;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .new-record,
   .new-record::before,
-  .new-record::after {
+  .new-record::after,
+  .unlocked,
+  .unlocked::before,
+  .unlocked::after {
     animation: none;
   }
 }
@@ -822,3 +847,130 @@ input:focus-visible {
 .progress-table tbody th {
   font-weight: 600;
 }
+
+/* Star total (amendment 11, FR-095): start screen, end screen and garage only. */
+.star-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.star-symbol {
+  color: #ffd54a;
+  text-shadow: 0 2px 0 #8a5a00;
+}
+
+.garage-button {
+  background: #2f7be8;
+  box-shadow: 0 6px 0 #1d4f9b;
+}
+
+/* Tank garage (amendment 11, FR-091) */
+.garage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.garage-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.tank-preview {
+  width: min(360px, 80vw);
+  height: auto;
+  flex-shrink: 0;
+  background: linear-gradient(#8fd0ff, #cfeaff 70%, #6fae5a 70%);
+  border-radius: 16px;
+}
+
+.garage-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(960px, 100%);
+}
+
+.garage-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.garage-group h2 {
+  flex: 0 0 96px;
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.garage-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garage-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 112px;
+  min-height: 96px;
+  padding: 8px 10px;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  background: #34446a;
+  box-shadow: none;
+}
+
+.garage-item[data-locked='true'] {
+  color: #c4cad6;
+  background: #2a3550;
+  cursor: default;
+}
+
+.garage-item[data-chosen='true'] {
+  border-color: #ffd54a;
+}
+
+.garage-item[data-selected='true'] {
+  outline: 3px dashed #ffffff;
+  outline-offset: 2px;
+}
+
+.garage-number {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.garage-icon {
+  width: 56px;
+  height: 40px;
+}
+
+.garage-chosen {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+

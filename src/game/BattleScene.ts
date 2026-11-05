@@ -28,6 +28,9 @@
  *   (`<number>@<x>,<y>` of each tappable tank, in world units), `data-decoy-bursts` (decoys burst this round) and
  *   `data-help-tanks` (the number of the tank marked by help step 3, or '').
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
+ * - Amendment 11 (FR-093): `options.look` gives the child's tank its garage color, flag and hat and the child's shells
+ *   their trail; the enemy and decoys keep their look. The canvas carries `data-player-look` (lookKey) for the
+ *   end-to-end tests only (D4).
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -45,6 +48,8 @@ import { TankView } from './TankView';
 import { TerrainView } from './TerrainView';
 import { ensureTextures, TEX } from './textures';
 import { landingSounds } from '../audio/sfx';
+import { lookKey } from '../core/rewards/garage';
+import { STANDARD_LOOK, type Look } from '../core/rewards/items';
 
 /** Sound hooks the scene calls; src/audio/sfx.ts provides them. */
 export interface BattleSounds {
@@ -56,6 +61,8 @@ export interface BattleSounds {
 
 export interface BattleSceneOptions {
   sounds?: BattleSounds;
+  /** The child's tank and shell look from the garage (amendment 11); the standard look when absent. */
+  look?: Look;
 }
 
 /** The player's turret turns to a raised or lifted arc over this time before the shell leaves. */
@@ -71,6 +78,7 @@ const FOLD_REMOVE_MS = 800;
 export class BattleScene extends Phaser.Scene {
   private readonly controller: BattleController;
   private readonly sounds: BattleSounds | undefined;
+  private readonly look: Look;
   private unsubscribe: (() => void) | null = null;
   private terrain!: TerrainView;
   private player!: TankView;
@@ -90,14 +98,16 @@ export class BattleScene extends Phaser.Scene {
     super('battle');
     this.controller = controller;
     this.sounds = options.sounds;
+    this.look = options.look ?? STANDARD_LOOK;
   }
 
   create(): void {
     ensureTextures(this, WORLD_WIDTH, WORLD_HEIGHT);
     this.add.image(0, 0, TEX.sky).setOrigin(0, 0);
     this.terrain = new TerrainView(this, WORLD_HEIGHT);
-    this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT);
-    this.player = new TankView(this, 'player', WORLD_HEIGHT);
+    this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT, this.look.trail);
+    this.player = new TankView(this, 'player', WORLD_HEIGHT, undefined, this.look);
+    this.game.canvas.dataset.playerLook = lookKey(this.look);
     this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT, () => this.controller.tapTank(this.controller.getState().enemy.id));
     this.numberLine = new NumberLineView(this, this.controller, WORLD_HEIGHT);
     this.effects = new Effects(this);

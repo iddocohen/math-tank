@@ -19,6 +19,10 @@
  * taps: `setTappable` turns on a tap area of at least TAP_MIN_CSS by TAP_MIN_CSS CSS pixels around the tank, which
  * calls the `onTap` handler; `tapCenter` gives its center for the end-to-end tests. `setMark` draws the green ring of
  * help step 3 around the correct tank.
+ *
+ * Amendment 11 (FR-093): the child's tank takes a `look` from the garage: its color (dark blue with stripes adds light
+ * stripes on the hull), its flag and a hat on the dome, drawn from the shapes in src/core/rewards/looks.ts. The enemy
+ * and decoys never take a look.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -26,6 +30,8 @@ import { toScreenY } from '../core/view/geometry';
 import { tankStyle, type TankStyle } from '../core/view/tankStyle';
 import { t } from '../i18n';
 import { TANK_BODY_HEIGHT, TEX } from './textures';
+import { STANDARD_LOOK, type Look } from '../core/rewards/items';
+import { colorStripes, flagShapes, hatShapes, STRIPE_COLOR, tankColor, type Shape } from '../core/rewards/looks';
 
 /** Turret pivot above the tank base, matching the muzzle height in core/battle/round.ts. */
 const TURRET_PIVOT = 28;
@@ -72,21 +78,33 @@ export class TankView {
   private readonly tapZone: Phaser.GameObjects.Zone;
   private tappable = false;
   private readonly mark: Phaser.GameObjects.Graphics;
+  private readonly hat: Phaser.GameObjects.Graphics;
 
   constructor(
     private readonly scene: Phaser.Scene,
     kind: TankState['kind'],
     private readonly worldHeight: number,
     onTap?: () => void,
+    look: Look = STANDARD_LOOK,
   ) {
     this.style = tankStyle(kind);
-    this.color = this.style.color;
+    const player = kind === 'player';
+    this.color = player ? tankColor(look.color) : this.style.color;
     this.tint = this.color;
     this.turret = scene.add.image(0, -TURRET_PIVOT, TEX.turret).setOrigin(0, 0.5).setTint(this.color);
     const bodyTexture = this.style.body === 'angular' ? TEX.tankBodyAngular : TEX.tankBody;
     this.body = scene.add.image(0, 0, bodyTexture).setOrigin(0.5, 1).setTint(this.color);
     this.flag = scene.add.graphics();
-    drawFlag(this.flag, this.style.flag);
+    if (player) {
+      drawAntenna(this.flag);
+      drawShapes(this.flag, flagShapes(look.flag));
+    } else {
+      drawFlag(this.flag, this.style.flag);
+    }
+    this.hat = scene.add.graphics();
+    // The hat graphics sit above the body, so they also hold the stripes on the hull.
+    if (player && colorStripes(look.color)) drawStripes(this.hat);
+    if (player) drawShapes(this.hat, hatShapes(look.hat));
     this.hearts = scene.add.graphics();
     this.target = scene.add.graphics().setVisible(false);
     drawTarget(this.target);
@@ -96,7 +114,7 @@ export class TankView {
     this.mark.strokeCircle(0, -TANK_BODY_HEIGHT / 2, MARK_R);
     this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
     if (onTap) this.tapZone.on('pointerdown', onTap);
-    this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.target, this.hearts, this.you, this.tapZone]);
+    this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.hat, this.target, this.hearts, this.you, this.tapZone]);
   }
 
   /** Comparison turns (amendment 10): a tap on the tank fires at its number; off outside comparison searches. */
@@ -200,7 +218,7 @@ export class TankView {
 
   /** Short side-to-side shake of body and turret; the container keeps its position on the number. */
   shake(): void {
-    const parts = [this.body, this.turret, this.target, this.flag];
+    const parts = [this.body, this.turret, this.target, this.flag, this.hat];
     this.scene.tweens.add({ targets: parts, x: SHAKE_PX, duration: SHAKE_MS, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => parts.forEach((p) => (p.x = 0)) });
   }
 
@@ -233,7 +251,7 @@ export class TankView {
 
   destroy(): void {
     this.youTimer?.remove();
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.you]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you]);
     this.tapZone.removeAllListeners();
     this.container.destroy();
   }
@@ -296,6 +314,47 @@ function drawFlag(g: Phaser.GameObjects.Graphics, flag: TankStyle['flag']): void
     g.fillStyle(0x111111, 1);
     g.fillTriangle(x, y, x + FLAG_W + 2, y + FLAG_H / 2, x, y + FLAG_H);
   }
+}
+
+function drawAntenna(g: Phaser.GameObjects.Graphics): void {
+  g.lineStyle(3, 0x2b2f36, 1);
+  g.lineBetween(ANTENNA_X, -TANK_BODY_HEIGHT + 8, ANTENNA_X, ANTENNA_TOP);
+}
+
+/** Garage shapes (amendment 11) are in tank coordinates with y up; the container has y down. */
+function drawShapes(g: Phaser.GameObjects.Graphics, shapes: Shape[]): void {
+  for (const s of shapes) {
+    switch (s.type) {
+      case 'poly': {
+        const pts = s.points.map(([x, y]) => new Phaser.Math.Vector2(x, -y));
+        g.fillStyle(s.fill, 1);
+        g.fillPoints(pts, true);
+        if (s.stroke !== undefined) {
+          g.lineStyle(1.5, s.stroke, 1);
+          g.strokePoints(pts, true);
+        }
+        break;
+      }
+      case 'circle':
+        g.fillStyle(s.fill, 1);
+        g.fillCircle(s.x, -s.y, s.r);
+        if (s.stroke !== undefined) {
+          g.lineStyle(1, s.stroke, 1);
+          g.strokeCircle(s.x, -s.y, s.r);
+        }
+        break;
+      case 'line':
+        g.lineStyle(s.width, s.color, 1);
+        g.lineBetween(s.from[0], -s.from[1], s.to[0], -s.to[1]);
+        break;
+    }
+  }
+}
+
+/** Light diagonal stripes across the hull for "Dunkelblau mit Streifen" (amendment 11). */
+function drawStripes(g: Phaser.GameObjects.Graphics): void {
+  g.lineStyle(2, STRIPE_COLOR, 0.9);
+  for (const x of [-20, -8, 4, 16]) g.lineBetween(x, -9, x + 6, -17);
 }
 
 function starPoints(cx: number, cy: number, outer: number, inner: number): Phaser.Math.Vector2[] {

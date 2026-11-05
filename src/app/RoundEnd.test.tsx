@@ -7,6 +7,7 @@ import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { forbiddenWords, t } from '../i18n';
 import { RoundEnd } from './RoundEnd';
+import { itemById } from '../core/rewards/items';
 
 const m = t();
 
@@ -88,3 +89,31 @@ describe('RoundEnd (amendment 06)', () => {
     expect(props.onBackToStart).toHaveBeenCalledOnce();
   });
 });
+
+describe('RoundEnd unlock line and star total (amendment 11, FR-094, FR-095)', () => {
+  it('names one new item in one line and shows the star total', () => {
+    show({ garage: { stars: 10, unlocked: [itemById('rocket')!] } });
+    expect(screen.getByTestId('unlocked').textContent).toBe('Neu freigeschaltet: Raketen-Flagge!');
+    expect(screen.getByTestId('star-total').textContent).toContain('10');
+  });
+
+  it('names two new items in the same line', () => {
+    show({ garage: { stars: 21, unlocked: [itemById('rocket')!, itemById('sky')!] } });
+    expect(screen.getAllByTestId('unlocked')).toHaveLength(1);
+    expect(screen.getByTestId('unlocked').textContent).toBe(`Neu freigeschaltet: ${m.garage.items.rocket}, ${m.garage.items.sky}!`);
+  });
+
+  it('shows only the star total when nothing was unlocked, and no line about missing stars', () => {
+    const { root } = show({ garage: { stars: 14, unlocked: [] } });
+    expect(screen.queryByTestId('unlocked')).toBeNull();
+    expect(screen.getByTestId('star-total').textContent).toContain('14');
+    expect(root.textContent).not.toMatch(/noch \d+ Stern/i);
+  });
+
+  it('shows neither without garage data (garage off)', () => {
+    show({ garage: null });
+    expect(screen.queryByTestId('unlocked')).toBeNull();
+    expect(screen.queryByTestId('star-total')).toBeNull();
+  });
+});
+

@@ -33,3 +33,20 @@ describe('StartScreen (T070)', () => {
     expect(keyStartMode('?mode=other', true)).toBe('guided');
   });
 });
+
+describe('StartScreen garage button and star total (amendment 11, FR-091, FR-095, FR-096)', () => {
+  it('shows a "Garage" button and the star total when the garage is on', () => {
+    const onGarage = vi.fn();
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} garage={{ stars: 12 }} onGarage={onGarage} />);
+    expect(screen.getByTestId('star-total').textContent).toContain('12');
+    fireEvent.click(screen.getByRole('button', { name: t().start.garage }));
+    expect(onGarage).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows neither without garage data (the parent turned the garage off)', () => {
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} garage={null} onGarage={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: t().start.garage })).toBeNull();
+    expect(screen.queryByTestId('star-total')).toBeNull();
+  });
+});
+

@@ -4,9 +4,12 @@
  * `?mode=free` (like `?seed=`, tasks.md D4) makes Enter and Space start free play when it is allowed.
  * The gear (`gear`, the ParentGate from the app) sits at the top right; it opens the parent menu after a 2-second
  * press and ignores keys (FR-045).
+ * Amendment 11 (FR-091, FR-095, FR-096): with the garage on (`garage` not null) a large "Garage" button and the star
+ * total show; G opens the garage through the app's keyboard listener.
  */
 import type { ReactNode } from 'react';
 import { t } from '../i18n';
+import { StarTotal } from './StarTotal';
 
 export type StartMode = 'guided' | 'freePlay';
 
@@ -20,9 +23,12 @@ interface Props {
   /** The parent's free-play setting (FR-014). */
   freePlay: boolean;
   gear?: ReactNode;
+  /** The star total, or null when the parent turned the garage off. */
+  garage?: { stars: number } | null;
+  onGarage?: () => void;
 }
 
-export function StartScreen({ onPlay, freePlay, gear }: Props) {
+export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage }: Props) {
   const m = t();
   const fullscreen = () => {
     const el = document.documentElement;
@@ -40,6 +46,7 @@ export function StartScreen({ onPlay, freePlay, gear }: Props) {
         </button>
       </div>
       <h1 className="title">{m.appName}</h1>
+      {garage && <StarTotal stars={garage.stars} />}
       <div className="play-buttons">
         <button type="button" className="play-button" onClick={() => onPlay('guided')}>
           {m.start.play}
@@ -47,6 +54,11 @@ export function StartScreen({ onPlay, freePlay, gear }: Props) {
         {freePlay && (
           <button type="button" className="play-button free-play-button" onClick={() => onPlay('freePlay')}>
             {m.start.freePlay}
+          </button>
+        )}
+        {garage && (
+          <button type="button" className="play-button garage-button" onClick={onGarage}>
+            {m.start.garage}
           </button>
         )}
       </div>

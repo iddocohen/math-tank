@@ -10,18 +10,20 @@ import { keyToAction, type KeyAction, type KeyScreen } from './keyboard';
 export interface KeyboardOptions {
   screen: KeyScreen | null;
   helpLevel?: number;
+  /** The parent's garage setting (amendment 11): G on the start screen. */
+  garage?: boolean;
   onAction: (action: KeyAction) => void;
 }
 
-export function useKeyboard({ screen, helpLevel = 0, onAction }: KeyboardOptions): void {
-  const latest = useRef({ screen, helpLevel, onAction });
-  latest.current = { screen, helpLevel, onAction };
+export function useKeyboard({ screen, helpLevel = 0, garage = false, onAction }: KeyboardOptions): void {
+  const latest = useRef({ screen, helpLevel, garage, onAction });
+  latest.current = { screen, helpLevel, garage, onAction };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const { screen: current, helpLevel: level, onAction: handle } = latest.current;
+      const { screen: current, helpLevel: level, garage: garageOn, onAction: handle } = latest.current;
       if (current === null || isTextField(event.target)) return;
-      const action = keyToAction(event, current, { helpLevel: level });
+      const action = keyToAction(event, current, { helpLevel: level, garage: garageOn });
       if (action === null) return;
       event.preventDefault();
       handle(action);
@@ -57,6 +59,8 @@ export function applyBattleAction(controller: BattleController, action: KeyActio
       return true;
     case 'start':
     case 'newRound':
+    case 'garage':
+    case 'back':
       return false;
   }
 }

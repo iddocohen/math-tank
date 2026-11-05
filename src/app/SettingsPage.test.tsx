@@ -209,6 +209,15 @@ describe('SettingsPage', () => {
     expect(persistence.settings()).toMatchObject({ showClock: true, showRecords: false });
   });
 
+  it('"Garage und Sterne" is on by default and saves garage (amendment 11, FR-096)', () => {
+    const { persistence } = setup();
+    expect(field(L.garage).checked).toBe(true);
+    expect(SETTING_FIELDS).toContain('garage');
+    toggle(L.garage);
+    fireEvent.click(saveButton());
+    expect(persistence.settings().garage).toBe(false);
+  });
+
   it('lists the amendment 06 fields in SETTING_FIELDS', () => {
     for (const f of ['roundType', 'roundLength', 'showClock', 'showRecords'] as const) expect(SETTING_FIELDS).toContain(f);
   });
@@ -229,7 +238,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.garage,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }

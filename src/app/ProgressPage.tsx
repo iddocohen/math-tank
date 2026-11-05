@@ -4,7 +4,9 @@
  * independent correct answers and the answers with help in separate columns, the current difficulty step and
  * mastered or developing; the skills that needed the most help; the sessions; and the personal bests per range,
  * ruler starting level and round type as a plain list without ranking. "Fortschritt zurücksetzen" asks first and
- * then clears the progress; the personal bests stay.
+ * then clears the progress; the personal bests and the stars stay.
+ * Amendment 11 (FR-096): the star total of the tank garage and a separate "Sterne zurücksetzen" with its own
+ * confirmation, which sets 0 stars, locks every item and chooses the standard look.
  */
 import { useState } from 'react';
 import { formatTime } from '../core/records/records';
@@ -14,7 +16,7 @@ import { t } from '../i18n';
 import type { Persistence } from './persistence';
 
 interface Props {
-  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress'>;
+  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress' | 'garage' | 'resetStars'>;
   onClose: () => void;
 }
 
@@ -30,6 +32,9 @@ export function ProgressPage({ persistence, onClose }: Props) {
   const [progress, setProgress] = useState(() => persistence.progress());
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  const [stars, setStars] = useState(() => persistence.garage().stars);
+  const [confirmingStars, setConfirmingStars] = useState(false);
+  const [starsDone, setStarsDone] = useState(false);
   const summary = summarize(progress, persistence.records());
 
   const rangeText = (rangeKey: string) => {
@@ -45,6 +50,13 @@ export function ProgressPage({ persistence, onClose }: Props) {
     setDone(true);
   };
 
+  const resetStars = () => {
+    persistence.resetStars();
+    setStars(persistence.garage().stars);
+    setConfirmingStars(false);
+    setStarsDone(true);
+  };
+
   return (
     <div className="settings-page progress-page" role="dialog" aria-modal="true" aria-label={P.title} data-testid="progress-page">
       <header className="settings-header">
@@ -58,6 +70,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
 
       <div className="settings-notices" role="status" aria-live="polite">
         {done && <p className="notice ok">{P.resetDone}</p>}
+        {starsDone && <p className="notice ok">{P.starsResetDone}</p>}
       </div>
 
       <section className="settings-group">
@@ -197,6 +210,36 @@ export function ProgressPage({ persistence, onClose }: Props) {
               }}
             >
               {P.reset}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="settings-group">
+        <p data-testid="progress-stars">{P.stars(stars)}</p>
+        {confirmingStars ? (
+          <div className="progress-reset" role="alertdialog" aria-label={P.starsReset}>
+            <p>{P.starsResetConfirm}</p>
+            <div className="data-buttons">
+              <button type="button" className="primary-button" onClick={resetStars}>
+                {P.starsResetYes}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setConfirmingStars(false)}>
+                {P.resetNo}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="data-buttons">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setStarsDone(false);
+                setConfirmingStars(true);
+              }}
+            >
+              {P.starsReset}
             </button>
           </div>
         )}

@@ -5,7 +5,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { memoryKeyValue } from '../core/storage/keyValue';
-import { PROGRESS_KEY, RECORDS_KEY } from '../core/storage/storage';
+import { GARAGE_KEY, PROGRESS_KEY, RECORDS_KEY } from '../core/storage/storage';
+import { emptyGarage } from '../core/rewards/garage';
 import { skillKey } from '../core/progress/ladders';
 import type { Records } from '../core/records/records';
 import type { Progress, RecentOutcome, SkillProgress } from '../core/types';
@@ -47,7 +48,8 @@ function records(): Records {
 }
 
 function setup(progress: Progress = fixture(), recs: Records = records()) {
-  const kv = memoryKeyValue({ [PROGRESS_KEY]: JSON.stringify(progress), [RECORDS_KEY]: JSON.stringify(recs) });
+  const garage = { version: 1, stars: 23, look: { ...emptyGarage().look, flag: 'rocket' } };
+  const kv = memoryKeyValue({ [PROGRESS_KEY]: JSON.stringify(progress), [RECORDS_KEY]: JSON.stringify(recs), [GARAGE_KEY]: JSON.stringify(garage) });
   const persistence = createPersistence({ kv, storage: undefined });
   const onClose = vi.fn();
   render(<ProgressPage persistence={persistence} onClose={onClose} />);
@@ -155,3 +157,30 @@ describe('ProgressPage', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ProgressPage stars (amendment 11, FR-040, FR-096)', () => {
+  it('"Fortschritt zurücksetzen" keeps the stars and the chosen look', () => {
+    const { persistence } = setup();
+    fireEvent.click(screen.getByRole('button', { name: P.reset }));
+    fireEvent.click(screen.getByRole('button', { name: P.resetYes }));
+    expect(persistence.garage().stars).toBe(23);
+    expect(persistence.garage().look.flag).toBe('rocket');
+  });
+
+  it('shows the star total; "Sterne zurücksetzen" asks first and then sets 0 stars and the standard look', () => {
+    const { persistence } = setup();
+    expect(screen.getByTestId('progress-stars').textContent).toBe(P.stars(23));
+    fireEvent.click(screen.getByRole('button', { name: P.starsReset }));
+    expect(screen.getByText(P.starsResetConfirm)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: P.resetNo }));
+    expect(persistence.garage().stars).toBe(23);
+    fireEvent.click(screen.getByRole('button', { name: P.starsReset }));
+    fireEvent.click(screen.getByRole('button', { name: P.starsResetYes }));
+    expect(persistence.garage()).toEqual(emptyGarage());
+    expect(screen.getByTestId('progress-stars').textContent).toBe(P.stars(0));
+    expect(screen.getByText(P.starsResetDone)).toBeTruthy();
+    // The learning progress stays.
+    expect(persistence.progress().sessions).toHaveLength(1);
+  });
+});
+

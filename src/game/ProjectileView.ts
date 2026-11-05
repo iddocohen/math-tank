@@ -3,11 +3,15 @@
  * player's previous shot. A shell that leaves the battlefield gets a marker where it crossed the
  * side edge (US1 scenario 6). Playback advances only in advance(), which the scene calls from
  * update(), so pausing the scene stops the replay.
+ * Amendment 11 (FR-093): the child's shells draw the garage trail (`playerTrail`): sparkles, rainbow lines or
+ * bubbles along the live path; the enemy's shells keep the plain trail.
  */
 import Phaser from 'phaser';
 import type { Point, ShotInFlight } from '../core/types';
 import { dottedTrail, edgeMarker, pathDuration, pathPointAt, toScreenY } from '../core/view/geometry';
 import { TEX } from './textures';
+import type { TrailId } from '../core/rewards/items';
+import { trailStyle, type TrailStyle } from '../core/rewards/looks';
 
 /** Playback speed relative to physics time. */
 export const REPLAY_SPEED = 1.6;
@@ -30,12 +34,16 @@ export class ProjectileView {
   private trailPath: readonly Point[] | null = null;
   /** Edge markers by shooter; each stays until that shooter fires again. */
   private readonly markers = new Map<ShotInFlight['shooter'], { y: number; side: 'left' | 'right' }>();
+  private readonly playerStyle: TrailStyle;
+  private readonly plainStyle = trailStyle('plain');
 
   constructor(
     scene: Phaser.Scene,
     private readonly worldWidth: number,
     private readonly worldHeight: number,
+    playerTrail: TrailId = 'plain',
   ) {
+    this.playerStyle = trailStyle(playerTrail);
     this.trail = scene.add.graphics();
     this.live = scene.add.graphics();
     this.marker = scene.add.graphics();
@@ -71,7 +79,7 @@ export class ProjectileView {
     r.elapsed = Math.min(r.duration, r.elapsed + deltaMs);
     const s = pathPointAt(r.shot.path, r.elapsed, REPLAY_SPEED);
     this.shell.setPosition(s.point.x, this.sy(s.point.y));
-    this.drawLive(r.shot.path, s.index, s.point);
+    this.drawLive(r.shot.path, s.index, s.point, r.shot.shooter === 'player' ? this.playerStyle : this.plainStyle);
     if (!s.done && r.elapsed < r.duration) return;
     this.replay = null;
     this.shell.setVisible(false);
@@ -95,20 +103,38 @@ export class ProjectileView {
     for (const d of dottedTrail(path, TRAIL_SPACING)) g.fillCircle(d.x, this.sy(d.y), 2.5);
   }
 
-  private drawLive(path: readonly Point[], index: number, head: Point): void {
+  private drawLive(path: readonly Point[], index: number, head: Point, style: TrailStyle): void {
     const g = this.live;
     g.clear();
-    g.lineStyle(3, 0xfff3c4, 0.8);
-    g.beginPath();
     const from = Math.max(0, index - 40);
-    const start = path[from] as Point;
-    g.moveTo(start.x, this.sy(start.y));
-    for (let i = from + 1; i <= index; i++) {
+    const lines = style.line.length;
+    style.line.forEach((color, k) => {
+      // Several colors (rainbow) lie side by side, 3 units apart.
+      const dy = (k - (lines - 1) / 2) * 3;
+      g.lineStyle(3, color, lines > 1 ? 0.95 : 0.8);
+      g.beginPath();
+      const start = path[from] as Point;
+      g.moveTo(start.x, this.sy(start.y) + dy);
+      for (let i = from + 1; i <= index; i++) {
+        const p = path[i] as Point;
+        g.lineTo(p.x, this.sy(p.y) + dy);
+      }
+      g.lineTo(head.x, this.sy(head.y) + dy);
+      g.strokePath();
+    });
+    if (style.dots === 'none') return;
+    for (let i = from + 1; i <= index; i += 4) {
       const p = path[i] as Point;
-      g.lineTo(p.x, this.sy(p.y));
+      const age = (index - i) / 40;
+      if (style.dots === 'sparkles') {
+        const side = i % 8 < 4 ? -7 : 7;
+        g.fillStyle(i % 8 < 4 ? 0xffd23f : 0xffffff, 1 - age * 0.7);
+        g.fillCircle(p.x, this.sy(p.y) + side, 2.5);
+      } else {
+        g.lineStyle(2, 0xbfe8ff, 1 - age * 0.7);
+        g.strokeCircle(p.x, this.sy(p.y) + 5, 2 + age * 7);
+      }
     }
-    g.lineTo(head.x, this.sy(head.y));
-    g.strokePath();
   }
 
   /** Arrows at the side edge pointing out of the battlefield where a shell left it. */

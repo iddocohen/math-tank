@@ -289,6 +289,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           )}
           <Check field="showClock" label={L.showClock} checked={draft.showClock} onChange={(v) => set('showClock', v)} />
           <Check field="showRecords" label={L.showRecords} checked={draft.showRecords} onChange={(v) => set('showRecords', v)} />
+          <Check field="garage" label={L.garage} checked={draft.garage} onChange={(v) => set('garage', v)} />
           <Check field="adaptive" label={L.adaptive} checked={draft.adaptive} onChange={(v) => set('adaptive', v)} />
           <Check field="timeLimitSeconds" label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
           {draft.timeLimitSeconds !== null && (

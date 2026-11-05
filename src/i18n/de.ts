@@ -13,6 +13,40 @@ export const de = {
     parentHint: 'Für Eltern: Zahnrad gedrückt halten',
     gear: 'Für Eltern',
     updateReady: 'Eine neue Version ist bereit.',
+    /** Amendment 11 (FR-091): the button that opens the tank garage. */
+    garage: 'Garage',
+  },
+
+  /** Amendment 11 (FR-089 to FR-095): the tank garage. Short words for a child. */
+  garage: {
+    title: 'Garage',
+    back: 'Zurück',
+    preview: 'Dein Panzer',
+    kinds: { color: 'Farbe', flag: 'Flagge', trail: 'Spur', hat: 'Hut' },
+    items: {
+      blue: 'Blau',
+      sky: 'Himmelblau',
+      teal: 'Blaugrün',
+      turquoise: 'Türkis',
+      navyStripes: 'Dunkelblau mit Streifen',
+      star: 'Stern-Flagge',
+      rocket: 'Raketen-Flagge',
+      dragon: 'Drachen-Flagge',
+      football: 'Fußball-Flagge',
+      lightning: 'Blitz-Flagge',
+      plain: 'Einfache Spur',
+      sparkles: 'Funkel-Spur',
+      rainbow: 'Regenbogen-Spur',
+      bubbles: 'Blasen-Spur',
+      none: 'Ohne Hut',
+      crown: 'Krone',
+      helmet: 'Helm',
+    },
+    /** A locked item (FR-091). */
+    stillNeeded: (n: number) => (n === 1 ? 'noch 1 Stern' : `noch ${n} Sterne`),
+    chosen: 'Gewählt',
+    /** The star total, for screen readers (FR-095). */
+    stars: (n: number) => (n === 1 ? '1 Stern' : `${n} Sterne`),
   },
 
   battle: {
@@ -106,6 +140,8 @@ export const de = {
     yourRecord: (n: number) => `Dein Rekord: ${n}`,
     again: 'Nochmal',
     backToStart: 'Zum Start',
+    /** Amendment 11 (FR-094): every item the round unlocked, in one line. */
+    unlocked: (names: string) => `Neu freigeschaltet: ${names}!`,
   },
 
   parent: {
@@ -159,10 +195,16 @@ export const de = {
     empty: 'Noch keine Aufgaben gespielt.',
     noBests: 'Noch keine Rekorde.',
     reset: 'Fortschritt zurücksetzen',
-    resetConfirm: 'Den ganzen Fortschritt zurücksetzen? Die Rekorde bleiben erhalten.',
+    resetConfirm: 'Den ganzen Fortschritt zurücksetzen? Die Rekorde und Sterne bleiben erhalten.',
     resetYes: 'Ja, zurücksetzen',
     resetNo: 'Abbrechen',
     resetDone: 'Der Fortschritt wurde zurückgesetzt.',
+    /** Amendment 11 (FR-096): the stars of the tank garage, reset only here. */
+    stars: (n: number) => (n === 1 ? 'Sterne in der Garage: 1' : `Sterne in der Garage: ${n}`),
+    starsReset: 'Sterne zurücksetzen',
+    starsResetConfirm: 'Alle Sterne löschen? Die Garage ist dann wieder leer.',
+    starsResetYes: 'Ja, Sterne zurücksetzen',
+    starsResetDone: 'Die Sterne wurden zurückgesetzt.',
   },
 
   settings: {
@@ -248,6 +290,7 @@ export const de = {
       roundLength: 'Anzahl der Gegner',
       showClock: 'Uhr beim Spielen zeigen',
       showRecords: 'Rekord zeigen',
+      garage: 'Garage und Sterne',
       adaptive: 'Schwierigkeit automatisch anpassen',
       freePlay: 'Freies Spiel erlauben',
       noDamage: 'Ohne Schaden spielen',

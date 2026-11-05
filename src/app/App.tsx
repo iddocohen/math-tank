@@ -17,6 +17,11 @@
  * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). "Spielen", Enter and Space
  * start guided mode; "Freies Spiel" (only with the parent's free-play setting) starts free play, and so do Enter and
  * Space with `?mode=free` (T070). "Nochmal" and Enter on the end screen start a new round in the same mode.
+ *
+ * Amendment 11 (FR-089 to FR-096): every increase of `enemiesDestroyed` (enemies only, never decoys) adds stars at
+ * once, with the garage on or off. The end screen names the items unlocked since the round started. The garage screen
+ * opens from the start screen (button or G, only with the garage on), and the battle draws the child's tank with the
+ * chosen look, or the standard look when the garage is off.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -33,9 +38,12 @@ import { keyStartMode, StartScreen, type StartMode } from './StartScreen';
 import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
+import { Garage } from './Garage';
+import { newlyDestroyed, unlockedBetween } from '../core/rewards/garage';
+import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
 
-type Screen = 'start' | 'battle';
+type Screen = 'start' | 'garage' | 'battle';
 
 /** The parent screens over the game (FR-045): the parent menu, the settings page and the progress page (FR-040). */
 type ParentView = 'closed' | 'menu' | 'settings' | 'progress';
@@ -74,6 +82,11 @@ export function App() {
   // The personal best after the latest finished round, by round seed, so each round is compared only once (FR-086).
   const [roundRecord, setRoundRecord] = useState<{ seed: number; record: RoundRecord } | null>(null);
   const state = useRoundState(controller);
+  // Stars and the chosen look (amendment 11); a copy of persistence.garage() so screens redraw when it changes.
+  const [garage, setGarage] = useState(() => persistence.garage());
+  // The destroyed-enemy count already turned into stars, and the star total when the current round started.
+  const seenDestroyed = useRef(0);
+  const roundStartStars = useRef(garage.stars);
   const gameParent = useRef<HTMLDivElement>(null);
 
   useEffect(() => sfx.installUnlock(document), [sfx]);
@@ -81,9 +94,10 @@ export function App() {
   useEffect(() => {
     const parent = gameParent.current;
     if (screen !== 'battle' || !parent) return;
-    const handle = createGame(parent, controller, { sounds: sfx });
+    const look = persistence.settings().garage ? persistence.garage().look : STANDARD_LOOK;
+    const handle = createGame(parent, controller, { sounds: sfx, look });
     return () => handle.destroy();
-  }, [screen, controller, sfx]);
+  }, [screen, controller, sfx, persistence]);
 
   // Pause while the tab is hidden, so the round's time stops (FR-084).
   useEffect(() => {
@@ -112,14 +126,36 @@ export function App() {
     setRoundRecord({ seed: roundOverSeed, record });
   }, [roundOverSeed, controller, persistence]);
 
+  // One star per destroyed enemy, stored at once (FR-089). A new round starts the count at 0 again.
+  const destroyed = state.enemiesDestroyed;
+  useEffect(() => {
+    const n = newlyDestroyed(seenDestroyed.current, destroyed);
+    seenDestroyed.current = destroyed;
+    if (n > 0) {
+      persistence.addStars(n);
+      setGarage(persistence.garage());
+    }
+  }, [destroyed, persistence]);
+
   // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070).
-  const startRound = useCallback(() => controller.startRound(controller.getState().mode), [controller]);
+  const startRound = useCallback(() => {
+    roundStartStars.current = persistence.garage().stars;
+    controller.startRound(controller.getState().mode);
+  }, [controller, persistence]);
   const play = useCallback(
     (mode: StartMode) => {
+      roundStartStars.current = persistence.garage().stars;
       controller.startRound(mode);
       setScreen('battle');
     },
-    [controller],
+    [controller, persistence],
+  );
+  const equip = useCallback(
+    (id: string) => {
+      persistence.equip(id);
+      setGarage(persistence.garage());
+    },
+    [persistence],
   );
 
   const openParent = useCallback(() => {
@@ -131,9 +167,11 @@ export function App() {
   }, [controller, screen]);
   const closeParent = useCallback(() => {
     setParent('closed');
+    // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendment 11).
+    setGarage(persistence.garage());
     if (pausedByGate.current) controller.resume();
     pausedByGate.current = false;
-  }, [controller]);
+  }, [controller, persistence]);
   const gear = (
     <ParentGate onOpen={openParent} onClose={closeParent} onSettings={() => setParent('settings')} onProgress={() => setParent('progress')} />
   );
@@ -143,12 +181,14 @@ export function App() {
   const onAction = useCallback(
     (action: KeyAction) => {
       if (action.type === 'start') play(keyStartMode(window.location.search, persistence.settings().freePlay));
+      else if (action.type === 'garage') setScreen('garage');
       else if (action.type === 'newRound') startRound();
       else applyBattleAction(controller, action);
     },
     [controller, persistence, play, startRound],
   );
-  useKeyboard({ screen: keyScreen, helpLevel: state.help.level, onAction });
+  const garageOn = persistence.settings().garage;
+  useKeyboard({ screen: keyScreen, helpLevel: state.help.level, garage: garageOn, onAction });
 
   // Focus the root on load and on every screen change (start, battle, round end).
   const root = useRef<HTMLDivElement>(null);
@@ -160,7 +200,9 @@ export function App() {
   return (
     <div className="app-root" ref={root} tabIndex={-1} data-testid="app-root">
       {screen === 'start' ? (
-        <StartScreen onPlay={play} freePlay={persistence.settings().freePlay} gear={gear} />
+        <StartScreen onPlay={play} freePlay={persistence.settings().freePlay} gear={gear} garage={garageOn ? garage : null} onGarage={() => setScreen('garage')} />
+      ) : screen === 'garage' ? (
+        <Garage garage={garage} onEquip={equip} onBack={() => setScreen('start')} />
       ) : (
         <main className="battle">
           <div className="game-parent" ref={gameParent} />
@@ -171,6 +213,7 @@ export function App() {
               enemiesDestroyed={state.enemiesDestroyed}
               elapsedMs={state.elapsedMs}
               record={controller.getRoundSettings().showRecords && roundRecord?.seed === state.seed ? roundRecord.record : null}
+              garage={garageOn ? { stars: garage.stars, unlocked: unlockedBetween(roundStartStars.current, garage.stars) } : null}
               onAgain={startRound}
               onBackToStart={() => setScreen('start')}
             />
@@ -188,6 +231,8 @@ export function App() {
 /** Which keyboard map applies; null while a shell is in flight, so keys do nothing (FR-061). */
 export function keyScreenFor(screen: Screen, phase: string): KeyScreen | null {
   if (screen === 'start') return 'start';
+  // The garage has its own key listener (Garage.tsx).
+  if (screen === 'garage') return null;
   switch (phase) {
     case 'roundOver':
       return 'roundEnd';

@@ -149,3 +149,36 @@ describe('keyToAction: no key starts a new scene (amendment 03, FR-070)', () => 
     }
   });
 });
+
+describe('keyToAction: the tank garage (amendment 11, FR-062, FR-092)', () => {
+  it('G and g on the start screen open the garage only when the garage is on', () => {
+    expect(keyToAction(key('g'), 'start', { garage: true })).toEqual({ type: 'garage' });
+    expect(keyToAction(key('G', { shiftKey: true }), 'start', { garage: true })).toEqual({ type: 'garage' });
+    expect(keyToAction(key('g'), 'start', { garage: false })).toBeNull();
+    expect(keyToAction(key('g'), 'start')).toBeNull();
+    expect(keyToAction(key('g', { ctrlKey: true }), 'start', { garage: true })).toBeNull();
+  });
+
+  it('Enter and Space on the start screen still start a round with the garage on', () => {
+    expect(keyToAction(key('Enter'), 'start', { garage: true })).toEqual({ type: 'start' });
+    expect(keyToAction(key(' '), 'start', { garage: true })).toEqual({ type: 'start' });
+  });
+
+  it('G does nothing on any other screen', () => {
+    for (const screen of ['battle', 'paused', 'roundEnd'] as const) {
+      expect(keyToAction(key('g'), screen, { garage: true })?.type).not.toBe('garage');
+    }
+  });
+
+  it('in the garage: digits, Backspace, Enter and Escape act', () => {
+    for (let d = 0; d <= 9; d++) expect(keyToAction(key(String(d)), 'garage')).toEqual({ type: 'digit', digit: d });
+    expect(keyToAction(key('Backspace'), 'garage')).toEqual({ type: 'backspace' });
+    expect(keyToAction(key('Enter'), 'garage')).toEqual({ type: 'confirm' });
+    expect(keyToAction(key('Escape'), 'garage')).toEqual({ type: 'back' });
+  });
+
+  it('in the garage: Space, H, Minus, G, arrows and letters do nothing; a repeated Enter is ignored', () => {
+    for (const k of [' ', 'h', 'H', '-', 'g', 'G', 'ArrowLeft', 'a', 'Tab']) expect(keyToAction(key(k), 'garage'), k).toBeNull();
+    expect(keyToAction(key('Enter', { repeat: true }), 'garage')).toBeNull();
+  });
+});
