@@ -3,15 +3,31 @@
  * React and Phaser subscribe to it and call its methods; neither changes state directly.
  * Each change produces a new RoundState object, so `useSyncExternalStore` sees it.
  *
- * This phase covers free play. Guided mode, challenges and help arrive in later phases.
+ * Amendment 01: the player aims by choosing a number. The cannon is fixed and solveArcToX computes the arc,
+ * so the shell always lands at the chosen number. This phase covers free play; guided mode arrives later.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { RoundState, Settings, ShotInFlight, TankState } from '../types';
 import { simulateShot } from '../physics/ballistics';
+import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
+import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { enemyDamageFactor, enemyShot } from '../ai/enemy';
 import type { ProgressStore, Speaker } from './ports';
-import { applyImpact, blastRadiusFor, createRound, muzzle, tankCenter, TANK_HIT_RADIUS, WORLD_HEIGHT, WORLD_WIDTH, type DamageRules } from './round';
+import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
+import {
+  applyImpact,
+  createRound,
+  enemyPositionFor,
+  moveTank,
+  muzzle,
+  tankCenter,
+  TANK_HIT_RADIUS,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+  type DamageRules,
+  type Impact,
+} from './round';
 
 export interface BattleDeps {
   settings: Settings;
@@ -37,6 +53,8 @@ export class BattleController {
   private enemyRng: Rng = createRng(0);
   private enemyShotIndex = 0;
   private phaseBeforePause: RoundState['phase'] | null = null;
+  /** The number of the player's shell in flight. */
+  private firedNumber: number | null = null;
 
   constructor(deps: BattleDeps) {
     this.deps = deps;
@@ -73,27 +91,77 @@ export class BattleController {
     this.enemyRng = createRng(deriveSeed(seed, 2));
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
+    this.firedNumber = null;
     this.set(createRound(this.settings, seed, side, mode));
   }
 
-  setAim(angleDeg: number, power: number): void {
-    if (this.state.phase !== 'aiming') return;
-    this.set({ ...this.state, aim: { angleDeg: clamp(angleDeg, 0, 180), power: clamp(power, 0, 100) } });
+  /** Pointer preview: clears typed digits and never fires. */
+  selectNumber(n: number): void {
+    if (!this.acceptsInput()) return;
+    const { min, max } = this.settings.range;
+    this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry() });
   }
 
-  /** Computes the whole flight; the renderer replays it and then calls shotAnimationDone. */
-  fire(): void {
-    if (this.state.phase !== 'aiming') return;
+  /** +1 / -1 buttons and arrow keys; starts from the player tank's number when nothing is selected. */
+  nudge(delta: 1 | -1 | 10 | -10): void {
+    if (!this.acceptsInput()) return;
+    const { min, max } = this.settings.range;
+    const from = this.state.selection ?? this.state.player.position;
+    this.set({ ...this.state, selection: clamp(from + delta, min, max), entry: emptyEntry() });
+  }
+
+  typeDigit(d: Digit): void {
+    this.applyEntryKey({ digit: d });
+  }
+
+  typeMinus(): void {
+    this.applyEntryKey('minus');
+  }
+
+  backspace(): void {
+    this.applyEntryKey('backspace');
+  }
+
+  /** Enter or the fire button: fires at the selection; an out-of-range entry fires nothing (FR-063). */
+  confirm(): void {
+    if (!this.acceptsInput()) return;
+    const { selection, entry } = this.state;
+    if (selection === null || entry.outOfRange) return;
+    this.fireAt(selection);
+  }
+
+  /** Fires at n with the fixed cannon (FR-065); the renderer replays the path and then calls shotAnimationDone. */
+  fireAt(n: number): void {
+    if (!this.acceptsInput()) return;
+    const { min, max } = this.settings.range;
+    if (!Number.isInteger(n) || n < min || n > max) return;
+    const answerableAt = this.state.answerableAt;
+    if (answerableAt !== null && this.deps.clock() < answerableAt) return;
+
     const s = this.state;
-    const shot = this.computeShot('player', s.player, s.aim.angleDeg, s.aim.power, blastRadiusFor(s.charged));
-    this.set({ ...s, phase: 'playerShot', shot });
+    const origin = muzzle(s.player);
+    const arc = solveArcToX({
+      origin,
+      targetX: numberToX(n, min, max),
+      towardRight: s.playerSide === 'left',
+      terrain: s.terrain,
+      worldWidth: WORLD_WIDTH,
+      worldHeight: WORLD_HEIGHT,
+      tolerance: 0.25 * ((DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / (max - min)),
+    });
+    const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS };
+    this.firedNumber = n;
+    this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry() });
   }
 
   shotAnimationDone(): void {
     if (this.state.phase !== 'playerShot' || !this.state.shot) return;
     const shot = this.state.shot;
-    const s = this.impact(shot);
-    const next: RoundState = { ...s, turn: s.turn + 1, charged: false, lastPlayerPath: shot.path, shot: null };
+    const { min, max } = this.settings.range;
+    const fired = this.firedNumber ?? xToNumber(shot.impact.x, min, max);
+    this.firedNumber = null;
+    const s = this.impact({ point: shot.impact, hitTargetId: null, outOfBounds: false, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) }, shot.blastRadius);
+    const next: RoundState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
     const outcome = deadOutcome(next);
     if (outcome) {
       this.set({ ...next, phase: 'roundOver', outcome });
@@ -104,9 +172,14 @@ export class BattleController {
 
   enemyShotAnimationDone(): void {
     if (this.state.phase !== 'enemyTurn' || !this.state.shot) return;
-    const s = { ...this.impact(this.state.shot), shot: null };
+    const shot = this.state.shot;
+    const s = { ...this.impact({ point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: 'enemy' }, shot.blastRadius), shot: null };
     const outcome = deadOutcome(s) ?? (s.turn >= this.settings.roundLength ? 'turnsUsed' : null);
-    this.set(outcome ? { ...s, phase: 'roundOver', outcome } : { ...s, phase: 'aiming' });
+    if (outcome) {
+      this.set({ ...s, phase: 'roundOver', outcome });
+      return;
+    }
+    this.set({ ...s, phase: 'aiming', enemy: s.lastShot?.hit ? this.movedEnemy(s) : s.enemy });
   }
 
   pause(): void {
@@ -123,6 +196,25 @@ export class BattleController {
     this.set({ ...this.state, phase });
   }
 
+  /** Digits, Enter, arrows and pointer selection work only while the player chooses a number. */
+  private acceptsInput(): boolean {
+    const phase = this.state.phase;
+    return phase === 'aiming' || phase === 'challenge';
+  }
+
+  private applyEntryKey(key: EntryKey): void {
+    if (!this.acceptsInput()) return;
+    const r = applyKey(this.state.entry, key, this.settings.range);
+    this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection });
+  }
+
+  /** Free play: after a hit the enemy moves to a new visible position (decision D12). */
+  private movedEnemy(s: RoundState): TankState {
+    const rng = createRng(deriveSeed(s.seed, 3, s.turn));
+    return moveTank(s.enemy, enemyPositionFor(this.settings, s.playerSide, rng, s.enemy.position), this.settings, s.terrain);
+  }
+
+  /** The enemy's shell on the state after the player's impact (enemy aiming, research R18). */
   private nextEnemyShot(s: RoundState): ShotInFlight {
     const origin = muzzle(s.enemy);
     const aim = enemyShot({
@@ -135,22 +227,15 @@ export class BattleController {
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
     });
-    return this.computeShot('enemy', s.enemy, aim.angleDeg, aim.power, BLAST_RADIUS);
+    // The enemy is not a target: its shell starts inside its own hit circle.
+    const targets = [s.player, ...s.decoys].filter((t) => t.alive).map((t) => ({ id: t.id, ...tankCenter(t), radius: TANK_HIT_RADIUS }));
+    const r = simulateShot({ ...aim, origin, terrain: s.terrain, targets, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
+    return { shooter: 'enemy', path: r.path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius: BLAST_RADIUS };
   }
 
-  private computeShot(shooter: ShotInFlight['shooter'], from: TankState, angleDeg: number, power: number, blastRadius: number): ShotInFlight {
-    const s = this.state;
-    // The shooter is not a target: its shell starts inside its own hit circle.
-    const targets = [s.player, s.enemy, ...s.decoys]
-      .filter((t) => t.alive && t.id !== from.id)
-      .map((t) => ({ id: t.id, ...tankCenter(t), radius: TANK_HIT_RADIUS }));
-    const r = simulateShot({ origin: muzzle(from), angleDeg, power, terrain: s.terrain, targets, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
-    return { shooter, path: r.path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius };
-  }
-
-  private impact(shot: ShotInFlight): RoundState {
+  private impact(impact: Impact, blastRadius: number): RoundState {
     const rules: DamageRules = { enemyDamageFactor: enemyDamageFactor(this.settings.enemyDifficulty), noDamage: this.settings.noDamage };
-    return applyImpact(this.state, { point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: shot.shooter }, shot.blastRadius, rules);
+    return applyImpact(this.state, impact, blastRadius, rules);
   }
 
   private set(next: RoundState): void {

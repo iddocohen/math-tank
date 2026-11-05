@@ -167,25 +167,43 @@ export interface RoundState {
   decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
-  /** False during a search: enemy hidden. */
+  /** False during a position search: enemy hidden; true after a hit, for readPosition and in free play. */
   enemyFound: boolean;
-  /** Shots since the enemy was found; new search after a hit or 3 shots. */
-  shotsAtEnemy: number;
+  /** In free play a readPosition challenge once that kind exists (amendment 02); null until then. */
   challenge: Challenge | null;
-  challengePurpose: 'search' | 'bonus' | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
-  /** Previewed number; submitted only by the check button. */
+  /** Previewed number; fired by the fire button or Enter. */
   selection: number | null;
-  /** FR-011 */
-  charged: boolean;
-  aim: { angleDeg: number; power: number };
+  /** Keyboard digits typed so far (FR-060); outOfRange shows the range hint (FR-063). */
+  entry: { typed: string; outOfRange: boolean };
+  /** order3: tank ids badged so far. */
+  orderTaps: string[];
+  /** Ruler detail level for this round (FR-018). */
+  rulerLevel: 1 | 2 | 3 | 4 | 5;
+  /** The player's last shot: landed number shown large; distance in steps shown in free play. */
+  lastShot: LastShot | null;
   /** FR-004 trail */
   lastPlayerPath: Point[] | null;
   /** The shell in flight during 'playerShot' and 'enemyTurn', for the renderer to replay; otherwise null. */
   shot: ShotInFlight | null;
   outcome: 'playerWon' | 'enemyWon' | 'turnsUsed' | null;
+}
+
+export interface LastShot {
+  /** The number the player fired at. */
+  fired: number;
+  /** The number under the impact point. */
+  landed: number;
+  /** The enemy was hit (exact number, FR-066). */
+  hit: boolean;
+  /** Inside the enemy's blast radius without a hit: the enemy shakes, no damage. */
+  nearMiss: boolean;
+  /** The tank whose number was fired at (enemy or decoy), or null. */
+  hitTankId: string | null;
+  /** Steps from the landed number to the enemy's number. */
+  distance: number | null;
 }
 
 export interface ShotInFlight {
