@@ -25,8 +25,9 @@
  * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
  * `data-help-level` is the help step. The fire button stays the only submit control.
  *
- * Comparison (US4, T091, FR-026): for "equal" the banner also shows the reference number large
- * (`data-testid="reference-number"`). In order3 a typed number on no tank shows a hint (decision D15).
+ * Comparison (US4, amendment 09, FR-026, FR-031): the banner names the options after the question, each as its own
+ * element (`data-testid="banner-option"`). At help step 1 the tens digit of every option is highlighted
+ * (`data-testid="tens-digit"`); a one-digit option has none.
  *
  * Help (US5, T101, FR-030, FR-031, FR-034): during every guided challenge a round help button (at least 48 by 48 CSS
  * pixels, mouse and touch only like "Neue Landschaft"; H is the key) shows the next help step. The status line shows
@@ -42,8 +43,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
 import { visibleEnemy } from '../core/battle/round';
-import type { LastShot, RoundState } from '../core/types';
-import { helpText, messageText, promptText, t } from '../i18n';
+import type { LastShot, PromptSpec, RoundState } from '../core/types';
+import { comparisonPrompt, helpText, messageText, promptText, t } from '../i18n';
 
 interface Props {
   controller: BattleController;
@@ -93,22 +94,13 @@ export function BattleOverlay({ controller, state, gear }: Props) {
     >
       {state.challenge && (
         <div className="challenge-banner" data-testid="challenge-banner">
-          {promptText(state.challenge.prompt)}
-          {state.challenge.kind === 'equal' && state.challenge.prompt.params.n !== undefined && (
-            <span className="reference-number" data-testid="reference-number">
-              {state.challenge.prompt.params.n}
-            </span>
-          )}
+          <BannerText prompt={state.challenge.prompt} tens={state.help.content?.tensDigits === true} />
         </div>
       )}
 
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
-        ) : state.notOnTank ? (
-          <span className="range-hint" data-testid="not-on-tank">
-            {m.battle.notOnTank}
-          </span>
         ) : lastShot?.hit ? (
           // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
           <span className="landed hit" data-testid="hit-feedback">
@@ -266,5 +258,46 @@ function TankIcon() {
       <path d="M8 12 L30 12 L36 18 L36 22 L2 22 L2 18 Z" fill="#b3261e" stroke="#4a0f0b" strokeWidth="1.5" />
       <rect x="4" y="22" width="30" height="3" rx="1.5" fill="#2b2f36" />
     </svg>
+  );
+}
+
+/**
+ * The banner text: the prompt, or for a comparison the question followed by the options, each in its own element so
+ * help step 1 can highlight its tens digit (amendment 09, FR-026, FR-031).
+ */
+function BannerText({ prompt, tens }: { prompt: PromptSpec; tens: boolean }) {
+  const comparison = comparisonPrompt(prompt);
+  if (!comparison) return <>{promptText(prompt)}</>;
+  return (
+    <>
+      {comparison.lead}{' '}
+      {comparison.options.map((o, i) => (
+        <span key={i}>
+          {i > 0 && comparison.separator}
+          <span className="banner-option" data-testid="banner-option">
+            {tens ? <TensDigit n={o} /> : o}
+          </span>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A number with its tens digit highlighted; a one-digit number stays as it is. */
+function TensDigit({ n }: { n: number }) {
+  const text = String(n);
+  const sign = text.startsWith('-') ? '-' : '';
+  const digits = text.slice(sign.length);
+  if (digits.length < 2) return <>{text}</>;
+  const at = digits.length - 2;
+  return (
+    <>
+      {sign}
+      {digits.slice(0, at)}
+      <span className="tens-digit" data-testid="tens-digit">
+        {digits[at]}
+      </span>
+      {digits.slice(at + 1)}
+    </>
   );
 }

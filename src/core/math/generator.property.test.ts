@@ -205,15 +205,22 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
       it(`${name}: every challenge validates and comparisons come`, () => {
         const problems: string[] = [];
         let comparisons = 0;
+        const comparisonKinds = new Set<string>();
         for (let seed = 0; seed < SEEDS; seed++) {
           const playerPosition = seed % 2 === 0 ? settings.range.min : settings.range.max;
           const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel: 1 });
-          if (c.options) comparisons++;
+          if (c.options) {
+            comparisons++;
+            comparisonKinds.add(c.kind);
+          }
           const errors = validateChallenge(c, settings, playerPosition);
           if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind} ${String(c.options)}: ${errors.join('; ')}`);
         }
         expect(problems).toEqual([]);
         expect(comparisons).toBeGreaterThan(settings.challengeTypes.numberLine ? SEEDS * 0.2 : SEEDS * 0.99);
+        // Amendment 09: no 'equal' and no 'order3'; 'middle3' comes.
+        expect(comparisonKinds.has('equal') || comparisonKinds.has('order3')).toBe(false);
+        expect(comparisonKinds.has('middle3')).toBe(true);
       });
     }
   });

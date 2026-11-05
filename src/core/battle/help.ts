@@ -9,8 +9,8 @@
  *   (or the nearest major line) to the answer; addition and subtraction show the step path instead, with
  *   `help.stepAnimation` (FR-024);
  * - step 3: the solution.
- * Comparison challenges: step 1 highlights the tens digits on every tank (`help.nearestTen`), step 2 marks every option
- * on the ruler (`help.zoom`), step 3 shows the correct tank or, for order3, the correct order.
+ * Comparison challenges (amendment 09): step 1 highlights the tens digits of the options in the banner
+ * (`help.nearestTen`), step 2 puts a marker on the ruler under every option (`help.zoom`), step 3 shows the solution.
  *
  * A step whose help types are all turned off is skipped; the solution step is always on (FR-032).
  */
@@ -44,7 +44,7 @@ function isArithmetic(c: Challenge): boolean {
 }
 
 function empty(step: HelpContent['step']): HelpContent {
-  return { step, direction: null, nearestMajor: null, zoom: null, count: null, stepPath: null, tensDigits: false, optionMarkers: null, solution: null, order: null };
+  return { step, direction: null, nearestMajor: null, zoom: null, count: null, stepPath: null, tensDigits: false, optionMarkers: null, solution: null };
 }
 
 /** The content of one step, or null when every help type of that step is turned off. */
@@ -83,6 +83,5 @@ export function nextHelp(challenge: Challenge, level: number, landed: number | n
   }
   const solution = empty(3);
   solution.solution = challenge.answer;
-  solution.order = challenge.orderAnswer ? [...challenge.orderAnswer] : null;
   return solution;
 }

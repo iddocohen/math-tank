@@ -7,7 +7,7 @@ import Phaser from 'phaser';
 
 export const TEX = {
   tankBody: 'tank-body',
-  /** Amendment 05 (FR-077): the enemy and decoys get an angular body, so shape tells them from the child's tank. */
+  /** Amendment 05 (FR-077): the enemy gets an angular body, so shape tells it from the child's tank. */
   tankBodyAngular: 'tank-body-angular',
   turret: 'tank-turret',
   sky: 'sky',

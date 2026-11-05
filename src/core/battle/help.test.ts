@@ -27,8 +27,8 @@ function settings(help: Partial<Settings['help']> = {}, range = { preset: '0-100
 
 const find37 = challenge('findNumber', 37);
 const sub43minus7 = challenge('subtraction', 36, { operands: [43, 7], steps: [43, 40, 36] });
-const greater = challenge('greater', 74, { options: [47, 74] });
-const order = challenge('order3', 74, { options: [74, 12, 47], orderAnswer: [12, 47, 74] });
+const greater = challenge('greater', 74, { options: [74, 47] });
+const middle = challenge('middle3', 45, { options: [72, 27, 45] });
 
 describe('directionTo and nearestMajorTick', () => {
   it('directionTo gives right, left or null for the same number', () => {
@@ -76,7 +76,7 @@ describe('nextHelp for position challenges (FR-031)', () => {
   });
 
   it('step 3 is the solution', () => {
-    expect(nextHelp(find37, 3, 31, settings())).toMatchObject({ step: 3, solution: 37, order: null, direction: null, zoom: null, count: null });
+    expect(nextHelp(find37, 3, 31, settings())).toMatchObject({ step: 3, solution: 37, direction: null, zoom: null, count: null });
     expect(nextHelp(sub43minus7, 3, null, settings())).toMatchObject({ step: 3, solution: 36 });
   });
 
@@ -86,14 +86,16 @@ describe('nextHelp for position challenges (FR-031)', () => {
 });
 
 describe('nextHelp for comparison challenges (FR-031)', () => {
-  it('step 1 highlights the tens digits, step 2 marks every option on the ruler, step 3 shows the correct tank', () => {
+  it('step 1 highlights the tens digits in the banner, step 2 marks every option on the ruler, step 3 shows the solution (amendment 09)', () => {
     expect(nextHelp(greater, 1, 47, settings())).toMatchObject({ step: 1, tensDigits: true, direction: null, nearestMajor: null });
     expect(nextHelp(greater, 2, 47, settings())).toMatchObject({ step: 2, optionMarkers: [47, 74], zoom: null, count: null });
-    expect(nextHelp(greater, 3, 47, settings())).toMatchObject({ step: 3, solution: 74, order: null });
+    expect(nextHelp(greater, 3, 47, settings())).toMatchObject({ step: 3, solution: 74 });
   });
 
-  it('order3 step 3 shows the correct order', () => {
-    expect(nextHelp(order, 3, null, settings())).toMatchObject({ step: 3, solution: 74, order: [12, 47, 74] });
+  it('middle3: the markers are sorted ascending and step 3 shows the middle number; no step has an order', () => {
+    expect(nextHelp(middle, 2, null, settings())).toMatchObject({ step: 2, optionMarkers: [27, 45, 72] });
+    expect(nextHelp(middle, 3, null, settings())).toMatchObject({ step: 3, solution: 45 });
+    for (const level of [1, 2, 3]) expect(nextHelp(middle, level, null, settings())).not.toHaveProperty('order');
   });
 });
 
@@ -120,7 +122,7 @@ describe('nextHelp with help types turned off by the parent (FR-032)', () => {
 
   it('with every help type off, the solution is still returned at once', () => {
     const off = settings({ nearestTen: false, countSteps: false, zoom: false, stepAnimation: false });
-    for (const c of [find37, sub43minus7, greater, order]) {
+    for (const c of [find37, sub43minus7, greater, middle]) {
       expect(nextHelp(c, 1, null, off)).toMatchObject({ step: 3, solution: c.answer });
     }
   });

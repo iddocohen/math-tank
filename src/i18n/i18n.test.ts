@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_ERROR_KEYS } from '../core/settings/validate';
 import { de } from './de';
-import { encouragements, forbiddenWords, helpText, messageText, promptText, t } from './index';
+import { comparisonPrompt, encouragements, forbiddenWords, helpText, messageText, promptText, t } from './index';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore, type Speaker } from '../core/battle/ports';
 import { nextHelp } from '../core/battle/help';
@@ -104,6 +104,33 @@ describe('de table', () => {
     expect(c.stepsRight(40, 3)).toContain('40');
     expect(c.stepsRight(40, 1)).toContain('1 Schritt ');
     expect(c.midpoint(40, 60)).toMatch(/40.*60/);
+  });
+
+  it('comparison prompts name the options in the banner, in at most 10 words (amendment 09, FR-026, FR-057)', () => {
+    const cases: Array<[string, Record<string, number>, string]> = [
+      ['greater', { o1: 47, o2: 74 }, 'Der Gegner steht bei der größeren Zahl: 47 oder 74'],
+      ['smaller', { o1: 18, o2: 21 }, 'Der Gegner steht bei der kleineren Zahl: 18 oder 21'],
+      ['largest3', { o1: 38, o2: 83, o3: 58 }, 'Der Gegner steht bei der größten Zahl: 38, 83, 58'],
+      ['smallest3', { o1: 61, o2: 16, o3: 26 }, 'Der Gegner steht bei der kleinsten Zahl: 61, 16, 26'],
+      ['closestTo', { o1: 46, o2: 57, n: 50 }, 'Der Gegner steht bei der Zahl näher an 50: 46 oder 57'],
+      ['between', { o1: 27, o2: 35, o3: 48, a: 30, b: 40 }, 'Der Gegner steht bei der Zahl zwischen 30 und 40: 27, 35, 48'],
+      ['middle3', { o1: 72, o2: 27, o3: 45 }, 'Der Gegner steht bei der mittleren Zahl: 72, 27, 45'],
+    ];
+    // Numbers are not words (FR-057 counts text).
+    const words = (text: string) => text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length;
+    for (const [key, params, text] of cases) {
+      expect(promptText({ key, params })).toBe(text);
+      expect(words(text), text).toBeLessThanOrEqual(10);
+      expect(comparisonPrompt({ key, params })!.options).toEqual([params.o1, params.o2, params.o3].filter((o) => o !== undefined));
+    }
+    expect(comparisonPrompt({ key: 'greater', params: { o1: 47, o2: 74 } })).toEqual({ lead: 'Der Gegner steht bei der größeren Zahl:', options: [47, 74], separator: ' oder ' });
+    expect(comparisonPrompt({ key: 'largest3', params: { o1: 38, o2: 83, o3: 58 } })!.separator).toBe(', ');
+    expect(comparisonPrompt({ key: 'findNumber', params: { n: 37 } })).toBeNull();
+    // Removed by amendment 09.
+    expect(t().challenge).not.toHaveProperty('equal');
+    expect(t().challenge).not.toHaveProperty('order3');
+    expect(t().battle).not.toHaveProperty('notOnTank');
+    expect(t().helpSteps).not.toHaveProperty('order');
   });
 
   it('promptText renders a challenge prompt from its key and parameters', () => {

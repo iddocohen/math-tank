@@ -52,7 +52,6 @@ export const de = {
     steps: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
     /** Order of three numbers (decision D15): the typed number is on no tank, so no badge was placed. */
-    notOnTank: 'Tippe eine Zahl von einem Panzer.',
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
   },
 
@@ -69,15 +68,16 @@ export const de = {
     // US3: the result of the exercise is the enemy's number (T083).
     addition: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} + ${b}${c === undefined ? '' : ` + ${c}`}`,
     subtraction: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} − ${b}${c === undefined ? '' : ` − ${c}`}`,
-    // US4 (T091, FR-026): the child taps the tank with the answer, or types its number.
-    greater: 'Welche Zahl ist größer?',
-    smaller: 'Welche Zahl ist kleiner?',
-    equal: (n: number) => `Welche Zahl ist gleich ${n}?`,
-    order3: 'Tippe die Zahlen von klein nach groß an',
-    largest3: 'Welche Zahl ist am größten?',
-    smallest3: 'Welche Zahl ist am kleinsten?',
-    closestTo: (n: number) => `Welche Zahl ist am nächsten an ${n}?`,
-    between: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
+    // US4 (amendment 09, FR-026): the start of the question; the banner adds the options, e.g. "47 oder 74".
+    greater: 'Der Gegner steht bei der größeren Zahl:',
+    smaller: 'Der Gegner steht bei der kleineren Zahl:',
+    largest3: 'Der Gegner steht bei der größten Zahl:',
+    smallest3: 'Der Gegner steht bei der kleinsten Zahl:',
+    closestTo: (n: number) => `Der Gegner steht bei der Zahl näher an ${n}:`,
+    between: (a: number, b: number) => `Der Gegner steht bei der Zahl zwischen ${a} und ${b}:`,
+    middle3: 'Der Gegner steht bei der mittleren Zahl:',
+    /** Between two options: "47 oder 74"; three options are separated by commas. */
+    optionsOr: 'oder',
   },
 
   /** Help steps (US5, FR-031, FR-033): one line per step, from i18n helpText. */
@@ -95,7 +95,6 @@ export const de = {
     tensDigits: 'Vergleiche zuerst die Zehner.',
     optionMarkers: 'Weiter rechts steht die größere Zahl.',
     solution: (n: number) => `Hier ist die ${n}.`,
-    order: (a: number, b: number, c: number) => `Die Reihenfolge ist ${a}, ${b}, ${c}.`,
   },
 
   /** Amendment 06 (FR-085, FR-086): result, time and the personal best, never a comparison. */

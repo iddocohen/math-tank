@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createRng } from '../rng';
 import { defaultSettings } from '../settings/defaults';
 import type { Challenge, ChallengeKind, DifficultyStep, Settings } from '../types';
-import { buildComparison, COMPARISON_KINDS, comparisonFits, comparisonSlots, fitsOptions, optionCount, type ComparisonKind } from './comparison';
+import { buildComparison, COMPARISON_KINDS, comparisonFits, optionCount, optionParams, type ComparisonKind } from './comparison';
 import { COMPARISON_47_74 } from './fixtures';
 import { generateChallenge } from './generate';
-import { minTankGap } from './gaps';
+import { minEnemyGap, minOptionGap } from './gaps';
 import type { ChallengeDraft } from './numberLine';
 import { validateChallenge } from './validate';
 
@@ -20,16 +20,16 @@ function onlyComparison(range: Settings['range'] = defaultSettings().range): Set
 function correctOptions(d: ChallengeDraft): number[] {
   const options = d.options!;
   const p = d.prompt.params;
+  const sorted = [...options].sort((a, b) => a - b);
   switch (d.kind as ComparisonKind) {
     case 'greater':
     case 'largest3':
-    case 'order3':
       return options.filter((o) => o === Math.max(...options));
     case 'smaller':
     case 'smallest3':
       return options.filter((o) => o === Math.min(...options));
-    case 'equal':
-      return options.filter((o) => o === p.n);
+    case 'middle3':
+      return [sorted[1]!];
     case 'closestTo': {
       const best = Math.min(...options.map((o) => Math.abs(o - p.n!)));
       return options.filter((o) => Math.abs(o - p.n!) === best);
@@ -39,9 +39,9 @@ function correctOptions(d: ChallengeDraft): number[] {
   }
 }
 
-function checkDraft(d: ChallengeDraft, settings: Settings, player: number): void {
+function checkDraft(d: ChallengeDraft, settings: Settings): void {
   const { min, max } = settings.range;
-  const gap = minTankGap(min, max);
+  const gap = minOptionGap(min, max);
   const options = d.options!;
   expect(options).toHaveLength(optionCount(d.kind as ComparisonKind));
   expect(new Set(options).size).toBe(options.length);
@@ -49,64 +49,109 @@ function checkDraft(d: ChallengeDraft, settings: Settings, player: number): void
     expect(Number.isInteger(o)).toBe(true);
     expect(o).toBeGreaterThanOrEqual(min);
     expect(o).toBeLessThanOrEqual(max);
-    expect(Math.abs(o - player)).toBeGreaterThanOrEqual(gap);
   }
   for (let i = 0; i < options.length; i++) {
     for (let j = i + 1; j < options.length; j++) expect(Math.abs(options[i]! - options[j]!)).toBeGreaterThanOrEqual(gap);
   }
   expect(correctOptions(d)).toEqual([d.answer]);
+  // The banner names the options in the order of `options` (amendment 09).
+  expect(optionParams(d.prompt.params)).toEqual(options);
+  expect((d as Partial<Challenge> & { orderAnswer?: unknown }).orderAnswer).toBeUndefined();
   for (const v of Object.values(d.prompt.params)) {
     expect(v).toBeGreaterThanOrEqual(min);
     expect(v).toBeLessThanOrEqual(max);
   }
 }
 
+describe('comparison kinds (amendment 09, FR-026)', () => {
+  it('are greater, smaller, largest3, smallest3, closestTo, between and middle3; no equal, no order3', () => {
+    expect([...COMPARISON_KINDS].sort()).toEqual(['between', 'closestTo', 'greater', 'largest3', 'middle3', 'smaller', 'smallest3']);
+  });
+
+  it('two options for greater, smaller and closestTo, three for the others', () => {
+    expect(COMPARISON_KINDS.map((k) => [k, optionCount(k)])).toEqual([
+      ['greater', 2],
+      ['smaller', 2],
+      ['largest3', 3],
+      ['smallest3', 3],
+      ['closestTo', 2],
+      ['between', 3],
+      ['middle3', 3],
+    ]);
+  });
+});
+
+describe('minOptionGap (amendment 09, FR-027)', () => {
+  it('is 2 numbers, or 2% of the range width when that is more', () => {
+    expect(minOptionGap(0, 5)).toBe(2);
+    expect(minOptionGap(0, 100)).toBe(2);
+    expect(minOptionGap(550, 780)).toBe(5);
+    expect(minOptionGap(0, 1000)).toBe(20);
+  });
+});
+
 describe('comparison builders (FR-026, FR-027, US4 scenario 6, AC-06)', () => {
   for (const kind of COMPARISON_KINDS) {
-    for (const [range, player] of [
-      [{ preset: '0-100', min: 0, max: 100 }, 0],
-      [{ preset: '0-100', min: 0, max: 100 }, 100],
-      [{ preset: '0-20', min: 0, max: 20 }, 20],
-      [{ preset: 'custom', min: 550, max: 780 }, 550],
+    for (const range of [
+      { preset: '0-100', min: 0, max: 100 },
+      { preset: '0-20', min: 0, max: 20 },
+      { preset: 'custom', min: 0, max: 5 },
+      { preset: 'custom', min: 550, max: 780 },
+      { preset: '0-1000', min: 0, max: 1000 },
     ] as const) {
-      it(`${kind} in ${range.min} to ${range.max}, player at ${player}: one correct answer, distinct options at least minTankGap apart`, () => {
+      it(`${kind} in ${range.min} to ${range.max}: distinct options at least minOptionGap apart, exactly one correct, named in the prompt`, () => {
         const settings = onlyComparison({ ...range });
-        const slots = comparisonSlots(settings, player);
         let built = 0;
         for (let seed = 0; seed < SEEDS; seed++) {
           const rng = createRng(seed);
-          const d = buildComparison(kind, rng.pick(slots), settings, STEP, rng, player);
+          const d = buildComparison(kind, rng.int(range.min, range.max), settings, STEP, rng);
           if (!d) continue;
           built++;
           expect(d.kind).toBe(kind);
-          checkDraft(d, settings, player);
+          checkDraft(d, settings);
         }
-        expect(built).toBeGreaterThan(SEEDS / 4);
+        expect(built).toBeGreaterThan(SEEDS / 5);
       });
     }
   }
 
-  it('order3 asks for the ascending order and the enemy is the largest number', () => {
+  it('middle3 has its answer between the two other options', () => {
     const settings = onlyComparison();
     for (let seed = 0; seed < SEEDS; seed++) {
       const rng = createRng(seed);
-      const d = buildComparison('order3', rng.int(15, 100), settings, STEP, rng, 0);
+      const d = buildComparison('middle3', rng.int(0, 100), settings, STEP, rng);
       if (!d) continue;
-      expect(d.orderAnswer).toEqual([...d.options!].sort((a, b) => a - b));
-      expect(d.answer).toBe(Math.max(...d.options!));
+      const others = d.options!.filter((o) => o !== d.answer);
+      expect(Math.min(...others)).toBeLessThan(d.answer);
+      expect(Math.max(...others)).toBeGreaterThan(d.answer);
     }
   });
 
-  it('only order3 has an order answer', () => {
+  it('the banner order of the options is not always ascending', () => {
     const settings = onlyComparison();
-    for (const kind of COMPARISON_KINDS.filter((k) => k !== 'order3')) {
-      const rng = createRng(3);
-      const d = buildComparison(kind, 80, settings, STEP, rng, 0);
-      expect(d?.orderAnswer).toBeUndefined();
+    let unsorted = 0;
+    for (let seed = 0; seed < 200; seed++) {
+      const rng = createRng(seed);
+      const d = buildComparison('largest3', rng.int(40, 100), settings, STEP, rng);
+      if (d && d.options!.some((o, i) => i > 0 && o < d.options![i - 1]!)) unsorted++;
+    }
+    expect(unsorted).toBeGreaterThan(50);
+  });
+
+  it('an easy ladder step narrows the option spread around the answer (amendment 09 item 7)', () => {
+    const settings = onlyComparison();
+    const easy: DifficultyStep = { maxNumberFraction: 0.2, allowCrossTens: true };
+    for (const kind of COMPARISON_KINDS) {
+      for (let seed = 0; seed < 500; seed++) {
+        const rng = createRng(seed);
+        const d = buildComparison(kind, rng.int(0, 100), settings, easy, rng);
+        if (!d) continue;
+        for (const o of d.options!) expect(Math.abs(o - d.answer)).toBeLessThanOrEqual(20);
+      }
     }
   });
 
-  it('generateChallenge with only comparison on gives valid comparison challenges for every kind', () => {
+  it('generateChallenge with only comparison on gives valid comparison challenges for every kind, the enemy away from the player', () => {
     const settings = onlyComparison();
     const kinds = new Set<ChallengeKind>();
     for (let seed = 0; seed < SEEDS; seed++) {
@@ -115,22 +160,16 @@ describe('comparison builders (FR-026, FR-027, US4 scenario 6, AC-06)', () => {
       expect(validateChallenge(c, settings, player)).toEqual([]);
       expect(COMPARISON_KINDS).toContain(c.kind);
       expect(c.mainSkill).toBe('comparison');
-      checkDraft(c, settings, player);
+      expect(Math.abs(c.answer - player)).toBeGreaterThanOrEqual(minEnemyGap(0, 100));
+      checkDraft(c, settings);
       kinds.add(c.kind);
     }
     expect([...kinds].sort()).toEqual([...COMPARISON_KINDS].sort());
   });
 });
 
-describe('comparison is skipped when 2 options do not fit (edge case "Comparison options too close together")', () => {
-  it('fitsOptions counts how many slots fit at the gap', () => {
-    expect(fitsOptions([10, 20, 30], 2, 10)).toBe(true);
-    expect(fitsOptions([10, 20, 30], 3, 10)).toBe(true);
-    expect(fitsOptions([10, 20, 30], 3, 11)).toBe(false);
-    expect(fitsOptions([10, 15, 19], 2, 10)).toBe(false);
-  });
-
-  it('every preset range fits 3 options from both ends', () => {
+describe('comparison fits (edge case "Comparison options too close together")', () => {
+  it('every preset range and a range of width 5 fit 3 options', () => {
     for (const [min, max] of [
       [0, 10],
       [0, 20],
@@ -141,27 +180,17 @@ describe('comparison is skipped when 2 options do not fit (edge case "Comparison
       [3, 8],
     ] as const) {
       const settings = onlyComparison({ preset: 'custom', min, max });
-      expect(comparisonFits('order3', settings, min)).toBe(true);
-      expect(comparisonFits('greater', settings, max)).toBe(true);
+      for (const kind of COMPARISON_KINDS) expect(comparisonFits(kind, settings)).toBe(true);
     }
-  });
-
-  it('with a tank as wide as the ruler no 2 options fit, and the generator falls back to another kind', () => {
-    // A layout whose ruler is one tank width long: minTankGap is the whole range.
-    const narrow = { worldWidth: 1600, left: 0, right: 60 };
-    const settings = onlyComparison();
-    expect(comparisonFits('greater', settings, 0, narrow)).toBe(false);
-    expect(comparisonFits('order3', settings, 0, narrow)).toBe(false);
-    const rng = createRng(1);
-    expect(buildComparison('greater', 80, settings, STEP, rng, 0, narrow)).toBeNull();
   });
 });
 
-describe('47 vs 74 fixture (US4 Independent Test, AC-06)', () => {
-  it('the fixture seed produces "greater" with the options 47 and 74 and the answer 74', () => {
+describe('47 oder 74 fixture (US4 Independent Test, AC-06)', () => {
+  it('the fixture seed produces "greater" with the options 47 and 74 in that order and the answer 74', () => {
     const c = generateChallenge({ ...COMPARISON_47_74.input, settings: COMPARISON_47_74.settings });
     expect(c.kind).toBe('greater');
-    expect([...c.options!].sort((a, b) => a - b)).toEqual([47, 74]);
+    expect(c.options).toEqual([47, 74]);
     expect(c.answer).toBe(74);
+    expect(COMPARISON_47_74.settings.adaptive).toBe(false);
   });
 });

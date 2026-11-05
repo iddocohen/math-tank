@@ -49,9 +49,12 @@ function onlyComparison(): Settings {
   return { ...defaultSettings(), adaptive: false, challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
 }
 
-const SEED_47_74 = 65327;
+const SEED_47_74 = 13355;
 
-/** US4 Independent Test (AC-06): the first guided search with this seed is "Welche Zahl ist größer?" with 47 and 74. */
+/**
+ * US4 Independent Test (AC-06, amendment 09): the first guided search with this seed is "Der Gegner steht bei der
+ * größeren Zahl: 47 oder 74", with the one enemy at 74.
+ */
 export const COMPARISON_47_74: {
   seed: number;
   settings: Settings;
@@ -63,7 +66,7 @@ export const COMPARISON_47_74: {
     skillSteps: parentSteps(onlyComparison()),
     roundSeed: deriveSeed(SEED_47_74, 1),
     turn: 0,
-    // The base seed 65327 puts the player on the right, at range.max.
+    // The base seed 13355 puts the player on the right, at range.max.
     playerPosition: 100,
     rulerLevel: 1,
     inputMethod: 'keyboard',

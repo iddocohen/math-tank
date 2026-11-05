@@ -26,7 +26,6 @@ import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
-import { topShellEntryX, topShellPath } from './topShell';
 import {
   applyImpact,
   createRound,
@@ -168,7 +167,7 @@ export class BattleController {
   selectNumber(n: number): void {
     if (!this.acceptsInput()) return;
     const { min, max } = this.settings.range;
-    this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry(), inputMethod: 'pointer', notOnTank: false });
+    this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry(), inputMethod: 'pointer' });
   }
 
   typeDigit(d: Digit): void {
@@ -189,62 +188,9 @@ export class BattleController {
    */
   confirm(method: InputMethod = 'keyboard'): void {
     if (!this.acceptsInput()) return;
-    const { selection, entry, challenge, help } = this.state;
+    const { selection, entry } = this.state;
     if (selection === null || entry.outOfRange) return;
-    if (this.state.mode === 'guided' && challenge?.kind === 'order3') {
-      // At the solution step Enter or the fire button fires at the enemy, the largest number (FR-013).
-      if (help.level === SOLUTION_HELP_LEVEL && entry.typed === '' && selection === challenge.answer) {
-        this.shoot(selection, method);
-        return;
-      }
-      // A number on a tank places its badge; any other number places none and shows a hint (decision D15).
-      const tank = this.numberedTanks().find((t) => t.label === selection);
-      if (tank) this.placeBadge(tank, method);
-      else this.set({ ...this.state, entry: emptyEntry(), notOnTank: true, inputMethod: method });
-      return;
-    }
-    // Single choice: a number on a tank fires at that tank, like tapTank; any other number is fired like any number.
     this.shoot(selection, method);
-  }
-
-  /**
-   * Comparison (US4, FR-026, FR-027): a tap on a numbered tank. In a single-choice comparison it fires at the tank's
-   * number: the enemy is destroyed, a decoy is destroyed as a miss. In order3 it places the next order badge without
-   * firing; a wrong order resets the badges and counts as a miss, and the correct third badge fires at the enemy.
-   * Ignored outside comparison searches, for destroyed tanks and before the challenge is answerable.
-   */
-  tapTank(tankId: string): void {
-    if (!this.acceptsInput() || this.state.mode !== 'guided' || !this.state.challenge?.options) return;
-    const tank = this.numberedTanks().find((t) => t.id === tankId);
-    if (!tank) return;
-    if (this.state.challenge.kind === 'order3') this.placeBadge(tank, 'pointer');
-    else this.shoot(tank.position, 'pointer');
-  }
-
-  /** The labeled tanks still standing in a comparison search: the enemy and the decoys. */
-  private numberedTanks(): TankState[] {
-    const s = this.state;
-    return [s.enemy, ...s.decoys].filter((t) => t.alive && t.label !== undefined);
-  }
-
-  /** order3: the next badge, a reset after a wrong order, or the shot at the enemy after the third (FR-026). */
-  private placeBadge(tank: TankState, method: InputMethod): void {
-    const s = this.state;
-    const order = s.challenge?.orderAnswer;
-    const answerableAt = s.answerableAt;
-    if (!order || (answerableAt !== null && this.deps.clock() < answerableAt)) return;
-    if (s.orderTaps.includes(tank.id)) return;
-    const taps = [...s.orderTaps, tank.id];
-    const labels = new Map(this.numberedTanks().map((t) => [t.id, t.label]));
-    const inOrder = taps.every((id, i) => labels.get(id) === order[i]);
-    const base: BattleState = { ...s, entry: emptyEntry(), notOnTank: false, inputMethod: method };
-    if (!inOrder) {
-      // A wrong order is a wrong answer for the help steps, but not a shot (FR-081).
-      this.set(afterMiss({ ...base, orderTaps: [] }, this.deps.clock(), this.settings));
-      return;
-    }
-    this.set({ ...base, orderTaps: taps });
-    if (taps.length === order.length) this.shoot(s.challenge!.answer, method);
   }
 
   /** Fires at n with the fixed cannon (FR-065); the renderer replays the path and then calls shotAnimationDone. */
@@ -273,7 +219,7 @@ export class BattleController {
     const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS };
     this.firedNumber = n;
     this.firedAt = this.deps.clock();
-    this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod, notOnTank: false });
+    this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
   }
 
   /**
@@ -419,7 +365,7 @@ export class BattleController {
   private applyEntryKey(key: EntryKey): void {
     if (!this.acceptsInput()) return;
     const r = applyKey(this.state.entry, key, this.settings.range);
-    this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection, inputMethod: 'keyboard', notOnTank: false });
+    this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection, inputMethod: 'keyboard' });
   }
 
   /**
@@ -434,8 +380,8 @@ export class BattleController {
 
   /**
    * The enemy's shell on the state after the player's impact (amendment 07, FR-041 to FR-043a): the seeded draw of
-   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle; in a comparison turn it
-   * falls from the top edge, so it does not show which tank is the enemy.
+   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle in every turn, comparison
+   * turns included (amendment 09: the only tank on the field is the enemy).
    */
   private nextEnemyShot(s: BattleState): ShotInFlight {
     const shotIndex = this.enemyShotIndex++;
@@ -449,10 +395,7 @@ export class BattleController {
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
     });
-    const path = s.decoys.length === 0
-      ? shot.path
-      : topShellPath({ impact: shot.impact, entryX: topShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
-    return { shooter: 'enemy', path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
+    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
   }
 
   private impact(impact: Impact, blastRadius: number): BattleState {

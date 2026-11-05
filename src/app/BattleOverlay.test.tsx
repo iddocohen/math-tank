@@ -258,24 +258,36 @@ describe('BattleOverlay comparison (US4, T091)', () => {
     throw new Error('no seed found');
   }
 
-  it('shows the reference number of an "equal" question', () => {
-    const { controller } = guided((s) => s.challenge?.kind === 'equal');
-    const n = controller.getState().challenge!.prompt.params.n!;
-    expect(screen.getByTestId('challenge-banner').textContent).toContain(t().challenge.equal(n));
-    expect(screen.getByTestId('reference-number').textContent).toBe(String(n));
+  it('the banner names every option as its own element, in banner order (amendment 09, FR-026)', () => {
+    const { controller } = guided((s) => s.challenge?.kind === 'greater');
+    const c = controller.getState().challenge!;
+    expect(screen.getByTestId('challenge-banner').textContent).toBe(promptText(c.prompt));
+    expect(screen.getAllByTestId('banner-option').map((e) => Number(e.textContent))).toEqual(c.options);
+    expect(screen.queryByTestId('reference-number')).toBeNull();
+    expect(screen.queryByTestId('not-on-tank')).toBeNull();
+    expect(screen.queryAllByTestId('tens-digit')).toHaveLength(0);
   });
 
-  it('order3: a typed number on no tank shows the hint until the next digit', () => {
-    const { controller, advance } = guided((s) => s.challenge?.kind === 'order3');
-    advance(1000);
-    const off = controller.getState().challenge!.options![0]! + 1;
-    act(() => {
-      for (const ch of String(off)) controller.typeDigit(Number(ch) as 0);
-      controller.confirm();
-    });
-    expect(screen.getByTestId('not-on-tank').textContent).toBe(t().battle.notOnTank);
-    act(() => controller.typeDigit(1));
-    expect(screen.queryByTestId('not-on-tank')).toBeNull();
+  it('help step 1 marks the tens digit of every option in the banner (FR-031)', () => {
+    const { controller } = guided((s) => s.challenge?.kind === 'largest3' && s.challenge.options!.every((o) => o >= 10));
+    const options = controller.getState().challenge!.options!;
+    act(() => controller.requestHelp());
+    expect(controller.getState().help.content).toMatchObject({ step: 1, tensDigits: true });
+    const tens = screen.getAllByTestId('tens-digit').map((e) => e.textContent);
+    expect(tens).toEqual(options.map((o) => String(Math.floor(o / 10) % 10)));
+    // The banner text stays the same.
+    expect(screen.getByTestId('challenge-banner').textContent).toBe(promptText(controller.getState().challenge!.prompt));
+    act(() => controller.requestHelp());
+    expect(screen.queryAllByTestId('tens-digit')).toHaveLength(0);
+  });
+
+  it('a one-digit option has no tens digit to mark', () => {
+    const { controller } = guided((s) => s.challenge?.options?.some((o) => o < 10) === true);
+    const options = controller.getState().challenge!.options!;
+    act(() => controller.requestHelp());
+    if (controller.getState().help.content?.tensDigits) {
+      expect(screen.queryAllByTestId('tens-digit')).toHaveLength(options.filter((o) => o >= 10).length);
+    }
   });
 });
 

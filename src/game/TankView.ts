@@ -2,24 +2,19 @@
  * One tank on screen (FR-007): body, turret rotated by the cannon angle.
  * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss on the body (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
- * Fade in and out and a fully hidden state are used for destroyed decoys; `appear` fades a new enemy in after the old
- * one was destroyed (amendment 06). The enemy is never hidden (amendment 07).
+ * `appear` fades a new enemy in after the old one was destroyed (amendment 06). The enemy is never hidden
+ * (amendment 07).
  *
  * Amendment 05 (FR-077): the look comes from tankStyle. The child's tank is blue and rounded with a yellow star flag
- * on its antenna; the enemy and decoys are dark red and angular with a black flag. `showYouMarker` shows a bouncing
+ * on its antenna; the enemy is dark red and angular with a black flag. `showYouMarker` shows a bouncing
  * arrow with "Du" over the child's tank.
  *
  * Amendment 06 (FR-073, FR-078, FR-080): `setLives` draws the child's hearts directly above the tank, full ones in
  * red and lost ones as an outline, with no text; the enemy has no health bar. `setTarget` draws a small target ring
  * where the pointer line meets the tank, on its center line, with no number.
  *
- * Comparison (US4, FR-026, FR-053, FR-073): `setLabel` puts a number plate above a numbered tank, the enemy and its
- * decoys alike, and makes the tank tappable: a tap area of at least TAP_MIN_CSS by TAP_MIN_CSS CSS pixels around the
- * tank and its plate calls the `onTap` handler. `setBadge` shows the order badge 1, 2 or 3 of an order3 search next to
- * the plate.
- *
- * Help (US5, T100, FR-031): `setPlateHelp` highlights the tens digit on the plate (comparison step 1) and marks the
- * correct tank with a green border, or for order3 with its place 1, 2 or 3 in a green circle above the plate (step 3).
+ * Amendment 09 (FR-026): no tank carries a number plate, takes taps or shows an order badge; comparison turns show
+ * the one enemy like every other turn.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -47,17 +42,6 @@ const SETTLE_MS = 450;
 const FADE_MS = 500;
 const SHAKE_PX = 6;
 const SHAKE_MS = 50;
-/** Number plate: its center this far above the tank base (where the child's hearts sit), and its text size. */
-const PLATE_Y = -BAR_OFFSET;
-const PLATE_FONT = 30;
-const PLATE_PAD_X = 10;
-const PLATE_H = 40;
-const BADGE_R = 17;
-/** The smallest tap area in CSS pixels (FR-053), and the tap area in world units on a large screen. */
-const TAP_MIN_CSS = 48;
-const TAP_W = 110;
-const TAP_H = 130;
-const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 export class TankView {
   readonly container: Phaser.GameObjects.Container;
@@ -74,22 +58,11 @@ export class TankView {
   private lastY: number | null = null;
   private lastLives: number | null = null;
   private hidden = false;
-  private readonly plate: Phaser.GameObjects.Container;
-  private readonly plateBg: Phaser.GameObjects.Graphics;
-  private readonly plateText: Phaser.GameObjects.Text;
-  private readonly badge: Phaser.GameObjects.Container;
-  private readonly badgeText: Phaser.GameObjects.Text;
-  private readonly tapZone: Phaser.GameObjects.Zone;
-  private label: number | null = null;
-  private readonly plateHelp: Phaser.GameObjects.Graphics;
-  private readonly markText: Phaser.GameObjects.Text;
-  private plateHelpKey = '';
 
   constructor(
     private readonly scene: Phaser.Scene,
     kind: TankState['kind'],
     private readonly worldHeight: number,
-    onTap?: () => void,
   ) {
     this.style = tankStyle(kind);
     this.color = this.style.color;
@@ -103,117 +76,7 @@ export class TankView {
     this.target = scene.add.graphics().setVisible(false);
     drawTarget(this.target);
     this.you = createYouMarker(scene).setVisible(false);
-    this.plateBg = scene.add.graphics();
-    this.plateText = scene.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: `${PLATE_FONT}px`, fontStyle: 'bold', color: '#14203a' })
-      .setOrigin(0.5, 0.5);
-    this.badgeText = scene.add
-      .text(0, 0, '', { fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#14203a' })
-      .setOrigin(0.5, 0.5);
-    const badgeBg = scene.add.graphics();
-    badgeBg.fillStyle(0xffd54a, 1);
-    badgeBg.fillCircle(0, 0, BADGE_R);
-    badgeBg.lineStyle(3, 0x14203a, 1);
-    badgeBg.strokeCircle(0, 0, BADGE_R);
-    this.badge = scene.add.container(0, 0, [badgeBg, this.badgeText]).setVisible(false);
-    this.plateHelp = scene.add.graphics();
-    this.markText = scene.add
-      .text(0, -PLATE_H - 6, '', { fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#14203a' })
-      .setOrigin(0.5, 0.5)
-      .setVisible(false);
-    this.plate = scene.add.container(0, PLATE_Y, [this.plateBg, this.plateHelp, this.plateText, this.badge, this.markText]).setVisible(false);
-    this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
-    if (onTap) this.tapZone.on('pointerdown', onTap);
-    this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.target, this.hearts, this.plate, this.you, this.tapZone]);
-  }
-
-  /**
-   * The number plate of a comparison tank (FR-026): the number on a light plate above the tank. A labeled tank takes
-   * taps; null removes the plate and the tap area.
-   */
-  setLabel(label: number | null): void {
-    if (label === this.label) return;
-    this.label = label;
-    if (label === null) {
-      this.plate.setVisible(false);
-      this.tapZone.disableInteractive();
-      return;
-    }
-    this.plateText.setText(String(label));
-    const w = this.plateText.width + 2 * PLATE_PAD_X;
-    this.plateBg.clear();
-    this.plateBg.fillStyle(0xf4f6fb, 1);
-    this.plateBg.fillRoundedRect(-w / 2, -PLATE_H / 2, w, PLATE_H, 8);
-    this.plateBg.lineStyle(3, 0x14203a, 1);
-    this.plateBg.strokeRoundedRect(-w / 2, -PLATE_H / 2, w, PLATE_H, 8);
-    this.badge.setX(w / 2 + BADGE_R + 4);
-    this.plate.setVisible(true);
-    this.plateHelpKey = '';
-    this.plateHelp.clear();
-    this.markText.setVisible(false);
-    this.fitTapZone();
-    this.tapZone.setInteractive({ useHandCursor: true });
-  }
-
-  /**
-   * Help on the plate (FR-031): `tens` highlights the tens digit; `mark` 0 puts a green border on the plate of the
-   * correct tank, 1 to 3 also shows its place in the correct order above the plate; null shows no mark.
-   */
-  setPlateHelp(tens: boolean, mark: number | null): void {
-    const key = `${tens}|${mark}|${this.label}`;
-    if (key === this.plateHelpKey) return;
-    this.plateHelpKey = key;
-    const g = this.plateHelp.clear();
-    this.markText.setVisible(false);
-    if (this.label === null) return;
-    const text = String(this.label);
-    const w = this.plateText.width;
-    const digits = text.replace('-', '').length;
-    if (tens && digits >= 2) {
-      // System fonts draw digits with equal widths, so the tens digit's place follows from the text width.
-      const cw = w / text.length;
-      const cx = -w / 2 + cw * (text.length - 1.5);
-      g.fillStyle(0xffd54a, 1);
-      g.fillRoundedRect(cx - cw / 2 - 3, -PLATE_H / 2 + 4, cw + 6, PLATE_H - 8, 6);
-    }
-    if (mark !== null) {
-      const pw = w + 2 * PLATE_PAD_X;
-      g.lineStyle(6, 0x3fae5a, 1);
-      g.strokeRoundedRect(-pw / 2 - 4, -PLATE_H / 2 - 4, pw + 8, PLATE_H + 8, 10);
-      if (mark > 0) {
-        g.fillStyle(0x9be89f, 1);
-        g.fillCircle(0, -PLATE_H - 6, BADGE_R);
-        g.lineStyle(3, 0x14203a, 1);
-        g.strokeCircle(0, -PLATE_H - 6, BADGE_R);
-        this.markText.setText(String(mark)).setVisible(true);
-      }
-    }
-  }
-
-  /** The order badge 1, 2 or 3 of an order3 search next to the plate; null hides it (FR-026). */
-  setBadge(n: number | null): void {
-    this.badge.setVisible(n !== null);
-    if (n !== null) this.badgeText.setText(String(n));
-  }
-
-  /**
-   * The tap area covers the tank and its plate, at least TAP_MIN_CSS CSS pixels in each direction at the current
-   * canvas scale (FR-053). Its center in world coordinates, for the end-to-end tests.
-   */
-  tapCenter(): { x: number; y: number } {
-    return { x: this.container.x + this.tapZone.x, y: this.container.y + this.tapZone.y };
-  }
-
-  private fitTapZone(): void {
-    const scale = this.scene.scale.displayScale.x || 1;
-    // displayScale is world units per CSS pixel.
-    const min = TAP_MIN_CSS * scale;
-    const w = Math.max(TAP_W, min);
-    const h = Math.max(TAP_H, min);
-    this.tapZone.setSize(w, h);
-    // From just below the tank base up over the plate.
-    this.tapZone.setPosition(0, 10 - h / 2);
-    if (this.tapZone.input) this.tapZone.input.hitArea.setTo(0, 0, w, h);
+    this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.target, this.hearts, this.you]);
   }
 
   /**
@@ -324,7 +187,6 @@ export class TankView {
   destroy(): void {
     this.youTimer?.remove();
     this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.you]);
-    this.tapZone.removeAllListeners();
     this.container.destroy();
   }
 }

@@ -222,7 +222,8 @@ input:focus-visible {
   left: 50%;
   top: calc(max(8px, env(safe-area-inset-top)) + 8px);
   transform: translateX(-50%);
-  max-width: min(640px, calc(100% - 320px));
+  width: max-content;
+  max-width: min(860px, calc(100% - 320px));
   padding: 8px 20px;
   border-radius: 14px;
   font-size: 1.6rem;
@@ -233,15 +234,16 @@ input:focus-visible {
   pointer-events: none;
 }
 
-/* "equal" comparison: the reference number, large next to the question (T091). */
-.reference-number {
-  display: inline-block;
-  margin-left: 12px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-size: 2rem;
+/* Comparison options in the banner (amendment 09); help step 1 highlights each tens digit (FR-031). */
+.banner-option {
+  white-space: nowrap;
+}
+
+.tens-digit {
+  padding: 0 3px;
+  border-radius: 6px;
   color: #14203a;
-  background: #f4f6fb;
+  background: #ffd54a;
 }
 
 @media (max-width: 720px) {

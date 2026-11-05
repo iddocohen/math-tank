@@ -45,12 +45,8 @@ describe('tankStyle (amendment 05, FR-077, FR-078)', () => {
     expect(luminance(enemy.color)).toBeLessThan(luminance(player.color));
   });
 
-  it('decoys look exactly like the enemy', () => {
-    expect(tankStyle('decoy')).toEqual(enemy);
-  });
-
   it('every health bar has the color of its tank', () => {
-    for (const kind of ['player', 'enemy', 'decoy'] as const) {
+    for (const kind of ['player', 'enemy'] as const) {
       expect(tankStyle(kind).barColor).toBe(tankStyle(kind).color);
     }
   });

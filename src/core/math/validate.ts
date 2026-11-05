@@ -22,7 +22,6 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
   (arithmetic ? c.operands.slice(0, 1) : c.operands).forEach((n, i) => check(`operand ${i}`, n));
   c.steps?.forEach((n, i) => check(`step ${i}`, n));
   c.options?.forEach((n, i) => check(`option ${i}`, n));
-  c.orderAnswer?.forEach((n, i) => check(`order ${i}`, n));
 
   const gap = minEnemyGap(min, max);
   if (Math.abs(c.answer - playerPosition) < gap) {
@@ -86,8 +85,8 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       errors.push(...arithmeticErrors({ ...c, kind: c.kind }, settings));
       break;
     default:
-      // Comparison: option count, minTankGap and exactly one correct option (FR-027).
-      errors.push(...comparisonErrors(c, settings, playerPosition));
+      // Comparison: option count, minOptionGap and exactly one correct option (FR-027, amendment 09).
+      errors.push(...comparisonErrors(c, settings));
       break;
   }
 
@@ -95,13 +94,9 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
 }
 
 /**
- * Accepts only the exact answer, for every kind; for 'order3' only the exact tap sequence.
+ * Accepts only the exact answer, for every kind (amendment 09 removed the order3 sequence).
  * Whether a shot damages the enemy is decided by core/battle/hitRule.ts (amendment 04).
  */
-export function checkAnswer(c: Challenge, answer: number | number[]): boolean {
-  if (c.orderAnswer) {
-    return Array.isArray(answer) && answer.length === c.orderAnswer.length && answer.every((n, i) => n === c.orderAnswer![i]);
-  }
-  if (typeof answer !== 'number') return false;
+export function checkAnswer(c: Challenge, answer: number): boolean {
   return answer === c.answer;
 }

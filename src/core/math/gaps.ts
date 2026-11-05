@@ -14,3 +14,11 @@ export function minTankGap(min: number, max: number, layout: Layout = DEFAULT_LA
 export function minEnemyGap(min: number, max: number): number {
   return 0.15 * (max - min);
 }
+
+/**
+ * Comparison options stand at least this far apart, so the ruler markers of help step 2 stay apart: 2 numbers, or
+ * 2% of the range width when that is more (amendment 09, FR-027).
+ */
+export function minOptionGap(min: number, max: number): number {
+  return Math.max(2, Math.ceil(0.02 * (max - min)));
+}

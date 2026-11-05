@@ -74,7 +74,7 @@ describe('enemyHitsPlayer (amendment 06, FR-006)', () => {
   });
 
   it('another tank as target is not a hit on the player', () => {
-    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'decoy-1', player)).toBe(false);
+    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'other-1', player)).toBe(false);
   });
 });
 

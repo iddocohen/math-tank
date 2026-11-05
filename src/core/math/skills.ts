@@ -1,7 +1,7 @@
 /** Skills per challenge (data-model.md "Main skill per kind", FR-036). */
-import type { Challenge, ChallengeKind, Skill } from '../types';
+import type { Challenge, ChallengeKind, Skill, StoredChallengeKind } from '../types';
 
-const MAIN_SKILL: Record<ChallengeKind, Skill> = {
+const MAIN_SKILL: Record<StoredChallengeKind, Skill> = {
   findNumber: 'positions',
   missingBetween: 'positions',
   midpoint: 'positions',
@@ -20,9 +20,10 @@ const MAIN_SKILL: Record<ChallengeKind, Skill> = {
   smallest3: 'comparison',
   closestTo: 'comparison',
   between: 'comparison',
+  middle3: 'comparison',
 };
 
-export function mainSkillOf(kind: ChallengeKind): Skill {
+export function mainSkillOf(kind: StoredChallengeKind): Skill {
   return MAIN_SKILL[kind];
 }
 

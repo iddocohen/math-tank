@@ -22,16 +22,19 @@ export const challengeKindSchema = z.enum([
   'stepsLeft',
   'missingBetween',
   'midpoint',
+  'readPosition',
   'addition',
   'subtraction',
   'greater',
   'smaller',
+  // Removed by amendment 09; attempts stored before it still load.
   'equal',
   'order3',
   'largest3',
   'smallest3',
   'closestTo',
   'between',
+  'middle3',
 ]);
 
 export const recentOutcomeSchema = z.enum(['independent', 'close', 'assisted', 'unsolved']);

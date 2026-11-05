@@ -119,12 +119,10 @@ export function createRound(
     elapsedMs: 0,
     lastEnemyHit: false,
     stepAnimation: null,
-    notOnTank: false,
     phase: 'aiming',
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
-    decoys: [],
     playerSide: side,
     challenge,
     answerableAt: null,
@@ -132,7 +130,6 @@ export function createRound(
     message: null,
     selection: null,
     entry: emptyEntry(),
-    orderTaps: [],
     inputMethod: null,
     rulerLevel,
     lastShot: null,
@@ -189,8 +186,8 @@ export interface DamageRules {
  *
  * An enemy shell that hits the player's tank costs one heart unless noDamage (FR-006, FR-080); one next to it does
  * nothing. The player's shell follows the amendment 06 rule (FR-066): the exact number destroys the enemy (the
- * controller then brings a new one), a shell on the body but not exact is a near miss (the enemy shakes), and a decoy
- * at the fired number is destroyed. The player's own shell never harms the player. Sets lastShot for player shells
+ * controller then brings a new one) and a shell on the body but not exact is a near miss (the enemy shakes). The
+ * player's own shell never harms the player. Sets lastShot for player shells
  * and lastEnemyHit for enemy shells.
  */
 export function applyImpact(state: BattleState, impact: Impact, blastRadius: number, rules: DamageRules): BattleState {
@@ -210,7 +207,6 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
       terrain,
       player: settle(state.player),
       enemy: settle(state.enemy),
-      decoys: state.decoys.map((d) => settle(d)),
       lives: lostHeart ? Math.max(0, state.lives - 1) : state.lives,
       lastEnemyHit: lostHeart,
     };
@@ -220,13 +216,12 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
   const enemy = state.enemy;
   const kind = enemy.alive ? shotKind(fired, enemy.position, rules.range) : 'miss';
   const hit = kind === 'hit';
-  const decoyHit = state.decoys.find((d) => d.alive && d.position === fired) ?? null;
   const lastShot: LastShot = {
     fired,
     landed,
     hit,
     nearMiss: kind === 'near',
-    hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
+    hitTankId: hit ? enemy.id : null,
     distance: Math.abs(landed - enemy.position),
     enemyNumber: enemy.position,
   };
@@ -235,7 +230,6 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
     terrain,
     player: settle(state.player),
     enemy: settle(enemy, hit),
-    decoys: state.decoys.map((d) => settle(d, d === decoyHit)),
     lastShot,
   };
 }

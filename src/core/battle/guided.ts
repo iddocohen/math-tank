@@ -11,7 +11,7 @@ import { isComparisonKind } from '../math/comparison';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { nextHelp } from './help';
-import { makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
+import { moveTank, parentDifficulty, type Difficulty } from './round';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
 export const ANSWER_DELAY_MS = 1000;
@@ -37,7 +37,7 @@ export function searchChallenge(
   skillSteps: Record<Skill, number> = parentDifficulty(settings).skillSteps,
   noComparison = false,
 ): Challenge {
-  // Amendment 08: right after "Neue Landschaft" no comparison, so exactly one enemy stands on the field.
+  // Amendment 08 (FR-070): right after "Neue Landschaft" no comparison.
   const kindsAllowed = noComparison ? enabledKinds(settings).filter((k) => !isComparisonKind(k)) : undefined;
   let challenge: Challenge | null = null;
   for (let i = 0; i < NEW_POSITION_TRIES; i++) {
@@ -61,8 +61,8 @@ export function searchChallenge(
  * input reset, answers accepted from `now + ANSWER_DELAY_MS`. lastShot stays, so the feedback of the previous shot
  * remains visible.
  *
- * Comparison (US4, FR-026, FR-027): every option stands on a tank at its own number, each labeled with it. The enemy
- * stands at the answer; the other options are decoys, which look the same. All of them are visible.
+ * Comparison (US4, FR-026, FR-027, amendment 09): the banner names the options and the one enemy stands at the answer,
+ * like in every other challenge; the other options are not on the battlefield.
  *
  * `difficulty` (US7, FR-018, FR-037): the skill steps the challenge is built with and the ruler level of the search.
  * `noComparison` (amendment 08): the search right after "Neue Landschaft" is never a comparison.
@@ -77,28 +77,18 @@ export function startSearch(
 ): BattleState {
   const rulerLevel = difficulty.rulerLevel;
   const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps, noComparison);
-  const moved: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
-  // Only a comparison enemy carries a number plate.
-  delete moved.label;
-  const options = challenge.options;
-  const enemy: TankState = options ? { ...moved, label: challenge.answer } : moved;
-  const decoys: TankState[] = (options ?? [])
-    .filter((n) => n !== challenge.answer)
-    .map((n, i) => ({ ...makeTank(`decoy-${challenge.id}-${i}`, 'decoy', n, settings, s.terrain), label: n }));
+  const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
   return {
     ...s,
     phase: 'challenge',
     rulerLevel,
     challenge,
     enemy,
-    decoys,
-    notOnTank: false,
     answerableAt: now + ANSWER_DELAY_MS,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null },
     message: null,
     selection: null,
     entry: emptyEntry(),
-    orderTaps: [],
     stepAnimation: null,
   };
 }
@@ -136,7 +126,7 @@ export function afterHelpRequest(s: BattleState, settings: Settings): BattleStat
 }
 
 /**
- * A miss in a search (a near miss on the body, a plain miss, a destroyed decoy or a wrong order): one more wrong
+ * A miss in a search (a near miss on the body or a plain miss): one more wrong
  * answer, the next help step and a feedback line, "Ganz knapp! Triff die Linie." after a near miss, otherwise an
  * encouraging phrase chosen by the round seed (FR-033).
  */

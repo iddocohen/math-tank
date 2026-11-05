@@ -17,11 +17,33 @@ export const encouragements: readonly string[] = active.encouragements;
 /** No child-facing string may contain one of these, case-insensitive, also inside compounds (FR-033, SC-006). */
 export const forbiddenWords: readonly string[] = ['falsch', 'verloren', 'Fehler', 'versagt', 'schlecht', 'dumm'];
 
+/** Keys of the comparison prompts (amendment 09): the banner adds the options after the question. */
+const COMPARISON_KEYS = ['greater', 'smaller', 'largest3', 'smallest3', 'closestTo', 'between', 'middle3'];
+
+/**
+ * A comparison prompt in parts, so the banner can mark each option (FR-026, FR-031): the question, the options in
+ * banner order and what stands between them (" oder " for two, ", " for three). Null for other prompts.
+ */
+export function comparisonPrompt(prompt: PromptSpec): { lead: string; options: number[]; separator: string } | null {
+  if (!COMPARISON_KEYS.includes(prompt.key)) return null;
+  const p = prompt.params;
+  const options = [p.o1, p.o2, p.o3].filter((o): o is number => o !== undefined);
+  const entry = (active.challenge as Record<string, unknown>)[prompt.key];
+  let lead = String(entry);
+  if (typeof entry === 'function') {
+    const call = entry as (...args: Array<number | undefined>) => string;
+    lead = prompt.key === 'between' ? call(p.a, p.b) : call(p.n);
+  }
+  return { lead, options, separator: options.length === 2 ? ` ${active.challenge.optionsOr} ` : ', ' };
+}
+
 /**
  * The banner text of a challenge prompt (T068, T069): the translation under `prompt.key`, called with the parameters
  * in the order the builders use (n, k) or (a, b, c). An unknown key gives an empty string.
  */
 export function promptText(prompt: PromptSpec): string {
+  const comparison = comparisonPrompt(prompt);
+  if (comparison) return `${comparison.lead} ${comparison.options.join(comparison.separator)}`;
   const entry = (active.challenge as Record<string, unknown>)[prompt.key];
   if (typeof entry === 'string') return entry;
   if (typeof entry !== 'function') return '';
@@ -39,7 +61,6 @@ export function messageText(m: FeedbackMessage): string {
 /** The text line of a help step (FR-031), or null when the step has nothing to say. */
 export function helpText(h: HelpContent): string | null {
   const s = active.helpSteps;
-  if (h.order && h.order.length === 3) return s.order(h.order[0]!, h.order[1]!, h.order[2]!);
   if (h.solution !== null) return s.solution(h.solution);
   if (h.direction) return s.direction[h.direction];
   if (h.nearestMajor !== null) return s.nearestTen(h.nearestMajor);

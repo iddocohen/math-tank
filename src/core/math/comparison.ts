@@ -1,151 +1,143 @@
 /**
- * Comparison challenges, answer first (FR-026, FR-027, research R10, data-model.md "Gaps").
- * Each option stands on a tank at its own number. The answer is the real enemy's number; the other options are
- * decoys. Every option is at least minTankGap from every other option and from the player tank, and exactly one
- * option answers the question. `order3` asks for the ascending order; its enemy is the largest number.
+ * Comparison challenges, answer first (FR-026, FR-027, amendment 09, data-model.md "Gaps" and "Comparison ladder").
+ * The banner names 2 or 3 options; exactly one answers the question, and the one enemy stands at it. The other
+ * options are not drawn on the battlefield, so they may stand anywhere in the range. Every two options are at least
+ * minOptionGap apart. The prompt carries the options in banner order as o1, o2 and o3.
  */
-import { DEFAULT_LAYOUT, type Layout } from '../numberline/mapping';
 import type { Rng } from '../rng';
-import type { Challenge, ChallengeKind, DifficultyStep, Settings } from '../types';
-import { minTankGap } from './gaps';
+import type { Challenge, DifficultyStep, Settings } from '../types';
+import { minOptionGap } from './gaps';
 import type { Builder, ChallengeDraft } from './numberLine';
 
-export const COMPARISON_KINDS = ['greater', 'smaller', 'equal', 'order3', 'largest3', 'smallest3', 'closestTo', 'between'] as const;
+export const COMPARISON_KINDS = ['greater', 'smaller', 'largest3', 'smallest3', 'closestTo', 'between', 'middle3'] as const;
 
 export type ComparisonKind = (typeof COMPARISON_KINDS)[number];
 
-export function isComparisonKind(kind: ChallengeKind): kind is ComparisonKind {
+export function isComparisonKind(kind: string): kind is ComparisonKind {
   return (COMPARISON_KINDS as readonly string[]).includes(kind);
 }
 
-/** Tanks in the challenge: the enemy and one decoy, or the enemy and two decoys for the kinds about three numbers. */
+/** Options named in the banner: two for greater, smaller and closestTo, three for the others. */
 export function optionCount(kind: ComparisonKind): 2 | 3 {
-  return kind === 'order3' || kind === 'largest3' || kind === 'smallest3' ? 3 : 2;
+  return kind === 'greater' || kind === 'smaller' || kind === 'closestTo' ? 2 : 3;
 }
 
-/** Whole numbers in the range at least minTankGap from the player tank: where a numbered tank may stand. */
-export function comparisonSlots(settings: Settings, playerPosition: number | undefined, layout: Layout = DEFAULT_LAYOUT): number[] {
+/** The option keys of the prompt, in banner order. */
+const OPTION_KEYS = ['o1', 'o2', 'o3'] as const;
+
+/** The options a prompt names, in banner order. */
+export function optionParams(params: Record<string, number>): number[] {
+  return OPTION_KEYS.map((k) => params[k]).filter((v): v is number => v !== undefined);
+}
+
+/** Whether `count` whole numbers fit in the range with every two at least minOptionGap apart. */
+export function comparisonFits(kind: ComparisonKind, settings: Settings): boolean {
   const { min, max } = settings.range;
-  const gap = minTankGap(min, max, layout);
-  const out: number[] = [];
-  for (let n = min; n <= max; n++) if (playerPosition === undefined || Math.abs(n - playerPosition) >= gap) out.push(n);
-  return out;
+  return (optionCount(kind) - 1) * minOptionGap(min, max) <= max - min;
 }
 
-/** Whether `count` of the sorted slots can be chosen with every two at least `gap` apart (greedy from the left). */
-export function fitsOptions(slots: readonly number[], count: number, gap: number): boolean {
-  let taken = 0;
-  let last = -Infinity;
-  for (const s of slots) {
-    if (s - last >= gap) {
-      taken++;
-      last = s;
-      if (taken >= count) return true;
-    }
+/** Where each other option may stand relative to the answer, in the order they are picked. */
+function sides(kind: ComparisonKind): Array<'below' | 'above' | 'any'> {
+  switch (kind) {
+    case 'greater':
+      return ['below'];
+    case 'largest3':
+      return ['below', 'below'];
+    case 'smaller':
+      return ['above'];
+    case 'smallest3':
+      return ['above', 'above'];
+    case 'middle3':
+      return ['below', 'above'];
+    case 'closestTo':
+      return ['any'];
+    case 'between':
+      return ['any', 'any'];
   }
-  return false;
 }
 
 /**
- * Whether the range fits the options of `kind` at minTankGap on the side away from the player. When it does not,
- * the generator skips the kind (edge case "Comparison options too close together").
+ * How far the other options may stand from the answer: the step's share of the range width (easy steps ask about
+ * nearby numbers, amendment 09 item 7), but always room for the options at minOptionGap.
  */
-export function comparisonFits(kind: ComparisonKind, settings: Settings, playerPosition: number, layout: Layout = DEFAULT_LAYOUT): boolean {
+function spreadOf(kind: ComparisonKind, settings: Settings, step: DifficultyStep): number {
   const { min, max } = settings.range;
-  return fitsOptions(comparisonSlots(settings, playerPosition, layout), optionCount(kind), minTankGap(min, max, layout));
+  if (step.maxNumberFraction >= 1) return max - min;
+  return Math.max(step.maxNumberFraction * (max - min), optionCount(kind) * minOptionGap(min, max));
 }
 
-/** Which decoys may stand beside the answer: below it, above it, or on either side. */
-function decoySide(kind: ComparisonKind): 'below' | 'above' | 'any' {
-  switch (kind) {
-    case 'greater':
-    case 'largest3':
-    case 'order3':
-      return 'below';
-    case 'smaller':
-    case 'smallest3':
-      return 'above';
-    default:
-      return 'any';
-  }
-}
-
-/** Picks the decoys at random, each at least `gap` from the answer and from each other; null when they do not fit. */
-function pickDecoys(kind: ComparisonKind, answer: number, slots: number[], gap: number, rng: Rng): number[] | null {
-  const side = decoySide(kind);
+/** Picks the other options at random; null when they do not fit. */
+function pickOthers(kind: ComparisonKind, answer: number, settings: Settings, step: DifficultyStep, rng: Rng): number[] | null {
+  const { min, max } = settings.range;
+  const gap = minOptionGap(min, max);
+  const spread = spreadOf(kind, settings, step);
   const taken = [answer];
-  for (let i = 1; i < optionCount(kind); i++) {
-    const free = slots.filter(
-      (s) => (side === 'any' || (side === 'below' ? s < answer : s > answer)) && taken.every((t) => Math.abs(s - t) >= gap),
-    );
+  for (const side of sides(kind)) {
+    const free: number[] = [];
+    for (let n = Math.max(min, answer - spread); n <= Math.min(max, answer + spread); n++) {
+      if (side === 'below' && n >= answer) continue;
+      if (side === 'above' && n <= answer) continue;
+      if (taken.every((t) => Math.abs(n - t) >= gap)) free.push(n);
+    }
     if (free.length === 0) return null;
     taken.push(rng.pick(free));
   }
   return taken.slice(1);
 }
 
-function ints(lo: number, hi: number): number[] {
-  const out: number[] = [];
-  for (let n = lo; n <= hi; n++) out.push(n);
+function shuffled(items: number[], rng: Rng): number[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
   return out;
 }
 
 /** Builds one comparison of `kind` whose enemy stands at `answer`, or null when the range does not allow it. */
-export function buildComparison(
-  kind: ComparisonKind,
-  answer: number,
-  settings: Settings,
-  _step: DifficultyStep,
-  rng: Rng,
-  playerPosition?: number,
-  layout: Layout = DEFAULT_LAYOUT,
-): ChallengeDraft | null {
+export function buildComparison(kind: ComparisonKind, answer: number, settings: Settings, step: DifficultyStep, rng: Rng): ChallengeDraft | null {
   const { min, max } = settings.range;
-  const gap = minTankGap(min, max, layout);
-  const slots = comparisonSlots(settings, playerPosition, layout);
-  if (!slots.includes(answer)) return null;
-  const decoys = pickDecoys(kind, answer, slots, gap, rng);
-  if (!decoys) return null;
-  const options = [answer, ...decoys].sort((a, b) => a - b);
-  const draft = (params: Record<string, number>, extra: Partial<ChallengeDraft> = {}): ChallengeDraft => ({
-    kind,
-    prompt: { key: kind, params },
-    operands: [...options, ...Object.values(params)],
-    answer,
-    options,
-    ...extra,
-  });
+  if (!Number.isInteger(answer) || answer < min || answer > max) return null;
+  const others = pickOthers(kind, answer, settings, step, rng);
+  if (!others) return null;
+  const options = shuffled([answer, ...others], rng);
+  const draft = (extra: Record<string, number>): ChallengeDraft => {
+    const params: Record<string, number> = {};
+    options.forEach((o, i) => (params[OPTION_KEYS[i]!] = o));
+    Object.assign(params, extra);
+    return { kind, prompt: { key: kind, params }, operands: [...options, ...Object.values(extra)], answer, options };
+  };
 
   switch (kind) {
     case 'greater':
     case 'smaller':
     case 'largest3':
     case 'smallest3':
+    case 'middle3':
       return draft({});
-    case 'order3':
-      return draft({}, { orderAnswer: [...options] });
-    case 'equal':
-      return draft({ n: answer });
     case 'closestTo': {
-      // A reference number strictly closer to the answer than to the decoy, and not the answer itself.
-      const decoy = decoys[0]!;
-      const refs = ints(min, max).filter((n) => n !== answer && Math.abs(n - answer) < Math.abs(n - decoy));
+      // A reference number strictly closer to the answer than to the other option, and not the answer itself.
+      const other = others[0]!;
+      const refs: number[] = [];
+      for (let n = min; n <= max; n++) if (n !== answer && Math.abs(n - answer) < Math.abs(n - other)) refs.push(n);
       if (refs.length === 0) return null;
       return draft({ n: rng.pick(refs) });
     }
     case 'between': {
-      // a < answer < b, with the decoy outside: below a or above b.
-      const decoy = decoys[0]!;
-      const [aLo, aHi, bLo, bHi] = decoy < answer ? [decoy + 1, answer - 1, answer + 1, max] : [min, answer - 1, answer + 1, decoy - 1];
-      if (aLo > aHi || bLo > bHi) return null;
-      return draft({ a: rng.int(aLo, aHi), b: rng.int(bLo, bHi) });
+      // a < answer < b, with every other option below a or above b.
+      const below = others.filter((o) => o < answer);
+      const above = others.filter((o) => o > answer);
+      const aLo = below.length > 0 ? Math.max(...below) + 1 : min;
+      const bHi = above.length > 0 ? Math.min(...above) - 1 : max;
+      if (aLo > answer - 1 || answer + 1 > bHi) return null;
+      return draft({ a: rng.int(aLo, answer - 1), b: rng.int(answer + 1, bHi) });
     }
   }
 }
 
-/** One builder per comparison kind; the generator passes the player's position as the fifth argument. */
+/** One builder per comparison kind. */
 export const comparisonBuilders: Record<ComparisonKind, Builder> = Object.fromEntries(
-  COMPARISON_KINDS.map((kind) => [kind, ((answer, settings, step, rng, playerPosition) => buildComparison(kind, answer, settings, step, rng, playerPosition)) as Builder]),
+  COMPARISON_KINDS.map((kind) => [kind, ((answer, settings, step, rng) => buildComparison(kind, answer, settings, step, rng)) as Builder]),
 ) as Record<ComparisonKind, Builder>;
 
 /** The options that answer the question, worked out from the options and the prompt alone. */
@@ -155,13 +147,14 @@ export function correctOptions(c: Pick<Challenge, 'kind' | 'options' | 'prompt'>
   switch (c.kind) {
     case 'greater':
     case 'largest3':
-    case 'order3':
       return options.filter((o) => o === Math.max(...options));
     case 'smaller':
     case 'smallest3':
       return options.filter((o) => o === Math.min(...options));
-    case 'equal':
-      return options.filter((o) => o === p.n);
+    case 'middle3': {
+      if (options.length !== 3) return [];
+      return [[...options].sort((a, b) => a - b)[1]!];
+    }
     case 'closestTo': {
       if (p.n === undefined) return [];
       const n = p.n;
@@ -175,18 +168,17 @@ export function correctOptions(c: Pick<Challenge, 'kind' | 'options' | 'prompt'>
   }
 }
 
-/** The comparison rules of validateChallenge (FR-027, data-model.md "Validation"). */
-export function comparisonErrors(c: Challenge, settings: Settings, playerPosition: number): string[] {
-  if (!isComparisonKind(c.kind)) return [];
+/** The comparison rules of validateChallenge (FR-027, amendment 09, data-model.md "Validation"). */
+export function comparisonErrors(c: Challenge, settings: Settings): string[] {
   const errors: string[] = [];
+  if ((c as { orderAnswer?: unknown }).orderAnswer !== undefined) errors.push(`${c.kind}: no kind has an order answer since amendment 09`);
+  if (!isComparisonKind(c.kind)) return errors;
   const options = c.options;
-  if (!options) return [`${c.kind}: no options`];
+  if (!options) return [...errors, `${c.kind}: no options`];
   if (options.length !== optionCount(c.kind)) errors.push(`${c.kind}: ${options.length} options instead of ${optionCount(c.kind)}`);
-  const { min, max } = settings.range;
-  const gap = minTankGap(min, max);
-  for (const o of options) {
-    if (Math.abs(o - playerPosition) < gap) errors.push(`option ${o} is closer than ${gap} to the player at ${playerPosition}`);
-  }
+  const named = optionParams(c.prompt.params);
+  if (named.length !== options.length || named.some((n, i) => n !== options[i])) errors.push(`${c.kind}: the prompt names other options than the challenge`);
+  const gap = minOptionGap(settings.range.min, settings.range.max);
   for (let i = 0; i < options.length; i++) {
     for (let j = i + 1; j < options.length; j++) {
       if (Math.abs(options[i]! - options[j]!) < gap) errors.push(`options ${options[i]} and ${options[j]} are closer than ${gap}`);
@@ -194,12 +186,5 @@ export function comparisonErrors(c: Challenge, settings: Settings, playerPositio
   }
   const correct = correctOptions(c);
   if (correct.length !== 1 || correct[0] !== c.answer) errors.push(`${c.kind}: the answer is not the one correct option`);
-  if (c.kind === 'order3') {
-    const ascending = [...options].sort((a, b) => a - b);
-    const ok = c.orderAnswer !== undefined && c.orderAnswer.length === ascending.length && c.orderAnswer.every((n, i) => n === ascending[i]);
-    if (!ok) errors.push('order3: the order answer is not the options from smallest to largest');
-  } else if (c.orderAnswer !== undefined) {
-    errors.push(`${c.kind}: only order3 has an order answer`);
-  }
   return errors;
 }

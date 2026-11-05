@@ -31,12 +31,14 @@ export type ChallengeKind =
   // comparison
   | 'greater'
   | 'smaller'
-  | 'equal'
-  | 'order3'
   | 'largest3'
   | 'smallest3'
   | 'closestTo'
-  | 'between';
+  | 'between'
+  | 'middle3';
+
+/** Attempts stored before amendment 09 may carry the removed kinds 'equal' and 'order3'; they still load. */
+export type StoredChallengeKind = ChallengeKind | 'equal' | 'order3';
 
 /** Translation key plus parameters, e.g. { key: 'subtraction', params: { a: 43, b: 7 } }. */
 export interface PromptSpec {
@@ -60,10 +62,8 @@ export interface Challenge {
   operands: number[];
   /** The target position on the number line. */
   answer: number;
-  /** Comparison only: numbers on the 2 or 3 tanks; includes answer. */
+  /** Comparison only: the 2 or 3 numbers the banner names, in banner order; includes answer (amendment 09). */
   options?: number[];
-  /** For 'order3': the required tap sequence. */
-  orderAnswer?: number[];
   /** Intermediate positions for the step animation, e.g. [43, 40, 36]. */
   steps?: number[];
   /** readPosition only: the ruler level the challenge was built for. */
@@ -80,7 +80,7 @@ export type RecentOutcome = 'independent' | 'close' | 'assisted' | 'unsolved';
 export interface Attempt {
   challengeId: string;
   seed: number;
-  kind: ChallengeKind;
+  kind: StoredChallengeKind;
   skills: Skill[];
   /** e.g. `0-100` or `15-45` */
   rangeKey: string;
@@ -157,13 +157,12 @@ export type Heightmap = Float32Array;
 
 export interface TankState {
   id: string;
-  kind: 'player' | 'enemy' | 'decoy';
+  kind: 'player' | 'enemy';
   /** Number on the line. */
   position: number;
   x: number;
   y: number;
-  /** Tanks have no health (amendment 06); the child's hearts are RoundState.lives. */
-  label?: number;
+  /** Tanks have no health (amendment 06); the child's hearts are RoundState.lives. No number plate (amendment 09). */
   alive: boolean;
 }
 
@@ -188,8 +187,6 @@ export interface RoundState {
   player: TankState;
   /** Always visible with its number and coordinates (amendment 07, FR-010). */
   enemy: TankState;
-  /** Comparison turns only. */
-  decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
   /** In free play a readPosition challenge whose answer is the enemy's number (amendment 02, FR-067). */
@@ -204,8 +201,6 @@ export interface RoundState {
   selection: number | null;
   /** Keyboard digits typed so far (FR-060); outOfRange shows the range hint (FR-063). */
   entry: { typed: string; outOfRange: boolean };
-  /** order3: tank ids badged so far. */
-  orderTaps: string[];
   /** Latest input method (FR-076); keyboard input gets no findNumber search. Kept across rounds; null before any input. */
   inputMethod: InputMethod | null;
   /** Ruler detail level for this round (FR-018). */
@@ -221,8 +216,6 @@ export interface RoundState {
    * starting number to the result, e.g. [43, 40, 36] (stepPath, FR-024). Null when no animation is shown.
    */
   stepAnimation: number[] | null;
-  /** order3: the confirmed number is on no tank, so no badge was placed; the overlay shows a hint (decision D15). */
-  notOnTank: boolean;
   /** goalReached: roundLength enemies destroyed with roundType 'enemyCount'; heartsGone: no lives left (FR-082). */
   outcome: 'goalReached' | 'heartsGone' | null;
 }
@@ -243,14 +236,12 @@ export interface HelpContent {
   count: { from: number; to: number; steps: number } | null;
   /** Step 2, addition and subtraction (help.stepAnimation): the marker's stops (stepPath, FR-024). */
   stepPath: number[] | null;
-  /** Step 1, comparison (help.nearestTen): the tens digits on every plate are highlighted. */
+  /** Step 1, comparison (help.nearestTen): the tens digits of the options in the banner are highlighted (amendment 09). */
   tensDigits: boolean;
-  /** Step 2, comparison (help.zoom): every option marked on the ruler, smallest first. */
+  /** Step 2, comparison (help.zoom): a small marker on the ruler under every option, smallest first. */
   optionMarkers: number[] | null;
   /** Step 3: the answer, shown and selected. */
   solution: number | null;
-  /** Step 3, order3: the correct order. */
-  order: number[] | null;
 }
 
 /** A feedback line; the overlay turns it into text with i18n `messageText`. `index` picks an encouraging phrase. */
@@ -265,7 +256,7 @@ export interface LastShot {
   hit: boolean;
   /** On the enemy tank's body but not exact: the enemy shakes, "Ganz knapp! Triff die Linie." (FR-066, FR-072). */
   nearMiss: boolean;
-  /** The destroyed enemy or the destroyed decoy, or null. */
+  /** The destroyed enemy, or null. */
   hitTankId: string | null;
   /** Steps from the landed number to the enemy's number. */
   distance: number;

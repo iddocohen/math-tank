@@ -21,9 +21,9 @@ export type NumberLineKind = (typeof NUMBER_LINE_KINDS)[number];
 
 /** The parts of a challenge a builder decides; the generator adds id, seed and skills. */
 export type ChallengeDraft = Pick<Challenge, 'kind' | 'prompt' | 'operands' | 'answer'> &
-  Partial<Pick<Challenge, 'options' | 'orderAnswer' | 'steps' | 'rulerLevel'>>;
+  Partial<Pick<Challenge, 'options' | 'steps' | 'rulerLevel'>>;
 
-/** `playerPosition` matters only to comparison builders, whose decoys keep minTankGap from the player tank. */
+/** `playerPosition` is passed to every builder; the generator already keeps the answer minEnemyGap from the player. */
 export type Builder = (answer: number, settings: Settings, step: DifficultyStep, rng: Rng, playerPosition?: number) => ChallengeDraft | null;
 
 /** Smallest and default largest step count for "move N steps". */

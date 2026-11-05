@@ -120,38 +120,56 @@ describe('validateChallenge (FR-029)', () => {
   });
 });
 
-describe('validateChallenge comparison rules (T086, FR-027)', () => {
-  // 0 to 100: minTankGap 8, minEnemyGap 15.
+describe('validateChallenge comparison rules (T086, FR-027, amendment 09)', () => {
+  // 0 to 100: minOptionGap 2, minEnemyGap 15.
+  const params = (options: number[]) => Object.fromEntries(options.map((o, i) => [`o${i + 1}`, o]));
   const greater = (options: number[], answer: number) =>
-    challenge({ kind: 'greater', mainSkill: 'comparison', skills: ['comparison'], prompt: { key: 'greater', params: {} }, operands: options, options, answer });
+    challenge({ kind: 'greater', mainSkill: 'comparison', skills: ['comparison'], prompt: { key: 'greater', params: params(options) }, operands: options, options, answer });
 
   it('accepts a valid comparison', () => {
     expect(validateChallenge(greater([47, 74], 74), settings, 100)).toEqual([]);
   });
 
-  it('reports options closer than minTankGap to each other or to the player', () => {
-    expect(validateChallenge(greater([40, 47], 47), settings, 100).length).toBeGreaterThan(0);
-    expect(validateChallenge(greater([5, 74], 74), settings, 0).length).toBeGreaterThan(0);
+  it('accepts options near the player tank and 2 apart: only the enemy keeps its distance from the player', () => {
+    expect(validateChallenge(greater([5, 74], 74), settings, 0)).toEqual([]);
+    expect(validateChallenge(greater([72, 74], 74), settings, 0)).toEqual([]);
+  });
+
+  it('reports options closer than minOptionGap to each other', () => {
+    expect(validateChallenge(greater([73, 74], 74), settings, 0).some((e) => e.includes('closer than'))).toBe(true);
+  });
+
+  it('reports an enemy closer than minEnemyGap to the player', () => {
+    expect(validateChallenge(greater([47, 90], 90), settings, 100).length).toBeGreaterThan(0);
   });
 
   it('reports an answer that is not the one correct option', () => {
     expect(validateChallenge(greater([47, 74], 47), settings, 100).length).toBeGreaterThan(0);
-    const closest = challenge({ kind: 'closestTo', mainSkill: 'comparison', prompt: { key: 'closestTo', params: { n: 50 } }, operands: [40, 60, 50], options: [40, 60], answer: 40 });
+    const closest = challenge({ kind: 'closestTo', mainSkill: 'comparison', prompt: { key: 'closestTo', params: { ...params([40, 60]), n: 50 } }, operands: [40, 60, 50], options: [40, 60], answer: 40 });
     expect(validateChallenge(closest, settings, 100).some((e) => e.includes('correct option'))).toBe(true);
-    const between = challenge({ kind: 'between', mainSkill: 'comparison', prompt: { key: 'between', params: { a: 30, b: 70 } }, operands: [40, 60, 30, 70], options: [40, 60], answer: 40 });
+    const between = challenge({ kind: 'between', mainSkill: 'comparison', prompt: { key: 'between', params: { ...params([20, 40, 60]), a: 30, b: 70 } }, operands: [20, 40, 60, 30, 70], options: [20, 40, 60], answer: 40 });
     expect(validateChallenge(between, settings, 100).some((e) => e.includes('correct option'))).toBe(true);
+  });
+
+  it('middle3 needs the middle number as the answer', () => {
+    const middle = (answer: number) =>
+      challenge({ kind: 'middle3', mainSkill: 'comparison', prompt: { key: 'middle3', params: params([72, 27, 45]) }, operands: [72, 27, 45], options: [72, 27, 45], answer });
+    expect(validateChallenge(middle(45), settings, 0)).toEqual([]);
+    expect(validateChallenge(middle(72), settings, 0).some((e) => e.includes('correct option'))).toBe(true);
   });
 
   it('reports a wrong number of options', () => {
     expect(validateChallenge(greater([20, 47, 74], 74), settings, 100).some((e) => e.includes('options instead of'))).toBe(true);
   });
 
-  it('order3 needs the ascending order answer and the largest number as the enemy', () => {
-    const order = (orderAnswer: number[], answer: number) =>
-      challenge({ kind: 'order3', mainSkill: 'comparison', prompt: { key: 'order3', params: {} }, operands: [20, 50, 80], options: [20, 50, 80], orderAnswer, answer });
-    expect(validateChallenge(order([20, 50, 80], 80), settings, 100)).toEqual([]);
-    expect(validateChallenge(order([20, 80, 50], 80), settings, 100).length).toBeGreaterThan(0);
-    expect(validateChallenge(order([20, 50, 80], 20), settings, 100).length).toBeGreaterThan(0);
+  it('reports prompt options that differ from the options', () => {
+    const c = greater([47, 74], 74);
+    expect(validateChallenge({ ...c, prompt: { key: 'greater', params: params([74, 47]) } }, settings, 100).some((e) => e.includes('prompt'))).toBe(true);
+  });
+
+  it('reports an order answer, which no kind has since amendment 09', () => {
+    const c = { ...greater([47, 74], 74), orderAnswer: [47, 74] } as Challenge;
+    expect(validateChallenge(c, settings, 100).some((e) => e.includes('order'))).toBe(true);
   });
 });
 
@@ -162,14 +180,5 @@ describe('checkAnswer (FR-029)', () => {
     expect(checkAnswer(c, 49)).toBe(false);
     expect(checkAnswer(c, 51)).toBe(false);
     expect(checkAnswer(c, 50.4)).toBe(false);
-    expect(checkAnswer(c, [50])).toBe(false);
-  });
-
-  it('for order3 accepts only the exact tap sequence', () => {
-    const c = challenge({ kind: 'order3', options: [20, 50, 80], orderAnswer: [20, 50, 80], answer: 20 });
-    expect(checkAnswer(c, [20, 50, 80])).toBe(true);
-    expect(checkAnswer(c, [20, 80, 50])).toBe(false);
-    expect(checkAnswer(c, [20, 50])).toBe(false);
-    expect(checkAnswer(c, 20)).toBe(false);
   });
 });

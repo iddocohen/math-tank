@@ -42,7 +42,7 @@ async function findNumberSearch(page: Page, overlay: Locator): Promise<number> {
 
 test('a guided "Finde N" search: the enemy is visible, a miss shows the step count and the enemy fires back, the exact number destroys it', async ({ page }) => {
   test.setTimeout(120_000);
-  // Comparison off: this test is about a position search, not the enemy among its decoys.
+  // Comparison off: this test is about a position search.
   await page.addInitScript(
     ([key, value]) => {
       window.localStorage.setItem(key, value);

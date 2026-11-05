@@ -19,7 +19,7 @@ function expectAboveRuler(t: Heightmap, label: string): void {
 }
 
 function expectTanksAboveRuler(s: BattleState, label: string): void {
-  for (const tank of [s.player, s.enemy, ...s.decoys]) {
+  for (const tank of [s.player, s.enemy]) {
     expect(toScreenY(tank.y, WORLD_HEIGHT), `${label}: ${tank.id} bottom`).toBeLessThanOrEqual(LIMIT);
   }
 }
