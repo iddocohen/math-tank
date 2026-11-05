@@ -7,7 +7,7 @@
  * heart. Game state comes from the data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test, waitCalmly } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test, typeAndFire } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import type { Settings } from '../../src/core/types';
@@ -15,12 +15,7 @@ import type { Settings } from '../../src/core/types';
 const normal: Settings = { ...defaultSettings(), enemyDifficulty: 'normal', roundType: 'enemyCount', roundLength: 5 };
 
 async function start(page: Page, settings: Settings): Promise<Locator> {
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(settings)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: settings });
   await page.goto('/?seed=3&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
@@ -29,21 +24,14 @@ async function start(page: Page, settings: Settings): Promise<Locator> {
   return overlay;
 }
 
-async function fire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await waitCalmly(page, overlay);
-  await page.keyboard.type(String(n));
-  await expect(page.getByTestId('readout')).toHaveText(String(n));
-  await page.keyboard.press('Enter');
-}
-
 /** Fires halfway between the child's end of the range and the enemy: a plain miss away from both tanks. */
 async function miss(page: Page, overlay: Locator, settings: Settings): Promise<void> {
-  const enemy = Number(await overlay.getAttribute('data-enemy-number'));
+  const enemy = await enemyNumber(overlay);
   const own = (await overlay.getAttribute('data-player-side')) === 'left' ? settings.range.min : settings.range.max;
-  await fire(page, overlay, Math.round((own + enemy) / 2));
-  await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
+  await typeAndFire(page, overlay, Math.round((own + enemy) / 2));
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   // The enemy fires back, then the child chooses again.
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
 }
 
 test('"Normal": the enemy zeroes in, warns after the second miss and hits at the third; a destroyed enemy brings new hills', async ({ page }) => {
@@ -70,8 +58,8 @@ test('"Normal": the enemy zeroes in, warns after the second miss and hits at the
   // Destroy the enemy: new hills, the same round, the hearts stay.
   const terrainSeed = (await canvas.getAttribute('data-terrain-seed'))!;
   const roundSeed = (await overlay.getAttribute('data-round-seed'))!;
-  await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await typeAndFire(page, overlay, await enemyNumber(overlay));
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
   await expect(overlay).toHaveAttribute('data-round-seed', roundSeed);
   await expect(overlay).toHaveAttribute('data-lives', '2');
@@ -94,9 +82,9 @@ test('bug report B1: the trail of the last shot goes with the old hills', async 
   await miss(page, overlay, normal);
   await expect(canvas).not.toHaveAttribute('data-trail-points', '0');
   const terrainSeed = (await canvas.getAttribute('data-terrain-seed'))!;
-  await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await typeAndFire(page, overlay, await enemyNumber(overlay));
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(canvas).toHaveAttribute('data-trail-points', '0');
 });

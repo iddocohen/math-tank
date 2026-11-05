@@ -8,7 +8,8 @@
  * Runs in the `iphone-landscape` project only (WebKit, touch, iPhone 13). Every action is a tap.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test, touchHold } from './fixtures';
+import { inside } from './layout';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -61,23 +62,23 @@ async function expectBattleFits(page: Page): Promise<void> {
     .poll(async () => {
       const canvas = await page.locator('canvas').boundingBox();
       const pad = await page.getByTestId('number-pad').boundingBox();
-      if (!canvas || !pad) return false;
-      return canvas.x >= 0 && canvas.y >= 0 && canvas.y + canvas.height <= LANDSCAPE.height + 1 && canvas.x + canvas.width <= pad.x + 1;
+      // Inside the area left of the pad (layout.ts allows half a pixel of rounding).
+      return !!canvas && !!pad && inside(canvas, pad.x, LANDSCAPE.height);
     })
     .toBe(true);
 }
 
 /** Types a number 30 away from the enemy on the number pad and fires: the shell lands at that number. */
 async function fireWithPad(page: Page, overlay: Locator): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
-  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
-  const enemy = Number(await overlay.getAttribute('data-enemy-number'));
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
+  const enemy = await enemyNumber(overlay);
   const n = enemy > 50 ? enemy - 30 : enemy + 30;
   const pad = page.getByTestId('number-pad');
   for (const digit of String(n)) await pad.locator(`[data-key="${digit}"]`).tap();
   await expect(page.getByTestId('readout')).toHaveText(String(n));
   await page.locator('.fire-button').tap();
-  await expect(overlay).toHaveAttribute('data-last-landing', String(n), { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-last-landing', String(n));
 }
 
 for (const ios of [false, true]) {
@@ -88,14 +89,7 @@ for (const ios of [false, true]) {
       test.skip(testInfo.project.name !== 'iphone-landscape', 'the rotation check runs on the phone only');
       if (ios) await page.addInitScript(iosLateSize);
       // No damage and no comparison challenge, so the round goes on and no decoy stands where the test fires.
-      await page.addInitScript(
-        ([key, value]) => {
-          if (window.sessionStorage.getItem('e2e-seeded')) return;
-          window.sessionStorage.setItem('e2e-seeded', '1');
-          window.localStorage.setItem(key, value);
-        },
-        [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
-      );
+      await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } }, { once: true });
     });
 
     test('load upright, turn sideways, play a shot with the number pad, turn upright and sideways again', async ({ page }) => {
@@ -127,15 +121,13 @@ for (const ios of [false, true]) {
       await page.goto('/?seed=5');
       await startButton(page).tap();
       const overlay = page.getByTestId('battle-overlay');
-      await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+      await expect(overlay).toHaveAttribute('data-phase', 'challenge');
 
       await turn(page, PORTRAIT);
       const rotate = page.getByTestId('rotate-screen');
       await expect(rotate).toBeVisible();
       const gear = rotate.getByTestId('parent-gate');
-      await gear.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
-      await page.waitForTimeout(2300);
-      await gear.dispatchEvent('pointerup', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
+      await touchHold(gear);
       const menu = page.getByRole('dialog', { name: m.parent.menu });
       await expect(menu).toBeVisible();
 

@@ -8,7 +8,7 @@
  * Frame rates depend on the machine being idle, so this spec runs in its own Playwright project `performance`, after
  * every other project has finished (playwright.config.ts). `pnpm e2e --project=performance --no-deps` runs it alone.
  */
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 
@@ -19,20 +19,17 @@ declare global {
 }
 
 test('the battlefield is ready within 3 s of Enter, and a shot flies at 55 frames per second or more', async ({ page }) => {
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-      // Every animation frame while the child's shell flies, by its requestAnimationFrame timestamp.
-      window.__shotFrames = [];
-      const sample = (ts: number) => {
-        const overlay = document.querySelector<HTMLElement>('[data-testid="battle-overlay"]');
-        if (overlay?.dataset.phase === 'playerShot') window.__shotFrames!.push(ts);
-        requestAnimationFrame(sample);
-      };
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 } });
+  await page.addInitScript(() => {
+    // Every animation frame while the child's shell flies, by its requestAnimationFrame timestamp.
+    window.__shotFrames = [];
+    const sample = (ts: number) => {
+      const overlay = document.querySelector<HTMLElement>('[data-testid="battle-overlay"]');
+      if (overlay?.dataset.phase === 'playerShot') window.__shotFrames!.push(ts);
       requestAnimationFrame(sample);
-    },
-    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 })] as const,
-  );
+    };
+    requestAnimationFrame(sample);
+  });
   await page.goto('/?seed=8');
   await expect(startButton(page)).toBeVisible();
 
@@ -55,15 +52,15 @@ test('the battlefield is ready within 3 s of Enter, and a shot flies at 55 frame
   // Two misses far from the enemy give long flights. The first shot warms up the drawing code (it can show one
   // stall of about 100 ms while the browser prepares the shell, trail and smoke); the second is measured.
   for (let shot = 0; shot < 2; shot++) {
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
     await page.evaluate(() => {
       window.__shotFrames = [];
     });
-    const enemy = Number(await overlay.getAttribute('data-enemy-number'));
+    const enemy = await enemyNumber(overlay);
     await page.keyboard.type(String(enemy > 50 ? 5 : 95));
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-phase', 'playerShot', { timeout: GAME_WAIT });
-    await expect(overlay).not.toHaveAttribute('data-phase', 'playerShot', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-phase', 'playerShot');
+    await expect(overlay).not.toHaveAttribute('data-phase', 'playerShot');
   }
 
   const frames = await page.evaluate(() => window.__shotFrames ?? []);

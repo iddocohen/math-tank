@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { GAME_WAIT } from './tests/e2e/gameWait';
 import { FIRE_BARS_HEIGHT, FIRE_DEVICES, silkUserAgent } from './tests/e2e/silk';
 
 /** Specs that run only in the device projects (amendment 12, T136, T306). */
@@ -50,8 +51,9 @@ export default defineConfig({
   // time step makes game time run slower than wall time and waits time out. 4 workers keep a full run at about 5 minutes.
   // PW_WORKERS changes the number for one run.
   workers: Number(process.env.PW_WORKERS) || 4,
-  // Specs that play a round wait on game state for up to GAME_WAIT (tests/e2e/fixtures.ts) per step.
+  // Specs that play a round wait on game state for up to GAME_WAIT (tests/e2e/gameWait.ts) per step.
   timeout: 60_000,
+  expect: { timeout: GAME_WAIT },
   // Amendment 12 (T278): with SCREENSHOT_DIR set, tests/e2e/devices.spec.ts saves a screenshot of each screen size.
   metadata: { screenshotDir: process.env.SCREENSHOT_DIR },
   use: {

@@ -11,7 +11,7 @@
  * and a "Du" arrow points at the child's tank for 3 seconds at every round start.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test, waitCalmly } from './fixtures';
+import { enemyNumber, expect, RULER_Y, seedStorage, startButton, test, waitCalmly, worldToScreen } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { withRange } from '../../src/core/settings/validate';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -24,10 +24,6 @@ const { min, max } = settings.range;
 /** Two enemies per round, so a keyboard round ends after two exact hits (FR-082). */
 const twoEnemies = { ...settings, roundType: 'enemyCount' as const, roundLength: 2 };
 
-async function enemyNumber(overlay: Locator): Promise<number> {
-  await expect(overlay).toHaveAttribute('data-enemy-number', /^-?\d+$/);
-  return Number(await overlay.getAttribute('data-enemy-number'));
-}
 
 /** Types n digit by digit; after each digit the preview shows the number typed so far (FR-060). */
 async function typeNumber(page: Page, overlay: Locator, n: number): Promise<void> {
@@ -44,12 +40,7 @@ async function typeNumber(page: Page, overlay: Locator, n: number): Promise<void
 
 test('play a free-play round with the keyboard only and start another', async ({ page }) => {
   test.setTimeout(180_000);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(twoEnemies)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: twoEnemies });
   await page.goto('/?seed=1&mode=ruler');
 
   // Count page loads from here on. Firefox also fires 'load' for the initial about:blank page,
@@ -82,26 +73,26 @@ test('play a free-play round with the keyboard only and start another', async ({
   const wrong = enemy - 5 >= min ? enemy - 5 : enemy + 5;
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong));
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   await expect(overlay).toHaveAttribute('data-last-distance', '5');
   await expect(page.locator('canvas')).toHaveAttribute('data-steps-label', m.battle.steps(5));
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
   // The second shot that does not destroy the enemy: the enemy fires again.
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-turn', '2');
 
   // The enemy's number destroys it; a new enemy appears and the tank counter shows 1 (FR-066, FR-083).
   await typeNumber(page, overlay, enemy);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expect(page.getByTestId('score')).toHaveText('1');
   await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(enemy)}`);
@@ -112,7 +103,7 @@ test('play a free-play round with the keyboard only and start another', async ({
   // The second destroyed enemy ends the round (FR-082).
   await typeNumber(page, overlay, second);
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver');
   await expect(overlay).toHaveAttribute('data-outcome', 'goalReached');
 
   // The round end: encouraging text, the score and the time, and the first record (FR-008, FR-033, FR-085, FR-086).
@@ -138,24 +129,18 @@ test('play a free-play round with the keyboard only and start another', async ({
 
   // The same result again is not a new record: the record is shown small and neutral (FR-086).
   for (let i = 0; i < 2; i++) {
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
     await typeNumber(page, overlay, await enemyNumber(overlay));
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1), { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1));
   }
-  await expect(roundEnd).toBeVisible({ timeout: GAME_WAIT });
+  await expect(roundEnd).toBeVisible();
   await expect(page.getByTestId('record')).toHaveText(m.roundEnd.yourRecord(2));
   await expect(page.getByTestId('new-record')).toHaveCount(0);
 });
 
 test('the new scene button makes a new landscape in the same round, and no key presses it (amendment 03, amendment 08, FR-070)', async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(settings)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: settings });
   await page.goto('/?seed=2&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
@@ -176,7 +161,7 @@ test('the new scene button makes a new landscape in the same round, and no key p
   await page.keyboard.press('Enter');
   await expect(overlay).not.toHaveAttribute('data-phase', 'challenge');
   await expect(button).toBeDisabled();
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-turn', '1');
   await expect(button).toBeEnabled();
 
@@ -187,7 +172,7 @@ test('the new scene button makes a new landscape in the same round, and no key p
   await page.keyboard.press(' ');
   await expect(overlay).toHaveAttribute('data-round-seed', seed!);
   // Space is the fire key, so it may have fired the selection again; wait until the child aims again.
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   const lives = (await overlay.getAttribute('data-lives'))!;
   const destroyed = (await overlay.getAttribute('data-enemies-destroyed'))!;
   const turn = (await overlay.getAttribute('data-turn'))!;
@@ -209,13 +194,7 @@ test('the new scene button makes a new landscape in the same round, and no key p
 });
 
 test('no shortcuts to the answer and a "Du" arrow at every round start (amendment 05)', async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(settings)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: settings });
   await page.goto('/?seed=3&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
@@ -227,7 +206,7 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   // run slower than the wall clock on a loaded test machine, so the wait for 'off' is generous.
   await expect(canvas).toHaveAttribute('data-you-marker', 'on');
   const shownAt = Date.now();
-  await expect(canvas).toHaveAttribute('data-you-marker', 'off', { timeout: GAME_WAIT });
+  await expect(canvas).toHaveAttribute('data-you-marker', 'off');
   expect(Date.now() - shownAt).toBeGreaterThanOrEqual(2_000);
 
   // No −1 or +1 buttons and no corner health labels (FR-019, FR-078).
@@ -245,15 +224,12 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   await expect(page.getByTestId('readout')).toHaveText('42');
 
   // Dragging on the ruler moves the selection but shows no number (FR-019).
-  const box = (await canvas.boundingBox())!;
-  const toScreen = (worldX: number, worldY: number) => ({ x: box.x + (worldX * box.width) / 1600, y: box.y + (worldY * box.height) / 900 });
-  const rulerY = 742;
-  const start = toScreen(400, rulerY);
+  const start = await worldToScreen(page, 400, RULER_Y);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   const seen = new Set<string>();
   for (const worldX of [500, 700, 900, 1100]) {
-    const pt = toScreen(worldX, rulerY);
+    const pt = await worldToScreen(page, worldX, RULER_Y);
     await page.mouse.move(pt.x, pt.y, { steps: 4 });
     const selection = await overlay.getAttribute('data-selection');
     expect(selection).toMatch(/^\d+$/);
@@ -270,10 +246,10 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   // After firing, the landing number is shown.
   const chosen = await overlay.getAttribute('data-selection');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-last-landing', chosen!, { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-last-landing', chosen!);
 
   // A new scene shows the "Du" arrow again (FR-070, FR-077).
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   const sceneSeed = await overlay.getAttribute('data-round-seed');
   await page.getByRole('button', { name: m.battle.newScene, exact: true }).click();
   await expect(overlay).not.toHaveAttribute('data-round-seed', sceneSeed!);
@@ -281,16 +257,10 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
 });
 
 test('on a crowded level 1 ruler only the typed number is labeled, once, under the marker (T203, T217, FR-017)', async ({ page }) => {
-  test.setTimeout(60_000);
   // 0 to 1000 at level 1: the minor labels do not fit even in two rows (T217); 0 to 100 now labels every number.
   const wide = withRange(settings, { preset: '0-1000', min: 0, max: 1000 });
   expect(wide.rulerLevelStart).toBe(1);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(wide)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: wide });
   await page.goto('/?seed=4&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
@@ -317,13 +287,7 @@ test('on a crowded level 1 ruler only the typed number is labeled, once, under t
 });
 
 test('after "Neue Landschaft" the search is never a comparison, so one tank stands opposite the child (amendment 08 item 1, amendment 10 item 10, FR-070)', async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(COMPARISON_47_74.settings)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: COMPARISON_47_74.settings });
   await page.goto(`/?seed=${COMPARISON_47_74.seed}`);
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');

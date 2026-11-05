@@ -7,7 +7,7 @@
  * a "Nur Zahlenstrahl" battle and a "Nur Rechnen" battle at help step 2.
  */
 import type { Locator, Page, TestInfo } from '@playwright/test';
-import { expect, GAME_WAIT, test, waitCalmly } from './fixtures';
+import { enemyNumber, expect, seedStorage, test, typeAndFire } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -17,28 +17,12 @@ const m = t();
 /** Number line only, so every "Nur Rechnen" search is a number line search with the zoomed ten at help step 2. */
 const numberLineOnly = { ...defaultSettings(), challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } };
 
-async function store(page: Page, settings: unknown): Promise<void> {
-  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(settings)] as const);
-}
-
 async function shot(page: Page, info: TestInfo, name: string): Promise<void> {
   // playwright.config.ts passes SCREENSHOT_DIR as metadata (the e2e specs have no Node types).
   const dir = info.config.metadata.screenshotDir as string | undefined;
   if (dir && info.project.name === 'chromium') await page.screenshot({ path: `${dir}/${name}.png` });
 }
 
-/** Types n and fires with Enter, after waiting calmly. */
-async function fire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await waitCalmly(page, overlay);
-  await page.keyboard.type(String(n));
-  await expect(page.getByTestId('readout')).toHaveText(String(n));
-  await page.keyboard.press('Enter');
-}
-
-async function enemyNumber(overlay: Locator): Promise<number> {
-  await expect(overlay).toHaveAttribute('data-enemy-number', /^-?\d+$/);
-  return Number(await overlay.getAttribute('data-enemy-number'));
-}
 
 /** A number halfway between the child's end of the range and the enemy: a plain miss. */
 async function missNumber(overlay: Locator): Promise<number> {
@@ -91,9 +75,9 @@ test('key 2 starts "Nur Zahlenstrahl": no banner, a pointer line, and 3 calm hit
 
   for (let destroyed = 1; destroyed <= 3; destroyed++) {
     await expect(overlay).toHaveAttribute('data-skill-step', '0');
-    await fire(page, overlay, await enemyNumber(overlay));
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: GAME_WAIT });
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+    await typeAndFire(page, overlay, await enemyNumber(overlay));
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed));
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   }
   // The fourth search is one step harder, within the same round (amendment 17).
   await expect(overlay).toHaveAttribute('data-skill-step', '1');
@@ -102,7 +86,7 @@ test('key 2 starts "Nur Zahlenstrahl": no banner, a pointer line, and 3 calm hit
 
 test('key 3 starts "Nur Rechnen": the banner, no ruler; a miss shows the landing number and steps; help step 2 shows the zoomed ten (FR-123)', async ({ page }, info) => {
   test.setTimeout(120_000);
-  await store(page, numberLineOnly);
+  await seedStorage(page, { [SETTINGS_KEY]: numberLineOnly });
   await page.goto('/?seed=4');
   await expect(page.getByTestId('mode-button')).toHaveCount(3);
   await page.keyboard.press('3');
@@ -116,11 +100,11 @@ test('key 3 starts "Nur Rechnen": the banner, no ruler; a miss shows the landing
 
   // A miss: the landing number and the step count still show; the help gives the direction in words.
   const wrong = await missNumber(overlay);
-  await fire(page, overlay, wrong);
-  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
+  await typeAndFire(page, overlay, wrong);
+  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong));
   await expect(canvas).toHaveAttribute('data-landing', String(wrong));
   await expect(canvas).toHaveAttribute('data-steps-label', /\d/);
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
   await expect(canvas).toHaveAttribute('data-help-zoom', '');
 
@@ -137,5 +121,5 @@ test('key 3 starts "Nur Rechnen": the banner, no ruler; a miss shows the landing
   await expect(overlay).toHaveAttribute('data-help-level', '3');
   await expect(canvas).toHaveAttribute('data-help-zoom', '');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
 });

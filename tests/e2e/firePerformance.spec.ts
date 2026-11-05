@@ -15,7 +15,7 @@
  * Runs in its own project `fire-performance`, after the `performance` project, alone.
  * `pnpm e2e --project=fire-performance --no-deps` runs it alone.
  */
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 
@@ -30,19 +30,16 @@ const FRAME_BUDGET_MS = 1000 / 30;
 test('with the processor slowed 4 times: the battlefield within 3 s, and a shot within the 30 fps budget', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const cdp = await page.context().newCDPSession(page);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-      window.__shotFrames = [];
-      const sample = (ts: number) => {
-        const overlay = document.querySelector<HTMLElement>('[data-testid="battle-overlay"]');
-        if (overlay?.dataset.phase === 'playerShot') window.__shotFrames!.push(ts);
-        requestAnimationFrame(sample);
-      };
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 } });
+  await page.addInitScript(() => {
+    window.__shotFrames = [];
+    const sample = (ts: number) => {
+      const overlay = document.querySelector<HTMLElement>('[data-testid="battle-overlay"]');
+      if (overlay?.dataset.phase === 'playerShot') window.__shotFrames!.push(ts);
       requestAnimationFrame(sample);
-    },
-    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 })] as const,
-  );
+    };
+    requestAnimationFrame(sample);
+  });
   await page.goto('/?seed=8');
   await expect(startButton(page)).toBeVisible();
   await cdp.send('Performance.enable');
@@ -61,16 +58,16 @@ test('with the processor slowed 4 times: the battlefield within 3 s, and a shot 
   // Two misses far from the enemy give long flights; the first warms up the drawing code, the second is measured.
   let mainMs = 0;
   for (let shot = 0; shot < 2; shot++) {
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
     await page.evaluate(() => {
       window.__shotFrames = [];
     });
-    const enemy = Number(await overlay.getAttribute('data-enemy-number'));
+    const enemy = await enemyNumber(overlay);
     for (const key of String(enemy > 50 ? 5 : 95)) await page.locator(`[data-key="${key}"]`).tap();
     await page.locator('.fire-button').tap();
-    await expect(overlay).toHaveAttribute('data-phase', 'playerShot', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-phase', 'playerShot');
     const before = await taskSeconds();
-    await expect(overlay).not.toHaveAttribute('data-phase', 'playerShot', { timeout: GAME_WAIT });
+    await expect(overlay).not.toHaveAttribute('data-phase', 'playerShot');
     mainMs = ((await taskSeconds()) - before) * 1000;
   }
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });

@@ -4,7 +4,7 @@
  * 43 → 40 → 36 and costs no heart and no shot; typing 36 and Enter destroys the enemy. Game state comes from the
  * overlay's and the canvas's data-* attributes (D4).
  */
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { expect, seedStorage, startButton, test } from './fixtures';
 import { SUBTRACTION_43_MINUS_7 } from '../../src/core/math/fixtures';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -13,12 +13,7 @@ const m = t();
 
 test('43 − 7: H shows the step animation 43, 40, 36, then 36 and Enter destroy the enemy (AC-05)', async ({ page }) => {
   test.setTimeout(90_000);
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify(SUBTRACTION_43_MINUS_7.settings)] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: SUBTRACTION_43_MINUS_7.settings });
   await page.goto(`/?seed=${SUBTRACTION_43_MINUS_7.seed}`);
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
@@ -42,7 +37,7 @@ test('43 − 7: H shows the step animation 43, 40, 36, then 36 and Enter destroy
 
   await page.keyboard.type('36');
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   // The new search has no step animation yet.
   await expect(canvas).toHaveAttribute('data-step-animation', '');

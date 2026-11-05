@@ -9,8 +9,8 @@
  * (Phase 13, T116), including the amendment 06 round type and number of enemies. The last cases check the gate itself: a short tap does nothing, and opening it in a battle
  * pauses the game until the parent closes it (FR-045); "Fortschritt" lists a finished search after a reload (T133).
  */
-import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { expect, GAME_WAIT, silenceAudio, startButton, test } from './fixtures';
+import type { Page } from '@playwright/test';
+import { enemyNumber, expect, LONG_PRESS_MS, openSettings, pressGear, silentPage, startButton, test, writeStorage } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
@@ -20,30 +20,6 @@ import { t } from '../../src/i18n';
 const m = t();
 const L = m.settings.labels;
 const RUNS = 5;
-
-/** Presses the gear with the mouse for `ms` milliseconds (FR-045). */
-async function pressGear(page: Page, ms: number): Promise<void> {
-  await page.getByTestId('parent-gate').hover();
-  await page.mouse.down();
-  await page.waitForTimeout(ms);
-  await page.mouse.up();
-}
-
-/** Parent gate: a 2-second press on the gear, then "Einstellungen" in the parent menu. */
-async function openSettings(page: Page): Promise<void> {
-  await pressGear(page, 2_300);
-  await page.getByRole('button', { name: m.parent.settings, exact: true }).click();
-  await expect(page.getByTestId('settings-page')).toBeVisible();
-}
-
-type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
-
-/** A page in a new context, silenced like the shared fixture's `page` (tests/e2e/fixtures.ts). */
-async function silentPage(browser: Browser, storageState?: StorageState): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext(storageState ? { storageState } : {});
-  await context.addInitScript(silenceAudio);
-  return { context, page: await context.newPage() };
-}
 
 async function storedSettings(page: Page): Promise<Settings | null> {
   const text = await page.evaluate((key) => window.localStorage.getItem(key), SETTINGS_KEY);
@@ -59,12 +35,12 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
     for (let run = 1; run <= RUNS; run++) {
       const first = await silentPage(browser);
       await first.page.goto('/?seed=7');
-      await first.page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(custom)] as const);
+      await writeStorage(first.page, { [SETTINGS_KEY]: custom });
       const state = await first.context.storageState();
       await first.page.close();
       await first.context.close();
 
-      const second = await silentPage(browser, state);
+      const second = await silentPage(browser, { storageState: state });
       // Free play (?mode=free, T070) shows the enemy, so its number comes from the stored range.
       await second.page.goto(`/?seed=${run}&mode=ruler`);
       await expect(startButton(second.page)).toBeVisible();
@@ -72,7 +48,7 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
       await second.page.keyboard.press('Enter');
       const overlay = second.page.locator('[data-phase]');
       await expect(overlay).toHaveAttribute('data-phase', 'challenge');
-      const enemy = Number(await overlay.getAttribute('data-enemy-number'));
+      const enemy = await enemyNumber(overlay);
       expect(enemy, `run ${run}: enemy number from the stored range`).toBeGreaterThanOrEqual(550);
       expect(enemy, `run ${run}: enemy number from the stored range`).toBeLessThanOrEqual(780);
       await second.context.close();
@@ -98,7 +74,7 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
       await first.page.close();
       await first.context.close();
 
-      const second = await silentPage(browser, state);
+      const second = await silentPage(browser, { storageState: state });
       await second.page.goto('/');
       await openSettings(second.page);
       await expect(second.page.getByLabel(L.rangePreset, { exact: true }), `run ${run}`).toHaveValue('0-20');
@@ -118,7 +94,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await page.getByTestId('parent-gate').focus();
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
-    await page.waitForTimeout(2_300);
+    await page.waitForTimeout(LONG_PRESS_MS);
     await expect(page.getByRole('dialog', { name: m.parent.menu })).toHaveCount(0);
   });
 
@@ -139,22 +115,21 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
   });
 
   test('"Fortschritt" shows the saved attempt of a finished search, also after a reload (FR-040, FR-048, T133)', async ({ page }) => {
-    test.setTimeout(60_000);
     await page.goto('/?seed=1');
     await expect(startButton(page)).toBeVisible();
     await page.keyboard.press('Enter');
     const overlay = page.locator('[data-phase]');
     await expect(overlay).toHaveAttribute('data-phase', 'challenge');
-    const enemy = (await overlay.getAttribute('data-enemy-number'))!;
+    const enemy = String(await enemyNumber(overlay));
     // More than 1.5 s after answers became possible, so the hit is not a guess (FR-038).
     await page.waitForTimeout(2_800);
     for (const ch of enemy) await page.keyboard.press(ch);
     await page.keyboard.press('Enter');
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
 
     const P = m.progressPage;
     const openProgress = async () => {
-      await pressGear(page, 2_300);
+      await pressGear(page);
       const button = page.getByRole('button', { name: m.parent.progress, exact: true });
       await expect(button).toBeEnabled();
       await button.click();

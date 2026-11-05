@@ -7,7 +7,7 @@
  * comes from the overlay's and the canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, recordPhases, startButton, test } from './fixtures';
+import { enemyNumber, expect, recordPhases, RULER_Y, seedStorage, startButton, tapWorld, test, writeStorage } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
@@ -15,15 +15,9 @@ import { t } from '../../src/i18n';
 
 const m = t();
 const { min, max } = defaultSettings().range;
-/** The ruler's axis in world units (src/game/NumberLineView.ts). */
-const RULER_Y = 742;
-
-/** Taps the ruler at number n, using the canvas box and numberToX (the world is 1600 by 900 units, scaled to fit). */
+/** Clicks the ruler at number n. */
 async function tapRuler(page: Page, n: number): Promise<void> {
-  const box = (await page.locator('canvas').boundingBox())!;
-  const x = box.x + (numberToX(n, min, max) * box.width) / 1600;
-  const y = box.y + (RULER_Y * box.height) / 900;
-  await page.mouse.click(x, y);
+  await tapWorld(page, numberToX(n, min, max), RULER_Y);
 }
 
 /** Starts new scenes until the search is "Finde N"; returns N. The pointer input carries into every new round. */
@@ -43,12 +37,7 @@ async function findNumberSearch(page: Page, overlay: Locator): Promise<number> {
 test('a guided "Finde N" search: the enemy is visible, a miss shows the step count and the enemy fires back, the exact number destroys it', async ({ page }) => {
   test.setTimeout(120_000);
   // Comparison off: this test is about a position search.
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } });
   await page.goto('/?seed=11');
   await startButton(page).click();
   const overlay = page.getByTestId('battle-overlay');
@@ -60,7 +49,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await expect(page.getByTestId('challenge-banner')).toHaveAttribute('data-placement', 'top', { timeout: 6_000 });
   // The enemy and its pointer line are visible from the start of the search (amendment 07, FR-010, FR-073).
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
-  await expect(canvas).toHaveAttribute('data-pointer-lines', (await overlay.getAttribute('data-enemy-number'))!);
+  await expect(canvas).toHaveAttribute('data-pointer-lines', String(await enemyNumber(overlay)));
 
   // One tap on the ruler makes the input method pointer, so a "Finde N" search can come (FR-076).
   await tapRuler(page, Math.round((min + max) / 2));
@@ -87,12 +76,12 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   // Fire: the shell lands at the wrong number, the ruler shows "10 Schritte" to the enemy, and the enemy fires back
   // at once. Its first shot of a round always misses (amendment 07, FR-043, FR-072, FR-081).
   await page.getByRole('button', { name: m.battle.fire }).click();
-  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-last-landing', String(wrong));
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   await expect(overlay).toHaveAttribute('data-last-distance', '10');
   await expect(canvas).toHaveAttribute('data-steps-label', m.battle.steps(10));
-  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: GAME_WAIT });
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-turn', '1');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
@@ -112,7 +101,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await tapRuler(page, n);
   await expect(overlay).toHaveAttribute('data-selection', String(n));
   await page.getByRole('button', { name: m.battle.fire }).click();
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
   await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(n)}`);
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
@@ -131,7 +120,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
   await startButton(page).click();
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
-  await expect(canvas).toHaveAttribute('data-pointer-lines', (await overlay.getAttribute('data-enemy-number'))!);
+  await expect(canvas).toHaveAttribute('data-pointer-lines', String(await enemyNumber(overlay)));
 });
 
 test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen" button starts it (T070, FR-121)', async ({ page }) => {
@@ -145,7 +134,7 @@ test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen
 
   // The parent offers only "Nur Zahlenstrahl": one "Spielen" button, no banner, the enemy visible.
   const onlyRuler = { ...defaultSettings(), playModes: { mixed: false, ruler: true, math: false } };
-  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(onlyRuler)] as const);
+  await writeStorage(page, { [SETTINGS_KEY]: onlyRuler });
   await page.goto('/?seed=12');
   await expect(page.getByTestId('mode-button')).toHaveCount(0);
   await page.getByRole('button', { name: m.start.play, exact: true }).click();

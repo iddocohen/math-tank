@@ -10,7 +10,7 @@
  * - No visible text on the start screen, the battle screen, the round end or the garage is smaller than 18 CSS px.
  */
 import type { Page } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -40,12 +40,7 @@ async function smallTexts(page: Page): Promise<string[]> {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 1 })] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 1 } });
   await page.goto('/?seed=8');
   await expect(startButton(page)).toBeVisible();
 });
@@ -73,7 +68,7 @@ test('start screen and garage: labels, focus and text size', async ({ page, brow
 test('battle and round end: labels, live readout and text size', async ({ page }) => {
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
 
   for (const name of [m.battle.help, m.battle.newScene, m.battle.pause, m.start.gear]) {
     await expect(page.getByRole('button', { name, exact: true }), name).toBeVisible();
@@ -92,8 +87,8 @@ test('battle and round end: labels, live readout and text size', async ({ page }
   await page.keyboard.press('Backspace');
   expect(await smallTexts(page)).toEqual([]);
 
-  await page.keyboard.type((await overlay.getAttribute('data-enemy-number'))!);
+  await page.keyboard.type(String(await enemyNumber(overlay)));
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
+  await expect(page.getByTestId('round-end')).toBeVisible();
   expect(await smallTexts(page)).toEqual([]);
 });

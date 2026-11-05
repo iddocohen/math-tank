@@ -40,6 +40,11 @@ export async function expectNoScroll(page: Page): Promise<void> {
   expect(size.sh).toBeLessThanOrEqual(size.h);
 }
 
+/** `el` is no wider than its visible width (1 px of rounding allowed), so it does not scroll sideways. */
+export async function expectNoSideScroll(el: Locator, message?: string): Promise<void> {
+  expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), message).toBe(true);
+}
+
 /** Every number-pad key is at least 48 by 48 CSS pixels (FR-103). Returns the keys. */
 export async function expectPadKeys(page: Page): Promise<Locator[]> {
   const keys = await page.getByTestId('pad-key').all();

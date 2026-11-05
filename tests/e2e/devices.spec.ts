@@ -9,11 +9,11 @@
  * With SCREENSHOT_DIR set, each case saves a screenshot of its size there.
  */
 import type { Locator, Page, TestInfo } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test, touchHold } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
-import { boxOf, expectBattleFits, expectNoScroll, expectPadKeys, inside } from './layout';
+import { boxOf, expectBattleFits, expectNoScroll, expectNoSideScroll, expectPadKeys, inside } from './layout';
 
 const m = t();
 
@@ -22,14 +22,6 @@ const EXPECTED_LAYOUT: Record<string, string> = {
   'ipad-portrait': 'portrait',
   'iphone-landscape': 'side',
 };
-
-async function store(page: Page, settings: unknown): Promise<void> {
-  await page.addInitScript(([key, value]: [string, string]) => {
-    if (window.sessionStorage.getItem('e2e-seeded')) return;
-    window.sessionStorage.setItem('e2e-seeded', '1');
-    window.localStorage.setItem(key, value);
-  }, [SETTINGS_KEY, JSON.stringify(settings)] as [string, string]);
-}
 
 async function screenshot(page: Page, name: string): Promise<void> {
   // playwright.config.ts passes SCREENSHOT_DIR as metadata (the e2e specs have no Node types).
@@ -41,16 +33,9 @@ async function startBattle(page: Page): Promise<Locator> {
   await page.goto('/?seed=3');
   await startButton(page).tap();
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', /^(challenge|aiming)$/);
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(page.locator('canvas')).toBeVisible();
   return overlay;
-}
-
-/** Holds a touch pointer on the gear for 2.3 seconds, the parent gate's press and hold (FR-045, FR-105). */
-async function holdGear(gear: Locator): Promise<void> {
-  await gear.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
-  await gear.page().waitForTimeout(2300);
-  await gear.dispatchEvent('pointerup', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
 }
 
 function layoutName(info: TestInfo): string {
@@ -84,15 +69,15 @@ test('the battle shows the number pad, and nothing is cut off or overlapping', a
 
 test('one full guided round is played with taps on the number pad only, with no "Finde N"', async ({ page }) => {
   test.setTimeout(120_000);
-  await store(page, { ...defaultSettings(), roundType: 'enemyCount', roundLength: 2 });
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), roundType: 'enemyCount', roundLength: 2 } }, { once: true });
   const overlay = await startBattle(page);
   const banner = page.getByTestId('challenge-banner');
 
   for (let destroyed = 0; destroyed < 2; destroyed++) {
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: GAME_WAIT });
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed));
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
     expect(await banner.textContent()).not.toMatch(/^Finde /);
-    const enemy = (await overlay.getAttribute('data-enemy-number'))!;
+    const enemy = String(await enemyNumber(overlay));
     expect(enemy).toMatch(/^\d+$/);
     // A wrong digit first, deleted with ⌫ (FR-103).
     await page.locator('[data-key="9"]').tap();
@@ -102,7 +87,7 @@ test('one full guided round is played with taps on the number pad only, with no 
     await expect(page.getByTestId('readout')).toHaveText(enemy);
     await page.locator('.fire-button').tap();
   }
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
+  await expect(page.getByTestId('round-end')).toBeVisible();
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '2');
 });
 
@@ -110,14 +95,13 @@ test('the parent gate opens by touch and the settings page fits the screen', asy
   await startBattle(page);
   const gear = page.getByTestId('parent-gate');
   expect(await gear.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
-  await holdGear(gear);
+  await touchHold(gear);
   const menu = page.getByRole('dialog', { name: m.parent.menu });
   await expect(menu).toBeVisible();
   await menu.getByRole('button', { name: m.parent.settings }).tap();
   const settings = page.getByTestId('settings-page');
   await expect(settings).toBeVisible();
-  const fits = await settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
-  expect(fits, 'settings page fits the screen width').toBe(true);
+  await expectNoSideScroll(settings, 'settings page fits the screen width');
   await expect(settings.getByLabel(m.settings.labels.numberPad)).toBeVisible();
   await screenshot(page, `settings-${testInfo.project.name}`);
   await expectNoScroll(page);
@@ -136,11 +120,11 @@ test('a phone held upright shows "Bitte dreh das Handy" and pauses; the settings
   await expectNoScroll(page);
 
   // The parent can still open the settings upright (FR-104).
-  await holdGear(rotate.getByTestId('parent-gate'));
+  await touchHold(rotate.getByTestId('parent-gate'));
   await page.getByRole('dialog', { name: m.parent.menu }).getByRole('button', { name: m.parent.settings }).tap();
   const settings = page.getByTestId('settings-page');
   await expect(settings).toBeVisible();
-  expect(await settings.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await expectNoSideScroll(settings);
   await screenshot(page, 'settings-iphone-portrait');
   await settings.getByRole('button', { name: m.parent.close }).first().tap();
   await expect(settings).toHaveCount(0);
@@ -148,5 +132,5 @@ test('a phone held upright shows "Bitte dreh das Handy" and pauses; the settings
 
   await page.setViewportSize({ width: 844, height: 390 });
   await expect(rotate).toHaveCount(0);
-  await expect(overlay).toHaveAttribute('data-phase', /^(challenge|aiming)$/);
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
 });

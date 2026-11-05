@@ -5,8 +5,8 @@
  * the range. After each change the lines and labels of the matching preview change. Both previews are as wide as
  * the settings page. A second case checks that the game ruler at 0 to 100, level 1, labels every number.
  */
-import type { Locator, Page } from '@playwright/test';
-import { expect, startButton, test } from './fixtures';
+import type { Locator } from '@playwright/test';
+import { expect, openSettings, seedStorage, startButton, test } from './fixtures';
 import { ticksFor } from '../../src/core/numberline/ticks';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -20,16 +20,6 @@ const LEVEL1_LABELS = ticksFor({ min: 0, max: 100 }, 1, 0)
 const m = t();
 const L = m.settings.labels;
 
-/** Parent gate: a 2-second press on the gear, then "Einstellungen" in the parent menu (FR-045). */
-async function openSettings(page: Page): Promise<void> {
-  await page.getByTestId('parent-gate').hover();
-  await page.mouse.down();
-  await page.waitForTimeout(2_300);
-  await page.mouse.up();
-  await page.getByRole('button', { name: m.parent.settings, exact: true }).click();
-  await expect(page.getByTestId('settings-page')).toBeVisible();
-}
-
 /** Line and label counts of one preview, and its labels as text. */
 async function counts(preview: Locator): Promise<{ lines: number; labels: number; text: string }> {
   const labels = preview.getByTestId('preview-label');
@@ -41,7 +31,6 @@ async function counts(preview: Locator): Promise<{ lines: number; labels: number
 }
 
 test('both ruler previews change with the levels and the range, and fill the page width (T219, FR-069)', async ({ page }) => {
-  test.setTimeout(60_000);
   await page.goto('/?seed=3');
   await openSettings(page);
   const start = page.getByTestId('ruler-preview-start');
@@ -98,7 +87,7 @@ test('the game ruler at 0 to 100, level 1, labels the numbers in two rows, none 
   const settings = { ...defaultSettings() };
   expect(settings.range).toMatchObject({ min: 0, max: 100 });
   expect(settings.rulerLevelStart).toBe(1);
-  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(settings)] as const);
+  await seedStorage(page, { [SETTINGS_KEY]: settings });
   await page.goto('/?seed=4&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');

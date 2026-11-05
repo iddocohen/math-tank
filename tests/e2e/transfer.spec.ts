@@ -8,8 +8,8 @@
  * passt nicht". With SCREENSHOT_DIR set, the Chromium run saves the settings transfer group and the dialog.
  */
 import jsQR from 'jsqr';
-import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { expect, GAME_WAIT, silenceAudio, startButton, test } from './fixtures';
+import type { Browser, Page } from '@playwright/test';
+import { expect, holdPress, openSettings, silentPage, startButton, test, writeStorage } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { withRange } from '../../src/core/settings/validate';
 import { GARAGE_KEY, PROGRESS_KEY, RECORDS_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -55,22 +55,6 @@ const PROGRESS = {
   sessions: SESSIONS,
 };
 
-async function silentPage(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext();
-  await context.addInitScript(silenceAudio);
-  return { context, page: await context.newPage() };
-}
-
-/** Parent gate: a 2-second press on the gear, then "Einstellungen" (FR-045). */
-async function openSettings(page: Page): Promise<void> {
-  await page.getByTestId('parent-gate').hover();
-  await page.mouse.down();
-  await page.waitForTimeout(2_300);
-  await page.mouse.up();
-  await page.getByRole('button', { name: m.parent.settings, exact: true }).click();
-  await expect(page.getByTestId('settings-page')).toBeVisible();
-}
-
 async function stored(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate((keys) => Object.fromEntries(keys.map((k) => [k, JSON.parse(window.localStorage.getItem(k) ?? 'null') as unknown])), [
     SETTINGS_KEY,
@@ -106,17 +90,7 @@ async function qrPixels(page: Page, testId = 'transfer-qr'): Promise<{ data: num
 async function linkFromFirstBrowser(browser: Browser, screenshot?: string): Promise<string> {
   const { context, page } = await silentPage(browser);
   await page.goto('/');
-  await page.evaluate(
-    (entries) => {
-      for (const [k, v] of entries) window.localStorage.setItem(k, v);
-    },
-    [
-      [SETTINGS_KEY, JSON.stringify(SETTINGS)],
-      [GARAGE_KEY, JSON.stringify(GARAGE)],
-      [RECORDS_KEY, JSON.stringify(RECORDS)],
-      [PROGRESS_KEY, JSON.stringify(PROGRESS)],
-    ] as const,
-  );
+  await writeStorage(page, { [SETTINGS_KEY]: SETTINGS, [GARAGE_KEY]: GARAGE, [RECORDS_KEY]: RECORDS, [PROGRESS_KEY]: PROGRESS });
   await page.reload();
   await openSettings(page);
   const group = page.getByRole('group', { name: m.settings.transfer.title });
@@ -165,10 +139,7 @@ test.describe('move a save to another browser (amendment 15)', () => {
     await expect(dialog).toBeVisible();
     expect(await stored(page)).toEqual({ [SETTINGS_KEY]: null, [PROGRESS_KEY]: null, [RECORDS_KEY]: null, [GARAGE_KEY]: null });
 
-    await accept.hover();
-    await page.mouse.down();
-    await page.waitForTimeout(2_300);
-    await page.mouse.up();
+    await holdPress(page, accept);
     await expect(dialog).toBeHidden();
     expect(page.url()).not.toContain('#save=');
     expect(page.url()).toBe('http://localhost:4173/');
@@ -219,10 +190,7 @@ test.describe('move a save to another browser (amendment 15)', () => {
 const CODE = 'v2.W3sidmVyc2lvbiI6NiwicmFuZ2UiOnsicHJlc2V0IjoiY3VzdG9tIiwibWluIjo1NTAsIm1heCI6NzgwfSwiYWRkaXRpb24iOnsibWF4UmVzdWx0Ijo3ODB9LCJlbmVteURpZmZpY3VsdHkiOiJub3JtYWwiLCJzaG93Q2xvY2siOnRydWV9LFs0Nywic2t5Iiwicm9ja2V0Iiwic3BhcmtsZXMiLCJjcm93biJdLFtbIjU1MC03ODB8MXx1bnRpbEhlYXJ0cyIsNCw2MTAwMCwxNzAwMDAwMDAwMDAwXV0sW1sicG9zaXRpb25zfDU1MC03ODAiLDIsMTIsOSwyLDEsImlhIl1dLFtbMTcwMDAwMDAwMDAwMCw2MDAwMDAsMTIsOSwyLDNdXV0';
 
 async function holdAccept(page: Page): Promise<void> {
-  await page.getByRole('button', { name: m.transfer.accept }).hover();
-  await page.mouse.down();
-  await page.waitForTimeout(2_300);
-  await page.mouse.up();
+  await holdPress(page, page.getByRole('button', { name: m.transfer.accept }));
 }
 
 test.describe('save links in a running tab and failed take-overs (review fixes)', () => {
@@ -239,7 +207,7 @@ test.describe('save links in a running tab and failed take-overs (review fixes)'
     await page.goto('/?seed=5');
     await startButton(page).click();
     const overlay = page.getByTestId('battle-overlay');
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
     await page.evaluate((code) => {
       window.location.hash = `save=${code}`;
     }, CODE);

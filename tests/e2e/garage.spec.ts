@@ -7,8 +7,7 @@
  * and Enter starts a round whose canvas carries `data-player-look` with the rocket flag (D4). A second case turns
  * the garage off: no button, no star total, and G does nothing.
  */
-import type { Page } from '@playwright/test';
-import { expect, GAME_WAIT, startButton, test, waitCalmly } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test, waitCalmly } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage, lookKey } from '../../src/core/rewards/garage';
@@ -19,18 +18,9 @@ const oneEnemy = { ...defaultSettings(), roundType: 'enemyCount' as const, round
 const nineStars = { ...emptyGarage(), stars: 9 };
 const rocketLook = lookKey({ ...emptyGarage().look, flag: 'rocket' });
 
-async function store(page: Page, entries: Record<string, unknown>): Promise<void> {
-  // Only on the first load of the page, so a reload keeps what the game stored.
-  await page.addInitScript((pairs: Array<[string, string]>) => {
-    if (window.sessionStorage.getItem('e2e-seeded')) return;
-    window.sessionStorage.setItem('e2e-seeded', '1');
-    for (const [k, v] of pairs) window.localStorage.setItem(k, v);
-  }, Object.entries(entries).map(([k, v]): [string, string] => [k, JSON.stringify(v)]));
-}
-
 test('destroy an enemy for the tenth star, choose the rocket flag in the garage and see it in battle', async ({ page }) => {
   test.setTimeout(120_000);
-  await store(page, { [SETTINGS_KEY]: oneEnemy, [GARAGE_KEY]: nineStars });
+  await seedStorage(page, { [SETTINGS_KEY]: oneEnemy, [GARAGE_KEY]: nineStars }, { once: true });
   await page.goto('/?seed=3&mode=ruler');
 
   await expect(page.getByTestId('star-total')).toContainText('9');
@@ -39,14 +29,14 @@ test('destroy an enemy for the tenth star, choose the rocket flag in the garage 
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(page.getByTestId('star-total')).toHaveCount(0);
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
-  const enemy = (await overlay.getAttribute('data-enemy-number'))!;
+  const enemy = String(await enemyNumber(overlay));
   await waitCalmly(page, overlay);
   for (const digit of enemy) await page.keyboard.press(digit);
   await expect(page.getByTestId('readout')).toHaveText(enemy);
   await page.keyboard.press('Enter');
 
   // The end screen names the new item and shows the star total (FR-094, FR-095).
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
+  await expect(page.getByTestId('round-end')).toBeVisible();
   await expect(page.getByTestId('unlocked')).toHaveText(m.roundEnd.unlocked(m.garage.items.rocket));
   await expect(page.getByTestId('star-total')).toContainText('10');
 
@@ -73,7 +63,7 @@ test('destroy an enemy for the tenth star, choose the rocket flag in the garage 
 });
 
 test('with the garage off there is no garage button, no star total, and G does nothing', async ({ page }) => {
-  await store(page, { [SETTINGS_KEY]: { ...oneEnemy, garage: false }, [GARAGE_KEY]: { ...emptyGarage(), stars: 30, look: { ...emptyGarage().look, flag: 'rocket' } } });
+  await seedStorage(page, { [SETTINGS_KEY]: { ...oneEnemy, garage: false }, [GARAGE_KEY]: { ...emptyGarage(), stars: 30, look: { ...emptyGarage().look, flag: 'rocket' } } }, { once: true });
   await page.goto('/?seed=3&mode=ruler');
   await expect(startButton(page)).toBeVisible();
   await expect(page.getByRole('button', { name: m.start.garage, exact: true })).toHaveCount(0);

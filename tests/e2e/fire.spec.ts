@@ -5,7 +5,7 @@
  * With SCREENSHOT_DIR set, the first test saves a screenshot of each size in the middle of a round.
  */
 import type { Browser, Locator, Page, TestInfo } from '@playwright/test';
-import { expect, GAME_WAIT, silenceAudio, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, silentPage, startButton, test } from './fixtures';
 import { expectBattleFits, expectPadKeys } from './layout';
 import { FIRE_BARS_HEIGHT, SILK_DESKTOP_USER_AGENT } from './silk';
 import { defaultSettings } from '../../src/core/settings/defaults';
@@ -13,14 +13,6 @@ import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { screenLayout } from '../../src/core/view/screen';
 
 const ROUND = { ...defaultSettings(), roundType: 'enemyCount', roundLength: 2 };
-
-async function store(page: Page, settings: unknown): Promise<void> {
-  await page.addInitScript(([key, value]: [string, string]) => {
-    if (window.sessionStorage.getItem('e2e-seeded')) return;
-    window.sessionStorage.setItem('e2e-seeded', '1');
-    window.localStorage.setItem(key, value);
-  }, [SETTINGS_KEY, JSON.stringify(settings)] as [string, string]);
-}
 
 async function screenshot(page: Page, name: string): Promise<void> {
   // playwright.config.ts passes SCREENSHOT_DIR as metadata (the e2e specs have no Node types).
@@ -37,7 +29,7 @@ async function startMixed(page: Page): Promise<Locator> {
   await expect(startButton(page)).toHaveAttribute('data-mode', 'mixed');
   await startButton(page).tap();
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', /^(challenge|aiming)$/);
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(page.locator('canvas')).toBeVisible();
   return overlay;
 }
@@ -55,21 +47,21 @@ async function expectTouchLayout(page: Page, isLandscape: boolean): Promise<void
 /** Answers every enemy of the round with its number, typed on the number pad, until the round ends. */
 async function playRoundWithPad(page: Page, overlay: Locator, enemies: number): Promise<void> {
   for (let destroyed = 0; destroyed < enemies; destroyed++) {
-    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed), { timeout: GAME_WAIT });
-    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
-    const enemy = (await overlay.getAttribute('data-enemy-number'))!;
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(destroyed));
+    await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
+    const enemy = String(await enemyNumber(overlay));
     expect(enemy).toMatch(/^-?\d+$/);
     for (const key of enemy) await page.locator(`[data-key="${key === '-' ? 'minus' : key}"]`).tap();
     await expect(page.getByTestId('readout')).toHaveText(enemy);
     await page.locator('.fire-button').tap();
   }
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
+  await expect(page.getByTestId('round-end')).toBeVisible();
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(enemies));
 }
 
 test('"Gemischt" starts from the start screen; nothing is cut off or overlapping; a round is played with the number pad only', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
-  await store(page, ROUND);
+  await seedStorage(page, { [SETTINGS_KEY]: ROUND }, { once: true });
   await page.goto('/?seed=3');
   const overlay = await startMixed(page);
   await expectTouchLayout(page, landscape(testInfo));
@@ -102,12 +94,12 @@ test('held sideways with fewer browser bars (only the navigation bar), the battl
 test('offline: after one load the game starts and a round is played with the number pad', async ({ page, context }, testInfo) => {
   test.skip(testInfo.project.name !== 'fire-7-landscape', 'the offline check runs once, on the Fire 7 size');
   test.setTimeout(120_000);
-  await store(page, ROUND);
+  await seedStorage(page, { [SETTINGS_KEY]: ROUND }, { once: true });
   await page.goto('/');
   await expect(startButton(page)).toBeVisible();
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await page.reload();
-  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), { timeout: GAME_WAIT }).toBe(true);
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 
   await context.setOffline(true);
   await page.reload();
@@ -128,7 +120,7 @@ async function desktopViewPage(browser: Browser, page: Page): Promise<Page> {
   const own = page.viewportSize()!;
   const width = Math.max(own.width, DESKTOP_LAYOUT_WIDTH);
   const height = Math.round((own.height * width) / own.width);
-  const context = await browser.newContext({
+  const { page: desktop } = await silentPage(browser, {
     userAgent: SILK_DESKTOP_USER_AGENT,
     viewport: { width, height },
     screen: { width, height: height + FIRE_BARS_HEIGHT },
@@ -136,8 +128,7 @@ async function desktopViewPage(browser: Browser, page: Page): Promise<Page> {
     hasTouch: true,
     isMobile: true,
   });
-  await context.addInitScript(silenceAudio);
-  return context.newPage();
+  return desktop;
 }
 
 test("Silk's desktop view still gets the touch layout with the number pad", async ({ browser, page }, testInfo) => {

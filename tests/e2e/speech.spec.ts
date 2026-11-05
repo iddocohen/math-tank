@@ -5,7 +5,7 @@
  * hidden.
  */
 import type { Page } from '@playwright/test';
-import { expect, startButton, test } from './fixtures';
+import { expect, seedStorage, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -14,33 +14,30 @@ const m = t();
 
 /** `speech` null stores no settings, so the defaults apply. */
 async function prepare(page: Page, speech: boolean | null): Promise<void> {
-  await page.addInitScript(
-    ([key, value]) => {
-      if (value !== null) window.localStorage.setItem(key, value);
-      const w = window as unknown as Record<string, unknown> & { __spoken: string[] };
-      w.__spoken = [];
-      const voice = { lang: 'de-DE', name: 'Test-Stimme', default: true, localService: true, voiceURI: 'test' };
-      const synth = {
-        getVoices: () => [voice],
-        speak: (u: { text: string }) => w.__spoken.push(u.text),
-        cancel: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-      };
-      class Utterance {
-        text: string;
-        lang = '';
-        voice: unknown = null;
-        rate = 1;
-        constructor(text: string) {
-          this.text = text;
-        }
+  if (speech !== null) await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), sound: { effects: false, music: false, speech } } });
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown> & { __spoken: string[] };
+    w.__spoken = [];
+    const voice = { lang: 'de-DE', name: 'Test-Stimme', default: true, localService: true, voiceURI: 'test' };
+    const synth = {
+      getVoices: () => [voice],
+      speak: (u: { text: string }) => w.__spoken.push(u.text),
+      cancel: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    class Utterance {
+      text: string;
+      lang = '';
+      voice: unknown = null;
+      rate = 1;
+      constructor(text: string) {
+        this.text = text;
       }
-      Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-      Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
-    },
-    [SETTINGS_KEY, speech === null ? null : JSON.stringify({ ...defaultSettings(), sound: { effects: false, music: false, speech } })] as const,
-  );
+    }
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance, configurable: true });
+  });
 }
 
 function spoken(page: Page): Promise<string[]> {

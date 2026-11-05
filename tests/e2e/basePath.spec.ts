@@ -6,7 +6,7 @@
  * round with the keyboard, and checks that every request stays under /math-tank/ and succeeds, and that the service
  * worker and the web app manifest use the sub-path.
  */
-import { expect, GAME_WAIT, startButton, test } from './fixtures';
+import { enemyNumber, expect, seedStorage, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 
@@ -22,12 +22,7 @@ test('the game built for /math-tank/ loads, plays a round and requests nothing o
   page.on('response', (r) => {
     if (r.status() >= 400) failed.push(`${r.status()} ${r.url()}`);
   });
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(key, value);
-    },
-    [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 1 })] as const,
-  );
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 1 } });
 
   // Relative to baseURL, so the page opens at /math-tank/.
   await page.goto('./?seed=8');
@@ -47,11 +42,11 @@ test('the game built for /math-tank/ loads, plays a round and requests nothing o
 
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
-  await page.keyboard.type((await overlay.getAttribute('data-enemy-number'))!);
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
+  await page.keyboard.type(String(await enemyNumber(overlay)));
   await page.keyboard.press('Enter');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
-  await expect(page.getByTestId('round-end')).toBeVisible({ timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
+  await expect(page.getByTestId('round-end')).toBeVisible();
 
   const outside = requests.filter((url) => {
     if (url.startsWith('data:') || url.startsWith('blob:')) return false;
