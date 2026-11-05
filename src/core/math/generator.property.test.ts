@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRng, type Rng } from '../rng';
+
+// These property tests generate tens of thousands of challenges. They take a few seconds locally but can exceed the
+// default 5 s limit on shared CI runners (seen on GitHub Actions: 20.7 s for the 0-1000 range), so this file allows
+// 60 s per test. The checks themselves are unchanged.
+vi.setConfig({ testTimeout: 60_000 });
 import {
   CUSTOM_MIN_LIMIT,
   CUSTOM_MIN_UPPER_LIMIT,
