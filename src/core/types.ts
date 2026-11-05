@@ -183,5 +183,18 @@ export interface RoundState {
   aim: { angleDeg: number; power: number };
   /** FR-004 trail */
   lastPlayerPath: Point[] | null;
+  /** The shell in flight during 'playerShot' and 'enemyTurn', for the renderer to replay; otherwise null. */
+  shot: ShotInFlight | null;
   outcome: 'playerWon' | 'enemyWon' | 'turnsUsed' | null;
+}
+
+export interface ShotInFlight {
+  shooter: 'player' | 'enemy';
+  /** Precomputed flight path from the muzzle to the impact. */
+  path: Point[];
+  impact: Point;
+  hitTargetId: string | null;
+  /** True when the shell left the battlefield over a side edge. */
+  outOfBounds: boolean;
+  blastRadius: number;
 }
