@@ -108,6 +108,17 @@ describe('de table', () => {
     expect(promptText({ key: 'unknownKind', params: {} })).toBe('');
   });
 
+  it('renders one- and two-step addition and subtraction prompts in at most 8 words (FR-056, FR-057)', () => {
+    const prompts = [
+      promptText({ key: 'subtraction', params: { a: 43, b: 7 } }),
+      promptText({ key: 'subtraction', params: { a: 52, b: 4, c: 9 } }),
+      promptText({ key: 'addition', params: { a: 24, b: 8 } }),
+      promptText({ key: 'addition', params: { a: 24, b: 8, c: 5 } }),
+    ];
+    expect(prompts).toEqual(['43 − 7 = ?', '52 − 4 − 9 = ?', '24 + 8 = ?', '24 + 8 + 5 = ?']);
+    for (const p of prompts) expect(wordCount(p), p).toBeLessThanOrEqual(8);
+  });
+
   it('t() returns the German table', () => {
     expect(t()).toBe(de);
     expect(t().encouragements).toBe(encouragements);

@@ -41,7 +41,7 @@ export interface SettingsError {
 export type SettingsValidation = { ok: true } | { ok: false; errors: SettingsError[] };
 
 /** Smallest result an exercise may have: range.min, or 0 when negative results are off. */
-function lowestResult(s: Pick<Settings, 'negativeResults'>, range: SettingsRange): number {
+export function lowestResult(s: Pick<Settings, 'negativeResults'>, range: SettingsRange): number {
   return s.negativeResults ? range.min : Math.max(range.min, 0);
 }
 

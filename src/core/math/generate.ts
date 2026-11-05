@@ -3,11 +3,13 @@
  * The answer is a battlefield position at least minEnemyGap from the player; the question is built to produce it.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
+import { additionAnswers, buildAddition } from './addition';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { answerCandidates, NUMBER_LINE_KINDS, numberLineBuilders, type Builder, type ChallengeDraft } from './numberLine';
 import { buildReadPosition, readPositionAnswers } from './readPosition';
 import { mainSkillOf, skillsOf } from './skills';
+import { buildSubtraction, subtractionAnswers } from './subtraction';
 import { validateChallenge } from './validate';
 
 export interface GenerateInput {
@@ -37,14 +39,21 @@ export const ANSWER_TRIES = 50;
 const SEED_SALT = 1;
 
 /**
- * Builders per kind. Addition, subtraction and comparison builders are added in later phases;
- * until then the generator offers only the kinds listed here.
+ * Builders per kind. Comparison builders are added in a later phase; until then the generator offers only the
+ * kinds listed here.
  */
-const BUILDERS: Partial<Record<ChallengeKind, Builder>> = { ...numberLineBuilders, readPosition: buildReadPosition };
+const BUILDERS: Partial<Record<ChallengeKind, Builder>> = {
+  ...numberLineBuilders,
+  readPosition: buildReadPosition,
+  addition: buildAddition,
+  subtraction: buildSubtraction,
+};
 
 const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: DifficultyStep) => number[]>> = {
   ...answerCandidates,
   readPosition: (settings, step) => readPositionAnswers(settings, step.rulerLevel ?? 1),
+  addition: additionAnswers,
+  subtraction: subtractionAnswers,
 };
 
 function enabledKinds(settings: Settings): ChallengeKind[] {

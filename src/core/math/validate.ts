@@ -1,5 +1,6 @@
 /** Challenge validation and answer checking (FR-029, data-model.md "Validation"). */
 import type { Challenge, Settings } from '../types';
+import { arithmeticErrors } from './arithmetic';
 import { minEnemyGap } from './gaps';
 import { movementAllowed, rangeMajorStep } from './numberLine';
 import { readPositionAnswers } from './readPosition';
@@ -14,7 +15,10 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
   };
 
   check('answer', c.answer);
-  c.operands.forEach((n, i) => check(`operand ${i}`, n));
+  // The added or subtracted numbers of an addition or subtraction may lie outside the range (560 + 5 in 550 to
+  // 780); arithmeticErrors checks them against the maximum operand. Every other operand is a shown position.
+  const arithmetic = c.kind === 'addition' || c.kind === 'subtraction';
+  (arithmetic ? c.operands.slice(0, 1) : c.operands).forEach((n, i) => check(`operand ${i}`, n));
   c.steps?.forEach((n, i) => check(`step ${i}`, n));
   c.options?.forEach((n, i) => check(`option ${i}`, n));
   c.orderAnswer?.forEach((n, i) => check(`order ${i}`, n));
@@ -76,8 +80,12 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       expect(readPositionAnswers(settings, level).includes(c.answer), 'readPosition: answer not allowed at this ruler level');
       break;
     }
+    case 'addition':
+    case 'subtraction':
+      errors.push(...arithmeticErrors({ ...c, kind: c.kind }, settings));
+      break;
     default:
-      // Arithmetic and comparison rules are added with those challenge kinds.
+      // Comparison rules are added with those challenge kinds.
       break;
   }
 

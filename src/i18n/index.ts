@@ -19,13 +19,13 @@ export const forbiddenWords: readonly string[] = ['falsch', 'verloren', 'Fehler'
 
 /**
  * The banner text of a challenge prompt (T068, T069): the translation under `prompt.key`, called with the parameters
- * in the order the builders use (n, k) or (a, b). An unknown key gives an empty string.
+ * in the order the builders use (n, k) or (a, b, c). An unknown key gives an empty string.
  */
 export function promptText(prompt: PromptSpec): string {
   const entry = (active.challenge as Record<string, unknown>)[prompt.key];
   if (typeof entry === 'string') return entry;
   if (typeof entry !== 'function') return '';
   const p = prompt.params;
-  const args = 'a' in p ? [p.a, p.b] : [p.n, p.k];
+  const args = 'a' in p ? [p.a, p.b, p.c] : [p.n, p.k];
   return (entry as (...args: Array<number | undefined>) => string)(...args);
 }

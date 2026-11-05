@@ -135,6 +135,57 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
     }
   });
 
+  describe('addition and subtraction on, 10,000 seeds each (T079, FR-022, FR-023, FR-029, SC-003, AC-04)', () => {
+    const arithmeticOnly = { numberLine: false, addition: true, subtraction: true, comparison: false };
+    const custom = (min: number, max: number, patch: Partial<Settings>): Settings => ({
+      ...defaultSettings(),
+      challengeTypes: arithmeticOnly,
+      range: { preset: 'custom', min, max },
+      ...patch,
+    });
+    const cases: Array<[string, Settings]> = [
+      ['0 to 20, one step', presetSettings('0-20', { challengeTypes: arithmeticOnly })],
+      [
+        '0 to 100, two steps, crossing tens off',
+        presetSettings('0-100', {
+          challengeTypes: arithmeticOnly,
+          crossTens: false,
+          addition: { maxOperand: 10, maxResult: 100, steps: 2 },
+          subtraction: { maxOperand: 10, steps: 2 },
+        }),
+      ],
+      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, crossHundreds: false })],
+      [
+        'custom -20 to 30, negative results on',
+        custom(-20, 30, { negativeResults: true, addition: { maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { maxOperand: 10, steps: 2 } }),
+      ],
+      // The start is above any addition operand limit the settings page allows (at most the span), so only
+      // subtraction can come.
+      [
+        'custom 550 to 780, operands up to 230',
+        custom(550, 780, { addition: { maxOperand: 230, maxResult: 780, steps: 1 }, subtraction: { maxOperand: 230, steps: 2 } }),
+      ],
+    ];
+
+    for (const [name, settings] of cases) {
+      it(`${name}: every challenge validates and addition or subtraction comes`, () => {
+        expect(validateSettings(settings)).toEqual({ ok: true });
+        const problems: string[] = [];
+        const kinds = new Map<string, number>();
+        for (let seed = 0; seed < SEEDS; seed++) {
+          const playerPosition = seed % 2 === 0 ? settings.range.min : settings.range.max;
+          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel: 1 });
+          kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1);
+          const errors = validateChallenge(c, settings, playerPosition);
+          if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind} ${c.operands.join(' ')}: ${errors.join('; ')}`);
+        }
+        expect(problems).toEqual([]);
+        expect(kinds.get('subtraction') ?? 0).toBeGreaterThan(SEEDS * 0.3);
+        if (name !== 'custom 550 to 780, operands up to 230') expect(kinds.get('addition') ?? 0).toBeGreaterThan(SEEDS * 0.1);
+      });
+    }
+  });
+
   describe('US9 ranges, 10,000 seeds each (T148, FR-029, FR-067, SC-003, SC-013)', () => {
     function customSettings(min: number, max: number, patch: Partial<Settings> = {}): Settings {
       const base = defaultSettings();
