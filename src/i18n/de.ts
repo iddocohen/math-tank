@@ -82,6 +82,9 @@ export const de = {
 
   parent: {
     holdGear: 'Zahnrad gedrückt halten',
+    menu: 'Für Eltern',
+    /** Amendment 05, FR-079: a feature that is not built yet. */
+    comingSoon: 'kommt bald',
     settings: 'Einstellungen',
     progress: 'Fortschritt',
     close: 'Schließen',
@@ -92,7 +95,37 @@ export const de = {
   },
 
   settings: {
+    title: 'Einstellungen',
     save: 'Speichern',
+    saved: 'Gespeichert. Die Einstellungen gelten ab der nächsten Runde.',
+    saveFailed: 'Speichern hat nicht geklappt. Die Einstellungen gelten nur, bis der Browser geschlossen wird.',
+    checkFields: 'Bitte die markierten Felder prüfen.',
+    persistDenied: 'Der Browser darf gespeicherte Daten löschen. Bitte die Daten ab und zu sichern.',
+    presetCustom: 'Eigener Zahlenraum',
+    levelOption: (n: number) => `Stufe ${n}`,
+    stepsOption: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
+    preview: (min: number, max: number, level: number) => `Vorschau: Zahlenstrahl von ${min} bis ${max}, Stufe ${level}`,
+    previewUnavailable: 'Die Vorschau erscheint, sobald der Zahlenraum gültig ist.',
+    /** Shown when every challenge type is off (FR-047, US6 scenario 4). */
+    guidedNeedsType: 'Geführtes Spielen braucht mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur freies Spiel.',
+    offerFreePlay: 'Nur freies Spiel anbieten',
+    /** Amendment 06 (announced): the round length counts enemies. The schema keeps 3 as the lowest value until then. */
+    roundLengthRange: (min: number, max: number) => `Bitte eine Zahl von ${min} bis ${max} eingeben.`,
+    data: {
+      title: 'Daten',
+      exportHint: 'Speichert Einstellungen und Fortschritt in einer Datei.',
+      imported: 'Daten geladen. Die Einstellungen gelten ab der nächsten Runde.',
+      importFailed: {
+        notJson: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',
+        wrongApp: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',
+        invalidSettings: 'Die Einstellungen in dieser Datei sind ungültig. Es wurde nichts geändert.',
+        invalidProgress: 'Der Fortschritt in dieser Datei ist ungültig. Es wurde nichts geändert.',
+      },
+      readFailed: 'Die Datei konnte nicht gelesen werden.',
+      /** FR-048a: the Home Screen keeps stored data on Safari. */
+      homeScreen:
+        'Tipp: Auf dem Home-Bildschirm behält der Browser die Daten sicherer. iPad: in Safari auf „Teilen“ und dann „Zum Home-Bildschirm“ tippen. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“ wählen.',
+    },
     groups: {
       challengeTypes: 'Aufgaben',
       range: 'Zahlenraum',
@@ -116,11 +149,13 @@ export const de = {
       additionMaxResult: 'Größtes Ergebnis',
       subtractionMaxOperand: 'Größte Zahl beim Minus',
       steps: 'Rechenschritte',
+      additionSteps: 'Rechenschritte beim Plus',
+      subtractionSteps: 'Rechenschritte beim Minus',
       crossTens: 'Über den Zehner',
       crossHundreds: 'Über den Hunderter',
       negativeResults: 'Ergebnisse unter null',
-      rulerLevelStart: 'Lineal: Startstufe',
-      rulerLevelMax: 'Lineal: schwerste Stufe',
+      rulerLevelStart: 'Zahlenstrahl am Anfang',
+      rulerLevelMax: 'Schwerste Stufe des Zahlenstrahls',
       enemyDifficulty: 'Gegner',
       enemyEasy: 'Leicht',
       enemyNormal: 'Normal',
@@ -133,13 +168,14 @@ export const de = {
       soundEffects: 'Geräusche',
       music: 'Musik',
       speech: 'Vorlesen',
-      roundLength: 'Züge pro Runde',
+      roundLength: 'Gegner pro Runde',
       adaptive: 'Schwierigkeit automatisch anpassen',
       freePlay: 'Freies Spiel erlauben',
       noDamage: 'Ohne Schaden spielen',
       exactHit: 'Genau treffen',
       exactHitHint: 'Nur die genaue Zahl trifft.',
-      timeLimit: 'Zeitlimit (Sekunden)',
+      timeLimit: 'Zeitlimit',
+      timeLimitSeconds: 'Sekunden pro Aufgabe',
     },
   },
 

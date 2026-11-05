@@ -1,0 +1,69 @@
+/**
+ * Settings whose feature is not built yet (amendment 05, FR-079). The settings page shows each of them disabled
+ * with the note "kommt bald" and keeps its stored value on save. Each later phase that builds a feature removes its
+ * entries here.
+ */
+
+/** Every field on the settings page, by its path in `Settings` (FR-046). */
+export const SETTING_FIELDS = [
+  'challengeTypes.numberLine',
+  'challengeTypes.addition',
+  'challengeTypes.subtraction',
+  'challengeTypes.comparison',
+  'freePlay',
+  'range',
+  'negativeResults',
+  'addition.maxOperand',
+  'addition.maxResult',
+  'addition.steps',
+  'subtraction.maxOperand',
+  'subtraction.steps',
+  'crossTens',
+  'crossHundreds',
+  'rulerLevelStart',
+  'rulerLevelMax',
+  'help.nearestTen',
+  'help.countSteps',
+  'help.zoom',
+  'help.stepAnimation',
+  'beginnerAssist',
+  'enemyDifficulty',
+  'noDamage',
+  'sound.effects',
+  'sound.music',
+  'sound.speech',
+  'roundLength',
+  'adaptive',
+  'timeLimitSeconds',
+] as const;
+
+export type SettingField = (typeof SETTING_FIELDS)[number];
+
+export const COMING_SOON: readonly SettingField[] = [
+  // Phase 16: addition and subtraction generators.
+  'addition.maxOperand',
+  'addition.maxResult',
+  'addition.steps',
+  'subtraction.maxOperand',
+  'subtraction.steps',
+  // Phase 18: comparison with decoy tanks.
+  'challengeTypes.comparison',
+  // Phases 19 and 20: help steps.
+  'help.nearestTen',
+  'help.countSteps',
+  'help.zoom',
+  'help.stepAnimation',
+  // Phase 17: step animation split at ten boundaries.
+  'beginnerAssist',
+  // Phase 23: spoken instructions. Music has no task yet.
+  'sound.speech',
+  'sound.music',
+  // Phases 21 and 22: adaptive difficulty.
+  'adaptive',
+  // Phase 19: time limit (decision D1).
+  'timeLimitSeconds',
+];
+
+export function isComingSoon(field: SettingField): boolean {
+  return COMING_SOON.includes(field);
+}

@@ -16,6 +16,7 @@
  * number; a body hit that is not exact shows "Treffer!" or, under "Genau treffen", "Ganz knapp!", with both
  * numbers and the distance; a miss shows the landing number.
  */
+import type { ReactNode } from 'react';
 import type { BattleController } from '../core/battle/controller';
 import type { LastShot, RoundState } from '../core/types';
 import { t } from '../i18n';
@@ -23,9 +24,11 @@ import { t } from '../i18n';
 interface Props {
   controller: BattleController;
   state: RoundState;
+  /** The parent gate's gear, shown at the top right (FR-045, contracts/ui-flows.md battle layout). */
+  gear?: ReactNode;
 }
 
-export function BattleOverlay({ controller, state }: Props) {
+export function BattleOverlay({ controller, state, gear }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
@@ -70,6 +73,8 @@ export function BattleOverlay({ controller, state }: Props) {
           <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
         ) : null}
       </div>
+
+      {gear && <div className="top-right">{gear}</div>}
 
       <button
         type="button"

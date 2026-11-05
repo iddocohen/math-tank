@@ -5,8 +5,9 @@
  * opens a new context with that state and checks that the settings are still there, as after a browser restart.
  *
  * The first case writes stored settings directly and checks that a new context plays with them; it covers
- * src/app/persistence.ts today. The second case changes the settings through the settings page; that page is
- * built in Phase 13 (T110 to T116), so the case is marked `fixme` until T116 makes it pass in all three browsers.
+ * src/app/persistence.ts. The second case changes the settings through the parent gate and the settings page
+ * (Phase 13, T116). The last cases check the gate itself: a short tap does nothing, and opening it in a battle
+ * pauses the game until the parent closes it (FR-045).
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { expect, silenceAudio, test } from './fixtures';
@@ -17,7 +18,23 @@ import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
 
 const m = t();
+const L = m.settings.labels;
 const RUNS = 5;
+
+/** Presses the gear with the mouse for `ms` milliseconds (FR-045). */
+async function pressGear(page: Page, ms: number): Promise<void> {
+  await page.getByTestId('parent-gate').hover();
+  await page.mouse.down();
+  await page.waitForTimeout(ms);
+  await page.mouse.up();
+}
+
+/** Parent gate: a 2-second press on the gear, then "Einstellungen" in the parent menu. */
+async function openSettings(page: Page): Promise<void> {
+  await pressGear(page, 2_300);
+  await page.getByRole('button', { name: m.parent.settings, exact: true }).click();
+  await expect(page.getByTestId('settings-page')).toBeVisible();
+}
 
 type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
@@ -62,37 +79,66 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
   });
 
   test(`settings changed on the settings page are shown again in a new context, ${RUNS} runs in a row (AC-08, US6 scenario 2)`, async ({ browser }) => {
-    test.fixme(true, 'The parent gate and settings page are built in Phase 13; T116 removes this line and makes the case pass.');
+    // Ten 2-second gate presses plus ten page loads; a loaded machine needs more than the default timeout.
+    test.slow();
     for (let run = 1; run <= RUNS; run++) {
       const first = await silentPage(browser);
       await first.page.goto('/');
-      // Parent gate: a 2-second press on the gear (FR-045).
-      const gear = first.page.getByTestId('parent-gate');
-      await gear.hover();
-      await first.page.mouse.down();
-      await first.page.waitForTimeout(2_200);
-      await first.page.mouse.up();
-      await first.page.getByRole('button', { name: 'Einstellungen' }).click();
-      await first.page.getByLabel('Zahlenraum').selectOption('0-20');
-      await first.page.getByLabel('Gegner').selectOption({ label: 'Leicht' });
-      await first.page.getByLabel('Zahlenstrahl am Anfang').selectOption('3');
-      await first.page.getByRole('button', { name: 'Speichern' }).click();
+      await openSettings(first.page);
+      await first.page.getByLabel(L.rangePreset, { exact: true }).selectOption('0-20');
+      await first.page.getByLabel(L.enemyDifficulty, { exact: true }).selectOption({ label: L.enemyEasy });
+      await first.page.getByLabel(L.rulerLevelStart, { exact: true }).selectOption('3');
+      await first.page.getByRole('button', { name: m.settings.save }).click();
+      await expect(first.page.getByText(m.settings.saved)).toBeVisible();
       const state = await first.context.storageState();
       await first.page.close();
       await first.context.close();
 
       const second = await silentPage(browser, state);
       await second.page.goto('/');
-      const gear2 = second.page.getByTestId('parent-gate');
-      await gear2.hover();
-      await second.page.mouse.down();
-      await second.page.waitForTimeout(2_200);
-      await second.page.mouse.up();
-      await second.page.getByRole('button', { name: 'Einstellungen' }).click();
-      await expect(second.page.getByLabel('Zahlenraum'), `run ${run}`).toHaveValue('0-20');
-      await expect(second.page.getByLabel('Gegner'), `run ${run}`).toHaveValue('easy');
-      await expect(second.page.getByLabel('Zahlenstrahl am Anfang'), `run ${run}`).toHaveValue('3');
+      await openSettings(second.page);
+      await expect(second.page.getByLabel(L.rangePreset, { exact: true }), `run ${run}`).toHaveValue('0-20');
+      await expect(second.page.getByLabel(L.enemyDifficulty, { exact: true }), `run ${run}`).toHaveValue('easy');
+      await expect(second.page.getByLabel(L.rulerLevelStart, { exact: true }), `run ${run}`).toHaveValue('3');
       await second.context.close();
     }
+  });
+});
+
+test.describe('parent gate (FR-045, US6 scenario 1)', () => {
+  test('a short tap or a key does not open the parent menu', async ({ page }) => {
+    await page.goto('/?seed=3');
+    await pressGear(page, 300);
+    await page.getByTestId('parent-gate').focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(2_300);
+    await expect(page.getByRole('dialog', { name: m.parent.menu })).toHaveCount(0);
+  });
+
+  test('opening the gate in a battle pauses the game; closing the settings page resumes it', async ({ page }) => {
+    await page.goto('/?seed=3');
+    await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+    await page.keyboard.press('Enter');
+    const overlay = page.getByTestId('battle-overlay');
+    await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+    await openSettings(page);
+    await expect(overlay).toHaveAttribute('data-phase', 'paused');
+    // Keys do nothing in the game while settings are open.
+    await page.keyboard.press('Escape');
+    await expect(overlay).toHaveAttribute('data-phase', 'paused');
+    await page.getByRole('button', { name: m.parent.close, exact: true }).click();
+    await expect(page.getByTestId('settings-page')).toHaveCount(0);
+    await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  });
+
+  test('the parent menu shows "Fortschritt" disabled with "kommt bald"', async ({ page }) => {
+    await page.goto('/');
+    await pressGear(page, 2_300);
+    const progress = page.getByRole('button', { name: new RegExp(m.parent.progress) });
+    await expect(progress).toBeDisabled();
+    await expect(progress).toContainText(m.parent.comingSoon);
+    await page.getByRole('button', { name: m.parent.close, exact: true }).click();
+    await expect(page.getByRole('dialog', { name: m.parent.menu })).toHaveCount(0);
   });
 });
