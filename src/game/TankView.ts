@@ -58,7 +58,7 @@ const YOU_TIP = BAR_OFFSET + 10;
 const YOU_BOUNCE = 14;
 const YOU_COLOR = 0xffd54a;
 const SETTLE_MS = 450;
-const FADE_MS = 500;
+export const FADE_MS = 500;
 const SHAKE_PX = 6;
 const SHAKE_MS = 50;
 /** The warning wobble (amendment 13, FR-100): the tank tips this many degrees each way; the hearts grow by this factor. */

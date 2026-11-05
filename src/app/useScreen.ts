@@ -33,15 +33,24 @@ export const REMEASURE_DELAYS_MS = [100, 300, 700, 1500] as const;
 
 const KEYS = Object.keys(SCREEN_QUERIES) as Array<keyof ScreenMedia>;
 
-function queryList(text: string): MediaQueryList | null {
-  return typeof window.matchMedia === 'function' ? window.matchMedia(text) : null;
+type QueryLists = Record<keyof ScreenMedia, MediaQueryList>;
+
+/** One MediaQueryList per query of SCREEN_QUERIES, or null without matchMedia. */
+function queryLists(): QueryLists | null {
+  if (typeof window.matchMedia !== 'function') return null;
+  const lists = {} as QueryLists;
+  for (const key of KEYS) lists[key] = window.matchMedia(SCREEN_QUERIES[key]);
+  return lists;
 }
 
-/** The media query results; from the window size only without matchMedia (no matchMedia counts as a fine pointer). */
-export function readScreenMedia(): ScreenMedia {
-  if (typeof window.matchMedia !== 'function') return mediaFromSize(window.innerWidth, window.innerHeight, true);
+/**
+ * The media query results from `lists` (default: new lists); from the window size only without matchMedia (no
+ * matchMedia counts as a fine pointer).
+ */
+export function readScreenMedia(lists: QueryLists | null = queryLists()): ScreenMedia {
+  if (lists === null) return mediaFromSize(window.innerWidth, window.innerHeight, true);
   const media = {} as ScreenMedia;
-  for (const key of KEYS) media[key] = window.matchMedia(SCREEN_QUERIES[key]).matches;
+  for (const key of KEYS) media[key] = lists[key].matches;
   return media;
 }
 
@@ -61,8 +70,10 @@ export function useScreen(setting: NumberPadSetting, forcePad = false): { layout
     const timers = new Set<ReturnType<typeof setTimeout>>();
     let frame: number | null = null;
     let cause = 'mount';
+    // The lists are made once and read on every measurement; each list's `matches` follows the browser's layout.
+    const lists = queryLists();
     const measure = () => {
-      const next = readScreenMedia();
+      const next = readScreenMedia(lists);
       setMeasured((prev) => (sameMedia(prev.media, next) ? prev : { media: next, lastEvent: cause }));
     };
     const measureSoon = (name: string) => {
@@ -86,7 +97,7 @@ export function useScreen(setting: NumberPadSetting, forcePad = false): { layout
       if (document.visibilityState !== 'hidden') measureSoon('visibilitychange');
     };
     const queries = KEYS.map((key) => {
-      const list = queryList(SCREEN_QUERIES[key]);
+      const list = lists?.[key];
       const onChange = () => measureSoon(`media ${SCREEN_QUERIES[key]}`);
       list?.addEventListener?.('change', onChange);
       return { list, onChange };

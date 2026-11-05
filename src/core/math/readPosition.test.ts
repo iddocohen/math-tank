@@ -53,8 +53,8 @@ describe('readPosition challenge (FR-067, FR-068, US9 scenario 5)', () => {
     for (const level of LEVELS) {
       it(`places the answer by the level rule and inside the range (${min} to ${max}, level ${level})`, () => {
         const settings = rangeSettings(min, max);
-        const { minorStep, ticks } = ticksFor(settings.range, level, 0);
-        const drawn = new Set(ticks.filter((t) => t.visible).map((t) => t.value));
+        const { minorStep, ticks } = ticksFor(settings.range, level);
+        const drawn = new Set(ticks.map((t) => t.value));
         for (let seed = 0; seed < 100; seed++) {
           for (const playerPosition of [min, max]) {
             const c = readPosition(settings, level, seed, playerPosition);

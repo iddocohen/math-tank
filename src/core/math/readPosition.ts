@@ -20,8 +20,8 @@ function answersFor(settings: Settings, level: RulerLevel): { list: readonly num
   const key = `${min}:${max}:${level}`;
   let entry = cache.get(key);
   if (!entry) {
-    const { minorStep, ticks } = ticksFor(settings.range, level, 0);
-    const list = ticks.filter((t) => t.visible && isMultiple(t.value, minorStep)).map((t) => t.value);
+    const { minorStep, ticks } = ticksFor(settings.range, level);
+    const list = ticks.filter((t) => isMultiple(t.value, minorStep)).map((t) => t.value);
     if (cache.size >= CACHE_LIMIT) cache.clear();
     entry = { list, set: new Set(list) };
     cache.set(key, entry);

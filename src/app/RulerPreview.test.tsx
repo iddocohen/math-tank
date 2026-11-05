@@ -65,7 +65,7 @@ describe('RulerPreview', () => {
 
   it('0 to 100 at level 1 labels the numbers in two rows, minor labels smaller, none crowding a large label (T217, T218, T231)', () => {
     render(<RulerPreview range={{ min: 0, max: 100 }} level={1} />);
-    expect(labels()).toEqual(ticksFor({ min: 0, max: 100 }, 1, 0).ticks.filter((t) => t.labeled).map((t) => t.value));
+    expect(labels()).toEqual(ticksFor({ min: 0, max: 100 }, 1).ticks.filter((t) => t.labeled).map((t) => t.value));
     expect(labels()).not.toContain(28);
     expect(lines()).toHaveLength(101);
     const els = screen.getAllByTestId('preview-label');

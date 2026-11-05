@@ -140,6 +140,19 @@ describe('useScreen (bug: iPhone rotation in Chrome)', () => {
     expect(result.current.layout).toBe('side');
   });
 
+  it('reads the same media query lists on every measurement instead of asking matchMedia again (code review)', () => {
+    const spy = vi.spyOn(window, 'matchMedia');
+    const { result } = renderHook(() => useScreen('auto'));
+    const afterMount = spy.mock.calls.length;
+    media = SIDEWAYS_PHONE;
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+      vi.advanceTimersByTime(1500);
+    });
+    expect(result.current.layout).toBe('side');
+    expect(spy.mock.calls.length).toBe(afterMount);
+  });
+
   it('stops measuring after unmount', () => {
     const { unmount } = renderHook(() => useScreen('auto'));
     act(() => {

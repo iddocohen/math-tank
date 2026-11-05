@@ -2772,20 +2772,27 @@ describe('amendment 21: waves of enemies in the ruler searches (FR-137 to FR-143
     expect(new Set(attempts.map((a) => a.challengeId)).size).toBe(3);
   });
 
-  it('an enemy destroyed while it is not the help target is recorded with no help and no wrong answer; the target keeps its misses', () => {
+  it('the misses and help since the last destroyed enemy go with the next destroyed enemy, also another wave enemy (code review)', () => {
     const { controller, progress } = makeController(WAVE);
     controller.startRound('ruler');
-    playTurn(controller, fireAtOwnNumber);
+    const target = controller.getState().enemy;
+    const missNext = (k: BattleController) => k.fireAt(target.position + Math.sign(k.getState().player.position - target.position));
+    playTurn(controller, missNext);
+    playTurn(controller, missNext);
     const s = controller.getState();
+    expect(s.enemy.id).toBe(target.id);
+    expect(s.help.wrongAnswers).toBe(2);
+    expect(s.help.level).toBeGreaterThanOrEqual(1);
     const other = standing(s).find((t) => t.id !== s.enemy.id)!;
     playTurn(controller, (k) => k.fireAt(other.position));
+    const attempts = progress.getProgress().attempts;
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({ wrongAnswers: 2, helpLevel: s.help.level, independent: false });
+    expect(attempts[0]!.challengeId).not.toBe(s.challenge!.id);
+    // The next search starts fresh: the next destroyed enemy has no misses of its own.
+    expect(controller.getState().help).toMatchObject({ level: 0, wrongAnswers: 0 });
+    playTurn(controller, fireAtEnemy);
     expect(progress.getProgress().attempts.at(-1)).toMatchObject({ helpLevel: 0, wrongAnswers: 0, independent: true });
-
-    const g = makeController(WAVE);
-    g.controller.startRound('ruler');
-    playTurn(g.controller, fireAtOwnNumber);
-    playTurn(g.controller, fireAtEnemy);
-    expect(g.progress.getProgress().attempts.at(-1)).toMatchObject({ wrongAnswers: 1, independent: false });
   });
 
   it('"Neue Landschaft" replaces the whole wave', () => {

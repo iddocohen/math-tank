@@ -13,8 +13,6 @@ export interface Tick {
   major: boolean;
   /** How long and bold the line is drawn (T235, FR-016). */
   size: TickSize;
-  /** Drawn: true for every line on every level since amendment 20. */
-  visible: boolean;
   labeled: boolean;
   /** Label row (T217): 0 directly under the line, 1 below it. Only level 1 uses row 1. */
   row: 0 | 1;
@@ -91,13 +89,11 @@ function lineValues(min: number, max: number, majorStep: number, minorStep: numb
 
 /**
  * The lines and labels of `view` at ruler `level` (FR-016, FR-017, amendment 20). Every line is drawn on every level;
- * the level only chooses the labels. `_seed` no longer changes the result (level 3 chose its labels by seed until
- * amendment 20); callers keep passing it.
+ * the level only chooses the labels.
  */
 export function ticksFor(
   view: { min: number; max: number },
   level: RulerLevel,
-  _seed: number,
   opts: { allLines?: boolean } = {},
 ): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean; labelRows: 1 | 2 } {
   const { min, max } = view;
@@ -114,7 +110,6 @@ export function ticksFor(
     value,
     major: isMultiple(value, majorStep),
     size: sizeOf(value),
-    visible: true,
     labeled: false,
     row: 0,
     shift: 0,

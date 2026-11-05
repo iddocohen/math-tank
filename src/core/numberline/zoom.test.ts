@@ -33,9 +33,9 @@ describe('helpZoomView (FR-020, FR-031, US9 scenario 6)', () => {
     ] as const) {
       const view = helpZoomView(n, min, max);
       for (const level of [1, 2, 3, 4, 5] as const) {
-        const { ticks } = ticksFor(view, level, 7, { allLines: true });
+        const { ticks } = ticksFor(view, level, { allLines: true });
         expect(ticks.map((t) => t.value)).toEqual(Array.from({ length: view.max - view.min + 1 }, (_, i) => view.min + i));
-        expect(ticks.every((t) => t.visible && t.labeled)).toBe(true);
+        expect(ticks.every((t) => t.labeled)).toBe(true);
       }
     }
   });

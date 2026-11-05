@@ -6,11 +6,11 @@
  * order as o1, o2 and o3. Every option stands on a drawn line of the minor grid (amendment 20): where the minor step is
  * 10 or more, only its multiples.
  */
-import { isMultiple, stepsFor } from '../numberline/ticks';
 import type { Rng } from '../rng';
 import type { Challenge, DifficultyStep, Settings } from '../types';
 import { minOptionGap, minTankGap } from './gaps';
 import type { Builder, ChallengeDraft } from './numberLine';
+import { DEFAULT_RULER_LEVEL, isReadPositionAnswer, readPositionAnswers } from './readPosition';
 
 export const COMPARISON_KINDS = ['greater', 'smaller', 'largest3', 'smallest3', 'closestTo', 'between', 'middle3'] as const;
 
@@ -41,15 +41,13 @@ function clearOfPlayer(n: number, settings: Settings, playerPosition: number | u
 
 /** Whether a tank may stand at n on the ruler: on a drawn line of the minor grid (amendment 20, FR-027). */
 export function onRulerLine(n: number, settings: Settings): boolean {
-  return isMultiple(n, stepsFor(settings.range).minorStep);
+  // Every level draws the same lines, so the read-the-ruler answers of any level are the drawn lines of the minor grid.
+  return isReadPositionAnswer(settings, DEFAULT_RULER_LEVEL, n);
 }
 
 /** The numbers where the enemy of a comparison may stand: the minor grid inside the range (amendment 20). */
 export function comparisonAnswers(settings: Settings): number[] {
-  const { min, max } = settings.range;
-  const out: number[] = [];
-  for (let n = min; n <= max; n++) if (onRulerLine(n, settings)) out.push(n);
-  return out;
+  return [...readPositionAnswers(settings, DEFAULT_RULER_LEVEL)];
 }
 
 /**

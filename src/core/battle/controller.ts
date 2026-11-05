@@ -293,7 +293,7 @@ export class BattleController {
       // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
       // With "Punkt nach voller Hilfe" off, a hit after the shown solution destroys the enemy but does not count toward
       // the score, the stars, "Gegner pro Runde" or the personal best (amendment 18, FR-129).
-      // A wave enemy that is not the help target had no help (amendment 21, FR-143).
+      // The shown solution points at the help target, so a hit on another wave enemy still counts (amendment 21, FR-143).
       const counts = this.settings.pointAfterFullHelp || next.help.level < SOLUTION_HELP_LEVEL || next.lastShot.hitTankId !== next.enemy.id;
       const destroyed: RoundState = {
         ...next,
@@ -365,14 +365,13 @@ export class BattleController {
    */
   private recordAttempt(s: RoundState, hitTankId: string | null = null): void {
     if (!s.challenge || s.answerableAt === null) return;
-    // Amendment 21 (FR-143): an enemy of the wave destroyed while it was not the help target counts as solved with no
-    // help and no wrong answer; the misses belong to the help target.
+    // Amendment 21 (FR-143, code review): the misses, the help and the timing since the last destroyed enemy go with the
+    // next destroyed enemy, whichever enemy of the wave it is; the attempt carries that enemy's challenge id.
     const other = hitTankId !== null && hitTankId !== s.enemy.id ? s.wave.find((t) => t.id === hitTankId) : undefined;
     const challenge = other ? challengeFor(s.challenge, other, 2) : s.challenge;
-    const help = other ? { level: 0 as const, wrongAnswers: 0, wrongAnswerTimes: [], content: null } : s.help;
     const attempt = buildAttempt({
       challenge,
-      help,
+      help: s.help,
       answerableAt: s.answerableAt,
       answeredAt: this.firedAt,
       range: this.settings.range,

@@ -3,7 +3,7 @@
  *
  * - Drawn in the ruler band (core/view/layout.ts, screen y 720 to 820) on the bedrock strip below the ground,
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
- * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn. On levels
+ * - Lines and labels come from ticksFor with the round's ruler level (FR-017); every line is drawn (amendment 20). On levels
  *   1 to 3 the line at half of each major step is a medium line, between the minor and major lengths (T235, FR-016).
  *   On level 1 every line is labeled: when the minor labels do not fit in one row, ticksFor puts them in two staggered
  *   rows (tick.row) and they are drawn with a smaller font; major lines and end points keep the large font in the
@@ -272,7 +272,7 @@ export class NumberLineView {
       this.drawn = { min, max, seed: s.seed, rulerLevel, hidden };
       this.dragging = false;
       if (hidden) this.hideRuler();
-      else this.drawRuler(min, max, rulerLevel, s.seed);
+      else this.drawRuler(min, max, rulerLevel);
     }
     this.drawMarks(s, min, max);
     this.pulseHit(s, min, max);
@@ -460,7 +460,6 @@ export class NumberLineView {
     return {
       range: { min, max },
       level: s.rulerLevel,
-      seed: s.seed,
       challenge: s.challenge,
       help: s.help.content,
       stepPath: s.stepAnimation,
@@ -614,7 +613,7 @@ export class NumberLineView {
     this.hideZoom();
     const { min, max } = this.controller.getRoundSettings().range;
     const level = this.last?.rulerLevel ?? 1;
-    const { ticks } = ticksFor(view, level, this.last?.seed ?? 0, { allLines: true });
+    const { ticks } = ticksFor(view, level, { allLines: true });
     const fromX = numberToX(view.min, min, max);
     const toX = numberToX(view.max, min, max);
     const center = clamp((fromX + toX) / 2, ZOOM_EDGE + ZOOM_WIDTH / 2, WORLD_WIDTH - ZOOM_EDGE - ZOOM_WIDTH / 2);
@@ -681,7 +680,7 @@ export class NumberLineView {
     this.scene.game.canvas.dataset.rulerLines = '0';
   }
 
-  private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
+  private drawRuler(min: number, max: number, rulerLevel: RulerLevel): void {
     for (const label of this.labels) label.destroy();
     this.labels = [];
     this.labelByValue.clear();
@@ -694,7 +693,7 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const ruled = ticksFor({ min, max }, rulerLevel, seed);
+    const ruled = ticksFor({ min, max }, rulerLevel);
     const { ticks, labelTypedNumber, labelRows } = ruled;
     this.ruled = { ticks, labelTypedNumber };
     // Every level draws every line (amendment 20); the level only chooses the labels.
@@ -713,7 +712,7 @@ export class NumberLineView {
       this.labels.push(label);
       this.labelByValue.set(tick.value, label);
     }
-    this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, seed, ruled);
+    this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, ruled);
     this.renderChips();
     this.scene.game.canvas.dataset.rulerLines = String(ticks.length);
     this.scene.game.canvas.dataset.rulerLabels = ticks

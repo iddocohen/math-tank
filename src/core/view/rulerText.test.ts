@@ -66,7 +66,6 @@ describe('help texts on the ruler never overlap (T228, P1)', () => {
             const scene = helpTextScene({
               range,
               level,
-              seed: 3,
               challenge: c,
               help,
               stepPath: path,
@@ -86,14 +85,14 @@ describe('help texts on the ruler never overlap (T228, P1)', () => {
     }
   }
 
-  it('gives the same label boxes from precomputed lines as from the range, level and seed', () => {
+  it('gives the same label boxes from precomputed lines as from the range and level', () => {
     for (const level of [1, 2, 3, 4, 5] as const) {
-      expect(rulerLabelBoxes(range, level, 3, ticksFor(range, level, 3))).toEqual(rulerLabelBoxes(range, level, 3));
+      expect(rulerLabelBoxes(range, level, ticksFor(range, level))).toEqual(rulerLabelBoxes(range, level));
     }
   });
 
   it('hides the ruler labels under a chip and keeps the others', () => {
-    const labels = rulerLabelBoxes(range, 1, 3);
+    const labels = rulerLabelBoxes(range, 1);
     const { shown, hiddenLabels } = layoutChips(labels, [{ key: 'start', x: x(43), text: '43', priority: 30 }]);
     expect(shown).toHaveLength(1);
     expect(hiddenLabels.has(43)).toBe(true);

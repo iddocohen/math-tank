@@ -37,8 +37,8 @@ describe('readPositionAnswers cache', () => {
     const b = { ...defaultSettings(), range: { preset: 'custom' as const, min: 0, max: 1000 } };
     for (const level of [1, 2, 3, 4, 5] as const) {
       const expected = (s: typeof a) => {
-        const { minorStep, ticks: all } = ticks.ticksFor(s.range, level, 0);
-        return all.filter((t) => t.visible && ticks.isMultiple(t.value, minorStep)).map((t) => t.value);
+        const { minorStep, ticks: all } = ticks.ticksFor(s.range, level);
+        return all.filter((t) => ticks.isMultiple(t.value, minorStep)).map((t) => t.value);
       };
       expect([...readPositionAnswers(a, level)]).toEqual(expected(a));
       expect([...readPositionAnswers(b, level)]).toEqual(expected(b));

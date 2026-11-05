@@ -68,7 +68,7 @@ import { YOU_MARKER_MS } from '../core/view/tankStyle';
 import { Effects } from './effects';
 import { NumberLineView } from './NumberLineView';
 import { ProjectileView } from './ProjectileView';
-import { TankView } from './TankView';
+import { FADE_MS, TankView } from './TankView';
 import { TerrainView } from './TerrainView';
 import { ensureTextures, TEX } from './textures';
 import { landingSounds } from '../audio/sfx';
@@ -117,6 +117,8 @@ export class BattleScene extends Phaser.Scene {
   private readonly decoyViews = new Map<string, TankView>();
   /** Views of the wave's other enemies by tank id (amendment 21); the tank with ENEMY_ID always uses `enemy`. */
   private readonly waveViews = new Map<string, TankView>();
+  /** Views of destroyed wave enemies that left the state and fade out after their explosion (code review). */
+  private readonly fadingWrecks = new Set<TankView>();
   private decoyBursts = 0;
   private enemyWarnings = 0;
   /** Whether the scene last asked Phaser to pause (true) or to resume (false). */
@@ -191,6 +193,8 @@ export class BattleScene extends Phaser.Scene {
     this.decoyViews.clear();
     for (const view of this.waveViews.values()) view.destroy();
     this.waveViews.clear();
+    for (const view of this.fadingWrecks) view.destroy();
+    this.fadingWrecks.clear();
     this.numberLine.destroy();
   }
 
@@ -267,6 +271,20 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The last destroyed enemy of a wave leaves the state when the next wave is placed; its wreck stays in view during
+   * its explosion and then fades out, like a destroyed enemy while others of its wave stand (code review).
+   */
+  private fadeWreck(view: TankView): void {
+    this.fadingWrecks.add(view);
+    view.fadeOut(NEW_ENEMY_DELAY_MS);
+    this.time.delayedCall(NEW_ENEMY_DELAY_MS + FADE_MS, () => {
+      if (!this.fadingWrecks.delete(view)) return;
+      view.destroy();
+      this.game.canvas.dataset.fadingWrecks = String(this.fadingWrecks.size);
+    });
+  }
+
   /** The view of an enemy of the wave by tank id (amendment 21). */
   private enemyView(id: string): TankView | undefined {
     return id === ENEMY_ID ? this.enemy : this.waveViews.get(id);
@@ -275,7 +293,7 @@ export class BattleScene extends Phaser.Scene {
   /**
    * The enemy and the wave's other enemies (amendment 21). `instant` places them without tweening (a new round, the hit
    * and the search after it). An enemy that comes alive fades in at its number (amendment 07, FR-010); one destroyed
-   * while others of its wave stand fades out after its explosion; the last one stays as a wreck until the next wave.
+   * while others of its wave stand fades out after its explosion; the last one of a wave too, after the next wave came.
    */
   private drawEnemies(s: RoundState, prev: RoundState | null, newRound: boolean, instant: boolean): void {
     const tanks = [s.enemy, ...s.wave];
@@ -283,8 +301,25 @@ export class BattleScene extends Phaser.Scene {
     for (const [id, view] of this.waveViews) {
       if (ids.has(id)) continue;
       this.waveViews.delete(id);
-      view.destroy();
+      // Only the enemy destroyed by the last shot still shows; one destroyed earlier in the wave has already faded out.
+      if (!newRound && s.lastShot?.hit && s.lastShot.hitTankId === id) this.fadeWreck(view);
+      else view.destroy();
     }
+    if (newRound) {
+      for (const view of this.fadingWrecks) view.destroy();
+      this.fadingWrecks.clear();
+    } else if (prev && prev.wave.length > 0 && s.lastShot?.hit && s.lastShot.hitTankId === ENEMY_ID) {
+      // The ENEMY_ID view moves on to the next wave at once, so its wreck gets a view of its own (code review).
+      const wreck = [prev.enemy, ...prev.wave].find((t) => t.id === ENEMY_ID);
+      const next = [s.enemy, ...s.wave].find((t) => t.id === ENEMY_ID);
+      if (wreck && !wreck.alive && next?.alive) {
+        const view = new TankView(this, 'enemy', WORLD_HEIGHT);
+        view.setBarrelAngle(s.playerSide === 'left' ? 150 : 30);
+        view.sync(wreck, true);
+        this.fadeWreck(view);
+      }
+    }
+    this.game.canvas.dataset.fadingWrecks = String(this.fadingWrecks.size);
     const before = prev === null || newRound ? new Map<string, TankState>() : new Map([prev.enemy, ...prev.wave].map((t) => [t.id, t]));
     const standing = standingEnemies(s).length;
     for (const tank of tanks) {

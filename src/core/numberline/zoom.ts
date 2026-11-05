@@ -1,6 +1,6 @@
 /**
  * The zoomed ten for the help steps (FR-020, FR-031, amendment 02). It is only a help visual: the child never
- * selects through it. The renderer draws it with ticksFor(view, level, seed, { allLines: true }), so every unit
+ * selects through it. The renderer draws it with ticksFor(view, level, { allLines: true }), so every unit
  * line is shown and labeled whatever the ruler level.
  */
 

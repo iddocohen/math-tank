@@ -14,7 +14,7 @@ import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
 
 /** The labels of the 0 to 100 ruler on level 1 (T217, T231): every number except the ones crowding a large label. */
-const LEVEL1_LABELS = ticksFor({ min: 0, max: 100 }, 1, 0)
+const LEVEL1_LABELS = ticksFor({ min: 0, max: 100 }, 1)
   .ticks.filter((tk) => tk.labeled)
   .map((tk) => tk.value);
 

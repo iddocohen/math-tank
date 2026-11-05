@@ -12,7 +12,7 @@ import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { nextHelp } from './help';
 import { MODE_TRAITS } from '../modes';
-import { makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
+import { ENEMY_ID, makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
 import { retarget, wavePositions, waveSize } from './wave';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
@@ -83,7 +83,10 @@ export function startSearch(
 ): RoundState {
   const rulerLevel = difficulty.rulerLevel;
   const challenge = searchChallenge(s, settings, { avoid, difficulty, noComparison });
-  const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
+  // A wave may have moved the ENEMY_ID tank into `wave` (retarget); each search starts from it again, so the scene's
+  // enemy view and the challenge ids of the wave (wave.ts challengeFor) stay tied to it.
+  const base = s.enemy.id === ENEMY_ID ? s.enemy : (s.wave.find((t) => t.id === ENEMY_ID) ?? s.enemy);
+  const enemy: TankState = { ...moveTank(base, challenge.answer, settings, s.terrain), alive: true };
   const decoys: TankState[] = (challenge.options ?? [])
     .filter((n) => n !== challenge.answer)
     .map((n, i) => makeTank(`decoy-${challenge.id}-${i}`, 'decoy', n, settings, s.terrain));

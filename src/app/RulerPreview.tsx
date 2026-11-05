@@ -28,7 +28,7 @@ const HEIGHT = 96;
 export function RulerPreview({ range, level, width = DEFAULT_LAYOUT.worldWidth }: Props) {
   const k = width / DEFAULT_LAYOUT.worldWidth;
   const layout = { worldWidth: width, left: DEFAULT_LAYOUT.left * k, right: DEFAULT_LAYOUT.right * k };
-  const { ticks, labelRows } = ticksFor(range, level, 0);
+  const { ticks, labelRows } = ticksFor(range, level);
   const isEnd = (v: number) => v === range.min || v === range.max;
   const x = (v: number) => numberToX(v, range.min, range.max, layout);
   return (

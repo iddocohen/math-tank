@@ -71,14 +71,13 @@ export interface RulerLabelBox {
 }
 
 /**
- * The boxes of the ruler's own labels, as NumberLineView draws them. `ruled` is ticksFor(range, level, seed) when the
+ * The boxes of the ruler's own labels, as NumberLineView draws them. `ruled` is ticksFor(range, level) when the
  * caller has already computed it.
  */
 export function rulerLabelBoxes(
   range: { min: number; max: number },
   level: RulerLevel,
-  seed: number,
-  ruled: Pick<ReturnType<typeof ticksFor>, 'ticks' | 'labelRows'> = ticksFor(range, level, seed),
+  ruled: Pick<ReturnType<typeof ticksFor>, 'ticks' | 'labelRows'> = ticksFor(range, level),
 ): RulerLabelBox[] {
   const { ticks, labelRows } = ruled;
   return ticks
@@ -188,7 +187,6 @@ export function stepCountBox(x: number, dir: number, text: string, besideHalf = 
 export interface HelpSceneInput {
   range: { min: number; max: number };
   level: RulerLevel;
-  seed: number;
   challenge: Challenge | null;
   help: HelpContent | null;
   /** The step animation's path while it is shown (state.stepAnimation). */
@@ -201,7 +199,7 @@ export interface HelpSceneInput {
   worldWidth: number;
   /** The typed number's own label on a crowded level 1 ruler (T203), or null. */
   typed?: number | null;
-  /** rulerLabelBoxes(range, level, seed) when the caller has already computed it. */
+  /** rulerLabelBoxes(range, level) when the caller has already computed it. */
   labels?: readonly RulerLabelBox[];
 }
 
@@ -236,7 +234,7 @@ export function helpTextScene(input: HelpSceneInput): {
 } {
   const { range, help, stepPath, landed } = input;
   const at = (n: number) => numberToX(n, range.min, range.max);
-  const labels = input.labels ?? rulerLabelBoxes(range, input.level, input.seed);
+  const labels = input.labels ?? rulerLabelBoxes(range, input.level);
   const { shown, hiddenLabels } = layoutChips(labels, sceneChips(input));
   const texts: { key: string; box: Box }[] = [];
   for (const l of labels) if (!hiddenLabels.has(l.value)) texts.push({ key: `label:${l.value}`, box: l.box });

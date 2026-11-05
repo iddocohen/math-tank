@@ -442,7 +442,7 @@ In comparison turns (amendment 10, replacing amendment 09 item 1), one tank stan
 - **Challenges**: each enemy has the `readPosition` challenge of the wave with its own `answer` and the id `<root>` for the first enemy and `<root>/<i>` for wave enemy i. The prompt key is `readPositionWave` ("Wo stehen die Gegner?") while 2 or more enemies stand, otherwise `readPosition`.
 - **Help target** (FR-141): `enemy`. Before any shot of the wave it is the leftmost enemy. After a miss it becomes the standing enemy nearest the landing number (on a tie the leftmost); `help.level`, `wrongAnswers` and `wrongAnswerTimes` carry over and `help.content` is rebuilt for the new target. After a hit with enemies still standing, it is the standing enemy nearest the landing number, with help reset and `answerableAt = now + ANSWER_DELAY_MS`.
 - **Enemy fire** (FR-140): `deriveSeed(seed, 9, shotIndexInRound)` picks the shooter among the standing enemies; the hit decision and the near miss come from `enemyShot` as before.
-- **Attempts** (FR-143): the hit help target is recorded with its help and wrong answers; another hit enemy is recorded with `helpLevel 0` and `wrongAnswers 0`, with the same `answerableAt`.
+- **Attempts** (FR-143): each destroyed enemy, the help target or another enemy of the wave, is recorded with the help level, the wrong answers and the `answerableAt` since the last destroyed enemy (code review fix, T394).
 
 ## Pointer curves (removed by amendment 21 item 18)
 

@@ -5,6 +5,8 @@ import type { Challenge, ChallengeKind, Settings, TankState } from '../types';
 import { createRng } from '../rng';
 import { minTankGap } from '../math/gaps';
 import { readPositionAnswers } from '../math/readPosition';
+import { createRound, ENEMY_ID } from './round';
+import { startSearch } from './guided';
 
 function settingsFor(min: number, max: number, overrides: Partial<Settings> = {}): Settings {
   const preset = `${min}-${max}`;
@@ -97,5 +99,20 @@ describe('nearestEnemy (amendment 21, FR-141)', () => {
     expect(nearestEnemy(40, tanks).id).toBe('b');
     expect(nearestEnemy(0, tanks).id).toBe('b');
     expect(nearestEnemy(60, tanks).id).toBe('c');
+  });
+});
+
+describe('startSearch with a wave keeps the ENEMY_ID tank (amendment 21, FR-141)', () => {
+  it('starts every search from the ENEMY_ID tank, also when a wave enemy was the help target', () => {
+    const settings = settingsFor(0, 100, { enemiesAtOnce: 4 });
+    for (let seed = 1; seed <= 40; seed++) {
+      let s = createRound(settings, seed, 'left', 'ruler');
+      for (let turn = 0; turn < 4; turn++) {
+        s = startSearch({ ...s, turn }, settings, 0, null);
+        const ids = [s.enemy, ...s.wave].map((t) => t.id);
+        expect(ids).toContain(ENEMY_ID);
+        expect(new Set(ids).size).toBe(ids.length);
+      }
+    }
   });
 });
