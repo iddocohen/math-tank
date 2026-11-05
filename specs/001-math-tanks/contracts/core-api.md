@@ -44,7 +44,7 @@ generateChallenge(input: {
 mainSkillOf(kind: ChallengeKind): Skill
 minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
-minOptionGap(min: number, max: number): number   // comparison options apart: max(2, ceil(0.02 * (max - min))) (amendment 09, FR-027)
+minOptionGap(min: number, max: number): number   // comparison options apart: max(minTankGap, 2, ceil(0.02 * (max - min))) (amendments 09 and 10, FR-027)
 
 validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[]   // empty when valid
 checkAnswer(c: Challenge, answer: number): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance; amendment 09 removes the order3 sequence); whether a shot destroys the enemy is decided by core/battle/hitRule
@@ -55,7 +55,7 @@ crossesHundred(a: number, b: number): boolean
 
 The `purpose: 'search' | 'bonus'` input is removed by amendment 01 (no bonus challenges).
 
-Comparison (amendment 09, FR-026, FR-027): the kinds are `greater`, `smaller`, `largest3`, `smallest3`, `closestTo`, `between` and `middle3`. A comparison challenge's `prompt.params` carry the options in banner order as `o1`, `o2` and `o3` (plus `n` for `closestTo`, `a` and `b` for `between`), and `options` holds the same numbers. `answer` is the one correct option and the enemy's position; the other options are not placed on the battlefield. `correctOptions(c)` works out the correct options from the options and the prompt alone.
+Comparison (amendment 09, FR-026, FR-027): the kinds are `greater`, `smaller`, `largest3`, `smallest3`, `closestTo`, `between` and `middle3`. A comparison challenge's `prompt.params` carry the options in banner order as `o1`, `o2` and `o3` (plus `n` for `closestTo`, `a` and `b` for `between`), and `options` holds the same numbers. `answer` is the one correct option and the enemy's position; a decoy tank stands at each other option (amendment 10), so every option is at least `minTankGap` from `playerPosition`. `correctOptions(c)` works out the correct options from the options and the prompt alone. `comparisonFits(kind, settings, playerPosition)` tells whether the kind's options fit at `minOptionGap` on the numbers at least `minTankGap` from the player; `generateChallenge` skips the kind when they do not.
 
 Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for every seed and every valid `Settings` (tested over 10,000 seeds per preset configuration and over 200 random valid settings, SC-003). Same seed and inputs give the same challenge.
 
@@ -104,7 +104,7 @@ enemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: 
 
 Changed by amendment 07: the enemy no longer aims with `solveAim` plus random error. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: `hits` is true with probability `ENEMY_HIT_CHANCE[difficulty]` and always false for `shotIndexInRound === 0` (FR-043). With `hits`, `targetX` is `playerX`; otherwise it is `playerX ± d` with `d` from 40 to 100 on a drawn side, and the other side when the drawn one is outside `[0, worldWidth]`. `enemyShot` adds the arc of `solveArcToX` from `origin` to `targetX`, so `|impact.x - targetX|` is at most 0.5 units. The input type has no field for attempts, help, mistakes or challenge data, so the draw cannot depend on them (FR-042). Over 3000 seeded shots the hit rate is within 0.03 of the chance for each difficulty. `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
 
-`core/battle/topShell` (`topShellEntryX`, `topShellPath`) is removed by amendment 09: the enemy fires from its own tank in comparison turns too (FR-043a).
+`core/battle/topShell` (`topShellEntryX(roundSeed, shotIndex, playerX)`, `topShellPath({ impact, entryX, terrain, worldHeight })`), removed by amendment 09, is back with amendment 10: in comparison turns the enemy's shell enters from the top edge at an x taken from the round seed, the shot index and the child's tank only, and falls onto the impact of the enemy's draw, so it does not show which tank is the enemy (FR-043a).
 
 ## `core/battle` (stateful)
 
@@ -116,7 +116,7 @@ class BattleController {
 
   startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
-                                           // position with a new challenge of any enabled kind (T243); hearts, enemiesDestroyed,
+                                           // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed,
                                            // turn, round time and enemy shot index stay; no enemy shot; an unfinished challenge is dropped
                                            // without an attempt; ignored in 'playerShot', 'enemyTurn', 'paused' and 'roundOver'
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
@@ -128,12 +128,15 @@ class BattleController {
                                            // a fired shot sets inputMethod to method (FR-076);
                                            // out-of-range entry -> no shot, range hint (FR-063)
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
+  tapTank(tankId: string): void            // comparison search only (amendment 10, FR-026, FR-064): fires at the number of the standing enemy or decoy
+                                           // with that id, as confirm('pointer') at it; ignored outside comparison searches, for destroyed tanks and before answerable
   requestHelp(): void                      // help button or H key: next help step
   shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new visible enemy
                                            // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help and
-                                           // enemy turn at once (FR-066, FR-081, amendment 07); sets lastShot
+                                           // enemy turn at once (FR-066, FR-081, amendment 07); sets lastShot. Comparison (amendment 10): a decoy's
+                                           // exact number destroys the decoy as a miss (lastShot.decoyHit); an enemy hit sets every decoy alive false
   enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage; 0 hearts -> roundOver 'heartsGone'
-                                           // the shell comes from the enemy's muzzle in every turn (FR-043a, amendment 09)
+                                           // the shell comes from the enemy's muzzle, except in comparison turns, where it enters from the top edge (FR-043a, amendment 10)
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
   resume(): void

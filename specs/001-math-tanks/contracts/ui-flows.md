@@ -20,7 +20,7 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 - Sky and battlefield: y 0 to 700. The battlefield spans exactly the configured range, for example 550 to 780.
 - Ruler: y 720 to 820, x 80 to 1520, same mapping as the battlefield (core-api `numberToX`), always on screen, lines and labels per the ruler level.
 - React overlay (HTML, positioned over the canvas): challenge banner at the top center; help, speaker and pause buttons at the top left; gear and fullscreen at the top right; the large readout of typed digits and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field, there are no −1 and +1 buttons, and there are no health bars or health labels in the corners (amendment 05). At the top left a small tank symbol and the number of destroyed enemies (no text); with "Uhr beim Spielen zeigen" an up-counting clock `m:ss` beside it (amendment 06, FR-083, FR-084).
-- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag. There are no decoy tanks (amendment 09). Three hearts sit directly above the child's tank, with no text; a lost heart stays as an empty outline. The enemy has no health bar (amendment 06, FR-078, FR-080). At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
+- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag. Decoy tanks in comparison turns look exactly like the enemy (amendment 10). Three hearts sit directly above the child's tank, with no text; a lost heart stays as an empty outline. The enemy has no health bar (amendment 06, FR-078, FR-080). At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
 
 ## Choosing a number and firing (every mode)
 
@@ -38,8 +38,8 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 | Off the tank body | nothing (a miss) | landing number | bracket from the landing number to the enemy with "N Schritte", in every mode (amendment 07) |
 
 - The overlay root carries, for the end-to-end tests only: `data-last-shot` (`hit`, `near` or `miss`), `data-lives` (0 to 3), `data-enemies-destroyed`, `data-last-distance` (the step count of the last shot, amendment 07) and `data-outcome` at the round end; `data-shots-since-enemy-fire` is removed by amendment 07. The canvas carries `data-steps-label`, the text of the step-count bracket on the ruler ('' when none). `data-enemy-health` and `data-player-health` are removed (amendment 06).
-- Enemy shot (FR-006, FR-041 to FR-043a, FR-080, FR-081, amendment 07): right after every shot of the child that does not destroy it, the enemy fires once, from its own tank with a visible arc, in comparison turns too (amendment 09). The shell usually lands 40 to 100 world units beside the child's tank and changes nothing; a seeded draw makes it hit about 1 in 6 ("Leicht"), 1 in 4 ("Normal") or 1 in 3 ("Herausfordernd") shots, never the first shot of a round. A hit on the child's tank removes one heart with a short flash. In no-damage mode the hearts never go down.
-- Pointer line (FR-073): the enemy, in every mode and challenge kind, and every numbered tank in comparison turns are always visible, and a thin dashed vertical line runs from the tank's center down to the ruler and ends in a small triangle on the ruler line. No number is drawn at or near it and no ruler label is highlighted; the enemy's number appears only in the feedback after a hit or a near miss. Where the line meets the enemy tank, a small target ring marks the spot to hit (amendment 06). There is no hidden enemy (amendment 07).
+- Enemy shot (FR-006, FR-041 to FR-043a, FR-080, FR-081, amendment 07): right after every shot of the child that does not destroy it, the enemy fires once, from its own tank with a visible arc; in comparison turns its shell enters from the top edge instead and the enemy does not turn its turret, so the shell does not show which tank is the enemy (amendment 10). The shell usually lands 40 to 100 world units beside the child's tank and changes nothing; a seeded draw makes it hit about 1 in 6 ("Leicht"), 1 in 4 ("Normal") or 1 in 3 ("Herausfordernd") shots, never the first shot of a round. A hit on the child's tank removes one heart with a short flash. In no-damage mode the hearts never go down.
+- Pointer line (FR-073): the enemy, in every mode and challenge kind, and every decoy in comparison turns are always visible, and a thin dashed vertical line runs from the tank's center down to the ruler and ends in a small triangle on the ruler line. No number is drawn at or near it and no ruler label is highlighted; the enemy's number appears only in the feedback after a hit or a near miss. Where the line meets the enemy tank or a decoy, a small target ring marks the spot to hit (amendments 06 and 10). There is no hidden enemy (amendment 07).
 
 ## Guided turn flow (one search per player turn)
 
@@ -53,7 +53,16 @@ The player's tank stands at the left or right end for the whole round and switch
 
 ## Comparison turns
 
-Amendment 09 (FR-026, FR-027, FR-031): a comparison turn looks like every other turn. Exactly one enemy tank stands on the battlefield at the correct option, visible, with its dashed pointer line and no number plate. The banner asks the question and names the options, for example "Der Gegner steht bei der größeren Zahl: 47 oder 74"; each option is its own element (`data-testid="banner-option"`), so help can mark it. The child types the number or picks it on the ruler and fires; a shot at another number is a miss like in every other challenge, and the enemy fires back from its own tank. Help: step 1 highlights the tens digit of every option in the banner (`data-testid="tens-digit"`); step 2 puts a small marker on the ruler under each option's number, with no extra number labels; step 3 shows the solution as for other kinds. There are no decoy tanks, no tank tapping and no order badges.
+Amendments 09 and 10 (FR-026, FR-027, FR-031, FR-043a, FR-066): the banner asks the question and names the options, for example "Der Gegner steht bei der größeren Zahl: 47 oder 74"; each option is its own element (`data-testid="banner-option"`), so help can mark it. One tank stands at each option: the real enemy at the correct option and a decoy at each other option. All look like the enemy, each with its dashed pointer line and target ring, and none has a number plate. The child finds the tank at the answer by reading the ruler, then types the number and presses Enter, picks it on the ruler and fires, or taps the tank (a tap area of at least 48 by 48 CSS pixels; a tap fires at that tank's number).
+
+- A shot at a decoy's number bursts the decoy into flat cardboard pieces with a light "plopp" sound, clearly different from the enemy's explosion. It is a miss: the encouraging phrase and the next help step appear, and the enemy fires back. The decoy stays gone for the rest of the search.
+- A hit on the enemy destroys it with the large explosion; the remaining decoys fold away (fade out) with it, and the next search starts.
+- A near miss on any tank's body makes that tank shake; the step count and the near-miss line refer to the tank nearest the landing number among the tanks still standing.
+- The enemy's shell enters from the top edge, and the enemy does not turn its turret first.
+- Help: step 1 highlights the tens digit of every option in the banner (`data-testid="tens-digit"`); step 2 puts a small marker on the ruler under each option's number, with no extra number labels; step 3 marks the correct tank with a green ring and shows the solution, and one tap or Enter fires at it.
+- "Neue Landschaft" never starts a comparison turn, so right after it exactly one tank stands opposite the child (amendment 08 item 1, restored by amendment 10).
+- There are no number plates and no order badges.
+- For the end-to-end tests only (tasks.md D4), the canvas carries `data-enemy-tanks` (the number of standing tanks that look like the enemy, decoys included), `data-pointer-lines` (their numbers, ascending, comma-separated), `data-tank-taps` (`<number>@<x>,<y>` of each tappable tank in world coordinates, `;`-separated, empty outside comparison searches), `data-decoy-bursts` (decoys burst in this round) and `data-help-tanks` (the number of the tank marked by help step 3, or empty).
 
 ## Free-play turn flow
 
@@ -73,7 +82,7 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 | 0 to 9 | none | type a digit | type a digit (fires at the typed number instead) | none | none |
 | Minus | none | first character, only when the range has negative numbers | same | none | none |
 | Backspace | none | delete the last digit | same | none | none |
-| Enter | start guided round | fire at the typed or previewed number (also in comparison turns; there are no badges or tanks to type, amendment 09) | fire at the solution | resume | new round |
+| Enter | start guided round | fire at the typed or previewed number (also in comparison turns, where a typed decoy number fires at the decoy; there are no badges, amendments 09 and 10) | fire at the solution | resume | new round |
 | Space | start guided round | none | fire at the solution | resume | new round |
 | H | none | next help step | none | none | none |
 | Escape | none | pause | pause | resume | none |
@@ -89,7 +98,7 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 - Step 1: phrase, the direction from the landing number to the answer ("Weiter nach rechts" or "Weiter nach links"), and a pulsing highlight on the nearest major line to the answer.
 - Step 2: the ruler zooms to the ten containing the answer, with all lines and labels shown whatever the ruler level, and counts steps (numbers pop up one by one) from the landing number to the answer; for addition and subtraction, a small tank icon moves along `stepPath`.
 - Step 3: a marker animates to the answer, the number is shown large, and one tap on the fire button, Enter or Space fires at it.
-- Comparison: step 1 highlights the tens digits on every tank; step 2 puts a marker on the ruler under each option's number; step 3 shows the correct tank or order, and one tap or Enter fires.
+- Comparison: step 1 highlights the tens digits of the options in the banner; step 2 puts a marker on the ruler under each option's number; step 3 marks the correct tank and shows the solution, and one tap or Enter fires (amendments 09 and 10).
 
 ## Settings page extras
 

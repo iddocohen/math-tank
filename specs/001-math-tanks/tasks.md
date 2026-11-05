@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -42,6 +42,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **D16**: Amendment 04 arrived after Phase 11. Phase 11a builds the hit rule, the Volltreffer, the pointer line, the `exactHit` setting (settings version 3) and the `'close'` outcome type, and finishes T181. Later unchecked tasks that assumed exact-only hits or the read-the-ruler tolerance were rewritten in place; new tasks start at T186.
 - **D15**: *Superseded by amendment 09 (Phase 22a).* There are no tank labels, no tank tapping and no `order3`: a typed number in a comparison is fired like in every other challenge.
 - **D20**: Amendment 09 arrived after Phase 22. Phase 22a removes the decoy tanks, number plates, `tapTank`, order badges, `notOnTank`, `orderAnswer`, the kinds `'equal'` and `'order3'` and `src/core/battle/topShell.ts`, and adds `'middle3'`. The banner names the options from `prompt.params` (`o1`, `o2`, `o3`). Options are at least `minOptionGap = max(2, ceil(0.02 * (max - min)))` apart. The comparison ladder's `maxNumberFraction` also limits the option spread around the answer (data-model.md "Comparison ladder"). Stored attempts with `'equal'` or `'order3'` still load (`StoredChallengeKind`). FR-070 keeps "no comparison right after Neue Landschaft", although a comparison turn now also shows one enemy, because amendment 09 does not change FR-070.
+- **D21**: Amendment 10 arrived after Phase 22b. Phase 22c brings back from commit 321159d^ what fits: `RoundState.decoys`, the `'decoy'` tank kind, `tapTank`, `data-tank-taps` and `src/core/battle/topShell.ts`. It does not bring back number plates (`TankState.label`), order badges, `orderTaps`, `notOnTank`, `orderAnswer`, `'equal'` or `'order3'`. `minOptionGap` becomes at least `minTankGap`, and every option keeps `minTankGap` from the player. `LastShot` gains `decoyHit`, `nearTankId` and `targetNumber` (the nearest standing tank in comparison turns, the enemy otherwise), so the step count does not show which tank is the enemy. Task T247 reverts T243: the search right after `newScene` is never a comparison. A burst decoy plays only the light `plopp` sound instead of the boom, so it sounds clearly different from the enemy's explosion.
 - **D17**: Amendment 05 arrived after Phase 11a. Phase 11b removes `nudge`, the arrow keys and the −1 and +1 buttons, hides every number while pointing, tracks `RoundState.inputMethod` so that keyboard input skips `findNumber`, and builds the clear tank identity. The settings phases moved directly after Phase 11b and were renumbered 12 and 13 (they keep task IDs T103 to T116 and T182); the guided phases that followed became Phases 14 to 20. The progress page stays in Phase 22, because it needs the attempt records of guided mode; until then the parent menu shows "Fortschritt" disabled with "kommt bald". Phase 12 works on free play alone: `updateSettings` applies at the next `startRound` in either mode. New tasks start at T194.
 - **D18**: Amendment 06 arrived after Phase 13. Phase 13a builds it on free play: `shotKind` returns `'hit'` (exact number, the enemy is destroyed and replaced), `'near'` (on the body, the enemy shakes, a miss) or `'miss'`; `TankState.health`, `MAX_DAMAGE`, `damageAt`, `enemyDamage`, `enemyDamageFactor`, `exactHit` and the outcome `'close'` are removed from new code (a stored `'close'` still loads). `RoundState` gains `lives` (3), `enemiesDestroyed`, `shotsSinceEnemyFire`, `elapsedMs` and `lastEnemyHit`; `outcome` becomes `'goalReached' | 'heartsGone'`. The enemy fires after every 2 shots of the child, misses included, in both modes; this changes the amendment 01 rule that a miss never gives the enemy a turn (FR-013, SC-005). Settings become version 4 (`roundType`, `showClock`, `showRecords`; `roundLength` 1 to 20 counts enemies). Personal bests live in `src/core/records/records.ts` under the storage key `mathtanks.records.v1` and are part of the export file. Later unchecked tasks that assumed health, damage values, the Volltreffer, `'close'`, `exactHit` or rounds counted in turns were rewritten in place; new tasks start at T204.
 - **D19**: Amendment 07 arrived after Phase 18a. Phase 18b makes the enemy and its pointer line visible in every mode and challenge kind (removing `enemyFound`, `HiddenTank`, `publicState` and the reduced `getState()` built in Phase 14 and T215), shows the step count after every miss in every mode (replacing D12's guided rule and the T068 and T215 rule that hid it during a search), and makes the enemy fire after every shot that does not destroy it (removing `shotsSinceEnemyFire` and `ENEMY_FIRE_EVERY` from Phase 13a). The enemy's aim becomes a seeded hit draw (1/6, 1/4, 1/3; never the first shot of a round) and a deliberate near miss 40 to 100 world units beside the child's tank. In comparison turns the shell still falls from the top edge. `data-shots-since-enemy-fire` (D4) is removed. Later unchecked tasks that assumed a hidden enemy or the every-2-shots rhythm (T095, T098, the Phase 19 goal) were rewritten in place; new tasks start at T220.
@@ -590,11 +591,30 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - [X] T233 Old results leave the screen (P7, FR-004, FR-066, FR-072): tests first in `src/app/BattleOverlay.test.tsx` (the hit text fades and is gone 2 seconds after the hit, and is gone at once when a later challenge starts, for example after "Neue Landschaft"; the near-miss line and the miss feedback stay until the next shot) and in `tests/e2e/guided.spec.ts` (after a hit the canvas `data-landing` and the overlay `hit-feedback` are gone within 3 seconds while the next challenge runs); then implement in `src/app/BattleOverlay.tsx`, `src/app/styles.css` (fade) and `src/game/NumberLineView.ts` (after a hit the landing marker and its number fade out after about 2 seconds and are removed at once when a later challenge starts; after a miss they stay until the next shot; the canvas carries `data-landing`, the landing number shown, '' when none)
 - [X] T234 The challenge as a large card (P8, FR-010, FR-053, FR-088): tests first in `src/app/BattleOverlay.test.tsx`: a new challenge shows the banner with `data-placement="center"`, large in the middle of the sky; after 3 seconds, or at once on the first input (a digit, a tap on the ruler, a help request, a shot), it gets `data-placement="top"` and stays large at the top center; a new challenge starts centered again; then implement in `src/app/BattleOverlay.tsx` and `src/app/styles.css` (centered card at least 2.6 rem, top banner at least 2.2 rem, both with a smooth move, never over the tanks after the move: the top banner and the status line stay within the top 160 pixels of a 720-pixel screen); `tests/e2e/guided.spec.ts` checks both placements; speech is built in T138
 - [X] T235 [P] Medium lines at half of each major step (P9, FR-016, FR-017, FR-069, [amendment 02](./amendment-02-ruler-ranges-and-detail.md) item 4): tests first in `src/core/numberline/ticks.test.ts` (`Tick.size` is `'major'`, `'medium'` or `'minor'`; on levels 1 to 3 a line at half of a major step is `'medium'` when that half is a multiple of the minor step: 5, 15, 25 … in 0 to 100, 50, 150 … in 0 to 1000, none in 0 to 230 with major 50 and minor 10; levels 4 and 5 have no medium lines; labels unchanged) and `src/app/RulerPreview.test.tsx` (each preview line carries `data-size`, and the level 1 preview of 0 to 100 has 10 medium lines); then implement `size` in `src/core/numberline/ticks.ts` and draw medium lines between the minor and major lengths in `src/game/NumberLineView.ts` (ruler and zoomed ten) and `src/app/RulerPreview.tsx` (both settings previews)
-- [X] T243 [US1] A comparison may follow "Neue Landschaft" (P10, FR-070, [amendment 08](./amendment-08-refresh-keeps-round.md) item 1): amendment 09 left one enemy in comparison turns, so the rule "no comparison right after Neue Landschaft" has no purpose. Tests first in `src/core/battle/battleController.test.ts` (with only comparison turned on, the search after `newScene()` is a comparison with one enemy at the answer); then remove the `noComparison` parameter from `startSearch` and `searchChallenge` in `src/core/battle/guided.ts` and its use in `src/core/battle/controller.ts`; update FR-070, amendment 08 item 1 and the `newScene` doc in contracts/core-api.md
+- [X] T243 [US1] A comparison may follow "Neue Landschaft" (P10, FR-070, [amendment 08](./amendment-08-refresh-keeps-round.md) item 1): amendment 09 left one enemy in comparison turns, so the rule "no comparison right after Neue Landschaft" has no purpose. Tests first in `src/core/battle/battleController.test.ts` (with only comparison turned on, the search after `newScene()` is a comparison with one enemy at the answer); then remove the `noComparison` parameter from `startSearch` and `searchChallenge` in `src/core/battle/guided.ts` and its use in `src/core/battle/controller.ts`; update FR-070, amendment 08 item 1 and the `newScene` doc in contracts/core-api.md. *(Reverted by [amendment 10](./amendment-10-decoys-without-plates.md) item 10, task T247.)*
 
 Verification for the whole phase: muted headless Chromium screenshots (outside Playwright test: `--mute-audio`, `speechSynthesis.speak` stubbed) of the 0 to 100 ruler on level 1 and level 3 with medium lines, a 43 − 7 search at help steps 1 to 3, and a hit followed by the next challenge (the large centered card, and about 2 seconds later no hit text and no landing marker), stored in the session scratchpad; then lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox.
 
 **Checkpoint**: The battle screen shows one message at a time, with no overlapping texts, and the challenge is easy to read.
+
+---
+
+## Phase 22c: Amendment 10 decoys without number plates
+
+**Goal**: Comparison turns show one tank per option named in the banner: the real enemy at the correct option and identical decoys at the others, with pointer lines and target rings and no number plates. A shot at a decoy bursts it like a cardboard dummy and counts as a miss; "Neue Landschaft" never starts a comparison ([amendment 10](./amendment-10-decoys-without-plates.md)).
+
+**Independent Test**: With only comparison on and the AC-06 fixture seed, the banner reads "Der Gegner steht bei der größeren Zahl: 47 oder 74", two identical tanks stand at 47 and 74, firing at 47 bursts the decoy and is a miss, and typing 74 and Enter destroys the enemy.
+
+- [ ] T244 [P] [US4] Update tests before the code in `src/core/math/comparison.test.ts`, `src/core/math/validate.test.ts` and `src/core/math/generator.property.test.ts`: `minOptionGap(min, max)` is `max(minTankGap, 2, ceil(0.02 * (max - min)))` (8 in 0 to 100, 80 in 0 to 1000); every generated comparison keeps every two options at least `minOptionGap` apart and every option at least `minTankGap` from `playerPosition`; `comparisonFits(kind, settings, playerPosition)` is false when the numbers at least `minTankGap` from the player cannot hold the options (0 to 10 with three options); validation rejects an option closer than `minTankGap` to the player; `COMPARISON_47_74` still produces `greater` with options 47 and 74 and answer 74 (FR-026, FR-027, SC-003, AC-06, edge case "Comparison options too close together")
+- [ ] T245 [US4] Implement until T244 passes: `minOptionGap` in `src/core/math/gaps.ts`; `comparisonFits` and the option picking with the player position in `src/core/math/comparison.ts`; `comparisonErrors` with the player position, called from `src/core/math/validate.ts`; the `comparisonFits` call in `src/core/math/generate.ts`; adapt the seed in `src/core/math/fixtures.ts` if needed, with adaptive off (FR-026, FR-027)
+- [ ] T246 [P] [US4] Update tests before the code in `src/core/battle/battleController.test.ts` and restore `src/core/battle/topShell.test.ts` from commit 321159d^: a comparison search has `decoys` of kind `'decoy'` at every option other than the answer, alive, with no `label`; `tapTank` fires at the number of a standing enemy or decoy and is ignored outside comparison searches and for destroyed tanks; firing at 47 in the AC-06 fixture destroys the decoy (`alive` false, `lastShot.decoyHit`, `hitTankId` its id), does not change `enemiesDestroyed`, counts as a miss with help step 1, and the enemy's shell enters from the top edge (`path[0].y === WORLD_HEIGHT`); the decoy stays destroyed after the enemy's shot and later misses; a near miss on a decoy's body sets `nearMiss` and `nearTankId` to the decoy; `targetNumber` and `distance` refer to the nearest standing tank; firing at 74 destroys the enemy and sets every decoy `alive` false; with only comparison on, the search after `newScene()` is not a comparison and has no decoys; outside comparison turns `decoys` is empty and the enemy fires from its muzzle (FR-026, FR-027, FR-043a, FR-064, FR-066, FR-070, FR-072, FR-081, AC-06)
+- [ ] T247 [US4] Implement until T246 passes: `TankState.kind` `'decoy'`, `RoundState.decoys` and `LastShot.decoyHit`, `nearTankId` and `targetNumber` in `src/core/types.ts`; decoys in `createRound` and `applyImpact` in `src/core/battle/round.ts`; decoys in `startSearch` and the `noComparison` parameter of `startSearch` and `searchChallenge` in `src/core/battle/guided.ts` (reverts T243); `tapTank`, the folded decoys after an enemy hit, the top-edge shell in comparison turns and `newScene` without comparison in `src/core/battle/controller.ts`; restore `src/core/battle/topShell.ts` from commit 321159d^ (FR-026, FR-043a, FR-064, FR-066, FR-070, FR-072, FR-081)
+- [ ] T248 [P] [US4] Update tests before the view code: `src/audio/sfx.test.ts` (a `plopp` voice that peaks at `MAX_GAIN` or lower and is silent when sound effects are off; `landingSounds` gives `['plopp']` for a burst decoy, `['boom', 'chime']` for a destroyed enemy, `['boom']` for any other landing), `src/core/view/tankStyle.test.ts` (a decoy looks exactly like the enemy) and `src/app/BattleOverlay.test.tsx` (a near miss shows "Du: N · Gegner: M" with `targetNumber`; a burst decoy shows the encouraging phrase and no hit text; `data-last-shot` is `miss` after a decoy hit) (FR-009, FR-066, FR-072, FR-077)
+- [ ] T249 [P] [US4] Update the end-to-end tests before the view code: rewrite `tests/e2e/comparison.spec.ts` (AC-06: the banner text, `data-enemy-tanks="2"`, `data-pointer-lines="47,74"`, `data-tank-taps` with two tanks; firing at 47 bursts the decoy (`data-decoy-bursts="1"`, `data-enemy-tanks="1"`), is a miss with help step 1, `data-enemies-destroyed` stays 0 and the enemy fires back; a second case taps the tank at 47 through its `data-tank-taps` point; typing 74 and Enter destroys the enemy) and add a case to `tests/e2e/battle.spec.ts` (guided, only comparison on, AC-06 seed: after "Neue Landschaft" the challenge is not a comparison, no `banner-option`, `data-enemy-tanks="1"`) (FR-026, FR-031, FR-043a, FR-053, FR-064, FR-066, FR-070, FR-073, AC-06)
+- [ ] T250 [US4] Implement until T248 and T249 pass: `plopp` and `landingSounds` in `src/audio/sfx.ts` and the `plopp` hook of `BattleSounds`; `src/core/view/tankStyle.ts`; `src/app/BattleOverlay.tsx` (the near-miss line with `targetNumber`); `src/game/effects.ts` (cardboard burst: flat brown pieces that tumble and fall, no fire ring); `src/game/TankView.ts` (a tap area of at least 48 by 48 CSS pixels, a green ring that marks the correct tank at help step 3, a fold-away fade); `src/game/BattleScene.ts` (decoy views, the burst, the fold-away after an enemy hit, the shake of `nearTankId`, no turret turn before a top-edge shell, `data-enemy-tanks`, `data-tank-taps`, `data-decoy-bursts`, `data-help-tanks`); `src/game/NumberLineView.ts` (pointer lines for every standing tank in `data-pointer-lines`, the miss bracket to `targetNumber`) (FR-009, FR-026, FR-031, FR-043a, FR-053, FR-064, FR-066, FR-072, FR-073, FR-077)
+- [ ] T251 [US4] Run lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox; take muted headless screenshots of a comparison turn with two tanks and of a decoy bursting, stored in the session scratchpad (AC-06, SC-003)
+
+**Checkpoint**: Comparison turns show the enemy among identical decoys without number plates (AC-06 under amendment 10), and "Neue Landschaft" always shows one enemy.
 
 ---
 
@@ -657,6 +677,7 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 13, 14 and 21.
 - **Phase 22a (amendment 09)**: depends on Phases 18, 18b, 20 and 22. Blocks Phase 23, whose keyboard spec T183 types the comparison answer. T236 runs before T237, T238 before T239, T240 before T241, and T242 last.
 - **Phase 22b (UI polish)**: depends on Phase 22a. Runs before Phase 23. T228 runs before T229 (same test file); T231 and T235 both change `src/core/numberline/ticks.ts`; T230 runs before T233 and T234 (same overlay code). Task IDs T228 to T231 and T233 to T235 are new; T232 was already used by amendment 08, so P10 is T243.
+- **Phase 22c (amendment 10)**: depends on Phases 22a and 22b. Runs before Phase 23. T244 runs before T245, T246 before T247, T248 and T249 before T250, and T251 last. T245 runs before T247, because the battle tests use the comparison fixture.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -724,8 +745,8 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-006 | T020, T024, T032, T038, T043, T158, T159, T162, T165, T181, T186, T204, T208, T209 |
 | FR-007 | T018, T022, T032, T038, T043, T158, T165 |
 | FR-008 | T032, T034, T043, T048, T158, T165, T208, T209, T214 |
-| FR-009 | T040, T042, T102, T142 |
-| FR-010 | T060, T062, T065, T066, T067, T068, T070, T222, T223, T225, T226, T234 |
+| FR-009 | T040, T042, T102, T142, T248, T250 |
+| FR-010 | T060, T062, T065, T066, T067, T068, T070, T222, T223, T225, T226, T234, T246, T247 |
 | FR-010a | T030, T060, T061, T062, T222 |
 | FR-011 | Removed by amendment 01 |
 | FR-012 | Removed by amendment 01 |
@@ -742,12 +763,12 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-023 | T071, T073, T077 |
 | FR-024 | T074, T078, T080, T081, T082, T229 |
 | FR-025 | T057, T059, T062, T072, T073, T076, T077 |
-| FR-026 | T084, T085, T087, T088, T089, T091, T236, T237, T238, T239, T240, T241 |
-| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237 |
+| FR-026 | T084, T085, T087, T088, T089, T091, T236, T237, T238, T239, T240, T241, T244, T245, T246, T247, T248, T249, T250, T251 |
+| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237, T244, T245, T246 |
 | FR-028 | T002, T004, T008, T009, T053, T059, T164 |
 | FR-029 | T054, T055, T058, T059, T079, T086, T107, T148, T178, T196, T197 |
 | FR-030 | T080, T095, T096, T101 |
-| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143, T238, T239, T240, T241, T228, T229, T230 |
+| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143, T238, T239, T240, T241, T228, T229, T230, T246, T249, T250 |
 | FR-032 | T093, T094 |
 | FR-033 | T014, T015, T049, T097, T172 |
 | FR-034 | T095, T096, T101 |
@@ -760,7 +781,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-041 | T026, T027, T220, T221, T222, T223 |
 | FR-042 | T026, T027, T034, T220, T221, T222 |
 | FR-043 | T026, T027, T032, T208, T209, T220, T221, T222 |
-| FR-043a | T221, T222, T223, T225, T238, T239 |
+| FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213 |
 | FR-045 | T110, T111, T115, T166 |
 | FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213 |
@@ -772,7 +793,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-051 | T003, T134, T139 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
-| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234 |
+| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234, T249, T250 |
 | FR-054 | T032, T041, T111, T140, T141 |
 | FR-055 | T137, T138 |
 | FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179 |
@@ -783,24 +804,24 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-061 | T158, T163, T165, T166, T167, T183, T194, T195, T197, T202 |
 | FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202 |
 | FR-063 | T157, T158, T161, T170, T183 |
-| FR-064 | T087, T088, T145, T146, T183, T238 |
+| FR-064 | T087, T088, T145, T146, T183, T238, T246, T247, T249, T250 |
 | FR-065 | T156, T160, T163, T169 |
-| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224, T233 |
+| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224, T233, T246, T247, T248, T249, T250 |
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
 | FR-069 | T112, T113, T182, T235 |
-| FR-070 | T185, T200, T208, T243 |
+| FR-070 | T185, T200, T208, T243, T246, T247, T249 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
-| FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233 |
-| FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226 |
+| FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233, T246, T247, T248, T250 |
+| FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226, T249, T250 |
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
 | FR-076 | T060, T062, T065, T183, T195, T196, T197, T199 |
-| FR-077 | T198, T200, T202, T241 |
+| FR-077 | T198, T200, T202, T241, T248, T250 |
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
-| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238 |
+| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238, T246, T247 |
 | FR-082 | T061, T205, T207, T208, T209, T213, T214 |
 | FR-083 | T208, T209, T210, T211, T214 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
@@ -810,7 +831,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-088 | T234 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
-| SC-003 | T055, T059, T079, T086, T107, T148, T236, T242 |
+| SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
 | SC-004 | T028, T136 |
 | SC-005 | T061, T095, T098, T208, T222 |
 | SC-006 | T014, T097, T098 |
@@ -826,7 +847,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-03 | T051, T070, T155, T173 |
 | AC-04 | T055, T079, T107, T155 |
 | AC-05 | T073, T077, T082, T083, T155 |
-| AC-06 | T084, T092, T155, T236, T240, T242 |
+| AC-06 | T084, T092, T155, T236, T240, T242, T244, T246, T249, T251 |
 | AC-07 | T095, T098, T102, T155 |
 | AC-08 | T109, T116, T155, T214 |
 | AC-09 | T118, T129, T155 |

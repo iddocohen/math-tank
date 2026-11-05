@@ -114,3 +114,19 @@ The product owner saw three identical red tanks with number plates in a comparis
 - The learning records, adaptive difficulty and the comparison skill stay. Attempts stored with the removed kinds still load.
 
 The spec (US4, Edge Cases, FR-026, FR-027, FR-031, FR-043a, FR-064, FR-066, FR-070, FR-077, FR-081, Key Entities, Assumptions), data model, contracts, quickstart and tasks (Phase 22a) were updated to match.
+
+## Amendment 10
+
+**Date**: 2026-11-05
+
+After playing amendment 09, the product owner said: "I liked the decoy tanks, they were better than the implementation now as it feels boring." The follow-up answer: decoys come back without number plates. This is an intended change, not drift.
+
+- **[Amendment 10](./amendment-10-decoys-without-plates.md)** shows one tank per option named in the banner: the real enemy at the correct option and identical decoys at the others, each with its pointer line and target ring and no number plate. The child reads the ruler to find the tank at the answer, then types the number, picks it on the ruler or taps the tank.
+- PRD section 6 asks the child to "select between two or more target objects" in comparison challenges. Amendment 10 brings back the target objects; the options are still named in the banner, so the child reads them from the question and finds their positions on the ruler instead of reading number plates.
+- A shot at a decoy bursts it like a cardboard dummy with a light "plopp" sound. It counts as a miss for the help steps and the learning records, and the enemy fires back (amendment 07). PRD sections 7.3 and 8 are kept: the sound is light, not negative, and the score still counts only destroyed enemies.
+- The enemy's shell enters from the top edge in comparison turns again, and the step count after a miss refers to the nearest standing tank, so neither shows which tank is the enemy.
+- All option tanks and the child's tank keep the minimum tank gap, so `minOptionGap` becomes at least `minTankGap`.
+- Item 10 restores amendment 08 item 1: "Neue Landschaft" never starts a comparison turn, so right after it exactly one enemy stands on the field. Phase 22b task T243 had removed that rule after amendment 09; amendment 10 reverts T243.
+- Unchanged from amendment 09: the banner question, the removed kinds "equal" and "order3", the "middle of three" kind, help steps 1 and 2, and the learning records.
+
+The spec (US4, Edge Cases, FR-010, FR-026, FR-027, FR-031, FR-043a, FR-064, FR-066, FR-070, FR-072, FR-073, FR-077, FR-081, Key Entities, Assumptions), amendment 08 item 1, the data model, the contracts, quickstart (AC-06) and tasks (Phase 22c) were updated to match.
