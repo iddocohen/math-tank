@@ -726,6 +726,24 @@ Notes from implementing Phase 22i: the dirt texture is `dirt_9.png` from https:/
 
 ---
 
+## Phase 22j: Amendment 15 QR code save transfer
+
+**Goal**: The settings page shows "Spielstand übertragen" with a QR code and "Link kopieren"; the link carries a compact, versioned copy of the settings, the garage, the personal bests and the progress summary in `#save=v1.<data>`; opening it shows a parent dialog whose "Übernehmen" needs a 2-second hold; "Abbrechen" changes nothing; damaged codes show "Dieser Code passt nicht"; the fragment is removed in both cases ([amendment 15](./amendment-15-qr-transfer.md)).
+
+**Independent Test**: `pnpm test` passes for `src/core/transfer/transfer.test.ts`, `src/core/transfer/qr.test.ts`, `src/app/TransferDialog.test.tsx`, `src/app/SettingsPage.test.tsx`, `src/app/ParentGate.test.tsx` and `src/app/persistence.test.ts`; `tests/e2e/transfer.spec.ts` passes in Chromium, WebKit and Firefox.
+
+- [ ] T295 [P] [US6] Write `src/core/transfer/transfer.test.ts` before the code: `toTransfer` keeps settings, garage stars and look, records, per skill step, attempts, independent correct, with help, guesses and the mastery window, and the session totals, and has no attempts; `encodeTransfer` then `decodeTransfer` gives back the same settings, garage, records, skills (with `recent: []`) and sessions, and `attempts: []`, with `browserCodec()` and with no codec (uncompressed); the link starts with the page address without its old fragment and has `#save=v1.`; the compressed link is shorter than the uncompressed one; with a small `maxBytes` the oldest sessions are dropped first (the newest stay), then the mastery windows are shortened, with `sessionsDropped` and `windowLength` reported, and `fits` is false when even empty windows are too long; `decodeTransfer` refuses an empty code, `v2.` codes, bad base64url, damaged compressed data, JSON that is not a transfer, invalid settings (range 50 to 10), a negative star total and a bad record; a version 1 code made with settings version 5 (no `numberPad`) is migrated to version 6; `saveCodeFromHash` reads `#save=v1.abc`, gives null for other fragments; the summary gives stars, the most enemies of any record (0 without records) and the range (FR-116, FR-117, FR-118, FR-120)
+- [ ] T296 [P] [US6] Write `src/core/transfer/qr.test.ts` before the code: `qrMatrix(link)` is square with a 4-module quiet zone, and decoding a rendering of it with `jsqr` (dev dependency, Apache-2.0) gives back the link, for a short link and for a link of `TRANSFER_MAX_LINK_BYTES`; the error correction level is M; `qrPath` has one square per dark module (FR-118)
+- [ ] T297 Implement until T295 and T296 pass: new `src/core/transfer/transfer.ts` (`SaveData`, `toTransfer`, `browserCodec`, `encodeTransfer`, `decodeTransfer`, `saveCodeFromHash`, `transferLink`, `TRANSFER_VERSION`, `TRANSFER_MAX_LINK_BYTES`) using the schemas and `migrate` of `src/core/storage/`, and `src/core/transfer/qr.ts` (`qrMatrix`, `qrPath`) on the bundled `uqr` 0.1.3 (MIT); record both licenses in `README.md` (FR-115 to FR-118, FR-120)
+- [ ] T298 [P] [US6] Write component tests before the code: new `src/app/TransferDialog.test.tsx` (the summary line "Sterne: 37, Rekord: 4, Zahlenraum: 550 bis 780"; a short press on "Übernehmen" does nothing; a 2-second hold calls `onAccept` once; Enter and Space do nothing; "Abbrechen" calls `onCancel`; an invalid code shows "Dieser Code passt nicht" and "Schließen" calls `onCancel`); `src/app/SettingsPage.test.tsx` (the group "Spielstand übertragen" shows an SVG QR code and `data-transfer-link` with `#save=v1.`; "Link kopieren" writes that link to the clipboard and shows "Link kopiert."; a failed clipboard shows the link as text; a trimmed link shows the note about "Daten sichern"); `src/app/persistence.test.ts` (`applyTransfer` replaces and saves settings, progress without attempts, records and garage); `src/app/ParentGate.test.tsx` keeps passing after the hold moves into a shared hook (FR-115, FR-118, FR-119)
+- [ ] T299 [US6] Implement until T298 passes: new `src/app/useHold.ts` (the 2-second press measured with the clock, shared by `src/app/ParentGate.tsx` and the dialog); new `src/app/TransferDialog.tsx`; the transfer group in `src/app/SettingsPage.tsx`; `saveData()` and `applyTransfer(data)` in `src/app/persistence.ts`; in `src/app/App.tsx` read `#save=` on load, decode it, show the dialog, apply or cancel, remove the fragment with `history.replaceState` and block game keys while it shows; texts in `src/i18n/de.ts`; styles in `src/app/styles.css` (FR-115 to FR-120)
+- [ ] T300 [P] [US6] Write `tests/e2e/transfer.spec.ts` before T299's app code, in Chromium, WebKit and Firefox: (a) a first context stores settings (range 550 to 780), 37 stars with an unlocked color, a record and progress with attempts; the settings page shows the QR code, and the QR code drawn on the page decodes with `jsqr` to `data-transfer-link`; a fresh second context opens that link, sees the dialog with "Sterne: 37", holds "Übernehmen" for 2.3 seconds and then has the same stars on the start screen, the same look, settings and records in storage, the same skills and sessions and no attempts, and an address without `#save=`; (b) "Abbrechen" leaves the fresh context's storage empty and removes `#save=`; (c) a changed code shows "Dieser Code passt nicht" and changes nothing; (d) with `SCREENSHOT_DIR` set, in Chromium only: the settings transfer group with the QR code and the receive dialog (FR-115 to FR-120)
+- [ ] T301 [US6] Run lint, typecheck, unit tests, build and every e2e spec in all six projects; take the muted headless screenshots of T300 (d), stored in the session scratchpad, and check the QR code and the dialog (FR-115 to FR-120)
+
+**Checkpoint**: A parent moves a save to another browser by scanning a QR code or opening a link, and nothing changes without the 2-second hold.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, with the keyboard alone, with pause, fullscreen and spoken challenges. Touch on tablets and phones, the number pad and the screen sizes are built and tested in Phases 22g and 22h (amendment 12).
@@ -769,7 +787,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - [ ] T152 [P] Extend `src/i18n/i18n.test.ts`: every child-facing message key (banner, feedback, help, round end, range hint) has at most about 8 words, checked as at most 9 words with an allowlist for prompts that need the numbers (FR-057)
 - [ ] T153 Accessibility pass on `src/app/*.tsx`: every icon-only button (gear, help, speaker, pause, fullscreen, new scene, fire) gets a German `aria-label` from `src/i18n/de.ts`; focus is visible on the app root; the readout of typed digits is announced with `aria-live="polite"` (it shows no number while pointing, amendment 05); no text below 18 px on child screens (FR-053, FR-057, FR-059)
 - [ ] T154 Run `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e` and fix every failure. Done when all pass in Chromium, WebKit and Firefox, and `grep -rni "setAim\|aimCorrection\|charged\|labelLevel\|selectInterval\|nudge" src tests` finds nothing (FR-050)
-- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 28) against `pnpm preview`, including scenarios 12 and 25 to 27 on an iPad and an iPhone or with Playwright's device emulation, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
+- [ ] T155 Walk through every scenario in `specs/001-math-tanks/quickstart.md` (1 to 29) against `pnpm preview`, including scenarios 12 and 25 to 27 on an iPad and an iPhone or with Playwright's device emulation, scenario 13 with the keyboard only, and the offline check on a real iPad in Safari for D6. Record any failure as a new task in this file (AC-01 to AC-10, SC-008, SC-010 noted as an evaluation goal for parents and testers, not automated)
 
 ---
 
@@ -805,6 +823,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - **Phase 22g (amendment 12 core and components)**: depends on Phases 13 (settings page), 22e (settings version 5) and 22f. T272 and T273 run before T274, T275 before T276; T274 runs before T276 (the overlay reads the setting).
 - **Phase 22h (amendment 12 layouts and device tests)**: depends on Phase 22g. T277 and T278 run before T279; T280 runs last. Runs before Phase 23, whose touch spec T136 uses the device projects of T278.
 - **Phase 22i (amendment 14)**: depends on Phases 22e (garage looks), 22f (new hills and the cross-fade) and 23 (pause and the comparison volley of bug report B2), which are done. T285 to T288 run before T289; T290 before T291; T292 before T293; T289 runs before T291 and T293 (both draw from the new core modules); T294 runs last.
+- **Phase 22j (amendment 15)**: depends on Phases 13 (settings page and parent gate), 22d (garage storage), 22i and 23 (offline play), which are done. T295 and T296 run before T297; T298 before T299; T297 before T299 (the app uses the core module); T300 before T299's app code; T301 runs last.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -843,6 +862,7 @@ Notes from implementing Phase 23: `tests/e2e/speech.spec.ts` (speech from the "S
 - **Phase 22g**: T272, T273 and T275 together; then T274; T276 last.
 - **Phase 22h**: T277 and T278 together; then T279; T280 last.
 - **Phase 22i**: T285, T286, T287, T288, T290 and T292 together; then T289; then T291 and T293; T294 last.
+- **Phase 22j**: T295, T296, T298 and T300 together; then T297; then T299; T301 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -920,7 +940,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276 |
 | FR-047 | T011, T013, T112, T113, T175, T176 |
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
-| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258 |
+| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154, T278 |
 | FR-051 | T003, T134, T139 |
@@ -988,6 +1008,12 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-112 | T290, T291, T293, T294 |
 | FR-113 | T287, T289, T292, T293, T294 |
 | FR-114 | T290, T291, T294 |
+| FR-115 | T297, T298, T299, T300, T301 |
+| FR-116 | T295, T297, T300 |
+| FR-117 | T295, T297, T300 |
+| FR-118 | T295, T296, T297, T298, T299, T300, T301 |
+| FR-119 | T298, T299, T300, T301 |
+| FR-120 | T295, T297, T299, T300, T301 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150, T292, T293 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1014,3 +1040,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | US10 | T252 to T264 |
 | Amendment 12 | T272 to T280; T136 and T141 changed |
 | Amendment 14 | T285 to T294 |
+| Amendment 15 | T295 to T301 |

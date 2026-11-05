@@ -240,6 +240,27 @@ importData(text: string): { ok: true; settings: Settings; progress: Progress; re
                                                                       // a file without records imports with empty records; without garage, garage is null and the caller keeps its own
 ```
 
+## `core/transfer` (amendment 15, FR-115 to FR-120)
+
+```ts
+interface SaveData { settings: Settings; progress: Progress; records: Records; garage: Garage }
+interface Codec { deflate(bytes: Uint8Array): Promise<Uint8Array>; inflate(bytes: Uint8Array): Promise<Uint8Array> } | null
+browserCodec(): Codec | null              // CompressionStream('deflate-raw') and DecompressionStream; null when the browser has none
+TRANSFER_VERSION = 1
+TRANSFER_MAX_LINK_BYTES = 2300
+toTransfer(data: SaveData): TransferV1    // data-model.md "Transfer code"; no attempt history
+encodeTransfer(data: SaveData, pageHref: string, opts?: { codec?: Codec | null; maxBytes?: number }):
+  Promise<{ link: string; code: string; fits: boolean; sessionsDropped: number; windowLength: number }>
+                                          // trims oldest sessions first, then the mastery windows, until the link fits
+decodeTransfer(code: string, opts?: { codec?: Codec | null }): Promise<{ ok: true; data: SaveData; summary: TransferSummary } | { ok: false }>
+                                          // code is 'v1.<data>'; the same schemas and migrations as storage (FR-120)
+interface TransferSummary { stars: number; record: number; min: number; max: number }
+saveCodeFromHash(hash: string): string | null      // '#save=v1.abc' -> 'v1.abc'; null without a save fragment
+transferLink(pageHref: string, code: string): string   // the address without its fragment + '#save=' + code
+qrMatrix(text: string): { size: number; modules: boolean[][] }   // bundled uqr, error correction M, 4-module quiet zone
+qrPath(matrix): string                    // SVG path data of the dark modules, one unit per module
+```
+
 ## `i18n`
 
 ```ts

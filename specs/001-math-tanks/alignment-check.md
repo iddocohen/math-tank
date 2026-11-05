@@ -191,3 +191,16 @@ The product owner asked whether the tanks and terrain could look better without 
 - Decisions of this update that the amendment does not state: the contrast rule is a CIE76 color difference of at least 30 between every garage color shade and every enemy shade and ground color (FR-109); "fewer particles" means at most 40 % of the usual number; a hit on any tank means the enemy destroyed, a heart of the child lost and a decoy burst, not a near miss, which already shakes the tank itself; the screen shake is 2.5 CSS pixels for 150 ms; the grass edge is at least 10 world units thick; the shell trails are 5 world units thick; the wheels, recoil, muzzle flash and smoke stay with reduced motion, because they are small and short.
 
 The spec (new FR-107 to FR-114, SC-002, Assumptions, Amendments), research R13, the contracts (battlefield look and effects, the test attributes, the settings credits), quickstart (scenario 28) and tasks (Phase 22i) were updated to match.
+
+## Amendment 15
+
+**Date**: 2026-11-05
+
+The product owner asked how a child can pick up a save in another browser and chose a QR code. This is an intended change, not drift.
+
+- **PRD section 12 (technical requirements)** asks for local storage without a server. The transfer keeps that: the save travels in the link's fragment, which browsers never send to the server, and the QR code is drawn in the browser (FR-117, FR-118).
+- **PRD section 9 (parent controls)**: taking over a save replaces the parent's settings, so the dialog uses the 2-second hold of the parent gate (FR-119), as for the settings themselves (FR-045).
+- **FR-048a (export and import as a file)** stays; the transfer leaves out the attempt history, which only the file carries (FR-116).
+- Decisions of this update that the amendment does not state: the limit is 2300 bytes for the whole link (the amendment says "about 2.3 KB"); error correction M for every size; the transfer also carries the guesses per skill, because the progress page shows them; `SkillProgress.recent` is not carried and starts empty; mastery windows are shortened together, one entry at a time from the oldest; when the link is still too long with empty windows, the QR code is not shown and "Link kopieren" stays; the fragment is removed when the dialog closes, not when the page opens, so a reload before the decision asks again; "Rekord" in the dialog is the most enemies of any personal best; the QR library is uqr 0.1.3 (MIT); deflate is used in its raw form (`deflate-raw`), which saves the 6 bytes of the zlib header and checksum.
+
+The spec (US6 scenarios 11 and 12, new FR-115 to FR-120, Key Entities, Assumptions, Amendments), the data model (Transfer code), the contracts (`core/transfer`, the receive dialog, the settings group), quickstart (scenario 29) and tasks (Phase 22j) were updated to match.

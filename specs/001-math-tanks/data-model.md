@@ -183,6 +183,31 @@ interface Garage { version: 1; stars: number; look: Look }   // stars: whole num
 
 **Loading** (`loadGarage`): a missing key gives `resetStars()`. Data without `version` (version 0) gets `version: 1`, a whole-number `stars` of at least 0 (anything else gives 0) and a full `look` (missing parts from `STANDARD_LOOK`). After the schema check, every part of `look` that is unknown or not unlocked for `stars` becomes the standard item of its kind. Damaged JSON or a failed schema check loads `resetStars()` and reports `'invalid'` like settings. "Fortschritt zurücksetzen" never touches this key; "Sterne zurücksetzen" writes `resetStars()`.
 
+## Transfer code (not persisted, amendment 15)
+
+The link of "Spielstand übertragen" (FR-115 to FR-120). Transfer version 1:
+
+```ts
+type Outcome = 'i' | 'c' | 'a' | 'u'   // independent, close, assisted, unsolved (RecentOutcome)
+interface TransferV1 {
+  v: 1;
+  settings: Settings;                         // as stored; any settings version, migrated when received
+  garage: { stars: number; look: Look };      // unlocked items follow from stars (FR-097)
+  records: Record<string, BestResult>;        // Records.best, keyed by recordKey
+  skills: Record<string, [step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string]>;
+                                              // keyed like Progress.skills; window = masteryWindow as Outcome letters, at most 10
+  sessions: Array<[id: string, startedAt: number, lastActiveAt: number, attempts: number, independentCorrect: number, assisted: number]>;
+                                              // oldest first, like Progress.sessions
+}
+```
+
+- **Not included**: `Progress.attempts` (the detailed history, up to 2000 entries) and `SkillProgress.recent`; only the file export (FR-048a) carries them.
+- **Encoding**: `JSON.stringify(transfer)`, UTF-8, compressed with `CompressionStream('deflate-raw')`, then base64url without padding. A browser without `CompressionStream` sends the UTF-8 bytes uncompressed. The code is `v1.<data>`; the link is the current page address without its fragment, plus `#save=v1.<data>`.
+- **Decoding**: the part after `v` up to the first `.` is the transfer version; only `1` is known, anything else is refused. The data is read as JSON directly when its bytes are a JSON object, else it is decompressed with `DecompressionStream('deflate-raw')` first.
+- **Size**: the whole link is at most `TRANSFER_MAX_LINK_BYTES` = 2300 bytes, below the 2331 bytes of a version 40 QR code with error correction M. Too long: the oldest session totals are dropped one by one; when no session is left, every mastery window is cut to its newest 9, 8, ... 0 entries; the result reports `sessionsDropped` and `windowLength` (10 when untouched). When the link is still too long with empty windows, `fits` is false and the settings page shows no QR code.
+- **Receiving**: the transfer is turned back into storage values and checked like loading (FR-048, FR-120): `settings` through `migrate` and `settingsSchema` and `validateSettings`; the garage through `parseGarage` (version 1); the records through `recordsSchema`; the progress `{ version: 1, attempts: [], skills, sessions }` through `progressSchema`, each skill with `recent: []`. Any failure refuses the whole code. A transfer version 1 made by an older game carries older settings, which `migrate` upgrades like stored ones.
+- **Summary** for the dialog: `stars` from the garage, `record` the most `enemies` among the records (0 when there is none), `min` and `max` from `settings.range`.
+
 ## Screen layout (not persisted, amendment 12)
 
 `src/core/view/screen.ts`, pure, no DOM:
