@@ -42,14 +42,14 @@ export class Effects {
     scene.time.delayedCall(PARTICLE_LIFE_MS + 100, () => emitter.destroy());
   }
 
-  /** Volltreffer (amendment 04, FR-071): a larger burst and a second ring around the enemy tank. */
-  bullseye(x: number, y: number, blastRadius: number): void {
+  /** The destroyed enemy (amendment 06, FR-066): a larger burst and a second ring where the enemy tank stood. */
+  destroyed(x: number, y: number, blastRadius: number): void {
     this.explosion(x, y, blastRadius * 1.8);
     const ring = this.scene.add.circle(x, y, blastRadius * 1.4).setStrokeStyle(8, 0xffffff, 0.9).setScale(0.3).setDepth(22);
     this.scene.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 550, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
   }
 
-  /** White flash on a tank that took damage. */
+  /** White flash on the child's tank when an enemy shell costs a heart. */
   hitFlash(tank: TankView): void {
     tank.flash();
   }

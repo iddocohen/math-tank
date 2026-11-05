@@ -9,25 +9,23 @@
  * Saving writes through persistence.ts and hands the settings to the app, which passes them to
  * `controller.updateSettings`, so they apply from the next round (FR-049).
  *
- * Amendment 06 (announced by the product owner, built in the next chunk): "Genau treffen" is not shown (a stored
- * value is kept), and the round length is labeled "Gegner pro Runde" with at most 20. Until the schema changes,
- * the lowest accepted value stays ROUND_LENGTH_MIN, so a saved value always loads again.
+ * Amendment 06 (FR-044, FR-082, FR-084, FR-086): there is no "Genau treffen". The Runde group has "Rundenende" with
+ * "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with the second. With
+ * "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde",
+ * because the hearts would never go down. "Uhr beim Spielen zeigen" and "Rekord zeigen" are switches.
  *
  * The data section (FR-048a): "Daten sichern" downloads the export file, "Daten laden" reads one, and a note
  * explains how to add the game to the Home Screen.
  */
 import { useId, useState, type ReactNode } from 'react';
 import type { RulerLevel } from '../core/numberline/ticks';
-import { RANGE_PRESETS, ROUND_LENGTH_MIN } from '../core/settings/defaults';
-import type { RangePreset, Settings, SettingsRange } from '../core/settings/schema';
+import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/settings/defaults';
+import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
 import { validateSettings, withRange } from '../core/settings/validate';
 import { t } from '../i18n';
 import { isComingSoon, type SettingField } from './comingSoon';
 import type { Persistence } from './persistence';
 import { RulerPreview } from './RulerPreview';
-
-/** Amendment 06: "Gegner pro Runde" goes up to 20. */
-export const ROUND_LENGTH_PAGE_MAX = 20;
 
 const PRESETS: RangePreset[] = ['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom'];
 const LEVELS: RulerLevel[] = [1, 2, 3, 4, 5];
@@ -58,10 +56,7 @@ function collectErrors(s: Settings): Map<string, string[]> {
   const add = (path: string, text: string) => out.set(path, [...(out.get(path) ?? []), text]);
   const r = validateSettings(s);
   if (!r.ok) {
-    for (const e of r.errors) {
-      // The page checks the round length against its own limits (amendment 06).
-      if (e.key !== 'roundLength') add(e.path, m.settingsErrors[e.key]);
-    }
+    for (const e of r.errors) add(e.path, m.settingsErrors[e.key]);
   }
   const wholeNumbers: Array<[string, number]> = [
     ['addition.maxOperand', s.addition.maxOperand],
@@ -70,9 +65,6 @@ function collectErrors(s: Settings): Map<string, string[]> {
     ['timeLimitSeconds', s.timeLimitSeconds ?? 0],
   ];
   for (const [path, value] of wholeNumbers) if (!Number.isInteger(value)) add(path, m.settingsErrors.rangeNotInteger);
-  if (!Number.isInteger(s.roundLength) || s.roundLength < ROUND_LENGTH_MIN || s.roundLength > ROUND_LENGTH_PAGE_MAX) {
-    add('roundLength', m.settings.roundLengthRange(ROUND_LENGTH_MIN, ROUND_LENGTH_PAGE_MAX));
-  }
   return out;
 }
 
@@ -252,7 +244,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
             ]}
             onChange={(v) => set('enemyDifficulty', v as Settings['enemyDifficulty'])}
           />
-          <Check field="noDamage" label={L.noDamage} checked={draft.noDamage} onChange={(v) => set('noDamage', v)} />
+          <Check
+            field="noDamage"
+            label={L.noDamage}
+            checked={draft.noDamage}
+            // Without damage the hearts never go down, so the round must end after a number of enemies (FR-082).
+            onChange={(v) => update({ ...draft, noDamage: v, roundType: v ? 'enemyCount' : draft.roundType })}
+          />
         </Group>
 
         <Group title={m.settings.groups.sound}>
@@ -262,7 +260,22 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
         </Group>
 
         <Group title={m.settings.groups.round}>
-          <NumberInput field="roundLength" label={L.roundLength} value={draft.roundLength} min={ROUND_LENGTH_MIN} max={ROUND_LENGTH_PAGE_MAX} errors={errorsAt('roundLength')} onChange={(n) => set('roundLength', n)} />
+          <Select
+            field="roundType"
+            label={L.roundType}
+            value={draft.roundType}
+            options={[
+              ...(draft.noDamage ? [] : [{ value: 'untilHearts', label: L.roundTypeUntilHearts }]),
+              { value: 'enemyCount', label: L.roundTypeEnemyCount },
+            ]}
+            onChange={(v) => set('roundType', v as RoundType)}
+          />
+          <Errors errors={errorsAt('roundType')} />
+          {draft.roundType === 'enemyCount' && (
+            <NumberInput field="roundLength" label={L.roundLength} value={draft.roundLength} min={ROUND_LENGTH_MIN} max={ROUND_LENGTH_MAX} errors={errorsAt('roundLength')} onChange={(n) => set('roundLength', n)} />
+          )}
+          <Check field="showClock" label={L.showClock} checked={draft.showClock} onChange={(v) => set('showClock', v)} />
+          <Check field="showRecords" label={L.showRecords} checked={draft.showRecords} onChange={(v) => set('showRecords', v)} />
           <Check field="adaptive" label={L.adaptive} checked={draft.adaptive} onChange={(v) => set('adaptive', v)} />
           <Check field="timeLimitSeconds" label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
           {draft.timeLimitSeconds !== null && (

@@ -6,7 +6,7 @@
  *
  * The first case writes stored settings directly and checks that a new context plays with them; it covers
  * src/app/persistence.ts. The second case changes the settings through the parent gate and the settings page
- * (Phase 13, T116). The last cases check the gate itself: a short tap does nothing, and opening it in a battle
+ * (Phase 13, T116), including the amendment 06 round type and number of enemies. The last cases check the gate itself: a short tap does nothing, and opening it in a battle
  * pauses the game until the parent closes it (FR-045).
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
@@ -88,6 +88,9 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
       await first.page.getByLabel(L.rangePreset, { exact: true }).selectOption('0-20');
       await first.page.getByLabel(L.enemyDifficulty, { exact: true }).selectOption({ label: L.enemyEasy });
       await first.page.getByLabel(L.rulerLevelStart, { exact: true }).selectOption('3');
+      // Amendment 06: the round type and the number of enemies are saved too.
+      await first.page.getByLabel(L.roundType, { exact: true }).selectOption('enemyCount');
+      await first.page.getByLabel(L.roundLength, { exact: true }).fill('7');
       await first.page.getByRole('button', { name: m.settings.save }).click();
       await expect(first.page.getByText(m.settings.saved)).toBeVisible();
       const state = await first.context.storageState();
@@ -100,6 +103,8 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
       await expect(second.page.getByLabel(L.rangePreset, { exact: true }), `run ${run}`).toHaveValue('0-20');
       await expect(second.page.getByLabel(L.enemyDifficulty, { exact: true }), `run ${run}`).toHaveValue('easy');
       await expect(second.page.getByLabel(L.rulerLevelStart, { exact: true }), `run ${run}`).toHaveValue('3');
+      await expect(second.page.getByLabel(L.roundType, { exact: true }), `run ${run}`).toHaveValue('enemyCount');
+      await expect(second.page.getByLabel(L.roundLength, { exact: true }), `run ${run}`).toHaveValue('7');
       await second.context.close();
     }
   });

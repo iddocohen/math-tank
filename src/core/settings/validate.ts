@@ -21,6 +21,7 @@ export const SETTINGS_ERROR_KEYS = [
   'noChallengeTypes',
   'rulerLevelOrder',
   'roundLength',
+  'roundTypeNoDamage',
   'timeLimit',
   'additionMaxOperand',
   'additionMaxResult',
@@ -68,6 +69,9 @@ export function validateSettings(s: Settings): SettingsValidation {
   if (!Number.isInteger(s.roundLength) || s.roundLength < ROUND_LENGTH_MIN || s.roundLength > ROUND_LENGTH_MAX) {
     add('roundLength', 'roundLength');
   }
+
+  // "Bis alle Herzen weg" never ends when the hearts never go down (FR-044, FR-082).
+  if (s.roundType === 'untilHearts' && s.noDamage) add('roundTypeNoDamage', 'roundType');
 
   if (s.timeLimitSeconds !== null && (s.timeLimitSeconds < TIME_LIMIT_MIN || s.timeLimitSeconds > TIME_LIMIT_MAX)) {
     add('timeLimit', 'timeLimitSeconds');

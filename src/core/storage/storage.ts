@@ -2,6 +2,7 @@ import { defaultSettings } from '../settings/defaults';
 import { settingsSchema, type Settings } from '../settings/schema';
 import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
+import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import type { KeyValue } from './keyValue';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
@@ -9,6 +10,8 @@ import { progressSchema } from './progressSchema';
 /** Storage keys (research R11). */
 export const SETTINGS_KEY = 'mathtanks.settings.v1';
 export const PROGRESS_KEY = 'mathtanks.progress.v1';
+/** Personal bests (amendment 06, FR-086). */
+export const RECORDS_KEY = 'mathtanks.records.v1';
 
 export type ResetReason = 'none' | 'invalid' | 'unavailable';
 
@@ -76,4 +79,20 @@ export function loadProgress(kv: KeyValue): { progress: Progress; resetReason: R
 
 export function saveProgress(kv: KeyValue, p: Progress): { ok: boolean } {
   return write(kv, PROGRESS_KEY, p);
+}
+
+/** Loads personal bests; damaged, invalid or unreadable data falls back to empty records (FR-048, FR-086). */
+export function loadRecords(kv: KeyValue): { records: Records; resetReason: ResetReason } {
+  const r = read(kv, RECORDS_KEY);
+  if (r.kind === 'missing') return { records: emptyRecords(), resetReason: 'none' };
+  if (r.kind === 'unavailable') return { records: emptyRecords(), resetReason: 'unavailable' };
+  const json = parseJson(r.text);
+  if (!json.ok) return { records: emptyRecords(), resetReason: 'invalid' };
+  const parsed = recordsSchema.safeParse(json.value);
+  if (!parsed.success) return { records: emptyRecords(), resetReason: 'invalid' };
+  return { records: parsed.data, resetReason: 'none' };
+}
+
+export function saveRecords(kv: KeyValue, r: Records): { ok: boolean } {
+  return write(kv, RECORDS_KEY, r);
 }

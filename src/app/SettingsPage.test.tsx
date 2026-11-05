@@ -1,7 +1,7 @@
 /**
  * Settings page (FR-046 to FR-048a, FR-069, FR-079, US6 scenarios 4 and 5).
- * Amendment 06 (announced by the product owner, built in the next chunk): "Genau treffen" is not shown, and the
- * round length is labeled "Gegner pro Runde" with 1 to 20; until the schema changes, the page accepts 3 to 20.
+ * Amendment 06 (FR-044, FR-082, FR-084, FR-086): no "Genau treffen"; "Rundenende" with "Bis alle Herzen weg" and
+ * "Gegner pro Runde" (1 to 20 enemies); "Uhr beim Spielen zeigen" and "Rekord zeigen".
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,8 @@ import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue } from '../core/storage/keyValue';
 import { SETTINGS_KEY } from '../core/storage/storage';
 import { t } from '../i18n';
-import { COMING_SOON } from './comingSoon';
+import { COMING_SOON, SETTING_FIELDS } from './comingSoon';
+import { emptyRecords } from '../core/records/records';
 import { createPersistence } from './persistence';
 import { SettingsPage } from './SettingsPage';
 
@@ -118,28 +119,68 @@ describe('SettingsPage', () => {
 
   it('does not show "Genau treffen" (amendment 06), an aim-correction or a label-level field', () => {
     setup();
-    expect(screen.queryByLabelText(L.exactHit)).toBeNull();
-    expect(screen.queryByText(L.exactHit)).toBeNull();
+    expect(screen.queryByLabelText('Genau treffen')).toBeNull();
+    expect(screen.queryByText('Genau treffen')).toBeNull();
     expect(screen.queryByLabelText(/Zielhilfe|aim/i)).toBeNull();
     expect(screen.queryByLabelText(/Beschriftung/i)).toBeNull();
   });
 
-  it('keeps a stored exactHit value on save (amendment 06 removes it in the next chunk)', () => {
-    const { persistence } = setup({ exactHit: true });
-    toggle(L.noDamage);
+  it('drops a stored exactHit: the saved settings have no such field', () => {
+    const { persistence, kv } = setup({ exactHit: true } as Partial<Settings>);
+    toggle(L.showClock);
     fireEvent.click(saveButton());
-    expect(persistence.settings().exactHit).toBe(true);
-    expect(persistence.settings().noDamage).toBe(true);
+    expect('exactHit' in persistence.settings()).toBe(false);
+    expect(JSON.parse(kv.get(SETTINGS_KEY) ?? '{}')).not.toHaveProperty('exactHit');
   });
 
-  it('labels the round length "Gegner pro Runde" and accepts 3 to 20', () => {
-    setup();
-    expect(field(L.roundLength).value).toBe('10');
-    setValue(L.roundLength, '21');
-    expect(screen.getByText(m.settings.roundLengthRange(3, 20))).toBeTruthy();
-    expect(saveButton().disabled).toBe(true);
-    setValue(L.roundLength, '20');
+  it('"Rundenende" offers "Bis alle Herzen weg" (default) and "Gegner pro Runde"; the number of enemies shows only with the second', () => {
+    const { persistence } = setup();
+    const select = field(L.roundType);
+    expect(select.value).toBe('untilHearts');
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([L.roundTypeUntilHearts, L.roundTypeEnemyCount]);
+    expect(screen.queryByLabelText(L.roundLength)).toBeNull();
+    setValue(L.roundType, 'enemyCount');
+    expect(field(L.roundLength).value).toBe('5');
+    fireEvent.click(saveButton());
+    expect(persistence.settings()).toMatchObject({ roundType: 'enemyCount', roundLength: 5 });
+  });
+
+  it('accepts 1 to 20 enemies per round and shows an error for 0 and 21', () => {
+    setup({ roundType: 'enemyCount' });
+    for (const bad of ['0', '21']) {
+      setValue(L.roundLength, bad);
+      expect(screen.getByText(m.settingsErrors.roundLength)).toBeTruthy();
+      expect(saveButton().disabled).toBe(true);
+    }
+    for (const ok of ['1', '20']) {
+      setValue(L.roundLength, ok);
+      expect(saveButton().disabled).toBe(false);
+    }
+  });
+
+  it('turning on "Ohne Schaden spielen" removes "Bis alle Herzen weg" and switches to "Gegner pro Runde" (FR-044, FR-082)', () => {
+    const { persistence } = setup();
+    toggle(L.noDamage);
+    const select = field(L.roundType);
+    expect(select.value).toBe('enemyCount');
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['enemyCount']);
     expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+    expect(persistence.settings()).toMatchObject({ noDamage: true, roundType: 'enemyCount' });
+  });
+
+  it('"Uhr beim Spielen zeigen" is off and "Rekord zeigen" is on by default, and both save', () => {
+    const { persistence } = setup();
+    expect(field(L.showClock).checked).toBe(false);
+    expect(field(L.showRecords).checked).toBe(true);
+    toggle(L.showClock);
+    toggle(L.showRecords);
+    fireEvent.click(saveButton());
+    expect(persistence.settings()).toMatchObject({ showClock: true, showRecords: false });
+  });
+
+  it('lists the amendment 06 fields in SETTING_FIELDS', () => {
+    for (const f of ['roundType', 'roundLength', 'showClock', 'showRecords'] as const) expect(SETTING_FIELDS).toContain(f);
   });
 
   it('shows a reset notice when stored data could not be read', () => {
@@ -148,7 +189,7 @@ describe('SettingsPage', () => {
   });
 
   it('shows every field of FR-046', () => {
-    setup({ timeLimitSeconds: 30 });
+    setup({ timeLimitSeconds: 30, roundType: 'enemyCount' });
     for (const label of [
       L.numberLine, L.addition, L.subtraction, L.comparison, L.freePlay,
       L.rangePreset,
@@ -158,7 +199,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundLength, L.adaptive, L.timeLimit, L.timeLimitSeconds,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }
@@ -226,7 +267,7 @@ describe('SettingsPage data section (FR-048a)', () => {
   it('"Daten laden" reads a chosen file, applies it and shows the result', async () => {
     const { persistence, onSaved } = setup();
     const other = { ...defaultSettings(), enemyDifficulty: 'challenging' as const, range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { maxOperand: 10, maxResult: 20, steps: 1 as const } };
-    const text = exportData(other, persistence.progress(), new Date('2026-11-01T00:00:00Z'));
+    const text = exportData(other, persistence.progress(), emptyRecords(), new Date('2026-11-01T00:00:00Z'));
     const file = new File([text], 'mathe-panzer.json', { type: 'application/json' });
     await act(async () => {
       fireEvent.change(screen.getByLabelText(m.parent.importData), { target: { files: [file] } });

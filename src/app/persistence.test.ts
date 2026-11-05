@@ -3,7 +3,8 @@ import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue, type KeyValue } from '../core/storage/keyValue';
-import { emptyProgress, PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { emptyProgress, PROGRESS_KEY, RECORDS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { emptyRecords } from '../core/records/records';
 import { createPersistence, type StorageManagerLike } from './persistence';
 
 function changedSettings(): Settings {
@@ -117,20 +118,30 @@ describe('requestPersistentStorage (FR-048)', () => {
 });
 
 describe('export and import through persistence (FR-048a)', () => {
-  it('exports the current settings and progress', () => {
+  it('exports the current settings, progress and records', () => {
     const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
     p.saveSettings(changedSettings());
+    p.submitResult('0-20|3|untilHearts', { enemies: 4, ms: 61_000, at: 5 });
     const file = JSON.parse(p.exportText(new Date('2026-11-05T00:00:00.000Z'))) as Record<string, unknown>;
-    expect(file).toEqual({ app: 'math-tanks', exportedAt: '2026-11-05T00:00:00.000Z', settings: changedSettings(), progress: emptyProgress() });
+    expect(file).toEqual({
+      app: 'math-tanks',
+      exportedAt: '2026-11-05T00:00:00.000Z',
+      settings: changedSettings(),
+      progress: emptyProgress(),
+      records: { version: 1, best: { '0-20|3|untilHearts': { enemies: 4, ms: 61_000, at: 5 } } },
+    });
   });
 
   it('a valid import replaces and saves settings and progress', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
-    const r = p.importText(exportData(changedSettings(), emptyProgress()));
+    const records = { version: 1 as const, best: { 'k': { enemies: 2, ms: 1000, at: 1 } } };
+    const r = p.importText(exportData(changedSettings(), emptyProgress(), records));
     expect(r.ok).toBe(true);
     expect(p.settings()).toEqual(changedSettings());
+    expect(p.records()).toEqual(records);
     expect(createPersistence({ kv, storage: undefined }).settings()).toEqual(changedSettings());
+    expect(createPersistence({ kv, storage: undefined }).records()).toEqual(records);
   });
 
   it('a failed import changes nothing', () => {
@@ -141,5 +152,28 @@ describe('export and import through persistence (FR-048a)', () => {
     expect(p.importText('{"app":"other"}')).toEqual({ ok: false, reason: 'wrongApp' });
     expect(p.settings()).toEqual(changedSettings());
     expect(kv.get(SETTINGS_KEY)).toBe(stored);
+  });
+});
+
+describe('personal bests through persistence (amendment 06, FR-086)', () => {
+  it('starts with empty records', () => {
+    expect(createPersistence({ kv: memoryKeyValue(), storage: undefined }).records()).toEqual(emptyRecords());
+  });
+
+  it('submitResult stores a new record so a new instance loads it, and reports the stored best otherwise', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    const first = p.submitResult('0-100|1|untilHearts', { enemies: 3, ms: 90_000, at: 1 });
+    expect(first).toEqual({ newRecord: true, best: { enemies: 3, ms: 90_000, at: 1 } });
+    expect(JSON.parse(kv.get(RECORDS_KEY) ?? 'null')).toEqual({ version: 1, best: { '0-100|1|untilHearts': { enemies: 3, ms: 90_000, at: 1 } } });
+    const again = createPersistence({ kv, storage: undefined });
+    expect(again.submitResult('0-100|1|untilHearts', { enemies: 2, ms: 10_000, at: 2 })).toEqual({ newRecord: false, best: { enemies: 3, ms: 90_000, at: 1 } });
+  });
+
+  it('keeps a new record for the session when it cannot be saved, and reports the failure', () => {
+    const p = createPersistence({ kv: failingWrites(memoryKeyValue()), storage: undefined });
+    expect(p.submitResult('k', { enemies: 1, ms: 1, at: 1 }).newRecord).toBe(true);
+    expect(p.status().saveFailed).toBe(true);
+    expect(p.records().best.k).toEqual({ enemies: 1, ms: 1, at: 1 });
   });
 });

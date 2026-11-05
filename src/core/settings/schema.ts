@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 3 (`mathtanks.settings.v1`, research R11 and R23).
+ * Structural schema for persisted settings, version 4 (`mathtanks.settings.v1`, research R11 and R23; amendment 06).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -16,7 +16,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(3),
+  version: z.literal(4),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -51,15 +51,21 @@ export const settingsSchema = z.object({
     music: z.boolean(),
     speech: z.boolean(),
   }),
+  /** How a round ends (amendment 06, FR-082): until the 3 hearts are gone, or after `roundLength` destroyed enemies. */
+  roundType: z.enum(['untilHearts', 'enemyCount']),
+  /** Enemies per round for `roundType: 'enemyCount'`, 1 to 20. */
   roundLength: z.number(),
   adaptive: z.boolean(),
   freePlay: z.boolean(),
   noDamage: z.boolean(),
-  /** "Genau treffen" (amendment 04, FR-074): only the exact number damages the enemy. */
-  exactHit: z.boolean(),
+  /** An up-counting clock at the top during play (FR-084). */
+  showClock: z.boolean(),
+  /** "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086). */
+  showRecords: z.boolean(),
   timeLimitSeconds: z.number().nullable(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
+export type RoundType = Settings['roundType'];
 export type RangePreset = z.infer<typeof rangePresetSchema>;
 export type SettingsRange = z.infer<typeof rangeSchema>;

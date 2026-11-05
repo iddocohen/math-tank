@@ -3,7 +3,11 @@ import { createRng, type Rng } from '../rng';
 import { simulateShot } from '../physics/ballistics';
 import { BLAST_RADIUS } from '../physics/damage';
 import { generateTerrain, surfaceY } from '../physics/terrain';
-import { enemyDamageFactor, enemyShot, type Difficulty, type EnemyShotInput } from './enemy';
+import { enemyShot, type Difficulty, type EnemyShotInput } from './enemy';
+import * as enemyModule from './enemy';
+import { createRound, muzzle, tankCenter, TANK_HIT_RADIUS } from '../battle/round';
+import { enemyHitsPlayer } from '../battle/hitRule';
+import { defaultSettings } from '../settings/defaults';
 
 const W = 1600;
 const H = 900;
@@ -85,10 +89,38 @@ describe('enemyShot', () => {
   });
 });
 
-describe('enemyDamageFactor', () => {
-  it('halves damage on easy only', () => {
-    expect(enemyDamageFactor('easy')).toBe(0.5);
-    expect(enemyDamageFactor('normal')).toBe(1);
-    expect(enemyDamageFactor('challenging')).toBe(1);
+describe('easy enemy accuracy (amendment 06, FR-043)', () => {
+  // 200 seeded rounds: 50 seeded terrains with 4 enemy random seeds each. solveAim caches per terrain, so the
+  // rounds on one terrain and both difficulties share the ideal aim, which keeps the test fast.
+  const terrains = Array.from({ length: 50 }, (_, seed) => createRound(defaultSettings(), 5000 + seed, seed % 2 === 0 ? 'left' : 'right'));
+  const rounds = Array.from({ length: 200 }, (_, seed) => terrains[seed % 50]!);
+
+  /** Share of the enemy's shots (not the first of a round) that hit the player's tank. */
+  function hitRate(difficulty: Difficulty): number {
+    let hits = 0;
+    let shots = 0;
+    rounds.forEach((round, seed) => {
+      const rng = createRng(seed);
+      for (let i = 1; i <= 2; i++) {
+        const origin = muzzle(round.enemy);
+        const aim = enemyShot({ difficulty, rng, shotIndexInRound: i, origin, target: tankCenter(round.player), terrain: round.terrain, worldWidth: W, worldHeight: H });
+        const targets = [{ id: round.player.id, ...tankCenter(round.player), radius: TANK_HIT_RADIUS }];
+        const r = simulateShot({ ...aim, origin, terrain: round.terrain, targets, worldWidth: W, worldHeight: H });
+        if (!r.outOfBounds && enemyHitsPlayer(r.impact, r.hitTargetId, round.player)) hits++;
+        shots++;
+      }
+    });
+    return hits / shots;
+  }
+
+  it('on easy, fewer than half of the enemy shots hit the player tank, and fewer than on challenging', { timeout: 60_000 }, () => {
+    const easy = hitRate('easy');
+    const challenging = hitRate('challenging');
+    expect(easy).toBeLessThan(0.5);
+    expect(easy).toBeLessThan(challenging);
+  });
+
+  it('there is no damage factor any more: each enemy hit removes one heart', () => {
+    expect('enemyDamageFactor' in enemyModule).toBe(false);
   });
 });

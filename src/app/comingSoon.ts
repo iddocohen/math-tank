@@ -32,7 +32,10 @@ export const SETTING_FIELDS = [
   'sound.effects',
   'sound.music',
   'sound.speech',
+  'roundType',
   'roundLength',
+  'showClock',
+  'showRecords',
   'adaptive',
   'timeLimitSeconds',
 ] as const;

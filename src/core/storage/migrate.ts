@@ -1,19 +1,22 @@
-import { defaultSettings } from '../settings/defaults';
+import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings/defaults';
 
 /**
  * Upgrades older stored versions to the current one before schema validation (research R11).
  * Settings: version 0 is any object with `version: 0` or no `version` field; versions 0 and 1 become
  * version 2 (decision D13: `aimCorrection` dropped, `labelLevel` turned into `rulerLevelStart` and
  * `rulerLevelMax`), with missing fields filled from the defaults. Version 2 becomes version 3 (amendment 04:
- * `exactHit` added, default false), so versions 0 and 1 go through both steps. Progress: version 0 becomes version 1.
+ * `exactHit` added, default false). Version 3 becomes version 4 (amendment 06: `exactHit` dropped, `roundType`,
+ * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Older versions go through every
+ * later step. Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
 export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   if (!isRecord(raw)) return raw;
   const version = raw.version ?? 0;
   if (kind === 'settings') {
-    if (version === 0 || version === 1) return migrateSettingsToV3(migrateSettingsToV2(raw));
-    return version === 2 ? migrateSettingsToV3(raw) : raw;
+    if (version === 0 || version === 1) return migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw)));
+    if (version === 2) return migrateSettingsToV4(migrateSettingsToV3(raw));
+    return version === 3 ? migrateSettingsToV4(raw) : raw;
   }
   return version === 0 ? migrateProgressV0(raw) : raw;
 }
@@ -43,13 +46,37 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
     over.rulerLevelStart = typeof labelLevel === 'number' ? (RULER_LEVEL_FROM_LABEL_LEVEL[labelLevel] ?? labelLevel) : labelLevel;
     over.rulerLevelMax = 5;
   }
-  const merged = mergeDeep(defaultSettings() as unknown as Record<string, unknown>, over);
+  // Fields added by later versions are left to their own migration step (amendment 06: roundType follows noDamage).
+  const base = defaultSettings() as unknown as Record<string, unknown>;
+  for (const later of ['roundType', 'showClock', 'showRecords']) delete base[later];
+  const merged = mergeDeep(base, over);
   return { ...merged, version: 2 };
 }
 
 /** Version 2 to 3 (amendment 04): adds "Genau treffen", off unless already set. */
 function migrateSettingsToV3(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, exactHit: raw.exactHit ?? false, version: 3 };
+}
+
+/**
+ * Version 3 to 4 (amendment 06): drops "Genau treffen"; the round ends when the hearts are gone, or after the old
+ * turn count as a number of enemies when the no-damage mode is on (the hearts would never go down).
+ * A whole-number `roundLength` is clamped to 1 to 20; anything else is kept so validation rejects it.
+ */
+function migrateSettingsToV4(raw: Record<string, unknown>): Record<string, unknown> {
+  const { exactHit: _dropped, ...rest } = raw;
+  void _dropped;
+  const roundLength = Number.isInteger(rest.roundLength)
+    ? Math.min(ROUND_LENGTH_MAX, Math.max(ROUND_LENGTH_MIN, rest.roundLength as number))
+    : rest.roundLength;
+  return {
+    ...rest,
+    roundType: rest.roundType ?? (rest.noDamage === true ? 'enemyCount' : 'untilHearts'),
+    roundLength,
+    showClock: rest.showClock ?? false,
+    showRecords: rest.showRecords ?? true,
+    version: 4,
+  };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

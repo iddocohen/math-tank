@@ -28,13 +28,17 @@ export const de = {
     newScene: 'Neue Landschaft',
     /** Amendment 05: the bouncing arrow over the child's tank at the start of every round (FR-077). */
     you: 'Du',
-    /** Amendment 04: the exact number (FR-071). */
-    bullseye: 'Volltreffer!',
-    /** Amendment 04: a hit on the tank body that is not exact (FR-066). */
-    bodyHit: 'Treffer!',
-    /** Amendment 04, "Genau treffen": on the tank body but not exact, no damage (FR-074). */
-    close: 'Ganz knapp!',
-    /** Amendment 04: both numbers and the distance after a body hit that is not exact (FR-072). */
+    /** Amendment 06: the exact number destroys the enemy (FR-066). */
+    hit: 'Getroffen!',
+    /** Amendment 06: on the tank body but not at the number, a miss (FR-066, FR-072). */
+    near: 'Ganz knapp! Triff die Linie.',
+    /** Amendment 06: label of the tank counter at the top, for screen readers only (FR-083). */
+    score: 'Getroffene Panzer',
+    /** Amendment 06: label of the optional clock, for screen readers only (FR-084). */
+    clock: 'Spielzeit',
+    /** Amendment 06: label of the hearts, for screen readers only (FR-080). */
+    lives: (n: number) => (n === 1 ? 'Noch 1 Herz' : `Noch ${n} Herzen`),
+    /** Amendment 04: both numbers and the distance after a near miss on the body (FR-072). */
     compare: (you: number, enemy: number) => {
       const d = Math.abs(you - enemy);
       return `Du: ${you} · Gegner: ${enemy} · ${d === 1 ? '1 Schritt' : `${d} Schritte`}`;
@@ -72,10 +76,13 @@ export const de = {
     solution: (n: number) => `Hier ist die ${n}.`,
   },
 
+  /** Amendment 06 (FR-085, FR-086): result, time and the personal best, never a comparison. */
   roundEnd: {
-    playerWon: 'Super! Du hast den Gegner getroffen.',
-    enemyWon: 'Gut gekämpft! Noch eine Runde?',
-    turnsUsed: 'Alle Züge sind gespielt. Gut gemacht!',
+    goalReached: 'Super! Alle Gegner getroffen.',
+    heartsGone: 'Gut gekämpft! Noch eine Runde?',
+    result: (enemies: number, time: string) => `${enemies} Panzer getroffen in ${time}`,
+    newRecord: 'Neuer Rekord!',
+    yourRecord: (n: number) => `Dein Rekord: ${n}`,
     again: 'Nochmal',
     backToStart: 'Zum Start',
   },
@@ -109,17 +116,16 @@ export const de = {
     /** Shown when every challenge type is off (FR-047, US6 scenario 4). */
     guidedNeedsType: 'Geführtes Spielen braucht mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur freies Spiel.',
     offerFreePlay: 'Nur freies Spiel anbieten',
-    /** Amendment 06 (announced): the round length counts enemies. The schema keeps 3 as the lowest value until then. */
-    roundLengthRange: (min: number, max: number) => `Bitte eine Zahl von ${min} bis ${max} eingeben.`,
     data: {
       title: 'Daten',
-      exportHint: 'Speichert Einstellungen und Fortschritt in einer Datei.',
+      exportHint: 'Speichert Einstellungen, Fortschritt und Rekorde in einer Datei.',
       imported: 'Daten geladen. Die Einstellungen gelten ab der nächsten Runde.',
       importFailed: {
         notJson: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',
         wrongApp: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',
         invalidSettings: 'Die Einstellungen in dieser Datei sind ungültig. Es wurde nichts geändert.',
         invalidProgress: 'Der Fortschritt in dieser Datei ist ungültig. Es wurde nichts geändert.',
+        invalidRecords: 'Die Rekorde in dieser Datei sind ungültig. Es wurde nichts geändert.',
       },
       readFailed: 'Die Datei konnte nicht gelesen werden.',
       /** FR-048a: the Home Screen keeps stored data on Safari. */
@@ -168,12 +174,15 @@ export const de = {
       soundEffects: 'Geräusche',
       music: 'Musik',
       speech: 'Vorlesen',
-      roundLength: 'Gegner pro Runde',
+      roundType: 'Rundenende',
+      roundTypeUntilHearts: 'Bis alle Herzen weg',
+      roundTypeEnemyCount: 'Gegner pro Runde',
+      roundLength: 'Anzahl der Gegner',
+      showClock: 'Uhr beim Spielen zeigen',
+      showRecords: 'Rekord zeigen',
       adaptive: 'Schwierigkeit automatisch anpassen',
       freePlay: 'Freies Spiel erlauben',
       noDamage: 'Ohne Schaden spielen',
-      exactHit: 'Genau treffen',
-      exactHitHint: 'Nur die genaue Zahl trifft.',
       timeLimit: 'Zeitlimit',
       timeLimitSeconds: 'Sekunden pro Aufgabe',
     },
@@ -188,7 +197,8 @@ export const de = {
     rangePresetMismatch: 'Der Zahlenraum passt nicht zur Auswahl.',
     noChallengeTypes: 'Bitte mindestens eine Aufgabenart wählen oder freies Spiel erlauben.',
     rulerLevelOrder: 'Die Startstufe darf nicht schwerer sein als die schwerste Stufe.',
-    roundLength: 'Eine Runde hat 3 bis 30 Züge.',
+    roundLength: 'Eine Runde hat 1 bis 20 Gegner.',
+    roundTypeNoDamage: '„Bis alle Herzen weg“ geht nicht ohne Schaden. Bitte „Gegner pro Runde“ wählen.',
     timeLimit: 'Das Zeitlimit liegt zwischen 10 und 120 Sekunden.',
     additionMaxOperand: 'Die größte Zahl beim Plus muss mindestens 1 sein.',
     additionMaxResult: 'Das größte Ergebnis darf nicht über dem Zahlenraum liegen.',

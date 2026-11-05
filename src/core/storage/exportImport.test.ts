@@ -3,6 +3,7 @@ import { defaultSettings } from '../settings/defaults';
 import type { Settings } from '../settings/schema';
 import type { Progress } from '../types';
 import { exportData, importData } from './exportImport';
+import { emptyRecords, type Records } from '../records/records';
 import { emptyProgress } from './storage';
 
 function sampleSettings(): Settings {
@@ -13,8 +14,14 @@ function sampleSettings(): Settings {
     enemyDifficulty: 'challenging',
     rulerLevelStart: 2,
     rulerLevelMax: 4,
-    exactHit: true,
+    roundType: 'enemyCount',
+    roundLength: 12,
+    showClock: true,
   };
+}
+
+function sampleRecords(): Records {
+  return { version: 1, best: { '550-780|2|enemyCount': { enemies: 12, ms: 400000, at: 1_700_000_000_000 } } };
 }
 
 function sampleProgress(): Progress {
@@ -56,17 +63,18 @@ function sampleProgress(): Progress {
 
 /** Exports sample data, then lets the caller change the parsed file before it is turned back into text. */
 function exportedFile(change: (file: Record<string, unknown>) => void = () => {}): string {
-  const file = JSON.parse(exportData(sampleSettings(), sampleProgress())) as Record<string, unknown>;
+  const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords())) as Record<string, unknown>;
   change(file);
   return JSON.stringify(file);
 }
 
 describe('exportData (FR-048a)', () => {
-  it('produces { app, exportedAt, settings, progress } as JSON text', () => {
+  it('produces { app, exportedAt, settings, progress, records } as JSON text', () => {
     const at = new Date('2026-11-05T10:00:00.000Z');
-    const text = exportData(sampleSettings(), sampleProgress(), at);
+    const text = exportData(sampleSettings(), sampleProgress(), sampleRecords(), at);
     const file = JSON.parse(text) as Record<string, unknown>;
-    expect(Object.keys(file).sort()).toEqual(['app', 'exportedAt', 'progress', 'settings']);
+    expect(Object.keys(file).sort()).toEqual(['app', 'exportedAt', 'progress', 'records', 'settings']);
+    expect(file.records).toEqual(sampleRecords());
     expect(file.app).toBe('math-tanks');
     expect(file.exportedAt).toBe('2026-11-05T10:00:00.000Z');
     expect(file.settings).toEqual(sampleSettings());
@@ -75,7 +83,7 @@ describe('exportData (FR-048a)', () => {
 
   it('uses the current time when no date is given', () => {
     const before = Date.now();
-    const file = JSON.parse(exportData(defaultSettings(), emptyProgress())) as { exportedAt: string };
+    const file = JSON.parse(exportData(defaultSettings(), emptyProgress(), emptyRecords())) as { exportedAt: string };
     const at = Date.parse(file.exportedAt);
     expect(at).toBeGreaterThanOrEqual(before);
     expect(at).toBeLessThanOrEqual(Date.now());
@@ -83,14 +91,26 @@ describe('exportData (FR-048a)', () => {
 });
 
 describe('importData (FR-048, FR-048a)', () => {
-  it('returns the same settings and progress that were exported', () => {
-    const r = importData(exportData(sampleSettings(), sampleProgress()));
-    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress() });
+  it('returns the same settings, progress and records that were exported', () => {
+    const r = importData(exportData(sampleSettings(), sampleProgress(), sampleRecords()));
+    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords() });
   });
 
-  it('round-trips the defaults and empty progress', () => {
-    const r = importData(exportData(defaultSettings(), emptyProgress()));
-    expect(r).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress() });
+  it('round-trips the defaults, empty progress and empty records', () => {
+    const r = importData(exportData(defaultSettings(), emptyProgress(), emptyRecords()));
+    expect(r).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords() });
+  });
+
+  it('a file without records (exported before amendment 06) imports with empty records', () => {
+    const r = importData(exportedFile((f) => delete f.records));
+    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: emptyRecords() });
+  });
+
+  it.each([
+    ['records of the wrong shape', (f: Record<string, unknown>) => (f.records = { version: 1, best: { k: { enemies: 'nine' } } })],
+    ['an unknown records version', (f: Record<string, unknown>) => (f.records = { version: 7, best: {} })],
+  ])('rejects invalid records: %s', (_name, change) => {
+    expect(importData(exportedFile(change))).toEqual({ ok: false, reason: 'invalidRecords' });
   });
 
   it.each([
@@ -132,14 +152,14 @@ describe('importData (FR-048, FR-048a)', () => {
   it('changes nothing: the exported objects are left as they were', () => {
     const settings = sampleSettings();
     const progress = sampleProgress();
-    const text = exportData(settings, progress);
+    const text = exportData(settings, progress, sampleRecords());
     importData(text);
     importData('{broken');
     expect(settings).toEqual(sampleSettings());
     expect(progress).toEqual(sampleProgress());
   });
 
-  it('migrates a version 1 settings file to version 3 (decision D13)', () => {
+  it('migrates a version 1 settings file to version 4 (decision D13)', () => {
     const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel: 4, aimCorrection: true };
     delete v1.rulerLevelStart;
     delete v1.rulerLevelMax;
@@ -147,19 +167,24 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(3);
+    expect(r.settings.version).toBe(4);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
-    expect(r.settings.exactHit).toBe(false);
+    expect('exactHit' in r.settings).toBe(false);
     expect('aimCorrection' in r.settings).toBe(false);
     expect('labelLevel' in r.settings).toBe(false);
   });
 
-  it('migrates a version 2 settings file to version 3 (amendment 04)', () => {
-    const v2: Record<string, unknown> = { ...defaultSettings(), version: 2, roundLength: 7 };
-    delete v2.exactHit;
-    const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v2, progress: emptyProgress() }));
-    expect(r).toEqual({ ok: true, settings: { ...defaultSettings(), roundLength: 7 }, progress: emptyProgress() });
+  it('migrates version 2 and version 3 settings files to version 4 (amendments 04 and 06)', () => {
+    for (const version of [2, 3]) {
+      const old: Record<string, unknown> = { ...defaultSettings(), version, roundLength: 7, exactHit: true };
+      delete old.roundType;
+      delete old.showClock;
+      delete old.showRecords;
+      if (version === 2) delete old.exactHit;
+      const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: old, progress: emptyProgress() }));
+      expect(r).toEqual({ ok: true, settings: { ...defaultSettings(), roundLength: 7 }, progress: emptyProgress(), records: emptyRecords() });
+    }
   });
 
   it('migrates version 0 progress and fills attempts stored before amendment 04 with exact: true', () => {
@@ -171,6 +196,6 @@ describe('importData (FR-048, FR-048a)', () => {
     if (r.ok) expect(r.progress.attempts[0]?.exact).toBe(true);
 
     const v0 = importData(JSON.stringify({ app: 'math-tanks', exportedAt: 'x', settings: defaultSettings(), progress: { skills: {} } }));
-    expect(v0).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress() });
+    expect(v0).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords() });
   });
 });

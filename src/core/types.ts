@@ -71,8 +71,9 @@ export interface Challenge {
 }
 
 /**
- * Progress outcome of a non-guess attempt. 'close' (amendment 04, FR-075): a hit on the tank body that is not exact,
- * without help or misses; it counts neither toward raising nor toward lowering difficulty, and not toward mastery.
+ * Progress outcome of a non-guess attempt. 'close' was added by amendment 04 and is no longer produced since
+ * amendment 06 (a near miss on the body is a miss); a stored 'close' still loads and counts neither toward raising
+ * nor toward lowering difficulty, and not toward mastery.
  */
 export type RecentOutcome = 'independent' | 'close' | 'assisted' | 'unsolved';
 
@@ -86,9 +87,9 @@ export interface Attempt {
   difficultyStep: number;
   /** True if a correct answer was given before the solution was shown. */
   solved: boolean;
-  /** solved at the exact number, with no help and no wrong answer (amendment 04, FR-075). */
+  /** solved at the exact number, with no help and no wrong answer (FR-075). */
   independent: boolean;
-  /** The shot that ended the search was at the enemy's exact number (Volltreffer). */
+  /** The shot that ended the search was at the enemy's exact number; always true since amendment 06. */
   exact: boolean;
   /** Highest help step reached; 3 means the solution was shown. */
   helpLevel: 0 | 1 | 2 | 3;
@@ -161,8 +162,7 @@ export interface TankState {
   position: number;
   x: number;
   y: number;
-  /** 0..100 */
-  health: number;
+  /** Tanks have no health (amendment 06); the child's hearts are RoundState.lives. */
   label?: number;
   alive: boolean;
 }
@@ -173,8 +173,18 @@ export type InputMethod = 'pointer' | 'keyboard';
 export interface RoundState {
   seed: number;
   mode: 'guided' | 'freePlay';
-  /** Player turns used. */
+  /** Player shots fired this round. */
   turn: number;
+  /** The child's hearts, LIVES at the start; 0 ends the round (amendment 06, FR-080). */
+  lives: number;
+  /** The score: enemies destroyed this round (FR-083). */
+  enemiesDestroyed: number;
+  /** The child's shots at the current enemy since it last fired; at ENEMY_FIRE_EVERY it fires (FR-081). */
+  shotsSinceEnemyFire: number;
+  /** Time played up to the last pause, final once the round is over (FR-084); controller.elapsedMs() adds the running part. */
+  elapsedMs: number;
+  /** The latest enemy shell removed a heart. */
+  lastEnemyHit: boolean;
   phase: Phase;
   terrain: Heightmap;
   player: TankState;
@@ -206,7 +216,8 @@ export interface RoundState {
   lastPlayerPath: Point[] | null;
   /** The shell in flight during 'playerShot' and 'enemyTurn', for the renderer to replay; otherwise null. */
   shot: ShotInFlight | null;
-  outcome: 'playerWon' | 'enemyWon' | 'turnsUsed' | null;
+  /** goalReached: roundLength enemies destroyed with roundType 'enemyCount'; heartsGone: no lives left (FR-082). */
+  outcome: 'goalReached' | 'heartsGone' | null;
 }
 
 export interface LastShot {
@@ -214,15 +225,11 @@ export interface LastShot {
   fired: number;
   /** The number under the impact point. */
   landed: number;
-  /** The enemy took damage: a body hit, or with exactHit only a Volltreffer (amendment 04, FR-066, FR-074). */
+  /** The fired number was the enemy's number: the enemy was destroyed (amendment 06, FR-066). */
   hit: boolean;
-  /** The landing point was on the enemy tank's body, exact or not. */
-  bodyHit: boolean;
-  /** Volltreffer: the fired number was the enemy's number (FR-071). */
-  bullseye: boolean;
-  /** Inside the enemy's blast radius without damage: the enemy shakes. */
+  /** On the enemy tank's body but not exact: the enemy shakes, "Ganz knapp! Triff die Linie." (FR-066, FR-072). */
   nearMiss: boolean;
-  /** The damaged enemy or the destroyed decoy, or null. */
+  /** The destroyed enemy or the destroyed decoy, or null. */
   hitTankId: string | null;
   /** Steps from the landed number to the enemy's number. */
   distance: number | null;

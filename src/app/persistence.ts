@@ -1,14 +1,15 @@
 /**
- * Browser persistence for settings and progress (FR-048, FR-048a, research R11).
+ * Browser persistence for settings, progress and personal bests (FR-048, FR-048a, FR-086, research R11).
  *
- * Loads both once, saves settings on request, asks the browser once to keep stored data permanently, and reports
+ * Loads them once, saves settings on request, asks the browser once to keep stored data permanently, and reports
  * what the settings page must show: why stored data was reset (`resetReason`) and whether the last save failed
  * (edge cases "Stored data is missing or damaged" and "Browser storage full or blocked").
  */
 import type { Settings } from '../core/settings/schema';
 import { exportData, importData, type ImportResult } from '../core/storage/exportImport';
 import { localStorageKeyValue, type KeyValue } from '../core/storage/keyValue';
-import { loadProgress, loadSettings, saveProgress, saveSettings, type ResetReason } from '../core/storage/storage';
+import { loadProgress, loadRecords, loadSettings, saveProgress, saveRecords, saveSettings, type ResetReason } from '../core/storage/storage';
+import { submitResult, type BestResult, type Records } from '../core/records/records';
 import type { Progress } from '../core/types';
 
 /** The part of `navigator.storage` this module uses. */
@@ -21,7 +22,7 @@ export interface StorageManagerLike {
 export type PersistOutcome = 'notAsked' | 'granted' | 'denied' | 'unsupported' | 'failed';
 
 export interface PersistenceStatus {
-  /** The worse of the settings and progress load results: 'unavailable' before 'invalid' before 'none'. */
+  /** The worst of the settings, progress and records load results: 'unavailable' before 'invalid' before 'none'. */
   resetReason: ResetReason;
   /** True when the latest save could not be written; the values still apply for this session. */
   saveFailed: boolean;
@@ -31,14 +32,21 @@ export interface PersistenceStatus {
 export interface Persistence {
   settings(): Settings;
   progress(): Progress;
+  /** Personal bests (amendment 06, FR-086). */
+  records(): Records;
   status(): PersistenceStatus;
   saveSettings(s: Settings): { ok: boolean };
   saveProgress(p: Progress): { ok: boolean };
+  /**
+   * Compares a finished round with the best for `key` (recordKey of the round's settings); a new record is stored
+   * at once. Returns whether it is a new record and the best after it (FR-086).
+   */
+  submitResult(key: string, result: BestResult): { newRecord: boolean; best: BestResult | null };
   /** Calls `persist()` at most once per instance; later calls return the first result. */
   requestPersistentStorage(): Promise<Exclude<PersistOutcome, 'notAsked'>>;
-  /** "Daten sichern": the export file text for the current settings and progress. */
+  /** "Daten sichern": the export file text for the current settings, progress and records. */
   exportText(now?: Date): string;
-  /** "Daten laden": on success replaces and saves settings and progress; on failure changes nothing. */
+  /** "Daten laden": on success replaces and saves settings, progress and records; on failure changes nothing. */
   importText(text: string): ImportResult;
 }
 
@@ -64,9 +72,11 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
 
   const loadedSettings = loadSettings(kv);
   const loadedProgress = loadProgress(kv);
+  const loadedRecords = loadRecords(kv);
   let settings = loadedSettings.settings;
   let progress = loadedProgress.progress;
-  const resetReason = worse(loadedSettings.resetReason, loadedProgress.resetReason);
+  let records = loadedRecords.records;
+  const resetReason = worse(worse(loadedSettings.resetReason, loadedProgress.resetReason), loadedRecords.resetReason);
   let saveFailed = false;
   let persistent: PersistOutcome = 'notAsked';
   let request: Promise<Exclude<PersistOutcome, 'notAsked'>> | null = null;
@@ -89,6 +99,7 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
   return {
     settings: () => settings,
     progress: () => progress,
+    records: () => records,
     status: () => ({ resetReason, saveFailed, persistent }),
     saveSettings(s) {
       settings = structuredClone(s);
@@ -98,6 +109,14 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       progress = structuredClone(p);
       return record(saveProgress(kv, progress));
     },
+    submitResult(key, result) {
+      const r = submitResult(records, key, result);
+      if (r.newRecord) {
+        records = r.records;
+        record(saveRecords(kv, records));
+      }
+      return { newRecord: r.newRecord, best: r.best };
+    },
     requestPersistentStorage() {
       request ??= ask().then((outcome) => {
         persistent = outcome;
@@ -105,15 +124,17 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       });
       return request;
     },
-    exportText: (now) => exportData(settings, progress, now),
+    exportText: (now) => exportData(settings, progress, records, now),
     importText(text) {
       const r = importData(text);
       if (!r.ok) return r;
       settings = r.settings;
       progress = r.progress;
+      records = r.records;
       const savedSettings = saveSettings(kv, settings);
       const savedProgress = saveProgress(kv, progress);
-      record({ ok: savedSettings.ok && savedProgress.ok });
+      const savedRecords = saveRecords(kv, records);
+      record({ ok: savedSettings.ok && savedProgress.ok && savedRecords.ok });
       return r;
     },
   };

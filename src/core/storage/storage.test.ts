@@ -6,12 +6,16 @@ import type { Progress } from '../types';
 import { memoryKeyValue, type KeyValue } from './keyValue';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
+import { emptyRecords, type Records } from '../records/records';
 import {
   emptyProgress,
   loadProgress,
+  loadRecords,
   loadSettings,
   PROGRESS_KEY,
+  RECORDS_KEY,
   saveProgress,
+  saveRecords,
   saveSettings,
   SETTINGS_KEY,
 } from './storage';
@@ -152,7 +156,7 @@ describe('unavailable storage', () => {
 });
 
 describe('migrate', () => {
-  it('turns a version 0 settings fixture into a valid version 3 object', () => {
+  it('turns a version 0 settings fixture into a valid version 4 object', () => {
     const v0 = {
       version: 0,
       challengeTypes: { numberLine: true, addition: false, subtraction: true, comparison: true },
@@ -166,7 +170,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(3);
+    expect(parsed.data?.version).toBe(4);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -183,11 +187,11 @@ describe('migrate', () => {
     return v1;
   }
 
-  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 3 with level 5 to 5 (decision D13)', () => {
+  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 4 with level 5 to 5 (decision D13)', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(3);
+    expect(parsed.data?.version).toBe(4);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -207,7 +211,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(3);
+    expect(settings.version).toBe(4);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -233,31 +237,66 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(3);
+    expect(settings.version).toBe(4);
     expect(settings.roundLength).toBe(12);
   });
 
-  it('turns version 2 settings into version 3 with exactHit false and every other field unchanged (amendment 04)', () => {
-    const v2: Record<string, unknown> = { ...defaultSettings(), version: 2, roundLength: 7, rulerLevelStart: 3 };
+  /** A version 3 settings object as stored before amendment 06. */
+  function v3Settings(over: Record<string, unknown> = {}): Record<string, unknown> {
+    const v3: Record<string, unknown> = { ...defaultSettings(), version: 3, exactHit: false, roundLength: 10, ...over };
+    delete v3.roundType;
+    delete v3.showClock;
+    delete v3.showRecords;
+    return v3;
+  }
+
+  it('turns version 2 settings into version 4 with every other field unchanged (amendments 04 and 06)', () => {
+    const v2 = v3Settings({ version: 2, roundLength: 7, rulerLevelStart: 3 });
     delete v2.exactHit;
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
-    expect(migrated).toEqual({ ...v2, version: 3, exactHit: false });
+    expect(migrated).toEqual({ ...v2, version: 4, roundType: 'untilHearts', showClock: false, showRecords: true });
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 3, exactHit: false });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 4, roundType: 'untilHearts' });
+  });
+
+  it('turns version 3 settings into version 4: exactHit dropped, roundType, showClock and showRecords added (amendment 06)', () => {
+    const v3 = v3Settings({ exactHit: true, rulerLevelStart: 2 });
+    const migrated = migrate(v3, 'settings') as Record<string, unknown>;
+    const expected: Record<string, unknown> = { ...v3, version: 4, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true };
+    delete expected.exactHit;
+    expect(migrated).toEqual(expected);
+    const parsed = settingsSchema.safeParse(migrated);
+    expect(parsed.success).toBe(true);
+    expect(validateSettings(parsed.data!)).toEqual({ ok: true });
+  });
+
+  it('version 3 with noDamage becomes "Gegner pro Runde", and a roundLength above 20 is clamped to 20', () => {
+    expect(migrate(v3Settings({ noDamage: true }), 'settings')).toMatchObject({ roundType: 'enemyCount', noDamage: true });
+    expect(migrate(v3Settings({ roundLength: 30 }), 'settings')).toMatchObject({ roundLength: 20 });
+    expect(migrate(v3Settings({ roundLength: 3 }), 'settings')).toMatchObject({ roundLength: 3 });
   });
 
   it('loadSettings upgrades stored version 2 settings without a reset', () => {
     const kv = memoryKeyValue();
-    const v2: Record<string, unknown> = { ...defaultSettings(), version: 2, freePlay: true };
+    const v2 = v3Settings({ version: 2, freePlay: true });
     delete v2.exactHit;
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 3, exactHit: false, freePlay: true });
+    expect(settings).toMatchObject({ version: 4, roundType: 'untilHearts', freePlay: true });
+    expect('exactHit' in settings).toBe(false);
   });
 
-  it('leaves version 3 settings unchanged', () => {
-    const s = { ...defaultSettings(), exactHit: true };
+  it('loadSettings upgrades stored version 3 settings with noDamage without a reset', () => {
+    const kv = memoryKeyValue();
+    kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
+    const { settings, resetReason } = loadSettings(kv);
+    expect(resetReason).toBe('none');
+    expect(settings).toMatchObject({ version: 4, roundType: 'enemyCount', noDamage: true });
+  });
+
+  it('leaves version 4 settings unchanged', () => {
+    const s = { ...defaultSettings(), roundType: 'enemyCount' as const, showClock: true };
     expect(migrate(s, 'settings')).toEqual(s);
   });
 
@@ -280,5 +319,41 @@ describe('memoryKeyValue', () => {
     expect(kv.get('x')).toBeNull();
     kv.set('x', 'y');
     expect(kv.get('x')).toBe('y');
+  });
+});
+
+describe('records storage (amendment 06, FR-086)', () => {
+  const sample = (): Records => ({ version: 1, best: { '0-100|1|untilHearts': { enemies: 9, ms: 372000, at: 1_700_000_000_000 } } });
+
+  it('uses the key mathtanks.records.v1 and round trips', () => {
+    expect(RECORDS_KEY).toBe('mathtanks.records.v1');
+    const kv = memoryKeyValue();
+    expect(saveRecords(kv, sample())).toEqual({ ok: true });
+    expect(kv.get('mathtanks.records.v1')).not.toBeNull();
+    expect(loadRecords(kv)).toEqual({ records: sample(), resetReason: 'none' });
+  });
+
+  it('missing records load empty with resetReason none', () => {
+    expect(loadRecords(memoryKeyValue())).toEqual({ records: emptyRecords(), resetReason: 'none' });
+  });
+
+  it('damaged or invalid records load empty with resetReason invalid', () => {
+    for (const text of ['{"version":1,', JSON.stringify({ version: 1, best: { k: { enemies: 'nine', ms: 1, at: 1 } } }), JSON.stringify({ version: 2, best: {} })]) {
+      const kv = memoryKeyValue({ [RECORDS_KEY]: text });
+      expect(loadRecords(kv)).toEqual({ records: emptyRecords(), resetReason: 'invalid' });
+    }
+  });
+
+  it('a throwing KeyValue gives empty records with resetReason unavailable, and saving reports ok false', () => {
+    const kv: KeyValue = {
+      get: () => {
+        throw new Error('blocked');
+      },
+      set: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(loadRecords(kv)).toEqual({ records: emptyRecords(), resetReason: 'unavailable' });
+    expect(saveRecords(kv, sample())).toEqual({ ok: false });
   });
 });

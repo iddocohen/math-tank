@@ -228,6 +228,43 @@ input:focus-visible {
   color: #ffd54a;
 }
 
+.landed.hit {
+  color: #9be89f;
+}
+
+.landed.near {
+  color: #ffd54a;
+}
+
+/* Amendment 06: tank counter and optional clock at the top left (FR-083, FR-084). No text, only a symbol and numbers. */
+.top-left {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.score,
+.clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 14px;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgb(20 28 48 / 0.8);
+}
+
+.score svg {
+  width: 40px;
+  height: 26px;
+}
+
 @media (max-width: 560px) {
   .battle {
     --controls-height: 96px;
@@ -272,6 +309,67 @@ input:focus-visible {
   max-width: 640px;
   font-size: clamp(1.75rem, 4vw, 2.75rem);
   font-weight: 800;
+}
+
+.round-result {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Neuer Rekord!" pops in with two sparkles (FR-086); without motion when the system asks for less. */
+.new-record {
+  margin: 0;
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 900;
+  color: #1b1f27;
+  background: #ffd54a;
+  animation: record-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.new-record::before,
+.new-record::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 12px;
+  color: #fff7d1;
+  animation: record-sparkle 900ms ease-in-out 3;
+}
+
+/* The record when it is not beaten: small and neutral, no comparison. */
+.record {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+@keyframes record-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes record-sparkle {
+  50% {
+    transform: scale(1.5) rotate(45deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-record,
+  .new-record::before,
+  .new-record::after {
+    animation: none;
+  }
 }
 
 .round-end-buttons {

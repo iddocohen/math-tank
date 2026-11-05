@@ -15,15 +15,16 @@ export const CUSTOM_MIN_LIMIT = -1000;
 export const CUSTOM_MIN_UPPER_LIMIT = 9000;
 export const RANGE_SPAN_MIN = 5;
 export const RANGE_SPAN_MAX = 1000;
-export const ROUND_LENGTH_MIN = 3;
-export const ROUND_LENGTH_MAX = 30;
+/** Enemies per round (amendment 06). */
+export const ROUND_LENGTH_MIN = 1;
+export const ROUND_LENGTH_MAX = 20;
 export const TIME_LIMIT_MIN = 10;
 export const TIME_LIMIT_MAX = 120;
 
 /** Data-model.md defaults (FR-046). Returns a fresh object on each call. */
 export function defaultSettings(): Settings {
   return {
-    version: 3,
+    version: 4,
     challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     range: { preset: '0-100', min: 0, max: 100 },
     addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -37,11 +38,13 @@ export function defaultSettings(): Settings {
     help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
     beginnerAssist: true,
     sound: { effects: true, music: false, speech: true },
-    roundLength: 10,
+    roundType: 'untilHearts',
+    roundLength: 5,
     adaptive: true,
     freePlay: false,
     noDamage: false,
-    exactHit: false,
+    showClock: false,
+    showRecords: true,
     timeLimitSeconds: null,
   };
 }

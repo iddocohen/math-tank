@@ -1,7 +1,10 @@
 /**
  * US1 and US8 end to end with the keyboard only (FR-001 to FR-008, FR-059 to FR-062, FR-066, SC-001, AC-01):
- * start a free-play round with Enter, type a wrong number and fire, watch the enemy turn, type the enemy's number
- * and fire, play to the round end and start a new round with Enter, all without a page reload.
+ * start a free-play round with Enter, fire two wrong numbers and watch the enemy fire after the second, type the
+ * enemy's number and fire, play to the round end and start a new round with Enter, all without a page reload.
+ * Amendment 06: only the exact number destroys the enemy, the enemy fires after every 2 shots, the round ends after
+ * the parent's number of enemies ("Gegner pro Runde" 2 here), and the end screen shows the score, the time and the
+ * personal best ("Neuer Rekord!" the first time, "Dein Rekord: 2" the second).
  * The first test has no click, tap or mouse call. Game state is read from the overlay's data-* attributes (D4).
  * Amendment 05: the arrow keys do nothing, pointing on the ruler shows no number, there are no −1 and +1 buttons,
  * and a "Du" arrow points at the child's tank for 3 seconds at every round start.
@@ -15,10 +18,8 @@ import { forbiddenWords, t } from '../../src/i18n';
 const m = t();
 const settings = { ...defaultSettings(), freePlay: true };
 const { min, max } = settings.range;
-
-async function healths(overlay: Locator): Promise<[string | null, string | null]> {
-  return [await overlay.getAttribute('data-player-health'), await overlay.getAttribute('data-enemy-health')];
-}
+/** Two enemies per round, so a keyboard round ends after two exact hits (FR-082). */
+const twoEnemies = { ...settings, roundType: 'enemyCount' as const, roundLength: 2 };
 
 async function enemyNumber(overlay: Locator): Promise<number> {
   await expect(overlay).toHaveAttribute('data-enemy-number', /^-?\d+$/);
@@ -43,7 +44,7 @@ test('play a free-play round with the keyboard only and start another', async ({
     ([key, value]) => {
       window.localStorage.setItem(key, value);
     },
-    [SETTINGS_KEY, JSON.stringify(settings)] as const,
+    [SETTINGS_KEY, JSON.stringify(twoEnemies)] as const,
   );
   await page.goto('/?seed=1');
 
@@ -66,64 +67,79 @@ test('play a free-play round with the keyboard only and start another', async ({
   const overlay = page.locator('[data-phase]');
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
   await expect(overlay).toHaveAttribute('data-turn', '0');
-  const startHealth = await healths(overlay);
-  expect(startHealth).toEqual(['100', '100']);
+  await expect(overlay).toHaveAttribute('data-lives', '3');
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
+  await expect(page.getByTestId('score')).toHaveText('0');
 
   // A number off the tank body (5 away; the body covers about 2 numbers either side in 0 to 100): the shell lands
-  // there, the enemy keeps its health, then the enemy takes its turn (FR-066, amendment 04).
+  // there and the enemy stays. It is the first shot, so the enemy does not fire yet (FR-066, FR-081).
   const enemy = await enemyNumber(overlay);
   const wrong = enemy - 5 >= min ? enemy - 5 : enemy + 5;
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
-  await expect(overlay).toHaveAttribute('data-enemy-health', '100');
-  await expect(overlay).toHaveAttribute('data-phase', /^(enemyTurn|aiming|roundOver)$/);
-  await expect(overlay).toHaveAttribute('data-phase', /^(aiming|roundOver)$/, { timeout: 15_000 });
-  await expect(overlay).toHaveAttribute('data-turn', '1');
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '1');
+  await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
-  // The enemy's number: a Volltreffer, the enemy loses health (FR-071).
-  let shots = 1;
-  if ((await overlay.getAttribute('data-phase')) === 'aiming') {
-    const target = await enemyNumber(overlay);
-    await typeNumber(page, overlay, target);
-    await page.keyboard.press('Enter');
-    shots++;
-    await expect.poll(async () => Number(await overlay.getAttribute('data-enemy-health')), { timeout: 15_000 }).toBeLessThan(100);
-    await expect(overlay).toHaveAttribute('data-last-shot', 'bullseye');
-  }
+  // The second shot that does not destroy the enemy: the enemy fires once. On "Leicht" its first shot misses (FR-043).
+  await typeNumber(page, overlay, wrong);
+  await page.keyboard.press('Enter');
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-turn', '2');
+  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '0');
+  await expect(overlay).toHaveAttribute('data-lives', '3');
 
-  // Keep firing at the enemy's number until the round ends.
-  while ((await overlay.getAttribute('data-phase')) !== 'roundOver') {
-    await expect(overlay).toHaveAttribute('data-phase', /^(aiming|roundOver)$/, { timeout: 20_000 });
-    if ((await overlay.getAttribute('data-phase')) === 'roundOver') break;
-    await typeNumber(page, overlay, await enemyNumber(overlay));
-    await page.keyboard.press('Enter');
-    shots++;
-    await expect(overlay).not.toHaveAttribute('data-phase', 'aiming', { timeout: 5_000 });
-    expect(shots).toBeLessThan(40);
-  }
+  // The enemy's number destroys it; a new enemy appears and the tank counter shows 1 (FR-066, FR-083).
+  await typeNumber(page, overlay, enemy);
+  await page.keyboard.press('Enter');
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
+  await expect(page.getByTestId('score')).toHaveText('1');
+  await expect(page.getByTestId('hit-feedback')).toHaveText(`${m.battle.hit} ${m.battle.enemyStoodAt(enemy)}`);
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  const second = await enemyNumber(overlay);
+  expect(second).not.toBe(enemy);
 
-  expect(await healths(overlay)).not.toEqual(startHealth);
+  // The second destroyed enemy ends the round (FR-082).
+  await typeNumber(page, overlay, second);
+  await page.keyboard.press('Enter');
+  await expect(overlay).toHaveAttribute('data-phase', 'roundOver', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-outcome', 'goalReached');
 
-  // The round end shows only encouraging text (FR-008, FR-033).
+  // The round end: encouraging text, the score and the time, and the first record (FR-008, FR-033, FR-085, FR-086).
   const roundEnd = page.getByTestId('round-end');
   await expect(roundEnd).toBeVisible();
+  await expect(roundEnd).toContainText(m.roundEnd.goalReached);
+  await expect(page.getByTestId('round-result')).toHaveText(/^2 Panzer getroffen in \d+:\d\d$/);
+  await expect(page.getByTestId('new-record')).toHaveText(m.roundEnd.newRecord);
   const text = (await roundEnd.innerText()).toLocaleLowerCase('de');
-  const messages = [m.roundEnd.playerWon, m.roundEnd.enemyWon, m.roundEnd.turnsUsed];
-  expect(messages.some((msg) => text.includes(msg.toLocaleLowerCase('de')))).toBe(true);
   for (const word of forbiddenWords) expect(text).not.toContain(word.toLocaleLowerCase('de'));
+  expect(text).not.toContain('nicht geschafft');
 
   // Enter on the round end starts a new round without a page reload (FR-062).
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
   await expect(overlay).toHaveAttribute('data-turn', '0');
-  await expect(overlay).toHaveAttribute('data-player-health', '100');
-  await expect(overlay).toHaveAttribute('data-enemy-health', '100');
+  await expect(overlay).toHaveAttribute('data-lives', '3');
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   await expect(roundEnd).toBeHidden();
   await expect(page.locator('canvas')).toHaveCount(1);
   expect(reloads).toBe(0);
   expect(await page.evaluate(() => (window as unknown as { e2eMarker?: boolean }).e2eMarker)).toBe(true);
+
+  // The same result again is not a new record: the record is shown small and neutral (FR-086).
+  for (let i = 0; i < 2; i++) {
+    await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+    await typeNumber(page, overlay, await enemyNumber(overlay));
+    await page.keyboard.press('Enter');
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1), { timeout: 15_000 });
+  }
+  await expect(roundEnd).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('record')).toHaveText(m.roundEnd.yourRecord(2));
+  await expect(page.getByTestId('new-record')).toHaveCount(0);
 });
 
 test('the new scene button starts a fresh round in the same mode, and no key presses it (amendment 03, FR-070)', async ({ page }) => {
@@ -169,8 +185,8 @@ test('the new scene button starts a fresh round in the same mode, and no key pre
   await expect(overlay).not.toHaveAttribute('data-round-seed', seed!);
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
   await expect(overlay).toHaveAttribute('data-turn', '0');
-  await expect(overlay).toHaveAttribute('data-player-health', '100');
-  await expect(overlay).toHaveAttribute('data-enemy-health', '100');
+  await expect(overlay).toHaveAttribute('data-lives', '3');
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   await expect(overlay).not.toHaveAttribute('data-player-side', side!);
   await expect(overlay).not.toHaveAttribute('data-last-landing', /.+/);
 

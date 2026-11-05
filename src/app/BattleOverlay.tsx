@@ -9,14 +9,19 @@
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
  * `data-enemy-number` is set only while the enemy is visible, so a test cannot read a hidden enemy's number.
- * `data-last-shot` names the result of the last player shot (amendment 04): `bullseye`, `body`, `close` (on the tank
- * body without damage under "Genau treffen") or `miss`.
+ * `data-last-shot` names the result of the last player shot (amendment 06): `hit` (the exact number, the enemy was
+ * destroyed), `near` (on the tank body but not exact) or `miss`. `data-lives`, `data-enemies-destroyed`,
+ * `data-shots-since-enemy-fire` and `data-outcome` replace the health attributes.
  *
- * Hit feedback (amendment 04, FR-071, FR-072, FR-074, contracts/ui-flows.md): a Volltreffer names the enemy's
- * number; a body hit that is not exact shows "Treffer!" or, under "Genau treffen", "Ganz knapp!", with both
- * numbers and the distance; a miss shows the landing number.
+ * Hit feedback (amendment 06, FR-066, FR-072, contracts/ui-flows.md): a hit shows "Getroffen!" and the number the
+ * enemy stood at; a near miss on the body shows "Ganz knapp! Triff die Linie." with both numbers and the distance;
+ * a miss shows the landing number.
+ *
+ * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
+ * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
  */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
 import type { LastShot, RoundState } from '../core/types';
 import { t } from '../i18n';
@@ -38,6 +43,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const readout = state.entry.typed !== '' ? state.entry.typed : '?';
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
+  const showClock = controller.getRoundSettings().showClock;
 
   return (
     <div
@@ -47,8 +53,10 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-turn={state.turn}
       data-round-seed={state.seed}
       data-player-side={state.playerSide}
-      data-player-health={Math.round(state.player.health)}
-      data-enemy-health={Math.round(state.enemy.health)}
+      data-lives={state.lives}
+      data-enemies-destroyed={state.enemiesDestroyed}
+      data-shots-since-enemy-fire={state.shotsSinceEnemyFire}
+      data-outcome={state.outcome ?? undefined}
       data-challenge-answerable={answerable}
       data-selection={state.selection ?? undefined}
       data-last-landing={state.lastShot?.landed ?? undefined}
@@ -58,20 +66,27 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
-        ) : lastShot?.bullseye && lastShot.hit ? (
-          // A Volltreffer names the number the enemy stood at, also after it has moved (FR-068, FR-071).
-          <span className="landed hit bullseye" data-testid="hit-feedback">
-            {m.battle.bullseye} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
+        ) : lastShot?.hit ? (
+          // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
+          <span className="landed hit" data-testid="hit-feedback">
+            {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
-        ) : lastShot?.bodyHit ? (
-          // On the tank body but not exact: both numbers and the distance, never "falsch" (FR-072, FR-074).
-          <span className={lastShot.hit ? 'landed hit' : 'landed close'} data-testid="hit-feedback">
-            {lastShot.hit ? m.battle.bodyHit : m.battle.close}{' '}
-            <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
+        ) : lastShot?.nearMiss ? (
+          // On the tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072).
+          <span className="landed near" data-testid="hit-feedback">
+            {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
           </span>
         ) : lastShot ? (
           <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
         ) : null}
+      </div>
+
+      <div className="top-left">
+        <div className="score" data-testid="score" role="img" aria-label={`${m.battle.score}: ${state.enemiesDestroyed}`}>
+          <TankIcon />
+          <span aria-hidden="true">{state.enemiesDestroyed}</span>
+        </div>
+        {showClock && <Clock controller={controller} />}
       </div>
 
       {gear && <div className="top-right">{gear}</div>}
@@ -106,8 +121,34 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   );
 }
 
-function lastShotKind(shot: LastShot): 'bullseye' | 'body' | 'close' | 'miss' {
-  if (shot.bullseye && shot.hit) return 'bullseye';
-  if (shot.bodyHit) return shot.hit ? 'body' : 'close';
-  return 'miss';
+function lastShotKind(shot: LastShot): 'hit' | 'near' | 'miss' {
+  if (shot.hit) return 'hit';
+  return shot.nearMiss ? 'near' : 'miss';
+}
+
+/** The up-counting clock m:ss (FR-084); it re-reads the controller's time once a second. */
+function Clock({ controller }: { controller: BattleController }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="clock" data-testid="clock" aria-label={t().battle.clock}>
+      {formatTime(controller.elapsedMs())}
+    </div>
+  );
+}
+
+/** A small enemy tank: red angular body, turret and a black flag, like the enemy on the battlefield (FR-077, FR-083). */
+function TankIcon() {
+  return (
+    <svg viewBox="0 0 40 26" aria-hidden="true" focusable="false">
+      <line x1="10" y1="12" x2="10" y2="2" stroke="#2b2f36" strokeWidth="1.5" />
+      <path d="M10 2 L18 5 L10 8 Z" fill="#111" />
+      <rect x="20" y="9" width="16" height="3" rx="1" fill="#b3261e" transform="rotate(-20 20 10)" />
+      <path d="M8 12 L30 12 L36 18 L36 22 L2 22 L2 18 Z" fill="#b3261e" stroke="#4a0f0b" strokeWidth="1.5" />
+      <rect x="4" y="22" width="30" height="3" rx="1.5" fill="#2b2f36" />
+    </svg>
+  );
 }

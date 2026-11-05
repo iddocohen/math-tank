@@ -5,6 +5,11 @@
  *
  * Amendment 01: the player aims by choosing a number. The cannon is fixed and solveArcToX computes the arc,
  * so the shell always lands at the chosen number. This phase covers free play; guided mode arrives later.
+ *
+ * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
+ * The enemy fires once after every ENEMY_FIRE_EVERY shots of the child at the same enemy; each enemy hit costs one
+ * of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
+ * roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
@@ -12,7 +17,8 @@ import { simulateShot } from '../physics/ballistics';
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
-import { enemyDamageFactor, enemyShot } from '../ai/enemy';
+import { enemyShot } from '../ai/enemy';
+import { ENEMY_FIRE_EVERY } from './hitRule';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import {
@@ -55,6 +61,8 @@ export class BattleController {
   private phaseBeforePause: RoundState['phase'] | null = null;
   /** The number of the player's shell in flight. */
   private firedNumber: number | null = null;
+  /** Clock time since which the round's time is running, or null while it is stopped (FR-084). */
+  private runningSince: number | null = null;
 
   constructor(deps: BattleDeps) {
     this.deps = deps;
@@ -64,6 +72,12 @@ export class BattleController {
     this.nextSide = createRng(deriveSeed(this.baseSeed, 0)).next() < 0.5 ? 'left' : 'right';
     // A placeholder round until startRound; it is never shown.
     this.state = { ...createRound(this.settings, this.baseSeed, this.nextSide), phase: 'roundOver' };
+  }
+
+  /** Time played this round in milliseconds: stopped while paused and once the round is over (FR-084). */
+  elapsedMs(): number {
+    const running = this.runningSince === null ? 0 : Math.max(0, this.deps.clock() - this.runningSince);
+    return this.state.elapsedMs + running;
   }
 
   getState(): RoundState {
@@ -100,6 +114,7 @@ export class BattleController {
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
     this.firedNumber = null;
+    this.runningSince = this.deps.clock();
     // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
     this.set({ ...createRound(this.settings, seed, side, mode), inputMethod: this.state.inputMethod });
   }
@@ -183,38 +198,58 @@ export class BattleController {
     this.firedNumber = null;
     const s = this.impact({ point: shot.impact, hitTargetId: null, outOfBounds: false, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) }, shot.blastRadius);
     const next: RoundState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
-    const outcome = deadOutcome(next);
-    if (outcome) {
-      this.set({ ...next, phase: 'roundOver', outcome });
+    if (next.lastShot?.hit) {
+      // One hit, one destroyed enemy; the count for the enemy's fire starts again for the new enemy (FR-066, FR-081).
+      const destroyed: RoundState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, shotsSinceEnemyFire: 0 };
+      if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
+        this.endRound(destroyed, 'goalReached');
+        return;
+      }
+      this.set(this.nextReadPosition(destroyed));
       return;
     }
-    this.set({ ...next, phase: 'enemyTurn', shot: this.nextEnemyShot(next) });
+    const shots = next.shotsSinceEnemyFire + 1;
+    if (shots >= ENEMY_FIRE_EVERY) {
+      const firing: RoundState = { ...next, shotsSinceEnemyFire: 0 };
+      this.set({ ...firing, phase: 'enemyTurn', shot: this.nextEnemyShot(firing) });
+      return;
+    }
+    this.set({ ...next, shotsSinceEnemyFire: shots, phase: 'aiming' });
   }
 
   enemyShotAnimationDone(): void {
     if (this.state.phase !== 'enemyTurn' || !this.state.shot) return;
     const shot = this.state.shot;
     const s = { ...this.impact({ point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: 'enemy' }, shot.blastRadius), shot: null };
-    const outcome = deadOutcome(s) ?? (s.turn >= this.settings.roundLength ? 'turnsUsed' : null);
-    if (outcome) {
-      this.set({ ...s, phase: 'roundOver', outcome });
+    if (s.lives <= 0) {
+      this.endRound(s, 'heartsGone');
       return;
     }
-    this.set(s.lastShot?.hit ? this.nextReadPosition(s) : { ...s, phase: 'aiming' });
+    this.set({ ...s, phase: 'aiming' });
   }
 
   pause(): void {
     const phase = this.state.phase;
     if (phase === 'paused' || phase === 'roundOver') return;
     this.phaseBeforePause = phase;
-    this.set({ ...this.state, phase: 'paused' });
+    const elapsedMs = this.elapsedMs();
+    this.runningSince = null;
+    this.set({ ...this.state, phase: 'paused', elapsedMs });
   }
 
   resume(): void {
     if (this.state.phase !== 'paused' || this.phaseBeforePause === null) return;
     const phase = this.phaseBeforePause;
     this.phaseBeforePause = null;
+    this.runningSince = this.deps.clock();
     this.set({ ...this.state, phase });
+  }
+
+  /** Stops the time for good and ends the round (FR-008, FR-084). */
+  private endRound(s: RoundState, outcome: NonNullable<RoundState['outcome']>): void {
+    const elapsedMs = this.elapsedMs();
+    this.runningSince = null;
+    this.set({ ...s, elapsedMs, phase: 'roundOver', outcome });
   }
 
   /** Digits, Enter and pointer selection work only while the player chooses a number. */
@@ -230,12 +265,12 @@ export class BattleController {
   }
 
   /**
-   * Free play: after a hit a new "read the ruler" challenge follows and the enemy moves to its answer, a new
-   * visible position (decision D12, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
+   * Free play: after a hit a new "read the ruler" challenge follows and a new enemy stands at its answer, a new
+   * visible position (decision D12, FR-066, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
    */
   private nextReadPosition(s: RoundState): RoundState {
     const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position);
-    const enemy: TankState = moveTank(s.enemy, challenge.answer, this.settings, s.terrain);
+    const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, this.settings, s.terrain), alive: true };
     return { ...s, phase: 'aiming', challenge, enemy };
   }
 
@@ -259,12 +294,7 @@ export class BattleController {
   }
 
   private impact(impact: Impact, blastRadius: number): RoundState {
-    const rules: DamageRules = {
-      enemyDamageFactor: enemyDamageFactor(this.settings.enemyDifficulty),
-      noDamage: this.settings.noDamage,
-      exactHit: this.settings.exactHit,
-      range: this.settings.range,
-    };
+    const rules: DamageRules = { noDamage: this.settings.noDamage, range: this.settings.range };
     return applyImpact(this.state, impact, blastRadius, rules);
   }
 
@@ -272,13 +302,6 @@ export class BattleController {
     this.state = next;
     for (const listener of [...this.listeners]) listener(next);
   }
-}
-
-/** A destroyed enemy wins the round for the player, even if both tanks are destroyed by the same shell. */
-function deadOutcome(s: RoundState): RoundState['outcome'] {
-  if (!s.enemy.alive) return 'playerWon';
-  if (!s.player.alive) return 'enemyWon';
-  return null;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

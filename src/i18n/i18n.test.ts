@@ -72,16 +72,20 @@ describe('de table', () => {
     expect(t().challenge.findNumber(42)).toContain('42');
   });
 
-  it('has the amendment 04 hit feedback (FR-071, FR-072, FR-074)', () => {
-    const b = t().battle;
-    expect(b.bullseye).toBe('Volltreffer!');
-    expect(b.bodyHit).toBe('Treffer!');
-    expect(b.close).toBe('Ganz knapp!');
-    expect(b.compare(30, 31)).toBe('Du: 30 · Gegner: 31 · 1 Schritt');
-    expect(b.compare(630, 637)).toBe('Du: 630 · Gegner: 637 · 7 Schritte');
-    expect(b.enemyStoodAt(637)).toBe('Der Gegner stand bei 637.');
-    expect(t().settings.labels.exactHit).toBe('Genau treffen');
-    expect(t().settings.labels.exactHitHint).toBe('Nur die genaue Zahl trifft.');
+  it('has the amendment 06 hit feedback and end screen (FR-066, FR-072, FR-085, FR-086)', () => {
+    const b = t().battle as Record<string, unknown>;
+    expect(t().battle.hit).toBe('Getroffen!');
+    expect(t().battle.near).toBe('Ganz knapp! Triff die Linie.');
+    expect(t().battle.compare(30, 31)).toBe('Du: 30 · Gegner: 31 · 1 Schritt');
+    expect(t().battle.compare(630, 637)).toBe('Du: 630 · Gegner: 637 · 7 Schritte');
+    expect(t().battle.enemyStoodAt(637)).toBe('Der Gegner stand bei 637.');
+    for (const removed of ['bullseye', 'bodyHit', 'close']) expect(b[removed]).toBeUndefined();
+    expect((t().settings.labels as Record<string, unknown>).exactHit).toBeUndefined();
+    const r = t().roundEnd;
+    expect(r.result(9, '6:12')).toBe('9 Panzer getroffen in 6:12');
+    expect(r.result(1, '0:42')).toBe('1 Panzer getroffen in 0:42');
+    expect(r.newRecord).toBe('Neuer Rekord!');
+    expect(r.yourRecord(12)).toBe('Dein Rekord: 12');
   });
 
   it('t() returns the German table', () => {

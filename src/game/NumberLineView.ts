@@ -18,8 +18,8 @@
  *   none), for the end-to-end tests only.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
  *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
- * - After a hit on the tank body that is not exact, a bracket from the child's number to the number the enemy
- *   stood at, with "Du: 30 · Gegner: 31 · 1 Schritt" (amendment 04, FR-072), in every mode.
+ * - After a near miss on the tank body (amendment 06), a bracket from the child's number to the enemy's number,
+ *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072).
  * - Pointer lines (amendment 04, FR-073): a thin dashed vertical line from the center of every visible tank (the
  *   enemy once found, and every decoy) down to the ruler, ending in a small triangle on the ruler line
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
@@ -246,8 +246,8 @@ export class NumberLineView {
       this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
 
       const enemyVisible = s.enemyFound && s.enemy.alive;
-      if (shot.bodyHit && !shot.bullseye) {
-        // On the tank body but not exact: both numbers and the distance (FR-072).
+      if (shot.nearMiss) {
+        // A near miss on the tank body: both numbers and the distance (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
       } else if (s.mode === 'freePlay' && !shot.hit && enemyVisible && shot.landed !== s.enemy.position) {
         this.drawBracket(lx, numberToX(s.enemy.position, min, max), t().battle.steps(Math.abs(shot.landed - s.enemy.position)));

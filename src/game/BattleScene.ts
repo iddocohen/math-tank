@@ -6,9 +6,11 @@
  * - Replays the shell path in state.shot, then calls shotAnimationDone or enemyShotAnimationDone.
  * - The ruler (NumberLineView) handles tapping and dragging; the cannon cannot be dragged (FR-003).
  * - The player's turret shows the fixed 65-degree angle and turns to the arc's launch angle just before a
- *   raised or lifted shot (FR-065). The enemy shakes when the player's shell lands near it without damage
- *   (lastShot.nearMiss), and a Volltreffer gets a larger explosion at the enemy (amendment 04, FR-071).
- * - With "Genau treffen" on, the enemy shows a bullseye on its center line (FR-074).
+ *   raised or lifted shot (FR-065).
+ * - Amendment 06 (FR-066, FR-073, FR-080): the enemy shakes after a near miss on its body (lastShot.nearMiss); an
+ *   exact hit destroys it with a large explosion where it stood, and the new enemy fades in at its new number. The
+ *   enemy shows a target ring where the pointer line meets it. The child's hearts sit above the child's tank, and
+ *   the tank flashes when an enemy shell costs a heart.
  * - At the start of every round, which includes "Neue Landschaft", a bouncing "Du" arrow points at the child's tank
  *   for YOU_MARKER_MS (amendment 05, FR-077). The canvas attribute `data-you-marker` is `on` while it shows and `off`
  *   after, for the end-to-end tests only (tasks.md D4).
@@ -19,7 +21,8 @@ import type { BattleController } from '../core/battle/controller';
 import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
-import type { RoundState, ShotInFlight, TankState } from '../core/types';
+import { LIVES } from '../core/battle/hitRule';
+import type { RoundState, ShotInFlight } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
 import { YOU_MARKER_MS } from '../core/view/tankStyle';
 import { Effects } from './effects';
@@ -41,6 +44,8 @@ export interface BattleSceneOptions {
 
 /** The player's turret turns to a raised or lifted arc over this time before the shell leaves. */
 const PLAYER_TURN_MS = 250;
+/** A new enemy fades in after the large explosion of the destroyed one. */
+const NEW_ENEMY_DELAY_MS = 600;
 /** The enemy turns its cannon, then fires after this pause, so the child can follow. */
 const ENEMY_TURN_MS = 450;
 const ENEMY_FIRE_DELAY_MS = 700;
@@ -106,20 +111,25 @@ export class BattleScene extends Phaser.Scene {
       this.startedShot = null;
       this.enemy.setAim(s.player.x < s.enemy.x ? 150 : 30);
       this.player.setAim(fixedAngle(s));
-      this.enemy.setBullseye(this.controller.getRoundSettings().exactHit);
+      this.enemy.setTarget(true);
       if (s.phase !== 'roundOver') this.showYouMarker();
     }
 
     this.terrain.update(s.terrain);
-    this.syncTank(this.player, s.player, prev?.player, newRound);
-    this.syncTank(this.enemy, s.enemy, prev?.enemy, newRound);
+    this.player.sync(s.player, newRound);
+    this.player.setLives(s.lives, LIVES);
+    const destroyed = !newRound && s.lastShot !== prev?.lastShot && s.lastShot?.hit === true;
+    this.enemy.sync(s.enemy, newRound || destroyed);
     this.enemy.setHidden(!s.enemyFound, !newRound);
+    if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
     if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
-    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.bullseye && s.lastShot.hit) {
-      const c = tankCenter(s.enemy);
-      this.effects.bullseye(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
+    if (destroyed && prev) {
+      // The large explosion where the destroyed enemy stood; then the new enemy fades in at its new number.
+      const c = tankCenter(prev.enemy);
+      this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
+      this.enemy.appear(NEW_ENEMY_DELAY_MS);
     }
     this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
@@ -139,11 +149,6 @@ export class BattleScene extends Phaser.Scene {
     this.player.showYouMarker(YOU_MARKER_MS, () => {
       canvas.dataset.youMarker = 'off';
     });
-  }
-
-  private syncTank(view: TankView, tank: TankState, before: TankState | undefined, newRound: boolean): void {
-    view.sync(tank, newRound);
-    if (!newRound && before && tank.health < before.health) this.effects.hitFlash(view);
   }
 
   private startShot(shot: ShotInFlight): void {

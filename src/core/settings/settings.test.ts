@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 3,
+      version: 4,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -34,11 +34,13 @@ describe('defaults', () => {
       help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
       beginnerAssist: true,
       sound: { effects: true, music: false, speech: true },
-      roundLength: 10,
+      roundType: 'untilHearts',
+      roundLength: 5,
       adaptive: true,
       freePlay: false,
       noDamage: false,
-      exactHit: false,
+      showClock: false,
+      showRecords: true,
       timeLimitSeconds: null,
     });
   });
@@ -55,14 +57,25 @@ describe('defaults', () => {
     expect(validateSettings(d)).toEqual({ ok: true });
   });
 
-  it('the schema requires a boolean exactHit ("Genau treffen", amendment 04, FR-074)', () => {
+  it('have no exactHit ("Genau treffen" is removed by amendment 06)', () => {
     const d = defaultSettings() as unknown as Record<string, unknown>;
-    expect(settingsSchema.safeParse({ ...d, exactHit: true }).success).toBe(true);
-    expect(settingsSchema.safeParse({ ...d, exactHit: 'yes' }).success).toBe(false);
-    const without = { ...d };
-    delete without.exactHit;
-    expect(settingsSchema.safeParse(without).success).toBe(false);
-    expect(settingsSchema.safeParse({ ...d, version: 2 }).success).toBe(false);
+    expect('exactHit' in d).toBe(false);
+    const parsed = settingsSchema.safeParse({ ...d, exactHit: true });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data && 'exactHit' in parsed.data).toBe(false);
+  });
+
+  it('the schema requires version 4, a known roundType and boolean showClock and showRecords (amendment 06)', () => {
+    const d = defaultSettings() as unknown as Record<string, unknown>;
+    expect(settingsSchema.safeParse({ ...d, version: 3 }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, roundType: 'enemyCount' }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...d, roundType: 'turns' }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, showClock: 'yes' }).success).toBe(false);
+    for (const key of ['roundType', 'showClock', 'showRecords']) {
+      const without = { ...d };
+      delete without[key];
+      expect(settingsSchema.safeParse(without).success).toBe(false);
+    }
   });
 
   it('returns a fresh object each call', () => {
@@ -158,17 +171,27 @@ describe('validateSettings', () => {
     expect(paths(s)).toContain('range');
   });
 
-  it('rejects roundLength outside 3 to 30', () => {
-    for (const roundLength of [2, 31, 10.5]) {
+  it('rejects roundLength (enemies per round) outside 1 to 20 (amendment 06)', () => {
+    for (const roundLength of [0, 21, 2.5]) {
       const s = clone(defaultSettings());
       s.roundLength = roundLength;
       expect(paths(s)).toContain('roundLength');
     }
-    for (const roundLength of [3, 30]) {
+    for (const roundLength of [1, 20]) {
       const s = clone(defaultSettings());
       s.roundLength = roundLength;
       expect(validateSettings(s)).toEqual({ ok: true });
     }
+  });
+
+  it('rejects "Bis alle Herzen weg" with the no-damage mode, which would never end (FR-044, FR-082)', () => {
+    const s = clone(defaultSettings());
+    s.noDamage = true;
+    const r = validateSettings(s);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContainEqual({ key: 'roundTypeNoDamage', path: 'roundType' });
+    s.roundType = 'enemyCount';
+    expect(validateSettings(s)).toEqual({ ok: true });
   });
 
   it('rejects timeLimitSeconds outside 10 to 120', () => {

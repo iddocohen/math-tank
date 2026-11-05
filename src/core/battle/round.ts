@@ -1,5 +1,5 @@
 /**
- * Building a round and applying explosions (FR-001, FR-005 to FR-007, FR-010a, FR-043, FR-044, FR-066, FR-071, FR-074).
+ * Building a round and applying explosions (FR-001, FR-005 to FR-007, FR-010a, FR-044, FR-066, FR-080; amendment 06).
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
@@ -8,8 +8,7 @@ import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { generateChallenge } from '../math/generate';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
-import { damageAt } from '../physics/damage';
-import { enemyDamage, shotKind } from './hitRule';
+import { enemyHitsPlayer, LIVES, shotKind } from './hitRule';
 import { emptyEntry } from './entry';
 
 /** Logical world size (research R5). */
@@ -36,7 +35,7 @@ export function muzzle(tank: TankState): Point {
 
 function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: RoundState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
-  return { id, kind, position, x, y: settleY(terrain, x), health: 100, alive: true };
+  return { id, kind, position, x, y: settleY(terrain, x), alive: true };
 }
 
 /** Until the difficulty ladders exist (Phase 21), every skill is on step 0. */
@@ -100,6 +99,11 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     seed,
     mode,
     turn: 0,
+    lives: LIVES,
+    enemiesDestroyed: 0,
+    shotsSinceEnemyFire: 0,
+    elapsedMs: 0,
+    lastEnemyHit: false,
     phase: 'aiming',
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
@@ -157,57 +161,55 @@ export type Impact =
     };
 
 export interface DamageRules {
-  /** enemyDamageFactor(settings.enemyDifficulty): 0.5 on easy (FR-043). */
-  enemyDamageFactor: number;
-  /** FR-044: the player tank takes no damage. */
+  /** FR-044: the player's hearts never go down. */
   noDamage: boolean;
-  /** "Genau treffen" (FR-074): only the exact number damages the enemy. */
-  exactHit: boolean;
   /** The round's number range: the tank body's width in numbers follows from it. */
   range: { min: number; max: number };
 }
 
 /**
- * Carves the crater, applies damage and settles the tanks onto the new surface.
+ * Carves the crater, applies the hit rule and settles the tanks onto the new surface.
  * A shell that left the battlefield changes nothing.
  *
- * Enemy shells damage every tank in the blast by distance (FR-006), measured where the tanks stood.
- * The player's shell follows the tank-body rule (amendment 04, decision D10, FR-066, FR-071, FR-074): a shell on
- * the enemy's body costs it MAX_DAMAGE, the exact number twice that, and with exactHit only the exact number
- * counts. A decoy at the fired number is destroyed. A shell inside the enemy's blast radius that does no damage
- * is a near miss (the enemy shakes). The player's own shell never damages the player. Sets lastShot.
+ * An enemy shell that hits the player's tank costs one heart unless noDamage (FR-006, FR-080); one next to it does
+ * nothing. The player's shell follows the amendment 06 rule (FR-066): the exact number destroys the enemy (the
+ * controller then brings a new one), a shell on the body but not exact is a near miss (the enemy shakes), and a decoy
+ * at the fired number is destroyed. The player's own shell never harms the player. Sets lastShot for player shells
+ * and lastEnemyHit for enemy shells.
  */
 export function applyImpact(state: RoundState, impact: Impact, blastRadius: number, rules: DamageRules): RoundState {
-  if (impact.outOfBounds) return state;
+  if (impact.outOfBounds) return impact.shooter === 'enemy' ? { ...state, lastEnemyHit: false } : state;
   const terrain = carveCrater(state.terrain, impact.point.x, impact.point.y, blastRadius, FLOOR);
-  const settle = (tank: TankState, damage: number): TankState => {
-    const health = Math.max(0, tank.health - damage);
-    return { ...tank, y: settleY(terrain, tank.x), health, alive: health > 0 };
-  };
+  const settle = (tank: TankState, destroyed = false): TankState => ({
+    ...tank,
+    y: settleY(terrain, tank.x),
+    alive: tank.alive && !destroyed,
+  });
 
   if (impact.shooter === 'enemy') {
-    const damageOf = (tank: TankState): number => {
-      if (!tank.alive || (tank.kind === 'player' && rules.noDamage)) return 0;
-      return Math.round(damageAt(impact.point, tankCenter(tank), blastRadius, impact.hitTargetId === tank.id) * rules.enemyDamageFactor);
+    const hit = state.player.alive && enemyHitsPlayer(impact.point, impact.hitTargetId, state.player);
+    const lostHeart = hit && !rules.noDamage;
+    return {
+      ...state,
+      terrain,
+      player: settle(state.player),
+      enemy: settle(state.enemy),
+      decoys: state.decoys.map((d) => settle(d)),
+      lives: lostHeart ? Math.max(0, state.lives - 1) : state.lives,
+      lastEnemyHit: lostHeart,
     };
-    const update = (tank: TankState) => settle(tank, damageOf(tank));
-    return { ...state, terrain, player: update(state.player), enemy: update(state.enemy), decoys: state.decoys.map(update) };
   }
 
   const { fired, landed } = impact;
   const enemy = state.enemy;
   const kind = enemy.alive ? shotKind(fired, enemy.position, rules.range) : 'miss';
-  const damage = enemyDamage(kind, rules.exactHit);
-  const hit = damage > 0;
+  const hit = kind === 'hit';
   const decoyHit = state.decoys.find((d) => d.alive && d.position === fired) ?? null;
-  const nearMiss = !hit && enemy.alive && Math.hypot(tankCenter(enemy).x - impact.point.x, tankCenter(enemy).y - impact.point.y) < blastRadius;
   const lastShot: LastShot = {
     fired,
     landed,
     hit,
-    bodyHit: kind !== 'miss',
-    bullseye: kind === 'bullseye',
-    nearMiss,
+    nearMiss: kind === 'near',
     hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
     distance: Math.abs(landed - enemy.position),
     enemyNumber: enemy.position,
@@ -215,9 +217,9 @@ export function applyImpact(state: RoundState, impact: Impact, blastRadius: numb
   return {
     ...state,
     terrain,
-    player: settle(state.player, 0),
-    enemy: settle(enemy, damage),
-    decoys: state.decoys.map((d) => settle(d, d === decoyHit ? d.health : 0)),
+    player: settle(state.player),
+    enemy: settle(enemy, hit),
+    decoys: state.decoys.map((d) => settle(d, d === decoyHit)),
     lastShot,
   };
 }

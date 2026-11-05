@@ -1,5 +1,5 @@
 /**
- * Computer opponent (research R18, FR-041 to FR-043).
+ * Computer opponent (research R18, FR-041 to FR-043). Each enemy hit costs the child one heart (amendment 06).
  * The enemy aims with solveAim, then adds normally distributed error whose spread depends on the difficulty.
  * Its input has no field for attempts, help or challenges, so its choices cannot depend on them (FR-042).
  */
@@ -39,10 +39,6 @@ const SPREAD: Record<Difficulty, { angle: number; power: number }> = {
 /** The first shot on easy must land at least this far from the target, beyond the blast radius. */
 const FORCED_MISS_DISTANCE = BLAST_RADIUS * 1.5;
 const FORCED_MISS_TRIES = 20;
-
-export function enemyDamageFactor(difficulty: Difficulty): number {
-  return difficulty === 'easy' ? 0.5 : 1;
-}
 
 export function enemyShot(input: EnemyShotInput): EnemyShot {
   const { difficulty, rng, origin, target } = input;

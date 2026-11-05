@@ -10,6 +10,10 @@
  * in a battle this pauses the game, and closing the menu or the settings page resumes it. While a parent screen is
  * open, keys do nothing in the game. Saved settings go to `controller.updateSettings` and apply from the next round.
  *
+ * Amendment 06 (FR-084, FR-086): when a round ends, its result (destroyed enemies and time) is compared once with
+ * the personal best for the round's range, ruler starting level and round type, and the end screen shows it. While
+ * the browser tab is hidden the battle is paused, so the time does not run; it resumes only what it paused.
+ *
  * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,7 +23,8 @@ import { memoryProgressStore } from '../core/battle/ports';
 import { createGame } from '../game/createGame';
 import { BattleOverlay } from './BattleOverlay';
 import { ParentGate } from './ParentGate';
-import { RoundEnd } from './RoundEnd';
+import { RoundEnd, type RoundRecord } from './RoundEnd';
+import { recordKey } from '../core/records/records';
 import { SettingsPage } from './SettingsPage';
 import { StartScreen } from './StartScreen';
 import { createPersistence } from './persistence';
@@ -61,6 +66,10 @@ export function App() {
   const [parent, setParent] = useState<ParentView>('closed');
   // True when the parent gate paused the battle, so closing it resumes only what it paused (FR-045, FR-054).
   const pausedByGate = useRef(false);
+  // True when hiding the tab paused the battle, so showing it again resumes only what it paused (FR-084).
+  const pausedByHiding = useRef(false);
+  // The personal best after the latest finished round, by round seed, so each round is compared only once (FR-086).
+  const [roundRecord, setRoundRecord] = useState<{ seed: number; record: RoundRecord } | null>(null);
   const state = useRoundState(controller);
   const gameParent = useRef<HTMLDivElement>(null);
 
@@ -72,6 +81,33 @@ export function App() {
     const handle = createGame(parent, controller, { sounds: sfx });
     return () => handle.destroy();
   }, [screen, controller, sfx]);
+
+  // Pause while the tab is hidden, so the round's time stops (FR-084).
+  useEffect(() => {
+    if (screen !== 'battle') return;
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (controller.getState().phase === 'paused' || controller.getState().phase === 'roundOver') return;
+        controller.pause();
+        pausedByHiding.current = controller.getState().phase === 'paused';
+      } else if (pausedByHiding.current) {
+        pausedByHiding.current = false;
+        // A parent screen that opened meanwhile keeps the game paused until it closes.
+        if (!pausedByGate.current) controller.resume();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [screen, controller]);
+
+  // Compare a finished round with the personal best once (FR-086).
+  const roundOverSeed = state.phase === 'roundOver' && state.outcome !== null ? state.seed : null;
+  useEffect(() => {
+    if (roundOverSeed === null) return;
+    const s = controller.getState();
+    const record = persistence.submitResult(recordKey(controller.getRoundSettings()), { enemies: s.enemiesDestroyed, ms: s.elapsedMs, at: Date.now() });
+    setRoundRecord({ seed: roundOverSeed, record });
+  }, [roundOverSeed, controller, persistence]);
 
   // Until Phase 15, "Spielen", Enter on the start screen and "Nochmal" start free play (tasks.md D3).
   const startRound = useCallback(() => controller.startRound('freePlay'), [controller]);
@@ -121,7 +157,16 @@ export function App() {
         <main className="battle">
           <div className="game-parent" ref={gameParent} />
           <BattleOverlay controller={controller} state={state} gear={gear} />
-          {roundOver && <RoundEnd outcome={state.outcome} onAgain={startRound} onBackToStart={() => setScreen('start')} />}
+          {roundOver && (
+            <RoundEnd
+              outcome={state.outcome}
+              enemiesDestroyed={state.enemiesDestroyed}
+              elapsedMs={state.elapsedMs}
+              record={controller.getRoundSettings().showRecords && roundRecord?.seed === state.seed ? roundRecord.record : null}
+              onAgain={startRound}
+              onBackToStart={() => setScreen('start')}
+            />
+          )}
         </main>
       )}
       {parent === 'settings' && (

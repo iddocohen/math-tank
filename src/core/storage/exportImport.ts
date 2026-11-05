@@ -3,18 +3,19 @@ import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
+import { emptyRecords, recordsSchema, type Records } from '../records/records';
 
 /** Marks an export file as ours (data-model.md "Export file"). */
 export const EXPORT_APP = 'math-tanks';
 
 /** Why an import was refused; the settings page maps each reason to a German message. */
-export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress';
+export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords';
 
-export type ImportResult = { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: ImportFailure };
+export type ImportResult = { ok: true; settings: Settings; progress: Progress; records: Records } | { ok: false; reason: ImportFailure };
 
-/** JSON text of `{ app, exportedAt, settings, progress }` for the "Daten sichern" download (FR-048a). */
-export function exportData(settings: Settings, progress: Progress, now: Date = new Date()): string {
-  return JSON.stringify({ app: EXPORT_APP, exportedAt: now.toISOString(), settings, progress }, null, 2);
+/** JSON text of `{ app, exportedAt, settings, progress, records }` for the "Daten sichern" download (FR-048a, FR-086). */
+export function exportData(settings: Settings, progress: Progress, records: Records, now: Date = new Date()): string {
+  return JSON.stringify({ app: EXPORT_APP, exportedAt: now.toISOString(), settings, progress, records }, null, 2);
 }
 
 /**
@@ -38,5 +39,13 @@ export function importData(text: string): ImportResult {
   const progress = progressSchema.safeParse(migrate(file.progress, 'progress'));
   if (!progress.success) return { ok: false, reason: 'invalidProgress' };
 
-  return { ok: true, settings: settings.data, progress: progress.data };
+  // A file exported before amendment 06 has no records; it imports with empty records.
+  let records = emptyRecords();
+  if (file.records !== undefined) {
+    const parsed = recordsSchema.safeParse(file.records);
+    if (!parsed.success) return { ok: false, reason: 'invalidRecords' };
+    records = parsed.data;
+  }
+
+  return { ok: true, settings: settings.data, progress: progress.data, records };
 }

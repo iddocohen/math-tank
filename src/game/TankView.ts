@@ -1,14 +1,17 @@
 /**
- * One tank on screen (FR-006, FR-007): body, turret rotated by the cannon angle, health bar.
- * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss without damage (FR-066).
+ * One tank on screen (FR-007): body, turret rotated by the cannon angle.
+ * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss on the body (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
- * Fade in and out and a fully hidden state are here for the search turns of later phases.
- * `setBullseye` draws a target on the tank's center line while "Genau treffen" is on (amendment 04, FR-074).
+ * Fade in and out and a fully hidden state are here for the search turns of later phases; `appear` fades a new
+ * enemy in after the old one was destroyed (amendment 06).
  *
- * Amendment 05 (FR-077, FR-078): the look comes from tankStyle. The child's tank is blue and rounded with a yellow
- * star flag on its antenna; the enemy and decoys are dark red and angular with a black flag. The health bar sits
- * directly above the tank in the tank's color, with no text. `showYouMarker` shows a bouncing arrow with "Du" over
- * the child's tank.
+ * Amendment 05 (FR-077): the look comes from tankStyle. The child's tank is blue and rounded with a yellow star flag
+ * on its antenna; the enemy and decoys are dark red and angular with a black flag. `showYouMarker` shows a bouncing
+ * arrow with "Du" over the child's tank.
+ *
+ * Amendment 06 (FR-073, FR-078, FR-080): `setLives` draws the child's hearts directly above the tank, full ones in
+ * red and lost ones as an outline, with no text; the enemy has no health bar. `setTarget` draws a small target ring
+ * where the pointer line meets the tank, on its center line, with no number.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -19,10 +22,10 @@ import { TANK_BODY_HEIGHT, TEX } from './textures';
 
 /** Turret pivot above the tank base, matching the muzzle height in core/battle/round.ts. */
 const TURRET_PIVOT = 28;
-const BAR_WIDTH = 64;
-const BAR_HEIGHT = 10;
-/** Above the antenna flag and the turret at its fixed angle. */
+/** The hearts sit above the antenna flag and the turret at its fixed angle. */
 const BAR_OFFSET = 86;
+const HEART_SIZE = 22;
+const HEART_GAP = 6;
 /** Antenna at the rear of the hull, flag at its top. */
 const ANTENNA_X = -20;
 const ANTENNA_TOP = -TANK_BODY_HEIGHT - 36;
@@ -41,8 +44,8 @@ export class TankView {
   readonly container: Phaser.GameObjects.Container;
   private readonly body: Phaser.GameObjects.Image;
   private readonly turret: Phaser.GameObjects.Image;
-  private readonly bar: Phaser.GameObjects.Graphics;
-  private readonly bullseye: Phaser.GameObjects.Graphics;
+  private readonly hearts: Phaser.GameObjects.Graphics;
+  private readonly target: Phaser.GameObjects.Graphics;
   private readonly flag: Phaser.GameObjects.Graphics;
   private readonly you: Phaser.GameObjects.Container;
   private youTimer: Phaser.Time.TimerEvent | null = null;
@@ -50,7 +53,7 @@ export class TankView {
   private readonly color: number;
   private tint: number;
   private lastY: number | null = null;
-  private lastHealth = -1;
+  private lastLives: number | null = null;
   private hidden = false;
 
   constructor(
@@ -66,11 +69,11 @@ export class TankView {
     this.body = scene.add.image(0, 0, bodyTexture).setOrigin(0.5, 1).setTint(this.color);
     this.flag = scene.add.graphics();
     drawFlag(this.flag, this.style.flag);
-    this.bar = scene.add.graphics();
-    this.bullseye = scene.add.graphics().setVisible(false);
-    drawBullseye(this.bullseye);
+    this.hearts = scene.add.graphics();
+    this.target = scene.add.graphics().setVisible(false);
+    drawTarget(this.target);
     this.you = createYouMarker(scene).setVisible(false);
-    this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.bullseye, this.bar, this.you]);
+    this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.target, this.hearts, this.you]);
   }
 
   /**
@@ -87,11 +90,6 @@ export class TankView {
       this.scene.tweens.add({ targets: this.container, y, duration: SETTLE_MS, ease: 'Quad.easeIn' });
     }
     this.lastY = y;
-
-    if (tank.health !== this.lastHealth) {
-      this.lastHealth = tank.health;
-      this.drawBar(tank.health);
-    }
     this.tint = tank.alive ? this.color : 0x555555;
     this.body.setTint(this.tint);
     this.turret.setTint(this.tint);
@@ -107,9 +105,30 @@ export class TankView {
     this.scene.tweens.add({ targets: this.turret, angle: -angleDeg, duration: ms, ease: 'Sine.easeInOut' });
   }
 
-  /** Shows or hides the bullseye on the tank's center line ("Genau treffen", FR-074). */
-  setBullseye(on: boolean): void {
-    this.bullseye.setVisible(on);
+  /** Shows or hides the target ring where the pointer line meets the tank (amendment 06, FR-073). */
+  setTarget(on: boolean): void {
+    this.target.setVisible(on);
+  }
+
+  /** The child's hearts above the tank (FR-080); null draws none. */
+  setLives(lives: number | null, max: number): void {
+    if (lives === this.lastLives) return;
+    this.lastLives = lives;
+    this.hearts.clear();
+    if (lives === null) return;
+    const width = max * HEART_SIZE + (max - 1) * HEART_GAP;
+    for (let i = 0; i < max; i++) {
+      const cx = -width / 2 + HEART_SIZE / 2 + i * (HEART_SIZE + HEART_GAP);
+      drawHeart(this.hearts, cx, -BAR_OFFSET + HEART_SIZE / 2, HEART_SIZE, i < lives);
+    }
+  }
+
+  /** A new enemy after the old one was destroyed: hidden first, then it fades in after `delayMs` (amendment 06). */
+  appear(delayMs: number): void {
+    if (this.hidden) return;
+    this.scene.tweens.killTweensOf(this.container);
+    this.container.alpha = 0;
+    this.scene.tweens.add({ targets: this.container, alpha: 1, delay: delayMs, duration: FADE_MS });
   }
 
   /**
@@ -131,7 +150,7 @@ export class TankView {
 
   /** Short side-to-side shake of body and turret; the container keeps its position on the number. */
   shake(): void {
-    const parts = [this.body, this.turret, this.bullseye, this.flag];
+    const parts = [this.body, this.turret, this.target, this.flag];
     this.scene.tweens.add({ targets: parts, x: SHAKE_PX, duration: SHAKE_MS, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => parts.forEach((p) => (p.x = 0)) });
   }
 
@@ -147,7 +166,7 @@ export class TankView {
     }
   }
 
-  /** Short white flash when the tank takes damage (FR-009). */
+  /** Short white flash when the tank is hit and loses a heart (FR-009). */
   flash(): void {
     const parts = [this.body, this.turret];
     const on = () => parts.forEach((p) => p.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL));
@@ -158,40 +177,50 @@ export class TankView {
     this.scene.time.delayedCall(270, off);
   }
 
-  private drawBar(health: number): void {
-    const g = this.bar;
-    const x = -BAR_WIDTH / 2;
-    const y = -BAR_OFFSET;
-    g.clear();
-    // Dark outline and empty track, then the fill in the tank's own color (FR-078); no text.
-    g.fillStyle(0x10141c, 0.85);
-    g.fillRoundedRect(x - 3, y - 3, BAR_WIDTH + 6, BAR_HEIGHT + 6, 5);
-    g.fillStyle(0xffffff, 0.25);
-    g.fillRoundedRect(x, y, BAR_WIDTH, BAR_HEIGHT, 3);
-    if (health > 0) {
-      g.fillStyle(this.style.barColor, 1);
-      g.fillRoundedRect(x, y, (BAR_WIDTH * health) / 100, BAR_HEIGHT, 3);
-    }
-  }
-
   destroy(): void {
     this.youTimer?.remove();
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.bullseye, this.flag, this.you]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.you]);
     this.container.destroy();
   }
 }
 
-/** Two rings and a dot on the body's center line: the exact number is the only place that hits. */
-function drawBullseye(g: Phaser.GameObjects.Graphics): void {
+/** A small ring with a dot on the body's center line, where the pointer line meets the tank: the spot to hit. */
+function drawTarget(g: Phaser.GameObjects.Graphics): void {
   const y = -TANK_BODY_HEIGHT / 2;
+  g.lineStyle(5, 0x1b1f27, 0.9);
+  g.strokeCircle(0, y, 9);
+  g.lineStyle(3, 0xffffff, 1);
+  g.strokeCircle(0, y, 9);
   g.fillStyle(0xffffff, 1);
-  g.fillCircle(0, y, 11);
-  g.fillStyle(0xd32f2f, 1);
-  g.fillCircle(0, y, 8);
-  g.fillStyle(0xffffff, 1);
-  g.fillCircle(0, y, 5);
-  g.fillStyle(0xd32f2f, 1);
   g.fillCircle(0, y, 2.5);
+}
+
+/** One heart, its center at (cx, cy): filled red when kept, a light outline when lost (FR-080). */
+function drawHeart(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, full: boolean): void {
+  const r = size / 4;
+  const top = cy - size / 2 + r;
+  const points: Phaser.Math.Vector2[] = [];
+  // Two half circles on top and a point at the bottom.
+  for (let a = 180; a <= 360; a += 15) {
+    const rad = (a * Math.PI) / 180;
+    points.push(new Phaser.Math.Vector2(cx - r + r * Math.cos(rad), top + r * Math.sin(rad)));
+  }
+  for (let a = 180; a <= 360; a += 15) {
+    const rad = (a * Math.PI) / 180;
+    points.push(new Phaser.Math.Vector2(cx + r + r * Math.cos(rad), top + r * Math.sin(rad)));
+  }
+  points.push(new Phaser.Math.Vector2(cx, cy + size / 2));
+  g.lineStyle(3, 0x10141c, 0.9);
+  if (full) {
+    g.fillStyle(0xe53935, 1);
+    g.fillPoints(points, true);
+    g.strokePoints(points, true);
+  } else {
+    g.fillStyle(0x10141c, 0.45);
+    g.fillPoints(points, true);
+    g.lineStyle(2.5, 0xf4f6fb, 0.9);
+    g.strokePoints(points, true);
+  }
 }
 
 /** Antenna with its flag: a yellow flag with a dark blue star for the child, a black pennant for the enemy (FR-077). */

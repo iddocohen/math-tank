@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_DAMAGE } from '../physics/damage';
-import { bodyHalfWidth, enemyDamage, shotKind } from './hitRule';
+import * as damage from '../physics/damage';
+import * as hitRule from './hitRule';
+import type { TankState } from '../types';
+import { bodyHalfWidth, ENEMY_FIRE_EVERY, enemyHitsPlayer, LIVES, shotKind } from './hitRule';
 
 const r = (min: number, max: number) => ({ min, max });
 
@@ -13,18 +15,18 @@ describe('bodyHalfWidth (amendment 04, FR-066)', () => {
   });
 });
 
-describe('shotKind (FR-066, FR-071)', () => {
-  it('the exact number is a bullseye in every range', () => {
+describe('shotKind (amendment 06, FR-066)', () => {
+  it('the exact number is a hit in every range', () => {
     const cases: Array<[number, number, number]> = [[0, 10, 5], [0, 100, 0], [0, 100, 100], [550, 780, 637], [-20, 30, -7], [0, 1000, 437]];
     for (const [min, max, n] of cases) {
-      expect(shotKind(n, n, r(min, max))).toBe('bullseye');
+      expect(shotKind(n, n, r(min, max))).toBe('hit');
     }
   });
 
-  it('0 to 100: 1 and 2 away land on the body, 3 away is a miss', () => {
-    expect(shotKind(31, 30, r(0, 100))).toBe('body');
-    expect(shotKind(32, 30, r(0, 100))).toBe('body');
-    expect(shotKind(28, 30, r(0, 100))).toBe('body');
+  it('0 to 100: 1 and 2 away are near misses on the body, 3 away is a miss', () => {
+    expect(shotKind(31, 30, r(0, 100))).toBe('near');
+    expect(shotKind(32, 30, r(0, 100))).toBe('near');
+    expect(shotKind(28, 30, r(0, 100))).toBe('near');
     expect(shotKind(33, 30, r(0, 100))).toBe('miss');
     expect(shotKind(27, 30, r(0, 100))).toBe('miss');
   });
@@ -35,14 +37,14 @@ describe('shotKind (FR-066, FR-071)', () => {
   });
 
   it('0 to 1000: 20 away is on the body, 22 away is a miss', () => {
-    expect(shotKind(457, 437, r(0, 1000))).toBe('body');
-    expect(shotKind(417, 437, r(0, 1000))).toBe('body');
+    expect(shotKind(457, 437, r(0, 1000))).toBe('near');
+    expect(shotKind(417, 437, r(0, 1000))).toBe('near');
     expect(shotKind(459, 437, r(0, 1000))).toBe('miss');
   });
 
   it('550 to 780: 4 away is on the body, 5 away is a miss', () => {
-    expect(shotKind(641, 637, r(550, 780))).toBe('body');
-    expect(shotKind(633, 637, r(550, 780))).toBe('body');
+    expect(shotKind(641, 637, r(550, 780))).toBe('near');
+    expect(shotKind(633, 637, r(550, 780))).toBe('near');
     expect(shotKind(642, 637, r(550, 780))).toBe('miss');
     expect(shotKind(632, 637, r(550, 780))).toBe('miss');
   });
@@ -50,23 +52,41 @@ describe('shotKind (FR-066, FR-071)', () => {
   it('is symmetric and agrees with bodyHalfWidth for every distance', () => {
     const range = r(0, 1000);
     for (let d = 1; d <= 30; d++) {
-      const expected = d <= bodyHalfWidth(0, 1000) ? 'body' : 'miss';
+      const expected = d <= bodyHalfWidth(0, 1000) ? 'near' : 'miss';
       expect(shotKind(500 + d, 500, range)).toBe(expected);
       expect(shotKind(500 - d, 500, range)).toBe(expected);
     }
   });
 });
 
-describe('enemyDamage (FR-066, FR-071, FR-074)', () => {
-  it('a bullseye costs twice the hit damage, a body hit the hit damage, a miss nothing', () => {
-    expect(enemyDamage('bullseye', false)).toBe(2 * MAX_DAMAGE);
-    expect(enemyDamage('body', false)).toBe(MAX_DAMAGE);
-    expect(enemyDamage('miss', false)).toBe(0);
+describe('enemyHitsPlayer (amendment 06, FR-006)', () => {
+  const player: TankState = { id: 'player', kind: 'player', position: 0, x: 200, y: 300, alive: true };
+
+  it('a shell that entered the player\'s hit circle hits', () => {
+    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'player', player)).toBe(true);
   });
 
-  it('with exactHit only the bullseye does damage', () => {
-    expect(enemyDamage('bullseye', true)).toBe(2 * MAX_DAMAGE);
-    expect(enemyDamage('body', true)).toBe(0);
-    expect(enemyDamage('miss', true)).toBe(0);
+  it('a shell within half the tank width of the player\'s x hits, one unit further does not', () => {
+    expect(enemyHitsPlayer({ x: 230, y: 300 }, null, player)).toBe(true);
+    expect(enemyHitsPlayer({ x: 170, y: 300 }, null, player)).toBe(true);
+    expect(enemyHitsPlayer({ x: 231, y: 300 }, null, player)).toBe(false);
+    expect(enemyHitsPlayer({ x: 169, y: 300 }, null, player)).toBe(false);
+  });
+
+  it('another tank as target is not a hit on the player', () => {
+    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'decoy-1', player)).toBe(false);
+  });
+});
+
+describe('constants and removed damage (amendment 06)', () => {
+  it('the child has 3 lives and the enemy fires after every 2 shots', () => {
+    expect(LIVES).toBe(3);
+    expect(ENEMY_FIRE_EVERY).toBe(2);
+  });
+
+  it('there is no damage any more', () => {
+    expect('enemyDamage' in hitRule).toBe(false);
+    expect('MAX_DAMAGE' in damage).toBe(false);
+    expect('damageAt' in damage).toBe(false);
   });
 });
