@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/** Specs that run only in the device projects (amendment 12, T136). */
-const DEVICE_SPECS = /(devices|touch)\.spec\.ts$/;
+/** Specs that run only in the device projects (amendment 12, T136, T306). */
+const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
 /** The smoke test of the build for GitHub Pages runs only in the `base-path` project (P11, T304). */
 const BASE_PATH_SPEC = /basePath\.spec\.ts$/;
 /** The frame rate test runs alone, after every other project (T150). */
