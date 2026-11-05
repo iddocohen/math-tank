@@ -79,7 +79,8 @@ export function validateSettings(s: Settings): SettingsValidation {
 
   const lo = lowestResult(s, range);
 
-  if (s.addition.maxOperand < 1) add('additionMaxOperand', 'addition.maxOperand');
+  // Like subtraction, at most the range width, so generating an exercise stays fast (review R5).
+  if (s.addition.maxOperand < 1 || s.addition.maxOperand > span) add('additionMaxOperand', 'addition.maxOperand');
   if (s.addition.maxResult > range.max) add('additionMaxResult', 'addition.maxResult');
   else if (s.challengeTypes.addition && lo + 1 > Math.min(s.addition.maxResult, range.max)) {
     // The smallest sum is lo + 1 (lo plus an operand of 1).

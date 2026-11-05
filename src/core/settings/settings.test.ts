@@ -282,6 +282,16 @@ describe('validateSettings', () => {
   });
 });
 
+describe('addition.maxOperand limit (review R5)', () => {
+  it('an addition operand larger than the range width is refused, like subtraction', () => {
+    const s = { ...defaultSettings(), range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { maxOperand: 21, maxResult: 20, steps: 1 as const } };
+    const r = validateSettings(s);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContainEqual({ key: 'additionMaxOperand', path: 'addition.maxOperand' });
+    expect(validateSettings({ ...s, addition: { ...s.addition, maxOperand: 20 } })).toEqual({ ok: true });
+  });
+});
+
 describe('withRange', () => {
   const presets = Object.keys(RANGE_PRESETS) as Array<keyof typeof RANGE_PRESETS>;
 

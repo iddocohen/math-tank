@@ -122,6 +122,33 @@ for (const ios of [false, true]) {
       await fireWithPad(page, overlay);
     });
 
+    test('the parent menu opened on the rotate picture stays open and the round stays paused after turning sideways (review R1)', async ({ page }) => {
+      await turn(page, LANDSCAPE);
+      await page.goto('/?seed=5');
+      await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+      const overlay = page.getByTestId('battle-overlay');
+      await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+
+      await turn(page, PORTRAIT);
+      const rotate = page.getByTestId('rotate-screen');
+      await expect(rotate).toBeVisible();
+      const gear = rotate.getByTestId('parent-gate');
+      await gear.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
+      await page.waitForTimeout(2300);
+      await gear.dispatchEvent('pointerup', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
+      const menu = page.getByRole('dialog', { name: m.parent.menu });
+      await expect(menu).toBeVisible();
+
+      await turn(page, LANDSCAPE);
+      await expectSide(page);
+      await expect(menu).toBeVisible();
+      await expect(overlay).toHaveAttribute('data-phase', 'paused');
+      await menu.getByRole('button', { name: m.parent.close }).tap();
+      await expect(menu).toHaveCount(0);
+      await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+      await fireWithPad(page, overlay);
+    });
+
     test('load sideways: the game shows without the rotate picture', async ({ page }) => {
       await turn(page, LANDSCAPE);
       await page.goto('/?seed=5');

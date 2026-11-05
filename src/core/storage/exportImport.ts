@@ -9,8 +9,11 @@ import { parseGarage, type Garage } from '../rewards/garage';
 /** Marks an export file as ours (data-model.md "Export file"). */
 export const EXPORT_APP = 'math-tanks';
 
-/** Why an import was refused; the settings page maps each reason to a German message. */
-export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' | 'invalidGarage';
+/**
+ * Why an import was refused; the settings page maps each reason to a German message. `notSaved` comes only from
+ * persistence: the file was valid, but storing it failed and nothing was changed (review M4).
+ */
+export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' | 'invalidGarage' | 'notSaved';
 
 /** `garage` is null for a file exported before amendment 11; the caller then keeps its own stars (FR-096). */
 export type ImportResult =

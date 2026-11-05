@@ -29,7 +29,7 @@ import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/se
 import { validateSettings, withRange } from '../core/settings/validate';
 import { t } from '../i18n';
 import { isComingSoon, type SettingField } from './comingSoon';
-import type { Persistence } from './persistence';
+import type { DataKind, Persistence } from './persistence';
 import { RulerPreview } from './RulerPreview';
 
 const PRESETS: RangePreset[] = ['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom'];
@@ -71,6 +71,11 @@ function collectErrors(s: Settings): Map<string, string[]> {
   ];
   for (const [path, value] of wholeNumbers) if (!Number.isInteger(value)) add(path, m.settingsErrors.rangeNotInteger);
   return out;
+}
+
+/** The German names of kinds of stored data, joined for a notice (review H1, M2, M3). */
+function names(kinds: DataKind[]): string {
+  return kinds.map((k) => t().parent.dataNames[k]).join(', ');
 }
 
 function today(d: Date): string {
@@ -150,7 +155,8 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     }
     setDraft(structuredClone(r.settings));
     setLimits(limitsOf(r.settings));
-    setNotice(persistence.status().saveFailed ? { kind: 'warn', text: m.settings.saveFailed } : null);
+    // The import stored everything or nothing (review M4), so success never comes with a failed save (review L2).
+    setNotice(null);
     onSaved(structuredClone(r.settings));
     setSavedCount((n) => n + 1);
     setDataNotice({ kind: 'ok', text: m.settings.data.imported });
@@ -175,9 +181,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
       </header>
 
       <div className="settings-notices" role="status" aria-live="polite">
-        {status.resetReason === 'invalid' && <p className="notice warn">{m.parent.storageReset}</p>}
-        {status.resetReason === 'unavailable' && <p className="notice warn">{m.parent.storageUnavailable}</p>}
-        {status.saveFailed && <p className="notice warn">{m.parent.saveFailedData(status.failedData.map((k) => m.parent.dataNames[k]).join(', '))}</p>}
+        {status.resetReason === 'unavailable' ? (
+          <p className="notice warn">{m.parent.storageUnavailable}</p>
+        ) : (
+          status.resetData.length > 0 && <p className="notice warn">{m.parent.storageReset(names(status.resetData))}</p>
+        )}
+        {status.newerData.length > 0 && <p className="notice warn">{m.parent.storageNewer(names(status.newerData))}</p>}
+        {status.saveFailed && <p className="notice warn">{m.parent.saveFailedData(names(status.failedData))}</p>}
         {status.persistent === 'denied' && <p className="notice">{m.settings.persistDenied}</p>}
         {!valid && <p className="notice warn">{m.settings.checkFields}</p>}
         {notice && <p className={`notice ${notice.kind}`}>{notice.text}</p>}
@@ -359,7 +369,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   );
 }
 
-/** The link for the saved data; when the browser's compression fails, the uncompressed link (FR-117). */
+/** The link for the saved data; when the browser's compression fails, the uncompressed link (FR-117). Rejects when both fail. */
 async function buildTransfer(persistence: Persistence): Promise<EncodedTransfer> {
   try {
     return await encodeTransfer(persistence.saveData(), window.location.href);
@@ -372,13 +382,24 @@ async function buildTransfer(persistence: Persistence): Promise<EncodedTransfer>
 function TransferGroup({ persistence, savedCount }: { persistence: Persistence; savedCount: number }) {
   const T = t().settings.transfer;
   const [transfer, setTransfer] = useState<EncodedTransfer | null>(null);
+  const [buildFailed, setBuildFailed] = useState(false);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [large, setLarge] = useState(false);
   useEffect(() => {
     let live = true;
-    void buildTransfer(persistence).then((r) => {
-      if (live) setTransfer(r);
-    });
+    buildTransfer(persistence).then(
+      (r) => {
+        if (!live) return;
+        setTransfer(r);
+        setBuildFailed(false);
+      },
+      () => {
+        // Review M5: say so instead of leaving the group without a QR code and without a word.
+        if (!live) return;
+        setTransfer(null);
+        setBuildFailed(true);
+      },
+    );
     return () => {
       live = false;
     };
@@ -407,6 +428,7 @@ function TransferGroup({ persistence, savedCount }: { persistence: Persistence; 
           </button>
         )}
         {qr && large && <LargeQr qr={qr} onClose={() => setLarge(false)} />}
+        {buildFailed && <p className="notice warn">{T.buildFailed}</p>}
         {transfer && !transfer.fits && <p className="notice warn">{T.tooLarge}</p>}
         {transfer?.fits && trimmed && <p className="notice">{T.trimmed}</p>}
         <button type="button" className="secondary-button" onClick={() => void copyLink()} disabled={!transfer}>

@@ -9,7 +9,7 @@
  */
 import jsQR from 'jsqr';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { expect, silenceAudio, test } from './fixtures';
+import { expect, GAME_WAIT, silenceAudio, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { withRange } from '../../src/core/settings/validate';
 import { GARAGE_KEY, PROGRESS_KEY, RECORDS_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -211,5 +211,62 @@ test.describe('move a save to another browser (amendment 15)', () => {
     await expect(dialog).toHaveCount(0);
     expect(page.url()).not.toContain('#save=');
     expect(await stored(page)).toEqual({ [SETTINGS_KEY]: null, [PROGRESS_KEY]: null, [RECORDS_KEY]: null, [GARAGE_KEY]: null });
+  });
+
+});
+
+/** An uncompressed version 2 code: 47 stars, record 4, range 550 to 780 (the frozen code of transfer.test.ts). */
+const CODE = 'v2.W3sidmVyc2lvbiI6NiwicmFuZ2UiOnsicHJlc2V0IjoiY3VzdG9tIiwibWluIjo1NTAsIm1heCI6NzgwfSwiYWRkaXRpb24iOnsibWF4UmVzdWx0Ijo3ODB9LCJlbmVteURpZmZpY3VsdHkiOiJub3JtYWwiLCJzaG93Q2xvY2siOnRydWV9LFs0Nywic2t5Iiwicm9ja2V0Iiwic3BhcmtsZXMiLCJjcm93biJdLFtbIjU1MC03ODB8MXx1bnRpbEhlYXJ0cyIsNCw2MTAwMCwxNzAwMDAwMDAwMDAwXV0sW1sicG9zaXRpb25zfDU1MC03ODAiLDIsMTIsOSwyLDEsImlhIl1dLFtbMTcwMDAwMDAwMDAwMCw2MDAwMDAsMTIsOSwyLDNdXV0';
+
+async function holdAccept(page: Page): Promise<void> {
+  await page.getByRole('button', { name: m.transfer.accept }).hover();
+  await page.mouse.down();
+  await page.waitForTimeout(2_300);
+  await page.mouse.up();
+}
+
+test.describe('save links in a running tab and failed take-overs (review fixes)', () => {
+  test('a save link opened in a running tab shows the dialog (review P6)', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+    await page.evaluate((code) => {
+      window.location.hash = `save=${code}`;
+    }, CODE);
+    await expect(page.getByTestId('transfer-dialog')).toContainText(m.transfer.summary(47, 4, 550, 780));
+  });
+
+  test('the dialog pauses a running round, and "Abbrechen" resumes it (review R4)', async ({ page }) => {
+    await page.goto('/?seed=5');
+    await page.getByRole('button', { name: m.start.play, exact: true }).click();
+    const overlay = page.getByTestId('battle-overlay');
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+    await page.evaluate((code) => {
+      window.location.hash = `save=${code}`;
+    }, CODE);
+    await expect(page.getByTestId('transfer-dialog')).toBeVisible();
+    await expect(overlay).toHaveAttribute('data-phase', 'paused');
+    await page.getByRole('button', { name: m.transfer.cancel }).click();
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  });
+
+  test('when storing fails, the dialog says nothing changed and the link stays in the address (review M1)', async ({ page }) => {
+    await page.addInitScript(() => {
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key.startsWith('mathtanks.')) throw new DOMException('full', 'QuotaExceededError');
+        setItem.call(this, key, value);
+      };
+    });
+    await page.goto(`/#save=${CODE}`);
+    const dialog = page.getByTestId('transfer-dialog');
+    await expect(dialog).toContainText(m.transfer.summary(47, 4, 550, 780));
+    await holdAccept(page);
+    await expect(dialog).toContainText(m.transfer.saveFailed);
+    expect(page.url()).toContain('#save=');
+    expect(await stored(page)).toEqual({ [SETTINGS_KEY]: null, [PROGRESS_KEY]: null, [RECORDS_KEY]: null, [GARAGE_KEY]: null });
+    await dialog.getByRole('button', { name: m.transfer.close }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(page.url()).toContain('#save=');
+    await expect(page.getByTestId('star-total')).toHaveAttribute('aria-label', m.garage.stars(0));
   });
 });

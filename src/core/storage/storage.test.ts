@@ -69,6 +69,9 @@ function throwingKeyValue(): KeyValue {
     set() {
       throw new Error('QuotaExceededError');
     },
+    remove() {
+      throw new Error('SecurityError');
+    },
   };
 }
 
@@ -138,10 +141,27 @@ describe('damaged data', () => {
     expect(loadSettings(kv)).toEqual({ settings: defaultSettings(), resetReason: 'invalid' });
   });
 
-  it('an unknown future version gives defaults with resetReason invalid', () => {
-    const kv = memoryKeyValue();
-    kv.set(SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), version: 99 }));
-    expect(loadSettings(kv).resetReason).toBe('invalid');
+  it('data from a newer version of the game gives defaults with resetReason newer, not invalid (review M2)', () => {
+    const kv = memoryKeyValue({
+      [SETTINGS_KEY]: JSON.stringify({ ...defaultSettings(), version: 99 }),
+      [PROGRESS_KEY]: JSON.stringify({ ...emptyProgress(), version: 2 }),
+      [RECORDS_KEY]: JSON.stringify({ version: 2, best: {} }),
+      [GARAGE_KEY]: JSON.stringify({ version: 2, stars: 3, look: emptyGarage().look }),
+    });
+    expect(loadSettings(kv)).toEqual({ settings: defaultSettings(), resetReason: 'newer' });
+    expect(loadProgress(kv)).toEqual({ progress: emptyProgress(), resetReason: 'newer' });
+    expect(loadRecords(kv)).toEqual({ records: emptyRecords(), resetReason: 'newer' });
+    expect(loadGarage(kv)).toEqual({ garage: emptyGarage(), resetReason: 'newer' });
+  });
+});
+
+describe('stored addition operand above the range width (review R5)', () => {
+  it('loads with the operand clamped to the range width instead of resetting the settings', () => {
+    const stored = { ...defaultSettings(), range: { preset: '0-20', min: 0, max: 20 }, addition: { maxOperand: 500, maxResult: 20, steps: 1 } };
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify(stored) });
+    const r = loadSettings(kv);
+    expect(r.resetReason).toBe('none');
+    expect(r.settings.addition.maxOperand).toBe(20);
   });
 });
 
@@ -373,7 +393,7 @@ describe('records storage (amendment 06, FR-086)', () => {
   });
 
   it('damaged or invalid records load empty with resetReason invalid', () => {
-    for (const text of ['{"version":1,', JSON.stringify({ version: 1, best: { k: { enemies: 'nine', ms: 1, at: 1 } } }), JSON.stringify({ version: 2, best: {} })]) {
+    for (const text of ['{"version":1,', JSON.stringify({ version: 1, best: { k: { enemies: 'nine', ms: 1, at: 1 } } })]) {
       const kv = memoryKeyValue({ [RECORDS_KEY]: text });
       expect(loadRecords(kv)).toEqual({ records: emptyRecords(), resetReason: 'invalid' });
     }
@@ -385,6 +405,9 @@ describe('records storage (amendment 06, FR-086)', () => {
         throw new Error('blocked');
       },
       set: () => {
+        throw new Error('blocked');
+      },
+      remove: () => {
         throw new Error('blocked');
       },
     };
@@ -407,8 +430,8 @@ describe('garage storage (amendment 11, FR-097)', () => {
     expect(loadGarage(memoryKeyValue())).toEqual({ garage: emptyGarage(), resetReason: 'none' });
   });
 
-  it('damaged JSON, negative stars or an unknown version load 0 stars with resetReason invalid', () => {
-    for (const text of ['{"version":1,', JSON.stringify({ ...sample(), stars: -3 }), JSON.stringify({ ...sample(), version: 2 })]) {
+  it('damaged JSON or negative stars load 0 stars with resetReason invalid', () => {
+    for (const text of ['{"version":1,', JSON.stringify({ ...sample(), stars: -3 })]) {
       expect(loadGarage(memoryKeyValue({ [GARAGE_KEY]: text }))).toEqual({ garage: emptyGarage(), resetReason: 'invalid' });
     }
   });
@@ -429,6 +452,9 @@ describe('garage storage (amendment 11, FR-097)', () => {
         throw new Error('blocked');
       },
       set: () => {
+        throw new Error('blocked');
+      },
+      remove: () => {
         throw new Error('blocked');
       },
     };

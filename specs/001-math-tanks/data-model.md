@@ -9,7 +9,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `version` | `6` | `6` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; `migrate` upgrades version 0 to 5 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
-| `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
+| `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
 | `crossTens` | `boolean` | `true` | |
 | `crossHundreds` | `boolean` | `false` | |
@@ -211,7 +211,7 @@ interface TransferV1 {
 
 ```ts
 type TransferV2 = [
-  settings: Partial<Settings> & { version: number },   // only the values that differ from defaultSettings(), object by object; version always
+  settings: Partial<Settings> & { version: number },   // only the values that differ from TRANSFER_V2_SETTINGS_BASE (the frozen version 6 defaults), object by object; version always
   garage: [stars: number, color: string, flag: string, trail: string, hat: string],
   records: Array<[key: string, enemies: number, ms: number, at: number]>,
   skills: Array<[key: string, step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string]>,
@@ -222,7 +222,8 @@ type TransferV2 = [
 ];
 ```
 
-  The code is `v2.<data>`. Decoding lays the settings differences over the defaults of settings version 6 and then checks everything exactly like version 1. A later settings version must keep the version 6 defaults to read version 2 codes.
+  The code is `v2.<data>`. Writing and decoding both use `TRANSFER_V2_SETTINGS_BASE`, a frozen copy of the version 6 defaults in `src/core/transfer/transfer.ts`, never the live `defaultSettings()`, so changing a default later never changes what an existing code means (review T1). Decoding lays the differences over that base, then migrates from the settings version in the code and checks everything exactly like version 1. `src/core/transfer/transfer.test.ts` keeps two codes written on 2026-11-05 and checks that they still decode to the same save.
+- **Size limits when reading** (review R3): a code longer than `TRANSFER_MAX_CODE_LENGTH` = 8192 characters is refused without reading it, and unpacking stops and refuses the code as soon as the JSON passes `TRANSFER_MAX_JSON_BYTES` = 65536 bytes.
 
 ## Screen layout (not persisted, amendment 12)
 

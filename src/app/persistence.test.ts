@@ -26,6 +26,7 @@ function failingWrites(kv: KeyValue): KeyValue {
     set: () => {
       throw new DOMException('quota', 'QuotaExceededError');
     },
+    remove: (key) => kv.remove(key),
   };
 }
 
@@ -34,7 +35,7 @@ describe('createPersistence (FR-048)', () => {
     const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
     expect(p.settings()).toEqual(defaultSettings());
     expect(p.progress()).toEqual(emptyProgress());
-    expect(p.status()).toEqual({ resetReason: 'none', saveFailed: false, failedData: [], persistent: 'notAsked' });
+    expect(p.status()).toEqual({ resetReason: 'none', resetData: [], newerData: [], saveFailed: false, failedData: [], persistent: 'notAsked' });
   });
 
   it('saves settings so a new instance on the same store loads them', () => {
@@ -59,6 +60,9 @@ describe('createPersistence (FR-048)', () => {
       set: () => {
         throw new Error('blocked');
       },
+      remove: () => {
+        throw new Error('blocked');
+      },
     };
     const p = createPersistence({ kv: blocked, storage: undefined });
     expect(p.settings()).toEqual(defaultSettings());
@@ -77,6 +81,7 @@ describe('createPersistence (FR-048)', () => {
     const inner = memoryKeyValue();
     const kv: KeyValue = {
       get: inner.get,
+      remove: inner.remove,
       set: (k, v) => {
         if (fail) throw new Error('full');
         inner.set(k, v);
@@ -271,11 +276,11 @@ describe('saveData and applyTransfer (amendment 15, FR-119)', () => {
     }
   });
 
-  it('applyTransfer reports a failed save', () => {
+  it('applyTransfer reports a failed save and keeps the values of this browser (review M1, M4)', () => {
     const p = createPersistence({ kv: failingWrites(memoryKeyValue()), storage: undefined });
     expect(p.applyTransfer({ settings: changedSettings(), progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() })).toEqual({ ok: false });
     expect(p.status().saveFailed).toBe(true);
-    expect(p.settings()).toEqual(changedSettings());
+    expect(p.settings()).toEqual(defaultSettings());
   });
 });
 
@@ -314,5 +319,100 @@ describe('save failures per data kind (review H1, H2)', () => {
     failing.delete(GARAGE_KEY);
     p.addStars(1);
     expect(p.status()).toMatchObject({ saveFailed: false, failedData: [] });
+  });
+});
+
+describe('data that could not be loaded is never overwritten (review M2, M3, P1)', () => {
+  it('keeps damaged progress under <key>.unreadable before the first save replaces it', () => {
+    const kv = memoryKeyValue({ [PROGRESS_KEY]: '{"version":1,"attempts":[' });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(kv.get(`${PROGRESS_KEY}.unreadable`)).toBe('{"version":1,"attempts":[');
+    expect(p.saveProgress(emptyProgress())).toEqual({ ok: true });
+    expect(kv.get(`${PROGRESS_KEY}.unreadable`)).toBe('{"version":1,"attempts":[');
+    expect(JSON.parse(kv.get(PROGRESS_KEY)!)).toEqual(emptyProgress());
+  });
+
+  it('keeps damaged records and garage the same way', () => {
+    const kv = memoryKeyValue({ [RECORDS_KEY]: '[1]', [GARAGE_KEY]: '{"stars":' });
+    const p = createPersistence({ kv, storage: undefined });
+    p.submitResult('k', { enemies: 2, ms: 1, at: 1 });
+    p.addStars(1);
+    expect(kv.get(`${RECORDS_KEY}.unreadable`)).toBe('[1]');
+    expect(kv.get(`${GARAGE_KEY}.unreadable`)).toBe('{"stars":');
+  });
+
+  it('refuses to save over damaged data when its copy cannot be written', () => {
+    const inner = memoryKeyValue({ [PROGRESS_KEY]: 'broken' });
+    const p = createPersistence({ kv: failingKeys(inner, new Set([`${PROGRESS_KEY}.unreadable`])), storage: undefined });
+    expect(p.saveProgress(emptyProgress())).toEqual({ ok: false });
+    expect(inner.get(PROGRESS_KEY)).toBe('broken');
+    expect(p.status().failedData).toEqual(['progress']);
+  });
+
+  it('never saves over data from a newer version of the game, and tells the parent which data it is', () => {
+    const newer = JSON.stringify({ version: 2, attempts: [], skills: {}, sessions: [], extra: 1 });
+    const kv = memoryKeyValue({ [PROGRESS_KEY]: newer, [GARAGE_KEY]: JSON.stringify({ version: 5, stars: 40 }) });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(p.status().resetReason).toBe('newer');
+    expect(p.status().newerData).toEqual(['progress', 'garage']);
+    expect(p.saveProgress(emptyProgress())).toEqual({ ok: false });
+    p.addStars(3);
+    expect(kv.get(PROGRESS_KEY)).toBe(newer);
+    expect(JSON.parse(kv.get(GARAGE_KEY)!)).toEqual({ version: 5, stars: 40 });
+    // The other data still saves.
+    expect(p.saveSettings(changedSettings())).toEqual({ ok: true });
+  });
+
+  it('names the data that was reset (review M3)', () => {
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: '{oops', [GARAGE_KEY]: '[]' });
+    expect(createPersistence({ kv, storage: undefined }).status().resetData).toEqual(['settings', 'garage']);
+    expect(createPersistence({ kv: memoryKeyValue(), storage: undefined }).status().resetData).toEqual([]);
+  });
+});
+
+describe('import and transfer are all or nothing (review M4, P2)', () => {
+  const garage = { version: 1 as const, stars: 21, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+  const records = { version: 1 as const, best: { k: { enemies: 2, ms: 1000, at: 1 } } };
+
+  function seeded() {
+    const inner = memoryKeyValue();
+    const before = createPersistence({ kv: inner, storage: undefined });
+    before.saveSettings(defaultSettings());
+    before.addStars(4);
+    // Progress and records were never stored, so their keys are missing.
+    return { inner, snapshot: () => [SETTINGS_KEY, PROGRESS_KEY, RECORDS_KEY, GARAGE_KEY].map((k) => inner.get(k)) };
+  }
+
+  it('an import whose last write fails leaves every key and every value as before', () => {
+    const { inner, snapshot } = seeded();
+    const stored = snapshot();
+    const p = createPersistence({ kv: failingKeys(inner, new Set([GARAGE_KEY])), storage: undefined });
+    const r = p.importText(exportData(changedSettings(), emptyProgress(), records, garage));
+    expect(r).toEqual({ ok: false, reason: 'notSaved' });
+    expect(snapshot()).toEqual(stored);
+    expect(inner.get(PROGRESS_KEY)).toBeNull();
+    expect(p.settings()).toEqual(defaultSettings());
+    expect(p.garage().stars).toBe(4);
+    expect(p.status().saveFailed).toBe(true);
+  });
+
+  it('a transfer whose write fails leaves every key and every value as before', () => {
+    const { inner, snapshot } = seeded();
+    const stored = snapshot();
+    const p = createPersistence({ kv: failingKeys(inner, new Set([RECORDS_KEY])), storage: undefined });
+    expect(p.applyTransfer({ settings: changedSettings(), progress: emptyProgress(), records, garage })).toEqual({ ok: false });
+    expect(snapshot()).toEqual(stored);
+    expect(p.settings()).toEqual(defaultSettings());
+    expect(p.records()).toEqual(emptyRecords());
+    expect(p.garage().stars).toBe(4);
+  });
+
+  it('an import does not write over data from a newer version and changes nothing', () => {
+    const newer = JSON.stringify({ version: 9, best: {} });
+    const kv = memoryKeyValue({ [RECORDS_KEY]: newer });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(p.importText(exportData(changedSettings(), emptyProgress(), records, garage))).toEqual({ ok: false, reason: 'notSaved' });
+    expect(kv.get(RECORDS_KEY)).toBe(newer);
+    expect(kv.get(SETTINGS_KEY)).toBeNull();
   });
 });

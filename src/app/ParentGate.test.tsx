@@ -149,4 +149,14 @@ describe('ParentGate', () => {
     expect(menu()).toBeNull();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('with `open` from the app, the menu follows it, so a menu opened on another gear stays open (review R1)', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<ParentGate open={true} onOpen={vi.fn()} onClose={onClose} onSettings={vi.fn()} onProgress={vi.fn()} />);
+    expect(menu()).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: m.parent.close }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    rerender(<ParentGate open={false} onOpen={vi.fn()} onClose={onClose} onSettings={vi.fn()} onProgress={vi.fn()} />);
+    expect(menu()).toBeNull();
+  });
 });

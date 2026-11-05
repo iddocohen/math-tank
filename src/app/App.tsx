@@ -37,13 +37,18 @@
  * Amendment 15 (FR-119, FR-120): when the address has `#save=` (on load, or when only the fragment changes), the code
  * is decoded and TransferDialog asks the parent; "Übernehmen" (a 2-second hold) replaces the settings, progress,
  * records and garage, "Abbrechen" changes nothing. Closing the dialog removes the fragment with history.replaceState.
- * While the dialog shows, keys do nothing in the game.
+ * While the dialog shows, keys do nothing in the game and a running round is paused (review R4). When storing the save
+ * fails, the dialog says so and the fragment stays (review M1).
+ *
+ * Review fixes: useAutoPause holds every pause the app makes (parent screens, hidden tab, phone upright, transfer
+ * dialog) in one flag, and the app keeps the parent menu's state, so turning the phone with the menu open keeps it
+ * open (R1). A waiting service worker update reloads only on the start screen with nothing open over it (R2).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
 import { createSpeaker } from '../audio/speaker';
 import { promptText } from '../i18n';
-import { swUpdate } from './swUpdate';
+import { canApplyUpdate, swUpdate } from './swUpdate';
 import { BattleController } from '../core/battle/controller';
 import { createProgressStore } from '../core/storage/progressStore';
 import { createGame } from '../game/createGame';
@@ -65,6 +70,7 @@ import { RotateScreen } from './RotateScreen';
 import { useScreen } from './useScreen';
 import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
 import { TransferDialog, type TransferDialogState } from './TransferDialog';
+import { useAutoPause, useDocumentHidden } from './useAutoPause';
 
 /** A save link being read, or its dialog (amendment 15). */
 type Transfer = { kind: 'reading' } | (TransferDialogState & { data?: SaveData });
@@ -102,12 +108,6 @@ export function App() {
   const [{ controller, sfx, speaker, persistence }] = useState(createApp);
   const [screen, setScreen] = useState<Screen>('start');
   const [parent, setParent] = useState<ParentView>('closed');
-  // True when the parent gate paused the battle, so closing it resumes only what it paused (FR-045, FR-054).
-  const pausedByGate = useRef(false);
-  // True when hiding the tab paused the battle, so showing it again resumes only what it paused (FR-084).
-  const pausedByHiding = useRef(false);
-  // True when the phone was turned upright and that paused the battle (amendment 12, FR-104).
-  const pausedByRotate = useRef(false);
   // The personal best after the latest finished round, by round seed, so each round is compared only once (FR-086).
   const [roundRecord, setRoundRecord] = useState<{ seed: number; record: RoundRecord } | null>(null);
   const state = useRoundState(controller);
@@ -132,40 +132,11 @@ export function App() {
     return () => handle.destroy();
   }, [screen, controller, sfx, persistence]);
 
-  // Pause while the tab is hidden, so the round's time stops (FR-084).
-  useEffect(() => {
-    if (screen !== 'battle') return;
-    const onVisibility = () => {
-      if (document.hidden) {
-        if (controller.getState().phase === 'paused' || controller.getState().phase === 'roundOver') return;
-        controller.pause();
-        pausedByHiding.current = controller.getState().phase === 'paused';
-      } else if (pausedByHiding.current) {
-        pausedByHiding.current = false;
-        // A parent screen that opened meanwhile keeps the game paused until it closes.
-        if (!pausedByGate.current) controller.resume();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [screen, controller]);
-
-  // A phone held upright pauses the round until it is turned sideways again (amendment 12, FR-104). The phase is a
-  // dependency, so a round that could not pause at once (it was already paused by the gate) is paused later.
+  // A running round pauses while a parent screen or the transfer dialog is open, the tab is hidden (the time stops,
+  // FR-084) or the phone is held upright (FR-104), and resumes only when none of them is left (review P3, R1, R4).
+  const hidden = useDocumentHidden();
   const upright = layout === 'rotate';
-  const phase = state.phase;
-  useEffect(() => {
-    if (screen !== 'battle') return;
-    if (upright) {
-      if (pausedByRotate.current || phase === 'paused' || phase === 'roundOver') return;
-      controller.pause();
-      pausedByRotate.current = controller.getState().phase === 'paused';
-    } else if (pausedByRotate.current) {
-      pausedByRotate.current = false;
-      // A parent screen or a hidden tab that paused it meanwhile keeps it paused until they end.
-      if (!pausedByGate.current && !pausedByHiding.current) controller.resume();
-    }
-  }, [upright, phase, screen, controller]);
+  useAutoPause(controller, state.phase, screen === 'battle' && (parent !== 'closed' || hidden || upright || transfer !== null));
 
   // Compare a finished round with the personal best once (FR-086).
   const roundOverSeed = state.phase === 'roundOver' && state.outcome !== null ? state.seed : null;
@@ -187,13 +158,21 @@ export function App() {
     }
   }, [destroyed, persistence]);
 
-  // A save link (FR-119): decode it on load and whenever only the fragment changes.
+  // A save link (FR-119): decode it on load and whenever only the fragment changes (review P6). Only the latest code
+  // counts, and a decode that throws shows "Dieser Code passt nicht" (review L1).
+  const latestDecode = useRef(0);
   useEffect(() => {
     let live = true;
-    const decode = (code: string) =>
-      void decodeTransfer(code).then((r) => {
-        if (live) setTransfer(r.ok ? { kind: 'ready', summary: r.summary, data: r.data } : { kind: 'invalid' });
-      });
+    const decode = (code: string) => {
+      const id = ++latestDecode.current;
+      const show = (next: Transfer) => {
+        if (live && id === latestDecode.current) setTransfer(next);
+      };
+      decodeTransfer(code).then(
+        (r) => show(r.ok ? { kind: 'ready', summary: r.summary, data: r.data } : { kind: 'invalid' }),
+        () => show({ kind: 'invalid' }),
+      );
+    };
     // The initial state is already 'reading' when the page opened with a save link.
     const first = saveCodeFromHash(window.location.hash);
     if (first !== null) decode(first);
@@ -215,18 +194,25 @@ export function App() {
     window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
   }, []);
   const acceptTransfer = useCallback(() => {
-    if (transfer?.kind === 'ready' && transfer.data) {
-      persistence.applyTransfer(transfer.data);
-      controller.updateSettings(persistence.settings());
-      setGarage(persistence.garage());
+    if (transfer?.kind !== 'ready' || !transfer.data) return closeTransfer();
+    if (!persistence.applyTransfer(transfer.data).ok) {
+      // Nothing was stored (review M1, M4): say so and keep `#save=`, so a reload can try again.
+      setTransfer({ kind: 'failed' });
+      return;
     }
+    controller.updateSettings(persistence.settings());
+    setGarage(persistence.garage());
+    // The end screen lists items unlocked during the round, not the stars that came with the save (review R4).
+    roundStartStars.current = persistence.garage().stars;
     closeTransfer();
   }, [transfer, persistence, controller, closeTransfer]);
 
-  // A waiting new version is applied only on the start screen, never during a round (FR-051a).
+  // A waiting new version is applied only on the start screen, never during a round (FR-051a), and never while a
+  // parent screen or the transfer dialog is open (review R2).
+  const updateAllowed = canApplyUpdate({ screen, parentOpen: parent !== 'closed', transferOpen: transfer !== null });
   useEffect(() => {
-    swUpdate.setStartScreen(screen === 'start');
-  }, [screen]);
+    swUpdate.setStartScreen(updateAllowed);
+  }, [updateAllowed]);
 
   // Spoken challenges (FR-055): each new challenge is read aloud while "Vorlesen" is on and a German voice exists.
   const speech = persistence.settings().sound.speech;
@@ -272,23 +258,24 @@ export function App() {
     [persistence],
   );
 
-  const openParent = useCallback(() => {
-    setParent('menu');
-    if (screen === 'battle' && controller.getState().phase !== 'paused') {
-      controller.pause();
-      pausedByGate.current = controller.getState().phase === 'paused';
-    }
-  }, [controller, screen]);
+  const openParent = useCallback(() => setParent('menu'), []);
   const closeParent = useCallback(() => {
     setParent('closed');
     // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendment 11).
     setGarage(persistence.garage());
-    if (pausedByGate.current) controller.resume();
-    pausedByGate.current = false;
-  }, [controller, persistence]);
+  }, [persistence]);
+  // One gear shows at a time: on the rotate picture while it shows, otherwise on the screen below. The app keeps the
+  // menu's state, so a menu opened on the rotate picture stays open after the phone turns sideways (review R1).
   const gear = (
-    <ParentGate onOpen={openParent} onClose={closeParent} onSettings={() => setParent('settings')} onProgress={() => setParent('progress')} />
+    <ParentGate
+      open={parent === 'menu'}
+      onOpen={openParent}
+      onClose={closeParent}
+      onSettings={() => setParent('settings')}
+      onProgress={() => setParent('progress')}
+    />
   );
+  const screenGear = rotate ? undefined : gear;
 
   // While a parent screen is open, keys do nothing in the game (FR-045, T115).
   const keyScreen = parent === 'closed' && !rotate && transfer === null ? keyScreenFor(screen, state.phase) : null;
@@ -325,7 +312,7 @@ export function App() {
         <StartScreen
           onPlay={play}
           freePlay={persistence.settings().freePlay}
-          gear={gear}
+          gear={screenGear}
           garage={garageOn ? garage : null}
           onGarage={() => setScreen('garage')}
           saveFailed={persistence.status().saveFailed}
@@ -338,7 +325,7 @@ export function App() {
           <BattleOverlay
             controller={controller}
             state={state}
-            gear={gear}
+            gear={screenGear}
             numberPad={numberPad}
             onSpeak={speech && speaker.available ? speakChallenge : undefined}
           />
@@ -360,7 +347,9 @@ export function App() {
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
       )}
       {parent === 'progress' && <ProgressPage persistence={persistence} onClose={closeParent} />}
-      {transfer !== null && transfer.kind !== 'reading' && <TransferDialog state={transfer} onAccept={acceptTransfer} onCancel={closeTransfer} />}
+      {transfer !== null && transfer.kind !== 'reading' && (
+        <TransferDialog state={transfer} onAccept={acceptTransfer} onCancel={transfer.kind === 'failed' ? () => setTransfer(null) : closeTransfer} />
+      )}
     </div>
   );
 }

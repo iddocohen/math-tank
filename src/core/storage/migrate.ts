@@ -8,20 +8,39 @@ import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings
  * `exactHit` added, default false). Version 3 becomes version 4 (amendment 06: `exactHit` dropped, `roundType`,
  * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Version 4 becomes version 5
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
- * 'auto'). Older versions go through every later step. Progress: version 0 becomes version 1.
+ * 'auto'). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
 export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   if (!isRecord(raw)) return raw;
   const version = raw.version ?? 0;
-  if (kind === 'settings') {
-    if (version === 0 || version === 1) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw)))));
-    if (version === 2) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(raw))));
-    if (version === 3) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(raw)));
-    if (version === 4) return migrateSettingsToV6(migrateSettingsToV5(raw));
-    return version === 5 ? migrateSettingsToV6(raw) : raw;
-  }
+  if (kind === 'settings') return clampAdditionOperand(migrateSettings(raw, version));
   return version === 0 ? migrateProgressV0(raw) : raw;
+}
+
+function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
+  if (version === 0 || version === 1) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw)))));
+  if (version === 2) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(raw))));
+  if (version === 3) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(raw)));
+  if (version === 4) return migrateSettingsToV6(migrateSettingsToV5(raw));
+  return version === 5 ? migrateSettingsToV6(raw) : raw;
+}
+
+/**
+ * Review R5: the settings rules now keep `addition.maxOperand` within the range width, as for subtraction. Settings
+ * stored before that rule get the operand clamped instead of being reset; anything not a whole number stays as it is,
+ * so validation rejects it.
+ */
+function clampAdditionOperand(raw: Record<string, unknown>): Record<string, unknown> {
+  const { range, addition } = raw;
+  if (!isRecord(range) || !isRecord(addition)) return raw;
+  const { min, max } = range;
+  const { maxOperand } = addition;
+  if (!Number.isInteger(min) || !Number.isInteger(max) || !Number.isInteger(maxOperand)) return raw;
+  const span = (max as number) - (min as number);
+  if (span < 1 || (maxOperand as number) <= span) return raw;
+  return { ...raw, addition: { ...addition, maxOperand: span } };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { createRng } from '../rng';
 import { defaultSettings } from '../settings/defaults';
 import type { Settings } from '../settings/schema';
+import { validateSettings, withRange } from '../settings/validate';
+import { migrate } from '../storage/migrate';
 import type { Attempt, Progress, SessionSummary } from '../types';
 import type { Garage } from '../rewards/garage';
 import type { Records } from '../records/records';
@@ -11,7 +14,10 @@ import {
   saveCodeFromHash,
   toTransfer,
   transferLink,
+  TRANSFER_MAX_CODE_LENGTH,
+  TRANSFER_MAX_JSON_BYTES,
   TRANSFER_MAX_LINK_BYTES,
+  TRANSFER_V2_SETTINGS_BASE,
   type SaveData,
 } from './transfer';
 
@@ -95,10 +101,21 @@ function codeOf(link: string): string {
   return link.slice(link.indexOf('#save=') + '#save='.length);
 }
 
+/** base64url of bytes. */
+function b64urlBytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 /** base64url of UTF-8 text, for hand-made codes. */
 function b64url(text: string): string {
-  const bytes = new TextEncoder().encode(text);
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return b64urlBytes(new TextEncoder().encode(text));
+}
+
+function fromB64url(text: string): Uint8Array {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (text.length % 4)) % 4));
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
 describe('toTransfer (FR-116)', () => {
@@ -339,5 +356,156 @@ describe('compact transfer version 2 (T305)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(toTransfer(data())))}`);
     expect(dec.ok).toBe(true);
     if (dec.ok) expect(dec.data.settings).toEqual(settings());
+  });
+});
+
+/** Codes written by this game on 2026-11-05 (settings version 6, transfer version 2), kept as they are (review T1, P4). */
+const FROZEN_V2_COMPRESSED = 'v2.VU67bsMwDPwXzgwg52G3WpOhc1dDg-AwrWBZMig5iWHn38M4KYJyIXm8O149wZk4uRhAlwhsww-BnqBnSpRBQzOkHDtA6JxQdjslk72Crj7UDcEejy4v4ukBf1MafP47UqBuPLjTyTWCjmIWInfWi1n6jZe9j00LOvNAN6y3laDtKDcWWF7L2ltuPSUZG46XAAbrGiTCSvznYh5Cdv6LLGehbLEslFJYVOpdZlH0MS0h0_zSAq6xWOPnoyE4CwvvnxLLZ3vRNsaYOw';
+const FROZEN_V2_PLAIN = 'v2.W3sidmVyc2lvbiI6NiwicmFuZ2UiOnsicHJlc2V0IjoiY3VzdG9tIiwibWluIjo1NTAsIm1heCI6NzgwfSwiYWRkaXRpb24iOnsibWF4UmVzdWx0Ijo3ODB9LCJlbmVteURpZmZpY3VsdHkiOiJub3JtYWwiLCJzaG93Q2xvY2siOnRydWV9LFs0Nywic2t5Iiwicm9ja2V0Iiwic3BhcmtsZXMiLCJjcm93biJdLFtbIjU1MC03ODB8MXx1bnRpbEhlYXJ0cyIsNCw2MTAwMCwxNzAwMDAwMDAwMDAwXV0sW1sicG9zaXRpb25zfDU1MC03ODAiLDIsMTIsOSwyLDEsImlhIl1dLFtbMTcwMDAwMDAwMDAwMCw2MDAwMDAsMTIsOSwyLDNdXV0';
+
+/** The version 6 defaults as a literal, so this test does not follow later changes of defaultSettings(). */
+const V6_DEFAULTS = {
+  version: 6,
+  challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
+  range: { preset: '0-100', min: 0, max: 100 },
+  addition: { maxOperand: 10, maxResult: 100, steps: 1 },
+  subtraction: { maxOperand: 10, steps: 1 },
+  crossTens: true,
+  crossHundreds: false,
+  negativeResults: false,
+  rulerLevelStart: 1,
+  rulerLevelMax: 5,
+  enemyDifficulty: 'easy',
+  help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
+  beginnerAssist: true,
+  sound: { effects: true, music: false, speech: true },
+  roundType: 'untilHearts',
+  roundLength: 5,
+  adaptive: true,
+  freePlay: false,
+  noDamage: false,
+  showClock: false,
+  showRecords: true,
+  timeLimitSeconds: null,
+  garage: true,
+  numberPad: 'auto',
+};
+
+describe('frozen version 2 codes (review T1, P4)', () => {
+  it('the settings differences of version 2 codes are laid over the frozen version 6 defaults', () => {
+    expect(TRANSFER_V2_SETTINGS_BASE).toEqual(V6_DEFAULTS);
+    expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE)).toBe(true);
+    expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.sound)).toBe(true);
+  });
+
+  for (const [name, code] of [
+    ['compressed', FROZEN_V2_COMPRESSED],
+    ['uncompressed', FROZEN_V2_PLAIN],
+  ] as const) {
+    it(`a frozen ${name} code still gives the same save`, async () => {
+      const dec = await decodeTransfer(code, { codec: browserCodec() });
+      expect(dec.ok).toBe(true);
+      if (!dec.ok) return;
+      const v6 = {
+        ...V6_DEFAULTS,
+        range: { preset: 'custom', min: 550, max: 780 },
+        addition: { maxOperand: 10, maxResult: 780, steps: 1 },
+        enemyDifficulty: 'normal',
+        showClock: true,
+      };
+      expect(dec.data.settings).toEqual(migrate(v6, 'settings'));
+      expect(dec.data.garage).toEqual({ version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } });
+      expect(dec.data.records.best).toEqual({ '550-780|1|untilHearts': { enemies: 4, ms: 61000, at: 1700000000000 } });
+      expect(dec.data.progress.skills).toEqual({
+        'positions|550-780': { step: 2, recent: [], masteryWindow: ['independent', 'assisted'], guesses: 1, attempts: 12, independentCorrect: 9, assisted: 2 },
+      });
+      expect(dec.data.progress.sessions).toEqual([{ id: '1700000000000-3', startedAt: 1700000000000, lastActiveAt: 1700000600000, attempts: 12, independentCorrect: 9, assisted: 2 }]);
+    });
+  }
+});
+
+describe('size limits when reading a code (review R3, P8)', () => {
+  it('refuses a code longer than the limit without reading it', async () => {
+    expect(TRANSFER_MAX_CODE_LENGTH).toBe(8192);
+    const long = `v2.${'A'.repeat(TRANSFER_MAX_CODE_LENGTH)}`;
+    expect((await decodeTransfer(long)).ok).toBe(false);
+  });
+
+  it('stops reading compressed data that unpacks to more than 64 KB', async () => {
+    expect(TRANSFER_MAX_JSON_BYTES).toBe(65_536);
+    // A valid payload padded with 200 KB of spaces: tiny when compressed, too large when unpacked.
+    const plain = new TextDecoder().decode(fromB64url(FROZEN_V2_PLAIN.slice(3)));
+    const padded = plain.slice(0, 1) + ' '.repeat(200_000) + plain.slice(1);
+    const zipped = await browserCodec()!.deflate(new TextEncoder().encode(padded));
+    const code = `v2.${b64urlBytes(zipped)}`;
+    expect(code.length).toBeLessThan(TRANSFER_MAX_CODE_LENGTH);
+    expect((await decodeTransfer(code)).ok).toBe(false);
+    // The same payload without the padding is read.
+    expect((await decodeTransfer(FROZEN_V2_PLAIN)).ok).toBe(true);
+  });
+});
+
+/** Valid settings drawn at random: every field, every range kind and the linked limits (review P5). */
+function randomSettings(seed: number): Settings {
+  const r = createRng(seed);
+  const bool = () => r.next() < 0.5;
+  const preset = r.pick(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom'] as const);
+  let range: Settings['range'];
+  if (preset === 'custom') {
+    const min = r.int(-1000, 9000);
+    range = { preset, min, max: min + r.int(5, 1000) };
+  } else {
+    const max = Number(preset.split('-')[1]);
+    range = { preset, min: 0, max };
+  }
+  const noDamage = bool();
+  const types = { numberLine: bool(), addition: bool(), subtraction: bool(), comparison: bool() };
+  const freePlay = bool() || !Object.values(types).some(Boolean);
+  const start = r.int(1, 5) as Settings['rulerLevelStart'];
+  // A range below 1 has exercises only with negative results.
+  const negativeResults = range.min < 0 && (bool() || range.max < 1);
+  const base: Settings = {
+    ...defaultSettings(),
+    challengeTypes: types,
+    negativeResults,
+    crossTens: bool(),
+    crossHundreds: bool(),
+    rulerLevelStart: start,
+    rulerLevelMax: r.int(start, 5) as Settings['rulerLevelMax'],
+    enemyDifficulty: r.pick(['easy', 'normal', 'challenging'] as const),
+    help: { nearestTen: bool(), countSteps: bool(), zoom: bool(), stepAnimation: bool() },
+    beginnerAssist: bool(),
+    sound: { effects: bool(), music: bool(), speech: bool() },
+    roundType: noDamage ? 'enemyCount' : r.pick(['untilHearts', 'enemyCount'] as const),
+    roundLength: r.int(1, 20),
+    adaptive: bool(),
+    freePlay,
+    noDamage,
+    showClock: bool(),
+    showRecords: bool(),
+    timeLimitSeconds: bool() ? null : r.int(10, 120),
+    garage: bool(),
+    numberPad: r.pick(['auto', 'always', 'never'] as const),
+  };
+  const fitted = withRange(base, range);
+  const span = range.max - range.min;
+  const lo = negativeResults ? range.min : Math.max(range.min, 0);
+  fitted.addition = { maxOperand: r.int(1, span), maxResult: r.int(Math.min(lo + 1, range.max), range.max), steps: r.pick([1, 2] as const) };
+  fitted.subtraction = { maxOperand: r.int(1, span), steps: r.pick([1, 2] as const) };
+  return fitted;
+}
+
+describe('round trip over generated settings (review P5)', () => {
+  it('200 random valid settings come back unchanged, compressed and uncompressed', async () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = randomSettings(seed);
+      expect(validateSettings(s), `seed ${seed}`).toEqual({ ok: true });
+      for (const codec of [browserCodec(), null]) {
+        const enc = await encodeTransfer({ ...data(), settings: s }, PAGE, { codec });
+        const dec = await decodeTransfer(codeOf(enc.link), { codec: browserCodec() });
+        expect(dec.ok, `seed ${seed}`).toBe(true);
+        if (dec.ok) expect(dec.data.settings, `seed ${seed}`).toEqual(s);
+      }
+    }
   });
 });

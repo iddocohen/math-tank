@@ -2,6 +2,8 @@
 export interface KeyValue {
   get(key: string): string | null;
   set(key: string, value: string): void;
+  /** Deletes the key; an import or transfer that fails puts back a key that was missing before (review M4). */
+  remove(key: string): void;
 }
 
 /**
@@ -22,6 +24,7 @@ export function localStorageKeyValue(): KeyValue {
   return {
     get: (key) => store().getItem(key),
     set: (key, value) => store().setItem(key, value),
+    remove: (key) => store().removeItem(key),
   };
 }
 
@@ -31,6 +34,9 @@ export function memoryKeyValue(initial: Record<string, string> = {}): KeyValue {
     get: (key) => map.get(key) ?? null,
     set: (key, value) => {
       map.set(key, value);
+    },
+    remove: (key) => {
+      map.delete(key);
     },
   };
 }

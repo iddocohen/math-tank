@@ -169,7 +169,12 @@ export const de = {
     close: 'Schließen',
     exportData: 'Daten sichern',
     importData: 'Daten laden',
-    storageReset: 'Gespeicherte Daten konnten nicht gelesen werden. Die Standardwerte gelten.',
+    /** Review M3: names the data that was reset; a copy of the old text stays in the browser (review M2). */
+    storageReset: (names: string) =>
+      `Gespeicherte Daten konnten nicht gelesen werden (${names}). Dafür gelten die Standardwerte. Die alten Daten bleiben als Kopie im Browser.`,
+    /** Review M2: data written by a newer version of the game in another tab or on a later visit. */
+    storageNewer: (names: string) =>
+      `Gespeicherte Daten stammen aus einer neueren Version des Spiels (${names}). Sie werden nicht überschrieben. Bitte die Seite neu laden.`,
     storageUnavailable: 'Speichern ist in diesem Browser nicht möglich.',
     /** The four kinds of stored data, for the notices on the settings page (review H1, M3). */
     dataNames: { settings: 'Einstellungen', progress: 'Fortschritt', records: 'Rekorde', garage: 'Sterne und Garage' },
@@ -256,6 +261,7 @@ export const de = {
         invalidProgress: 'Der Fortschritt in dieser Datei ist ungültig. Es wurde nichts geändert.',
         invalidRecords: 'Die Rekorde in dieser Datei sind ungültig. Es wurde nichts geändert.',
         invalidGarage: 'Die Sterne in dieser Datei sind ungültig. Es wurde nichts geändert.',
+        notSaved: 'Die Datei ist in Ordnung, aber Speichern hat nicht geklappt. Es wurde nichts geändert.',
       },
       readFailed: 'Die Datei konnte nicht gelesen werden.',
       /** FR-048a: the Home Screen keeps stored data on Safari. */
@@ -274,6 +280,8 @@ export const de = {
       copyFailed: 'Kopieren hat nicht geklappt. Bitte diesen Link kopieren:',
       trimmed: 'Ältere Sitzungen fehlen im Code. Den ganzen Verlauf überträgt nur „Daten sichern“.',
       tooLarge: 'Der Spielstand ist zu groß für einen QR-Code. Bitte den Link kopieren. Den ganzen Verlauf überträgt nur „Daten sichern“.',
+      /** Review M5: the code could not be built at all. */
+      buildFailed: 'Der Code konnte nicht erstellt werden. Bitte „Daten sichern“ nutzen.',
     },
     /** Amendment 14 (FR-114): credits for the ground texture, although CC0 does not require them. */
     credits: {
@@ -351,6 +359,8 @@ export const de = {
     accept: 'Übernehmen',
     cancel: 'Abbrechen',
     invalid: 'Dieser Code passt nicht',
+    /** Review M1: storing the save failed; nothing was changed. */
+    saveFailed: 'Übernehmen hat nicht geklappt. Es wurde nichts geändert.',
     close: 'Schließen',
   },
 
@@ -366,7 +376,7 @@ export const de = {
     roundLength: 'Eine Runde hat 1 bis 20 Gegner.',
     roundTypeNoDamage: '„Bis alle Herzen weg“ geht nicht ohne Schaden. Bitte „Gegner pro Runde“ wählen.',
     timeLimit: 'Das Zeitlimit liegt zwischen 10 und 120 Sekunden.',
-    additionMaxOperand: 'Die größte Zahl beim Plus muss mindestens 1 sein.',
+    additionMaxOperand: 'Die größte Zahl beim Plus muss zwischen 1 und der Größe des Zahlenraums liegen.',
     additionMaxResult: 'Das größte Ergebnis darf nicht über dem Zahlenraum liegen.',
     additionNoExercise: 'Mit diesen Grenzen gibt es keine Plus-Aufgabe.',
     subtractionMaxOperand: 'Die größte Zahl beim Minus muss zwischen 1 und der Größe des Zahlenraums liegen.',

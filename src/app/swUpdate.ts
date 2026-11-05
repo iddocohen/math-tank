@@ -6,6 +6,15 @@
  * `setStartScreen`. Without `install` (unit tests, the dev server) nothing happens.
  */
 
+/**
+ * Whether a waiting version may reload the page now (FR-051a, review R2): only on the start screen, and never while the
+ * parent menu, the settings or progress page or the transfer dialog is open, so no unsaved setting or pending take-over
+ * is lost.
+ */
+export function canApplyUpdate(view: { screen: string; parentOpen: boolean; transferOpen: boolean }): boolean {
+  return view.screen === 'start' && !view.parentOpen && !view.transferOpen;
+}
+
 export interface RegisterOptions {
   immediate?: boolean;
   onNeedRefresh?: () => void;

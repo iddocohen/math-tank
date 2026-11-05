@@ -237,9 +237,14 @@ describe('SettingsPage', () => {
     for (const f of ['roundType', 'roundLength', 'showClock', 'showRecords'] as const) expect(SETTING_FIELDS).toContain(f);
   });
 
-  it('shows a reset notice when stored data could not be read', () => {
-    setup(undefined, { [SETTINGS_KEY]: '{not json' });
-    expect(screen.getByText(m.parent.storageReset)).toBeTruthy();
+  it('shows a reset notice that names the data that could not be read (review M3)', () => {
+    setup(undefined, { [SETTINGS_KEY]: '{not json', [PROGRESS_KEY]: '[]' });
+    expect(screen.getByText(m.parent.storageReset(`${m.parent.dataNames.settings}, ${m.parent.dataNames.progress}`))).toBeTruthy();
+  });
+
+  it('tells the parent when stored data comes from a newer version of the game (review M2)', () => {
+    setup(undefined, { [PROGRESS_KEY]: JSON.stringify({ version: 2, attempts: [], skills: {}, sessions: [] }) });
+    expect(screen.getByText(m.parent.storageNewer(m.parent.dataNames.progress))).toBeTruthy();
   });
 
   it('shows a save failure that happened during play, naming the data, until that data saves (review H1)', () => {
@@ -370,6 +375,39 @@ describe('SettingsPage data section (FR-048a)', () => {
     expect(await screen.findByText(m.settings.data.importFailed.notJson)).toBeTruthy();
     expect(persistence.settings()).toEqual(before);
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('"Daten laden" whose save fails says only that nothing changed, never "imported" (review L2, M4)', async () => {
+    const inner = memoryKeyValue();
+    const kv = {
+      ...inner,
+      set: (k: string, v: string) => {
+        if (k === PROGRESS_KEY) throw new Error('full');
+        inner.set(k, v);
+      },
+    };
+    const persistence = createPersistence({ kv, storage: undefined });
+    const onSaved = vi.fn();
+    render(<SettingsPage persistence={persistence} onSaved={onSaved} onClose={vi.fn()} />);
+    const file = new File([exportData({ ...defaultSettings(), rulerLevelStart: 3 }, persistence.progress(), emptyRecords(), persistence.garage())], 'b.json');
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(m.parent.importData), { target: { files: [file] } });
+    });
+    expect(await screen.findByText(m.settings.data.importFailed.notSaved)).toBeTruthy();
+    expect(screen.queryByText(m.settings.data.imported)).toBeNull();
+    expect(persistence.settings().rulerLevelStart).toBe(1);
+    expect(inner.get(SETTINGS_KEY)).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('says so when the transfer code cannot be built, instead of showing no QR code silently (review M5)', async () => {
+    const persistence = createPersistence({ kv: memoryKeyValue(), storage: undefined });
+    vi.spyOn(persistence, 'saveData').mockImplementation(() => {
+      throw new Error('broken');
+    });
+    render(<SettingsPage persistence={persistence} onSaved={vi.fn()} onClose={vi.fn()} />);
+    expect(await screen.findByText(m.settings.transfer.buildFailed)).toBeTruthy();
+    expect(screen.queryByTestId('transfer-qr')).toBeNull();
   });
 
   it('explains how to add the game to the Home Screen', () => {

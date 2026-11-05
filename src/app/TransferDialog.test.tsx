@@ -103,4 +103,12 @@ describe('TransferDialog', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onAccept).not.toHaveBeenCalled();
   });
+
+  it('a failed take-over says that nothing changed and offers only "Schließen" (review M1)', () => {
+    const { onCancel } = setup({ kind: 'failed' });
+    expect(screen.getByTestId('transfer-dialog').textContent).toContain(m.transfer.saveFailed);
+    expect(screen.queryByRole('button', { name: m.transfer.accept })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: m.transfer.close }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
 });

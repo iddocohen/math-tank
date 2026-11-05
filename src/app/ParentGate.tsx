@@ -17,15 +17,22 @@ const RING_RADIUS = 30;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 interface Props {
+  /**
+   * Whether the menu shows, when the app keeps that state (review R1): the app shows one gear at a time (on the
+   * rotate picture or on the screen below it), so a menu opened on one gear stays open when the phone turns. Without
+   * it, the gate keeps its own state.
+   */
+  open?: boolean;
   onOpen: () => void;
   onClose: () => void;
   onSettings: () => void;
   onProgress: () => void;
 }
 
-export function ParentGate({ onOpen, onClose, onSettings, onProgress }: Props) {
+export function ParentGate({ open: openFromApp, onOpen, onClose, onSettings, onProgress }: Props) {
   const m = t();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOpen] = useState(false);
+  const open = openFromApp ?? ownOpen;
   const { progress, handlers } = useHold(() => {
     setOpen(true);
     onOpen();

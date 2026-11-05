@@ -16,7 +16,6 @@
  * foreign code is refused as a whole and changes nothing.
  */
 import { z } from 'zod';
-import { defaultSettings } from '../settings/defaults';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { parseGarage, type Garage } from '../rewards/garage';
 import type { Look } from '../rewards/items';
@@ -30,6 +29,10 @@ import type { Progress, RecentOutcome } from '../types';
 export const TRANSFER_VERSION = 2;
 /** The whole link, in bytes: below the 2331 bytes of a version 40 QR code with error correction M (FR-118). */
 export const TRANSFER_MAX_LINK_BYTES = 2300;
+/** Longest code read (review R3): about 3.5 times the longest link written, so no real code is refused. */
+export const TRANSFER_MAX_CODE_LENGTH = 8192;
+/** Most bytes of JSON read from a compressed code (review R3, P8); unpacking stops there, so a crafted code cannot freeze the tab. */
+export const TRANSFER_MAX_JSON_BYTES = 65_536;
 /** Longest stored mastery window (data-model.md SkillProgress). */
 const WINDOW_MAX = 10;
 const FRAGMENT = 'save=';
@@ -67,14 +70,18 @@ export interface TransferSummary {
 
 export interface Codec {
   deflate(bytes: Uint8Array): Promise<Uint8Array>;
-  inflate(bytes: Uint8Array): Promise<Uint8Array>;
+  /** Rejects when the unpacked data would be longer than `maxBytes`. */
+  inflate(bytes: Uint8Array, maxBytes: number): Promise<Uint8Array>;
 }
 
 export interface EncodedTransfer {
   link: string;
-  /** `v1.<data>`, the part after `#save=`. */
+  /** `v2.<data>`, the part after `#save=`. */
   code: string;
-  /** False when the link is longer than the limit even with no sessions and empty mastery windows. */
+  /**
+   * False when the link is longer than the limit even with no sessions and empty mastery windows; `link` is then still
+   * the shortest link, for "Link kopieren" (FR-118).
+   */
   fits: boolean;
   /** Oldest session totals left out (FR-118). */
   sessionsDropped: number;
@@ -108,12 +115,36 @@ async function pipe(bytes: Uint8Array, stream: TransformStream<Uint8Array, Uint8
   return new Uint8Array(await new Response(body.pipeThrough(stream)).arrayBuffer());
 }
 
+/** Unpacks chunk by chunk and stops as soon as the output passes `maxBytes` (review R3). */
+async function pipeLimited(bytes: Uint8Array, stream: TransformStream<Uint8Array, Uint8Array>, maxBytes: number): Promise<Uint8Array> {
+  const reader = new Response(bytes as BodyInit).body!.pipeThrough(stream).getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new RangeError('transfer data too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+
 /** `deflate-raw` through CompressionStream and DecompressionStream; null when the browser has neither. */
 export function browserCodec(): Codec | null {
   if (typeof CompressionStream === 'undefined' || typeof DecompressionStream === 'undefined' || typeof Response === 'undefined') return null;
   return {
     deflate: (bytes) => pipe(bytes, new CompressionStream('deflate-raw') as TransformStream<Uint8Array, Uint8Array>),
-    inflate: (bytes) => pipe(bytes, new DecompressionStream('deflate-raw') as TransformStream<Uint8Array, Uint8Array>),
+    inflate: (bytes, maxBytes) => pipeLimited(bytes, new DecompressionStream('deflate-raw') as TransformStream<Uint8Array, Uint8Array>, maxBytes),
   };
 }
 
@@ -174,6 +205,43 @@ function withDiff(base: Record<string, unknown>, diff: Record<string, unknown>):
   return out;
 }
 
+/**
+ * The base that version 2 codes store their settings differences against: the version 6 defaults, frozen (review T1).
+ * Writer and reader both use it, whatever the current defaults are, so changing a default later never changes what an
+ * existing code means. The settings version travels in the differences, and the reader migrates from it.
+ */
+export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
+  version: 6,
+  challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
+  range: { preset: '0-100', min: 0, max: 100 },
+  addition: { maxOperand: 10, maxResult: 100, steps: 1 },
+  subtraction: { maxOperand: 10, steps: 1 },
+  crossTens: true,
+  crossHundreds: false,
+  negativeResults: false,
+  rulerLevelStart: 1,
+  rulerLevelMax: 5,
+  enemyDifficulty: 'easy',
+  help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
+  beginnerAssist: true,
+  sound: { effects: true, music: false, speech: true },
+  roundType: 'untilHearts',
+  roundLength: 5,
+  adaptive: true,
+  freePlay: false,
+  noDamage: false,
+  showClock: false,
+  showRecords: true,
+  timeLimitSeconds: null,
+  garage: true,
+  numberPad: 'auto',
+});
+
+function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {
+  for (const v of Object.values(o)) if (isPlainObject(v)) deepFreeze(v);
+  return Object.freeze(o);
+}
+
 const EMPTY_WINDOW = '';
 
 /** Transfer version 2: `[settings, garage, records, skills, sessions]` (T305). */
@@ -191,7 +259,7 @@ function compact(t: TransferV1): unknown[] {
   });
   const { color, flag, trail, hat } = t.garage.look;
   return [
-    settingsDiff(t.settings as unknown as Record<string, unknown>, defaultSettings() as unknown as Record<string, unknown>),
+    settingsDiff(t.settings as unknown as Record<string, unknown>, TRANSFER_V2_SETTINGS_BASE),
     [t.garage.stars, color, flag, trail, hat],
     Object.entries(t.records).map(([key, r]) => [key, r.enemies, r.ms, r.at]),
     skills,
@@ -207,10 +275,7 @@ const compactSchema = z.tuple([
   z.array(z.tuple([z.number(), z.number(), intMin0(), intMin0(), intMin0(), z.union([intMin0(), z.string()])])),
 ]);
 
-/**
- * A version 2 payload in the shape of version 1. The settings differences are laid over the defaults of this game's
- * settings version; a later settings version must keep the version 6 defaults for codes written with them.
- */
+/** A version 2 payload in the shape of version 1. The settings differences are laid over the frozen version 6 defaults. */
 function expand(raw: unknown): unknown {
   const parsed = compactSchema.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -218,7 +283,7 @@ function expand(raw: unknown): unknown {
   let startedAt = 0;
   return {
     v: 1,
-    settings: withDiff(defaultSettings() as unknown as Record<string, unknown>, diff),
+    settings: withDiff(TRANSFER_V2_SETTINGS_BASE, diff),
     garage: { stars, look: { color, flag, trail, hat } },
     records: Object.fromEntries(records.map(([key, enemies, ms, at]) => [key, { enemies, ms, at }])),
     skills: Object.fromEntries(skills.map(([key, ...s]) => [key, s])),
@@ -309,21 +374,26 @@ function parseObject(bytes: Uint8Array): unknown {
 
 async function readJson(bytes: Uint8Array, codec: Codec | null): Promise<unknown> {
   // Uncompressed data is JSON; anything else is compressed.
-  if (isJsonStart(bytes)) {
+  if (isJsonStart(bytes) && bytes.length <= TRANSFER_MAX_JSON_BYTES) {
     const plain = parseObject(bytes);
     if (plain !== undefined) return plain;
   }
   if (!codec) return undefined;
   try {
-    return parseObject(await codec.inflate(bytes));
+    return parseObject(await codec.inflate(bytes, TRANSFER_MAX_JSON_BYTES));
   } catch {
     return undefined;
   }
 }
 
-/** Reads `v1.<data>` or `v2.<data>` with the same schemas and migrations as storage (FR-120); any failure refuses the whole code. */
+/**
+ * Reads `v1.<data>` or `v2.<data>` with the same schemas and migrations as storage (FR-120); any failure refuses the
+ * whole code. Codes longer than 8192 characters, and compressed data that unpacks to more than 64 KB, are refused
+ * (review R3).
+ */
 export async function decodeTransfer(code: string, opts: { codec?: Codec | null } = {}): Promise<DecodedTransfer> {
   const codec = opts.codec === undefined ? browserCodec() : opts.codec;
+  if (code.length > TRANSFER_MAX_CODE_LENGTH) return { ok: false };
   const m = /^v(\d+)\.(.+)$/.exec(code);
   const version = m ? Number(m[1]) : 0;
   if (!m || (version !== 1 && version !== 2)) return { ok: false };

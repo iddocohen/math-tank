@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSwUpdate, type RegisterSW } from './swUpdate';
+import { canApplyUpdate, createSwUpdate, type RegisterSW } from './swUpdate';
 
 /** A stand-in for registerSW from virtual:pwa-register: remembers the callbacks and counts updates. */
 function fakeRegister() {
@@ -55,5 +55,15 @@ describe('service worker update (FR-051, FR-051a, research R12)', () => {
   it('does nothing before install, for example in unit tests of the app', () => {
     const sw = createSwUpdate();
     expect(() => sw.setStartScreen(true)).not.toThrow();
+  });
+});
+
+describe('canApplyUpdate (review R2)', () => {
+  it('allows the reload only on the start screen with no parent screen and no transfer dialog open', () => {
+    expect(canApplyUpdate({ screen: 'start', parentOpen: false, transferOpen: false })).toBe(true);
+    expect(canApplyUpdate({ screen: 'battle', parentOpen: false, transferOpen: false })).toBe(false);
+    expect(canApplyUpdate({ screen: 'garage', parentOpen: false, transferOpen: false })).toBe(false);
+    expect(canApplyUpdate({ screen: 'start', parentOpen: true, transferOpen: false })).toBe(false);
+    expect(canApplyUpdate({ screen: 'start', parentOpen: false, transferOpen: true })).toBe(false);
   });
 });
