@@ -1,17 +1,17 @@
 # Contract: screens and player flows
 
-Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen") and [amendment 05](../amendment-05-no-shortcuts-settings-early.md) (no stepping shortcuts, no number while pointing, clear tanks, settings early).
+Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen") [amendment 05](../amendment-05-no-shortcuts-settings-early.md) (no stepping shortcuts, no number while pointing, clear tanks, settings early) and [amendment 06](../amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire after every 2 shots, score, time and personal best).
 
 ## Screens
 
 | Screen | Built with | Opens from | Content |
 |--------|-----------|-----------|---------|
 | Start | React | App load | Large "Spielen" button, "Freies Spiel" when the parent allows it, gear icon (press and hold), fullscreen button. Enter or Space starts guided mode |
-| Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield with the child's tank and the enemy tank, each with its health bar above it, ruler (number line), challenge banner, large readout of typed digits, fire button, help button, speaker icon, pause, fullscreen, gear icon |
-| Round end | React overlay | Round over | Encouraging message, "Nochmal" button (Enter or Space), back to start |
+| Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield with the child's tank (3 hearts above it) and the enemy tank (no health bar, a target ring where the pointer line meets it), ruler (number line), tank counter at the top left (and the clock beside it when "Uhr beim Spielen zeigen" is on), challenge banner, large readout of typed digits, fire button, help button, speaker icon, pause, fullscreen, gear icon |
+| Round end | React overlay | Round over | Encouraging message, the result "9 Panzer getroffen in 6:12", then "Neuer Rekord!" with a short celebration, or the record in small neutral text "Dein Rekord: 12" (neither when "Rekord zeigen" is off), "Nochmal" button (Enter or Space), back to start |
 | Parent gate | React | Gear held for 2 s with mouse or touch | Opens a parent menu with "Einstellungen" and "Fortschritt". No key opens it |
-| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with a ruler preview for the chosen range and level), Hilfe, Gegner, Ton, Runde. Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
-| Progress | React | Parent menu | Per-skill table, sessions list, reset button with confirmation |
+| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with a ruler preview for the chosen range and level), Hilfe, Gegner, Ton, Runde ("Rundenende" with "Bis alle Herzen weg" or "Gegner pro Runde" and the number of enemies, "Uhr beim Spielen zeigen", "Rekord zeigen"). Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
+| Progress | React | Parent menu | Per-skill table, sessions list, personal bests per range, starting level and round type (amendment 06), reset button with confirmation |
 
 There are no angle or power controls, and the cannon cannot be dragged (amendment 01).
 
@@ -19,8 +19,8 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 
 - Sky and battlefield: y 0 to 700. The battlefield spans exactly the configured range, for example 550 to 780.
 - Ruler: y 720 to 820, x 80 to 1520, same mapping as the battlefield (core-api `numberToX`), always on screen, lines and labels per the ruler level.
-- React overlay (HTML, positioned over the canvas): challenge banner at the top center; help, speaker and pause buttons at the top left; gear and fullscreen at the top right; the large readout of typed digits and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field, there are no −1 and +1 buttons, and there are no health bars or health labels in the corners (amendment 05).
-- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag; decoys look exactly like the enemy. Each tank's health bar sits directly above the tank, in the tank's color, with no text. At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
+- React overlay (HTML, positioned over the canvas): challenge banner at the top center; help, speaker and pause buttons at the top left; gear and fullscreen at the top right; the large readout of typed digits and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field, there are no −1 and +1 buttons, and there are no health bars or health labels in the corners (amendment 05). At the top left a small tank symbol and the number of destroyed enemies (no text); with "Uhr beim Spielen zeigen" an up-counting clock `m:ss` beside it (amendment 06, FR-083, FR-084).
+- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag; decoys look exactly like the enemy. Three hearts sit directly above the child's tank, with no text; a lost heart stays as an empty outline. The enemy has no health bar (amendment 06, FR-078, FR-080). At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
 
 ## Choosing a number and firing (every mode)
 
@@ -29,37 +29,42 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 3. After landing: crater; the landing number shown large; the previous path kept as a faint trail.
 4. Input method (amendment 05, FR-076): typing a digit or pressing Enter to fire sets the round's input method to keyboard; tapping or dragging on the ruler or tapping the fire button sets it to pointer. With keyboard input, the next search is never "Finde N".
 
-## Hit feedback (amendment 04, FR-066, FR-071, FR-072, FR-074)
+## Hit feedback (amendment 06, FR-066, FR-072)
 
 | Where the shell lands | Enemy | Status line | Ruler |
 |-----------------------|-------|-------------|-------|
-| Exact number | loses twice the hit damage; larger explosion | "Volltreffer!" and, for "read the ruler", "Der Gegner stand bei 637." | landing marker |
-| On the tank body, not exact | loses the hit damage | "Treffer!" | bracket from the child's number to the enemy's number with "Du: 30 · Gegner: 31 · 1 Schritt" |
-| On the tank body, not exact, "Genau treffen" on | shakes, no damage | "Ganz knapp!" | same bracket and text as the row above |
-| Off the tank body, inside the blast radius | shakes, no damage | landing number | free play: bracket with the step count |
-| Elsewhere | nothing | landing number | free play: bracket with the step count |
+| Exact number | destroyed with a large explosion; a new enemy appears at a new position; tank counter + 1 | "Getroffen!" and "Der Gegner stand bei 637." | landing marker |
+| On the tank body, not exact | shakes, not destroyed (a miss) | "Ganz knapp! Triff die Linie." | bracket from the child's number to the enemy's number with "Du: 30 · Gegner: 31 · 1 Schritt" |
+| Off the tank body | nothing (a miss) | landing number | free play: bracket with the step count |
 
-- The overlay root carries `data-last-shot`: `bullseye`, `body`, `close` (body hit without damage under "Genau treffen") or `miss`, for the end-to-end tests.
-- Pointer line (FR-073): whenever a tank is visible (the enemy in free play, in "read the ruler" and after a guided search reveals it; every numbered tank in comparison turns), a thin dashed vertical line runs from the tank's center down to the ruler and ends in a small triangle on the ruler line. No number is drawn at or near it and no ruler label is highlighted; the enemy's number appears only in the hit feedback after a hit. A hidden enemy has no line.
-- With "Genau treffen" on, the enemy tank shows a bullseye (two rings and a dot) on its center line.
+- The overlay root carries, for the end-to-end tests only: `data-last-shot` (`hit`, `near` or `miss`), `data-lives` (0 to 3), `data-enemies-destroyed`, `data-shots-since-enemy-fire` and `data-outcome` at the round end. `data-enemy-health` and `data-player-health` are removed (amendment 06).
+- Enemy shot (FR-006, FR-080, FR-081): after every 2 shots of the child at the same enemy, the enemy fires once. A hit on the child's tank removes one heart with a short flash; a shell next to the tank changes nothing. In no-damage mode the hearts never go down.
+- Pointer line (FR-073): whenever a tank is visible (the enemy in free play, in "read the ruler" and after a guided search reveals it; every numbered tank in comparison turns), a thin dashed vertical line runs from the tank's center down to the ruler and ends in a small triangle on the ruler line. No number is drawn at or near it and no ruler label is highlighted; the enemy's number appears only in the feedback after a hit or a near miss. Where the line meets the enemy tank, a small target ring marks the spot to hit (amendment 06). A hidden enemy has no line and no ring.
 
 ## Guided turn flow (one search per player turn)
 
 1. Search starts: for position challenges the enemy fades out completely and nothing is drawn at its new position; for "read the ruler" the enemy is visible and no number is given. The challenge banner appears and is spoken if speech is on. Fires are accepted after 1 second.
 2. The child chooses a number and fires (see above). Every fire is an answer.
-3. Hit (the shell lands on the enemy tank's body; the exact number is a Volltreffer): short cheerful sound, the enemy is revealed and loses health; feedback as in the hit feedback table above. With "Genau treffen" on, a body hit that is not exact is a miss with the message "Ganz knapp!" and the step count.
-   Miss: the landing number is shown large, an encouraging phrase, and the next help step (FR-031). The enemy takes no turn; health does not change; the child chooses again. A shell inside the enemy's blast radius makes the enemy shake.
-4. After the hit (or the shot at the shown solution), the enemy takes its turn with a visible arc. Then round end, or the enemy hides and moves and a new search starts (step 1).
+3. Hit (the shell lands at the enemy's exact number): short cheerful sound, the enemy is revealed and destroyed, the tank counter goes up; feedback as in the hit feedback table above.
+   Miss (a near miss on the body included): the landing number is shown large (after a near miss, "Ganz knapp! Triff die Linie." with the step count, and the tank shakes), an encouraging phrase, and the next help step (FR-031). If this was the child's second shot since the enemy last fired, the enemy fires once (FR-081); then the child chooses again.
+4. After the hit (or the shot at the shown solution): round end when the parent's number of enemies is reached, otherwise a new enemy hides at a new position and a new search starts (step 1); the count for the enemy's fire starts again.
 
 The player's tank stands at the left or right end for the whole round and switches sides in the next round.
 
 ## Comparison turns
 
-Numbered tanks are visible, each at its own number, each with a pointer line to the ruler. Tapping a tank (a Volltreffer on that tank), or typing its number and pressing Enter, fires at it. A decoy is destroyed and the shot counts as a miss. For `order3`, taps or typed numbers (Enter after each) place order badges 1, 2, 3 without firing; after a correct third badge the cannon fires at the enemy (the largest number); a wrong order resets the badges with an encouraging phrase and the next help step. A typed number that is on no tank places no badge and shows a hint.
+Numbered tanks are visible, each at its own number, each with a pointer line to the ruler. Tapping a tank (a hit at that tank's exact number), or typing its number and pressing Enter, fires at it. A decoy is destroyed and the shot counts as a miss. For `order3`, taps or typed numbers (Enter after each) place order badges 1, 2, 3 without firing; after a correct third badge the cannon fires at the enemy (the largest number); a wrong order resets the badges with an encouraging phrase and the next help step. A typed number that is on no tank places no badge and shows a hint.
 
 ## Free-play turn flow
 
-Started from the "Freies Spiel" button, shown only when the parent has made free play available. Every turn is a "read the ruler" challenge: the enemy is visible, the child reads the ruler and fires. Every shot is followed by an enemy turn. A miss shows the distance to the enemy in steps on the ruler; a body hit that is not exact shows both numbers and the distance. After a hit the enemy moves to a new visible position. Free play has no other challenge and no bonus.
+Started from the "Freies Spiel" button, shown only when the parent has made free play available. Every turn is a "read the ruler" challenge: the enemy is visible, the child reads the ruler and fires. The enemy fires once after every 2 shots of the child at the same enemy. A miss shows the distance to the enemy in steps on the ruler; a near miss on the body shows "Ganz knapp! Triff die Linie." with both numbers and the distance. After a hit the enemy is destroyed and a new enemy appears at a new visible position.
+
+## Round end and personal best (amendment 06, FR-084 to FR-086)
+
+1. The round ends when the child's hearts are gone, or with "Gegner pro Runde" right after the last enemy is destroyed.
+2. The time stops. The game stores the result against the personal best for the round's range, ruler starting level and round type.
+3. The end screen shows an encouraging message ("Super! Alle Gegner getroffen." or "Gut gekämpft! Noch eine Runde?"), the result "9 Panzer getroffen in 6:12" ("1 Panzer" for one), and with "Rekord zeigen" on either "Neuer Rekord!" with a short pop and sparkle (no motion with reduced motion), or "Dein Rekord: 12" in small neutral text when a best exists. It never says "verloren" or "nicht geschafft" and never compares the two numbers.
+4. "Neue Landschaft" and "Zum Start" during a round end it without a result. Free play has no other challenge and no bonus.
 
 ## Keyboard map (FR-059 to FR-064)
 
@@ -89,7 +94,8 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 ## Settings page extras
 
 - Ruler preview: a small ruler drawn with `ticksFor` for the chosen range and starting level, updated as the parent changes them.
-- "Genau treffen" (aim exactly) switch with a one-line explanation: "Nur die genaue Zahl trifft." (only the exact number hits).
+- "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
+- "Daten sichern" also includes the personal bests.
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.
 - A setting for a feature that is not built yet is shown disabled, with the note "kommt bald" (coming soon), instead of being hidden (amendment 05, FR-079).

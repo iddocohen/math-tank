@@ -63,3 +63,16 @@ The product owner asked to remove shortcuts to the answer and to have settings a
 - PRD section 8 (keyboard and accessibility) is not weakened: every child action still works with the keyboard alone.
 
 The spec (FR-017, FR-019, FR-020, FR-029, FR-053, FR-061, FR-062, new FR-076 to FR-079), data model, contracts, quickstart and tasks (Phase 11b and the moved settings phases) were updated to match.
+
+## Amendment 06
+
+**Date**: 2026-11-05
+
+The product owner found the body-hit damage and the Volltreffer hard for a child to understand and asked for a simpler rule, with a score and a personal best as a reward. This is an intended change, not drift.
+
+- **[Amendment 06](./amendment-06-one-hit-lives.md)** makes the pointer line the target: only the exact number destroys the enemy, one hit destroys it, and a new enemy appears. The enemy has no health bar. A shell on the tank body but not on the number shakes the tank and shows "Ganz knapp! Triff die Linie." as a miss. It replaces amendment 04 items 1, 2, 3, 6 and 7 (body-hit damage, the Volltreffer, double damage, the outcome `'close'` and "Genau treffen"). Amendment 04 item 5 (the pointer line) stays and gets a target ring.
+- The child's tank has 3 hearts, and the enemy fires once after every 2 shots of the child, hit or miss. This changes amendment 01's rule that a miss never gives the enemy a turn (FR-013, SC-005, US5 scenario 7): a miss still never removes a heart by itself, but a second miss can be followed by an enemy shot. PRD section 6 (low frustration) is weighed against the product owner's explicit answer "hit or miss"; the spec follows the product owner.
+- Rounds end when the hearts are gone (default) or after a parent-set number of destroyed enemies (1 to 20). The score is the number of destroyed enemies; the time is shown on the end screen only, unless the parent turns on the clock. A personal best per range, ruler starting level and round type is shown neutrally, or celebrated with "Neuer Rekord!". PRD section 7.3 (rewards without gambling or comparison) is kept: there is no list and no comparison with other people.
+- Settings become version 4 (`exactHit` dropped, `roundType`, `showClock`, `showRecords` added, `roundLength` counts enemies). The personal bests are stored under a new key and are part of the export file.
+
+The spec (US1, US2, US5, US6, US7, Edge Cases, FR-002, FR-006, FR-008, FR-010a, FR-013, FR-014, FR-043, FR-044, FR-046, FR-048a, FR-066, FR-068, FR-070, FR-072, FR-073, FR-075, FR-078, SC-005, SC-009, removed FR-071 and FR-074, new FR-080 to FR-087), data model, contracts, quickstart and tasks (Phase 13a) were updated to match.

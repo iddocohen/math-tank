@@ -46,7 +46,7 @@ minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
 
 validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[]   // empty when valid
-checkAnswer(c: Challenge, answer: number | number[]): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance); whether a shot damages the enemy is decided by core/battle/hitRule
+checkAnswer(c: Challenge, answer: number | number[]): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance); whether a shot destroys the enemy is decided by core/battle/hitRule
 stepPath(c: Challenge, beginnerAssist: boolean): number[]   // positions for the step animation, e.g. [43, 40, 36]
 crossesTen(a: number, b: number): boolean
 crossesHundred(a: number, b: number): boolean
@@ -60,8 +60,8 @@ Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for ever
 
 ```ts
 classifyAttempt(a: { solved: boolean; exact: boolean; helpLevel: number; wrongAnswers: number; responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): { independent: boolean; guess: boolean; outcome: RecentOutcome }
-// outcome: 'independent' when solved, exact, helpLevel 0 and wrongAnswers 0; 'close' when solved without help or misses but not exact (amendment 04);
-// 'assisted' when solved after help or misses; 'unsolved' when the solution was shown. 'close' never raises or lowers a step and never counts toward mastery
+// outcome: 'independent' when solved, helpLevel 0 and wrongAnswers 0; 'assisted' when solved after help or misses; 'unsolved' when the solution was shown.
+// Amendment 06: every hit is exact, a near miss on the body is a miss, so 'close' is never produced (a stored 'close' still loads and is neutral)
 // guess: solved and responseMs < 1500, or solved and 3+ wrongAnswerTimes within 5000 ms before submittedAt
 startOrContinueSession(p: Progress, now: number): Progress   // 30-minute idle and new-day rules
 recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule
@@ -78,7 +78,7 @@ generateTerrain(seed: number, worldWidth: number, worldHeight: number): Heightma
 carveCrater(t: Heightmap, cx: number, cy: number, radius: number, floor: number): Heightmap   // returns a new heightmap
 surfaceY(t: Heightmap, x: number): number
 simulateShot(input: { origin: Point; angleDeg: number; power: number; terrain: Heightmap; targets: Array<{ id: string; x: number; y: number; radius: number }>; worldWidth: number; worldHeight: number }): { path: Point[]; impact: Point; hitTargetId: string | null; outOfBounds: boolean }
-damageAt(impact: Point, tank: Point, blastRadius: number, directHit: boolean): number   // enemy shells only; 0..maxDamage, decreasing with distance
+BLAST_RADIUS = 60   // crater size; damageAt and MAX_DAMAGE are removed by amendment 06 (no health)
 solveAim(input: { origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number; hits: boolean; missDistance: number }   // enemy only (R18)
 
 // amendment 01: the player's fixed cannon
@@ -93,10 +93,9 @@ Guarantees: fixed timestep (1/120 s); identical output for identical input; terr
 
 ```ts
 enemyShot(input: { difficulty: 'easy'|'normal'|'challenging'; rng: Rng; shotIndexInRound: number; origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number }
-enemyDamageFactor(difficulty): number   // 0.5 on easy, 1 otherwise
 ```
 
-The input type has no field for attempts, help or challenge data (FR-042). On `easy`, `shotIndexInRound === 0` always returns a shot that misses by more than the blast radius.
+The input type has no field for attempts, help or challenge data (FR-042). On `easy`, `shotIndexInRound === 0` always returns a shot that misses by more than the blast radius, and over many seeded rounds most easy shots miss the player's tank (FR-043). `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
 
 ## `core/battle` (stateful)
 
@@ -106,7 +105,8 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(mode: 'guided' | 'freePlay'): void
+  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, shotsSinceEnemyFire 0, time 0 (amendment 06)
+  elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
   selectNumber(n: number): void            // pointer preview while dragging or after release; clears typed digits; never fires; sets inputMethod 'pointer'
   typeDigit(d: 0|1|2|3|4|5|6|7|8|9): void  // keyboard digit (FR-060); sets inputMethod 'keyboard' (also typeMinus and backspace)
   typeMinus(): void                        // accepted only as the first character when range.min < 0
@@ -117,9 +117,10 @@ class BattleController {
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
   tapTank(tankId: string): void            // comparison: fires at the tank's number; order3 places a badge without firing
   requestHelp(): void                      // help button or H key: next help step
-  shotAnimationDone(): void                // after replaying the path: crater, damage by the hit rule (body hit, Volltreffer double,
-                                           // exactHit), near-miss shake, miss -> help, hit -> enemy turn; sets lastShot
-  enemyShotAnimationDone(): void
+  shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new enemy
+                                           // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help, and
+                                           // at the 2nd shot since the enemy last fired -> enemy turn (FR-066, FR-081); sets lastShot
+  enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage; 0 hearts -> roundOver 'heartsGone'
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
   resume(): void
@@ -130,17 +131,31 @@ Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, 
 
 Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
 
-## `core/battle/hitRule` (pure, amendment 04)
+## `core/battle/hitRule` (pure, amendment 04, changed by amendment 06)
 
 ```ts
-type ShotKind = 'bullseye' | 'body' | 'miss';
+type ShotKind = 'hit' | 'near' | 'miss';
 bodyHalfWidth(min: number, max: number, layout?: Layout): number      // half of TANK_WIDTH (60) in numbers for the range
 shotKind(fired: number, target: number, range: { min: number; max: number }): ShotKind
-                                                                      // 'bullseye' when fired === target; 'body' when the x distance is at most TANK_WIDTH / 2
-enemyDamage(kind: ShotKind, exactHit: boolean): number                // 'bullseye' 2 * MAX_DAMAGE; 'body' MAX_DAMAGE, or 0 with exactHit; 'miss' 0
+                                                                      // 'hit' when fired === target (enemy destroyed); 'near' when the x distance is at most TANK_WIDTH / 2
+enemyHitsPlayer(impact: Point, hitTargetId: string | null, player: TankState): boolean
+                                                                      // the enemy shell entered the player's hit circle or landed within TANK_WIDTH / 2 of its x
+LIVES = 3; ENEMY_FIRE_EVERY = 2
 ```
 
-Guarantees: `shotKind(n, n, r)` is `'bullseye'` for every range; in 0 to 100 a shot 2 away is `'body'` and 3 away is `'miss'`; in 0 to 10 a shot 1 away is `'miss'`; in 0 to 1000 a shot 20 away is `'body'`.
+Guarantees: `shotKind(n, n, r)` is `'hit'` for every range; in 0 to 100 a shot 2 away is `'near'` and 3 away is `'miss'`; in 0 to 10 a shot 1 away is `'miss'`; in 0 to 1000 a shot 20 away is `'near'`. `enemyDamage` is removed by amendment 06.
+
+## `core/records` (pure, amendment 06)
+
+```ts
+interface BestResult { enemies: number; ms: number; at: number }
+interface Records { version: 1; best: Record<string, BestResult> }
+emptyRecords(): Records
+recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>): string   // `${min}-${max}|${level}|${roundType}`
+submitResult(r: Records, key: string, result: BestResult): { records: Records; newRecord: boolean; best: BestResult | null }
+                                                                      // newRecord when enemies >= 1 and enemies > the stored best (or none)
+formatTime(ms: number): string                                         // m:ss, e.g. 372000 -> "6:12"
+```
 
 ## `core/battle/entry` (pure)
 
@@ -157,9 +172,12 @@ loadSettings(kv: KeyValue): { settings: Settings; resetReason: 'none' | 'invalid
 saveSettings(kv: KeyValue, s: Settings): { ok: boolean }
 loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid' | 'unavailable' }
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
-migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 per data-model.md
-exportData(settings: Settings, progress: Progress, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
-importData(text: string): { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' }
+loadRecords(kv: KeyValue): { records: Records; resetReason: 'none' | 'invalid' | 'unavailable' }   // key mathtanks.records.v1 (amendment 06)
+saveRecords(kv: KeyValue, r: Records): { ok: boolean }
+migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 -> 4 per data-model.md
+exportData(settings: Settings, progress: Progress, records: Records, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
+importData(text: string): { ok: true; settings: Settings; progress: Progress; records: Records } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' }
+                                                                      // a file without records imports with empty records
 ```
 
 ## `i18n`
