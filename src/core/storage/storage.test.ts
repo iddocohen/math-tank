@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
 import { settingsSchema } from '../settings/schema';
+import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { memoryKeyValue, type KeyValue } from './keyValue';
 import { migrate } from './migrate';
@@ -116,7 +117,7 @@ describe('damaged data', () => {
 
   it('schema-invalid data gives defaults with resetReason invalid', () => {
     const kv = memoryKeyValue();
-    kv.set(SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), labelLevel: 9 }));
+    kv.set(SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), rulerLevelStart: 9 }));
     kv.set(PROGRESS_KEY, JSON.stringify({ version: 1, attempts: 'nope', skills: {}, sessions: [] }));
     expect(loadSettings(kv)).toEqual({ settings: defaultSettings(), resetReason: 'invalid' });
     expect(loadProgress(kv)).toEqual({ progress: emptyProgress(), resetReason: 'invalid' });
@@ -150,7 +151,7 @@ describe('unavailable storage', () => {
 });
 
 describe('migrate', () => {
-  it('turns a version 0 settings fixture into a valid version 1 object', () => {
+  it('turns a version 0 settings fixture into a valid version 2 object', () => {
     const v0 = {
       version: 0,
       challengeTypes: { numberLine: true, addition: false, subtraction: true, comparison: true },
@@ -164,12 +165,49 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(1);
+    expect(parsed.data?.version).toBe(2);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
-    expect(parsed.data?.labelLevel).toBe(2);
+    expect(parsed.data?.rulerLevelStart).toBe(2);
+    expect(parsed.data?.rulerLevelMax).toBe(5);
     expect(parsed.data?.roundLength).toBe(8);
     expect(parsed.data?.timeLimitSeconds).toBeNull();
+  });
+
+  function v1Settings(labelLevel: number, aimCorrection: boolean): Record<string, unknown> {
+    const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel, aimCorrection };
+    delete v1.rulerLevelStart;
+    delete v1.rulerLevelMax;
+    return v1;
+  }
+
+  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 2 with level 5 to 5 (decision D13)', () => {
+    const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
+    const parsed = settingsSchema.safeParse(migrated);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.version).toBe(2);
+    expect(parsed.data?.rulerLevelStart).toBe(5);
+    expect(parsed.data?.rulerLevelMax).toBe(5);
+    expect('aimCorrection' in migrated).toBe(false);
+    expect('labelLevel' in migrated).toBe(false);
+    expect(validateSettings(parsed.data!)).toEqual({ ok: true });
+  });
+
+  it('turns version 1 settings with labelLevel 2 into start 2 and max 5', () => {
+    const parsed = settingsSchema.safeParse(migrate(v1Settings(2, false), 'settings'));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.rulerLevelStart).toBe(2);
+    expect(parsed.data?.rulerLevelMax).toBe(5);
+  });
+
+  it('loadSettings upgrades stored version 1 settings without a reset', () => {
+    const kv = memoryKeyValue();
+    kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
+    const { settings, resetReason } = loadSettings(kv);
+    expect(resetReason).toBe('none');
+    expect(settings.version).toBe(2);
+    expect(settings.rulerLevelStart).toBe(3);
+    expect(settings.roundLength).toBe(12);
   });
 
   it('turns a version 0 progress fixture into a valid version 1 object', () => {
@@ -193,11 +231,11 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(1);
+    expect(settings.version).toBe(2);
     expect(settings.roundLength).toBe(12);
   });
 
-  it('leaves version 1 data unchanged', () => {
+  it('leaves version 2 settings unchanged', () => {
     const s = defaultSettings();
     expect(migrate(s, 'settings')).toEqual(s);
   });

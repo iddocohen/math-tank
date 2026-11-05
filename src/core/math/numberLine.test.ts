@@ -36,7 +36,7 @@ function input(settings: Settings, kind: ChallengeKind, roundSeed: number, playe
     roundSeed,
     turn: 1,
     playerPosition,
-    purpose: 'search',
+    rulerLevel: 1,
     kindsAllowed: [kind],
   };
 }
@@ -233,10 +233,10 @@ describe('generateChallenge for number-line kinds (FR-021, FR-028)', () => {
     expect(distinct.size).toBeGreaterThan(10);
   });
 
-  it('uses every number-line kind when all are allowed', () => {
+  it('uses every number-line kind, including readPosition, when all are allowed', () => {
     const all = { ...input(s, 'findNumber', 1), kindsAllowed: undefined };
     const kinds = new Set<ChallengeKind>();
     for (let seed = 0; seed < 500; seed++) kinds.add(generateChallenge({ ...all, roundSeed: seed }).kind);
-    expect([...kinds].sort()).toEqual([...NUMBER_LINE_KINDS].sort());
+    expect([...kinds].sort()).toEqual([...NUMBER_LINE_KINDS, 'readPosition'].sort());
   });
 });

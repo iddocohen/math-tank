@@ -1,5 +1,6 @@
 import {
   CUSTOM_MIN_LIMIT,
+  CUSTOM_MIN_UPPER_LIMIT,
   RANGE_PRESETS,
   RANGE_SPAN_MAX,
   RANGE_SPAN_MIN,
@@ -15,9 +16,10 @@ export const SETTINGS_ERROR_KEYS = [
   'rangeNotInteger',
   'rangeOrder',
   'rangeSpan',
-  'rangeMinTooLow',
+  'rangeMinOutside',
   'rangePresetMismatch',
   'noChallengeTypes',
+  'rulerLevelOrder',
   'roundLength',
   'timeLimit',
   'additionMaxOperand',
@@ -52,7 +54,7 @@ export function validateSettings(s: Settings): SettingsValidation {
   if (!Number.isInteger(range.min) || !Number.isInteger(range.max)) add('rangeNotInteger', 'range');
   if (range.min >= range.max) add('rangeOrder', 'range');
   else if (span < RANGE_SPAN_MIN || span > RANGE_SPAN_MAX) add('rangeSpan', 'range');
-  if (range.min < CUSTOM_MIN_LIMIT) add('rangeMinTooLow', 'range');
+  if (range.min < CUSTOM_MIN_LIMIT || range.min > CUSTOM_MIN_UPPER_LIMIT) add('rangeMinOutside', 'range');
   if (range.preset !== 'custom') {
     const fixed = RANGE_PRESETS[range.preset];
     if (fixed.min !== range.min || fixed.max !== range.max) add('rangePresetMismatch', 'range');
@@ -60,6 +62,8 @@ export function validateSettings(s: Settings): SettingsValidation {
 
   const anyType = Object.values(s.challengeTypes).some(Boolean);
   if (!anyType && !s.freePlay) add('noChallengeTypes', 'challengeTypes');
+
+  if (s.rulerLevelStart > s.rulerLevelMax) add('rulerLevelOrder', 'rulerLevelStart');
 
   if (!Number.isInteger(s.roundLength) || s.roundLength < ROUND_LENGTH_MIN || s.roundLength > ROUND_LENGTH_MAX) {
     add('roundLength', 'roundLength');

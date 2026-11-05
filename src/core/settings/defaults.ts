@@ -11,6 +11,8 @@ export const RANGE_PRESETS: Record<Exclude<RangePreset, 'custom'>, { min: number
 
 /** Lowest custom range start (data-model.md). */
 export const CUSTOM_MIN_LIMIT = -1000;
+/** Highest custom range start (spec Assumptions: at most 4 digits plus a sign). */
+export const CUSTOM_MIN_UPPER_LIMIT = 9000;
 export const RANGE_SPAN_MIN = 5;
 export const RANGE_SPAN_MAX = 1000;
 export const ROUND_LENGTH_MIN = 3;
@@ -21,7 +23,7 @@ export const TIME_LIMIT_MAX = 120;
 /** Data-model.md defaults (FR-046). Returns a fresh object on each call. */
 export function defaultSettings(): Settings {
   return {
-    version: 1,
+    version: 2,
     challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     range: { preset: '0-100', min: 0, max: 100 },
     addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -29,11 +31,11 @@ export function defaultSettings(): Settings {
     crossTens: true,
     crossHundreds: false,
     negativeResults: false,
-    labelLevel: 1,
+    rulerLevelStart: 1,
+    rulerLevelMax: 5,
     enemyDifficulty: 'easy',
     help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
     beginnerAssist: true,
-    aimCorrection: false,
     sound: { effects: true, music: false, speech: true },
     roundLength: 10,
     adaptive: true,

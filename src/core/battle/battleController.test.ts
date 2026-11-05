@@ -581,3 +581,70 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(progress.getProgress().attempts).toHaveLength(0);
   });
 });
+
+describe('BattleController newScene (amendment 03, FR-070)', () => {
+  it('starts a fresh round in the same mode with new terrain, full health, turn 0 and the other side', () => {
+    const { controller, progress } = makeController();
+    controller.startRound('freePlay');
+    playTurn(controller, fireBetween);
+    playTurn(controller, fireAtEnemy);
+    const before = controller.getState();
+    expect(before.turn).toBeGreaterThan(0);
+    expect(before.enemy.health).toBeLessThan(100);
+    // An unfinished choice is pending when the scene is replaced.
+    controller.nudge(1);
+
+    controller.newScene();
+    const after = controller.getState();
+    expect(after.mode).toBe('freePlay');
+    expect(after.phase).toBe('aiming');
+    expect(after.seed).not.toBe(before.seed);
+    expect(Array.from(after.terrain)).not.toEqual(Array.from(before.terrain));
+    expect(after.turn).toBe(0);
+    expect(after.player.health).toBe(100);
+    expect(after.enemy.health).toBe(100);
+    expect(after.playerSide).not.toBe(before.playerSide);
+    expect(after.selection).toBeNull();
+    expect(after.lastShot).toBeNull();
+    expect(after.outcome).toBeNull();
+    expect(progress.getProgress().attempts).toEqual([]);
+  });
+
+  it('is ignored while a shell is in flight or the game is paused', () => {
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+
+    fireBetween(controller);
+    expect(controller.getState().phase).toBe('playerShot');
+    const inFlight = controller.getState();
+    controller.newScene();
+    expect(controller.getState()).toBe(inFlight);
+
+    controller.shotAnimationDone();
+    expect(controller.getState().phase).toBe('enemyTurn');
+    const enemyTurn = controller.getState();
+    controller.newScene();
+    expect(controller.getState()).toBe(enemyTurn);
+    controller.enemyShotAnimationDone();
+
+    controller.pause();
+    const paused = controller.getState();
+    expect(paused.phase).toBe('paused');
+    controller.newScene();
+    expect(controller.getState()).toBe(paused);
+    controller.resume();
+    controller.newScene();
+    expect(controller.getState().seed).not.toBe(paused.seed);
+  });
+
+  it('also works after the round is over', () => {
+    const { controller } = makeController({ roundLength: 3 });
+    controller.startRound('freePlay');
+    for (let i = 0; i < 3 && controller.getState().phase !== 'roundOver'; i++) playTurn(controller, fireAtOwnNumber);
+    expect(controller.getState().phase).toBe('roundOver');
+    const over = controller.getState();
+    controller.newScene();
+    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().seed).not.toBe(over.seed);
+  });
+});

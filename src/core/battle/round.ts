@@ -64,8 +64,8 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     selection: null,
     entry: emptyEntry(),
     orderTaps: [],
-    // Settings get a ruler level in the version 2 migration (tasks.md D13); until then the most detailed level.
-    rulerLevel: 1,
+    // The parent's starting level (FR-018); following the positions skill comes with the difficulty ladders.
+    rulerLevel: settings.rulerLevelStart,
     lastShot: null,
     lastPlayerPath: null,
     shot: null,

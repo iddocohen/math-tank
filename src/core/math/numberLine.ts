@@ -20,7 +20,8 @@ export const NUMBER_LINE_KINDS = [
 export type NumberLineKind = (typeof NUMBER_LINE_KINDS)[number];
 
 /** The parts of a challenge a builder decides; the generator adds id, seed and skills. */
-export type ChallengeDraft = Pick<Challenge, 'kind' | 'prompt' | 'operands' | 'answer'> & Partial<Pick<Challenge, 'options' | 'orderAnswer' | 'steps'>>;
+export type ChallengeDraft = Pick<Challenge, 'kind' | 'prompt' | 'operands' | 'answer'> &
+  Partial<Pick<Challenge, 'options' | 'orderAnswer' | 'steps' | 'rulerLevel' | 'hitTolerance'>>;
 
 export type Builder = (answer: number, settings: Settings, step: DifficultyStep, rng: Rng) => ChallengeDraft | null;
 
@@ -109,7 +110,7 @@ export function midpointAnswers(settings: Settings): number[] {
 }
 
 /** Kinds whose possible answers are few; the generator picks answers only from these lists. */
-export const answerCandidates: Partial<Record<NumberLineKind, (settings: Settings) => number[]>> = {
+export const answerCandidates: Partial<Record<NumberLineKind, (settings: Settings, step: DifficultyStep) => number[]>> = {
   midpoint: midpointAnswers,
 };
 

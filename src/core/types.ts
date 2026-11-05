@@ -1,6 +1,8 @@
 /** Shared core types from data-model.md. No DOM or Phaser references. */
 
 export type { Settings } from './settings/schema';
+export type { RulerLevel } from './numberline/ticks';
+import type { RulerLevel } from './numberline/ticks';
 
 export type Skill =
   | 'positions'
@@ -21,6 +23,8 @@ export type ChallengeKind =
   | 'stepsLeft'
   | 'missingBetween'
   | 'midpoint'
+  // number line, amendment 02: the enemy is visible and the child reads the ruler
+  | 'readPosition'
   // arithmetic
   | 'addition'
   | 'subtraction'
@@ -62,6 +66,10 @@ export interface Challenge {
   orderAnswer?: number[];
   /** Intermediate positions for the step animation, e.g. [43, 40, 36]. */
   steps?: number[];
+  /** readPosition only: the ruler level the challenge was built for. */
+  rulerLevel?: RulerLevel;
+  /** readPosition only: 0 when the enemy stands on a visible line, otherwise half the smallest visible step (FR-068). */
+  hitTolerance?: number;
 }
 
 export type RecentOutcome = 'independent' | 'assisted' | 'unsolved';
@@ -128,7 +136,8 @@ export interface DifficultyStep {
   allowCrossTens: boolean;
   /** Still limited by settings. */
   maxOperand?: number;
-  labelLevel?: 1 | 2 | 3 | 4;
+  /** Positions ladder only; clamped to [rulerLevelStart, rulerLevelMax] (FR-018). */
+  rulerLevel?: RulerLevel;
 }
 
 export type Phase = 'challenge' | 'aiming' | 'playerShot' | 'enemyTurn' | 'roundOver' | 'paused';
@@ -169,7 +178,7 @@ export interface RoundState {
   playerSide: 'left' | 'right';
   /** False during a position search: enemy hidden; true after a hit, for readPosition and in free play. */
   enemyFound: boolean;
-  /** In free play a readPosition challenge once that kind exists (amendment 02); null until then. */
+  /** In free play a readPosition challenge (amendment 02, wired in by the free-play phase); null until then. */
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;
@@ -181,7 +190,7 @@ export interface RoundState {
   /** order3: tank ids badged so far. */
   orderTaps: string[];
   /** Ruler detail level for this round (FR-018). */
-  rulerLevel: 1 | 2 | 3 | 4 | 5;
+  rulerLevel: RulerLevel;
   /** The player's last shot: landed number shown large; distance in steps shown in free play. */
   lastShot: LastShot | null;
   /** FR-004 trail */

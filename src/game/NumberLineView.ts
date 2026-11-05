@@ -1,9 +1,10 @@
 /**
  * The ruler (number line) along the bottom of the battlefield (FR-015, FR-019, contracts/ui-flows.md battle layout).
  *
- * - Drawn in world y 720 to 820 and x 80 to 1520 with numberToX, so each number sits below its battlefield position.
- * - Lines and labels come from ticksFor with the round's label level (Phase 10 switches to ruler levels).
- *   Minor labels closer than MIN_LABEL_SPACING are left out so digits never overlap.
+ * - Drawn in the ruler band (core/view/layout.ts, screen y 720 to 820) on the bedrock strip below the ground,
+ *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
+ * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
+ *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap.
  * - Tapping or dragging anywhere on the ruler calls selectNumber; releasing only previews (FR-019).
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
@@ -12,20 +13,17 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
-import { ticksFor, type LabelLevel } from '../core/numberline/ticks';
+import { ticksFor, type RulerLevel } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
 import type { RoundState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
+import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
 import { t } from '../i18n';
 
-export const RULER_TOP = 720;
-export const RULER_BOTTOM = 820;
 const AXIS_Y = 742;
 const MAJOR_TICK = 26;
 const MINOR_TICK = 14;
 const LABEL_Y = 772;
-/** Minor lines closer than this (world units) get no label. */
-const MIN_LABEL_SPACING = 28;
 /** Presses this far above or below the ruler still count as on the line. */
 const GRAB_MARGIN = 24;
 
@@ -39,7 +37,7 @@ interface Drawn {
   min: number;
   max: number;
   seed: number;
-  labelLevel: LabelLevel;
+  rulerLevel: RulerLevel;
 }
 
 export class NumberLineView {
@@ -79,12 +77,12 @@ export class NumberLineView {
     this.last = s;
     const settings = this.controller.getRoundSettings();
     const { min, max } = settings.range;
-    const labelLevel = settings.labelLevel;
+    const rulerLevel = s.rulerLevel;
     const d = this.drawn;
-    if (!d || d.min !== min || d.max !== max || d.seed !== s.seed || d.labelLevel !== labelLevel) {
-      this.drawn = { min, max, seed: s.seed, labelLevel };
+    if (!d || d.min !== min || d.max !== max || d.seed !== s.seed || d.rulerLevel !== rulerLevel) {
+      this.drawn = { min, max, seed: s.seed, rulerLevel };
       this.dragging = false;
-      this.drawRuler(min, max, labelLevel, s.seed);
+      this.drawRuler(min, max, rulerLevel, s.seed);
     }
     this.drawMarks(s, min, max);
   }
@@ -96,7 +94,7 @@ export class NumberLineView {
     this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.onUp, this);
   }
 
-  private drawRuler(min: number, max: number, labelLevel: LabelLevel, seed: number): void {
+  private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
     for (const label of this.labels) label.destroy();
     this.labels = [];
     const g = this.ruler;
@@ -108,16 +106,15 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const { minorStep, ticks } = ticksFor({ min, max }, labelLevel, seed);
-    const minorSpacing = numberToX(min + minorStep, min, max) - x0;
+    const { ticks } = ticksFor({ min, max }, rulerLevel, seed);
     for (const tick of ticks) {
+      if (!tick.visible) continue;
       const x = numberToX(tick.value, min, max);
       const end = tick.value === min || tick.value === max;
       const len = tick.major || end ? MAJOR_TICK : MINOR_TICK;
       g.lineStyle(tick.major || end ? 4 : 2, LINE, 1);
       g.lineBetween(x, AXIS_Y - len / 2, x, AXIS_Y + len / 2);
-      const showLabel = tick.labeled && (tick.major || end || minorSpacing >= MIN_LABEL_SPACING);
-      if (!showLabel) continue;
+      if (!tick.labeled) continue;
       const size = tick.major || end ? 26 : 20;
       const label = this.scene.add
         .text(x, LABEL_Y, String(tick.value), { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: '#f4f6fb' })

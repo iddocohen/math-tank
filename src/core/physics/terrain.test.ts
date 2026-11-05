@@ -24,8 +24,8 @@ describe('generateTerrain', () => {
     }
   });
 
-  it('uses a floor of 40 units', () => {
-    expect(FLOOR).toBe(40);
+  it('uses a floor of 200 units, above the ruler band (T184)', () => {
+    expect(FLOOR).toBe(200);
   });
 });
 
@@ -64,8 +64,8 @@ describe('carveCrater', () => {
   });
 
   it('never goes below the floor, even when the crater reaches the bottom', () => {
-    const t = flat(60);
-    const out = carveCrater(t, 800, 60, 200, FLOOR);
+    const t = flat(FLOOR + 20);
+    const out = carveCrater(t, 800, FLOOR + 20, 200, FLOOR);
     for (const h of out) expect(h).toBeGreaterThanOrEqual(FLOOR);
     expect(out[800]).toBe(FLOOR);
   });
@@ -101,8 +101,8 @@ describe('settleY', () => {
   });
 
   it('keeps a tank on a crater floor that reaches the floor', () => {
-    const t = new Float32Array(W).fill(80);
-    const out = carveCrater(t, 400, 80, 120, FLOOR);
+    const t = new Float32Array(W).fill(FLOOR + 40);
+    const out = carveCrater(t, 400, FLOOR + 40, 120, FLOOR);
     expect(settleY(out, 400)).toBe(FLOOR);
   });
 });

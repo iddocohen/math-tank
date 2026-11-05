@@ -1,6 +1,8 @@
 /**
  * Battle overlay (FR-003, FR-019, FR-053, FR-063): health bars at the top; at the bottom right the large number
  * readout, −1 and +1 buttons and the fire button. There are no angle or power controls (amendment 01).
+ * At the right side, the "Neue Landschaft" button starts a new scene (amendment 03, FR-070). It is for mouse and
+ * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
  * `data-enemy-number` is set only while the enemy is visible, so a test cannot read a hidden enemy's number.
@@ -22,6 +24,7 @@ export function BattleOverlay({ controller, state }: Props) {
   const enemyVisible = state.enemyFound && state.enemy.alive;
   // Typed digits are shown exactly as typed (a lone "-" too); otherwise the previewed number.
   const readout = state.entry.typed !== '' ? state.entry.typed : state.selection !== null ? String(state.selection) : '?';
+  const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const landed = state.lastShot && state.phase !== 'playerShot' ? state.lastShot.landed : null;
 
   const playerBar = <HealthBar label={m.battle.playerHealth} health={state.player.health} kind="player" />;
@@ -33,6 +36,8 @@ export function BattleOverlay({ controller, state }: Props) {
       data-testid="battle-overlay"
       data-phase={state.phase}
       data-turn={state.turn}
+      data-round-seed={state.seed}
+      data-player-side={state.playerSide}
       data-player-health={Math.round(state.player.health)}
       data-enemy-health={Math.round(state.enemy.health)}
       data-challenge-answerable={answerable}
@@ -52,6 +57,21 @@ export function BattleOverlay({ controller, state }: Props) {
           <span className="landed">{m.battle.landedAt(landed)}</span>
         ) : null}
       </div>
+
+      <button
+        type="button"
+        className="icon-button new-scene-button"
+        data-testid="new-scene"
+        aria-label={m.battle.newScene}
+        title={m.battle.newScene}
+        tabIndex={-1}
+        disabled={sceneLocked}
+        onMouseDown={(e) => e.preventDefault()}
+        onKeyDown={(e) => e.preventDefault()}
+        onClick={() => controller.newScene()}
+      >
+        <span aria-hidden="true">↻</span>
+      </button>
 
       <div className="controls">
         <div className="readout" aria-label={m.battle.yourNumber}>

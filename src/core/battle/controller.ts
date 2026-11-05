@@ -100,6 +100,16 @@ export class BattleController {
     this.set(createRound(this.settings, seed, side, mode));
   }
 
+  /**
+   * "Neue Landschaft" button (amendment 03, FR-070): a new round in the same mode at once. Ignored while a shell
+   * is in flight or the game is paused. An unfinished challenge is dropped without recording an attempt.
+   */
+  newScene(): void {
+    const { phase, mode } = this.state;
+    if (phase === 'playerShot' || phase === 'enemyTurn' || phase === 'paused') return;
+    this.startRound(mode);
+  }
+
   /** Pointer preview: clears typed digits and never fires. */
   selectNumber(n: number): void {
     if (!this.acceptsInput()) return;

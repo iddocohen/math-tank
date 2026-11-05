@@ -120,3 +120,57 @@ test('play a free-play round with the keyboard only and start another', async ({
   expect(reloads).toBe(0);
   expect(await page.evaluate(() => (window as unknown as { e2eMarker?: boolean }).e2eMarker)).toBe(true);
 });
+
+test('the new scene button starts a fresh round in the same mode, and no key presses it (amendment 03, FR-070)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(
+    ([key, value]) => {
+      window.localStorage.setItem(key, value);
+    },
+    [SETTINGS_KEY, JSON.stringify(settings)] as const,
+  );
+  await page.goto('/?seed=2');
+  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  const overlay = page.locator('[data-phase]');
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+
+  const button = page.getByRole('button', { name: m.battle.newScene, exact: true });
+  await expect(button).toBeVisible();
+  const box = await button.boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(48);
+  expect(box!.height).toBeGreaterThanOrEqual(48);
+  expect(await button.getAttribute('tabindex')).toBe('-1');
+
+  // Play one shot so the round has a turn and a landing to clear.
+  const enemy = await enemyNumber(overlay);
+  const wrong = enemy === max ? enemy - 1 : enemy + 1;
+  await typeNumber(page, overlay, wrong);
+  await page.keyboard.press('Enter');
+  await expect(overlay).not.toHaveAttribute('data-phase', 'aiming');
+  await expect(button).toBeDisabled();
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  await expect(overlay).toHaveAttribute('data-turn', '1');
+  await expect(button).toBeEnabled();
+
+  // Tab and Enter or Space never reach the button.
+  const seed = await overlay.getAttribute('data-round-seed');
+  const side = await overlay.getAttribute('data-player-side');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press(' ');
+  await expect(overlay).toHaveAttribute('data-round-seed', seed!);
+
+  await button.click();
+  await expect(overlay).not.toHaveAttribute('data-round-seed', seed!);
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(overlay).toHaveAttribute('data-turn', '0');
+  await expect(overlay).toHaveAttribute('data-player-health', '100');
+  await expect(overlay).toHaveAttribute('data-enemy-health', '100');
+  await expect(overlay).not.toHaveAttribute('data-player-side', side!);
+  await expect(overlay).not.toHaveAttribute('data-last-landing', /.+/);
+
+  // After the click the keyboard still plays: Enter fires at a typed number.
+  await typeNumber(page, overlay, await enemyNumber(overlay));
+  await page.keyboard.press('Enter');
+  await expect(overlay).not.toHaveAttribute('data-phase', 'aiming');
+});

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings (`mathtanks.settings.v1`, research R11).
+ * Structural schema for persisted settings, version 2 (`mathtanks.settings.v1`, research R11 and R23).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -12,8 +12,11 @@ export const rangeSchema = z.object({
   max: z.number().int(),
 });
 
+/** Ruler detail level (FR-017). */
+export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
+
 export const settingsSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -33,7 +36,8 @@ export const settingsSchema = z.object({
   crossTens: z.boolean(),
   crossHundreds: z.boolean(),
   negativeResults: z.boolean(),
-  labelLevel: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  rulerLevelStart: rulerLevelSchema,
+  rulerLevelMax: rulerLevelSchema,
   enemyDifficulty: z.enum(['easy', 'normal', 'challenging']),
   help: z.object({
     nearestTen: z.boolean(),
@@ -42,7 +46,6 @@ export const settingsSchema = z.object({
     stepAnimation: z.boolean(),
   }),
   beginnerAssist: z.boolean(),
-  aimCorrection: z.boolean(),
   sound: z.object({
     effects: z.boolean(),
     music: z.boolean(),

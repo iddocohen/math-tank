@@ -5,6 +5,7 @@ const MAIN_SKILL: Record<ChallengeKind, Skill> = {
   findNumber: 'positions',
   missingBetween: 'positions',
   midpoint: 'positions',
+  readPosition: 'positions',
   after: 'countForward',
   stepsRight: 'countForward',
   before: 'countBackward',

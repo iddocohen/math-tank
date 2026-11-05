@@ -8,8 +8,11 @@
 import { createRng } from '../rng';
 import type { Heightmap } from '../types';
 
-/** Terrain never drops below this height. */
-export const FLOOR = 40;
+/**
+ * Terrain never drops below this height, also under craters. In the 900-unit world the floor line is at
+ * screen y 700, above the ruler band that starts at 720 (core/view/layout.ts, tasks.md T184).
+ */
+export const FLOOR = 200;
 
 const SMOOTH_RADIUS = 12;
 const SMOOTH_PASSES = 2;
@@ -17,12 +20,13 @@ const SMOOTH_PASSES = 2;
 export function generateTerrain(seed: number, worldWidth: number, worldHeight: number): Heightmap {
   const rng = createRng(seed);
   const width = Math.max(1, Math.floor(worldWidth));
-  const base = worldHeight * (0.28 + rng.next() * 0.08);
+  // Hills start above the floor, so valleys and craters stay above the ruler band.
+  const base = FLOOR + worldHeight * (0.22 + rng.next() * 0.06);
   const waveCount = rng.int(3, 4);
   const waves = Array.from({ length: waveCount }, (_, i) => ({
     // Lower waves are wide and tall, later ones narrower and smaller.
     cycles: 0.5 + i * 1.2 + rng.next() * 1.5,
-    amplitude: (worldHeight * (0.1 + rng.next() * 0.06)) / (i + 1),
+    amplitude: (worldHeight * (0.08 + rng.next() * 0.05)) / (i + 1),
     phase: rng.next() * Math.PI * 2,
   }));
 

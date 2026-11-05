@@ -39,8 +39,8 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
         const playerPosition = side === 'left' ? settings.range.min : settings.range.max;
         const problems: string[] = [];
         for (let seed = 0; seed < SEEDS; seed++) {
-          for (const purpose of ['search', 'bonus'] as const) {
-            const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, purpose });
+          for (const rulerLevel of [1, 4] as const) {
+            const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel });
             const errors = validateChallenge(c, settings, playerPosition);
             if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind}: ${errors.join('; ')}`);
           }
@@ -53,7 +53,7 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
       const settings = presetSettings(preset, { challengeTypes: numberLineOnly, crossTens: false });
       for (let seed = 0; seed < 2_000; seed++) {
         for (const playerPosition of [settings.range.min, settings.range.max]) {
-          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 3, playerPosition, purpose: 'search' });
+          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 3, playerPosition, rulerLevel: 1 });
           expect(validateChallenge(c, settings, playerPosition)).toEqual([]);
         }
       }
@@ -70,7 +70,7 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
           roundSeed: seed,
           turn: 1,
           playerPosition,
-          purpose: 'search',
+          rulerLevel: 1,
           kindsAllowed: ['midpoint'],
         });
         expect(c.kind).toBe('findNumber');
@@ -83,7 +83,7 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
     const settings = presetSettings('0-10', { crossTens: false, challengeTypes: numberLineOnly });
     const kinds = new Set<string>();
     for (let seed = 0; seed < 1_000; seed++) {
-      const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition: 0, purpose: 'search' });
+      const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition: 0, rulerLevel: 1 });
       expect(validateChallenge(c, settings, 0)).toEqual([]);
       kinds.add(c.kind);
     }
@@ -107,19 +107,23 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
       };
       for (let seed = 0; seed < 2_000; seed++) {
         for (const playerPosition of [min, max]) {
-          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 2, playerPosition, purpose: 'search' });
+          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 2, playerPosition, rulerLevel: 1 });
           expect(validateChallenge(c, settings, playerPosition)).toEqual([]);
         }
       }
     }
   });
 
-  it('a bonus challenge is never a comparison kind (FR-014)', () => {
-    const settings = presetSettings('0-100');
-    const comparison = ['greater', 'smaller', 'equal', 'order3', 'largest3', 'smallest3', 'closestTo', 'between'];
-    for (let seed = 0; seed < 1_000; seed++) {
-      const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition: 0, purpose: 'bonus' });
-      expect(comparison).not.toContain(c.kind);
+  it('the custom range 550 to 780 stays valid at every ruler level (SC-013)', () => {
+    const base = defaultSettings();
+    const settings: Settings = { ...base, range: { preset: 'custom', min: 550, max: 780 }, addition: { ...base.addition, maxResult: 780 } };
+    for (const rulerLevel of [1, 2, 3, 4, 5] as const) {
+      for (let seed = 0; seed < 500; seed++) {
+        for (const playerPosition of [550, 780]) {
+          const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel });
+          expect(validateChallenge(c, settings, playerPosition)).toEqual([]);
+        }
+      }
     }
   });
 });

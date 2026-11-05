@@ -2,6 +2,7 @@
 import type { Challenge, Settings } from '../types';
 import { minEnemyGap } from './gaps';
 import { movementAllowed, rangeMajorStep } from './numberLine';
+import { hitTolerance, readPositionAnswers } from './readPosition';
 
 /** Returns one message per broken rule; empty when the challenge is valid. */
 export function validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[] {
@@ -66,6 +67,16 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       );
       break;
     }
+    case 'readPosition': {
+      const level = c.rulerLevel;
+      if (level === undefined) {
+        errors.push('readPosition: missing ruler level');
+        break;
+      }
+      expect(readPositionAnswers(settings, level).includes(c.answer), 'readPosition: answer not allowed at this ruler level');
+      expect(c.hitTolerance === hitTolerance(c.answer, settings.range, level), 'readPosition: wrong hit tolerance');
+      break;
+    }
     default:
       // Arithmetic and comparison rules are added with those challenge kinds.
       break;
@@ -74,10 +85,14 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
   return errors;
 }
 
-/** Accepts only the exact answer; for 'order3' only the exact tap sequence. */
+/**
+ * Accepts only the exact answer; for 'order3' only the exact tap sequence; for 'readPosition' any number
+ * within the challenge's hit tolerance (FR-068).
+ */
 export function checkAnswer(c: Challenge, answer: number | number[]): boolean {
   if (c.orderAnswer) {
     return Array.isArray(answer) && answer.length === c.orderAnswer.length && answer.every((n, i) => n === c.orderAnswer![i]);
   }
-  return typeof answer === 'number' && answer === c.answer;
+  if (typeof answer !== 'number') return false;
+  return Math.abs(answer - c.answer) <= (c.kind === 'readPosition' ? (c.hitTolerance ?? 0) : 0);
 }

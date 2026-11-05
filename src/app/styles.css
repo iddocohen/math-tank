@@ -195,6 +195,19 @@ input:focus-visible {
   background: #ff8a65;
 }
 
+/* "Neue Landschaft" at the right side, vertically centered over the battlefield (amendment 03). */
+.new-scene-button {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  top: calc((100% - var(--controls-height)) / 2);
+  transform: translateY(-50%);
+  background: rgb(20 28 48 / 0.7);
+}
+
+.new-scene-button:disabled {
+  opacity: 0.4;
+}
+
 /* Control bar below the battlefield: number readout, −1 and +1, fire button (FR-019, FR-053). */
 .controls {
   position: absolute;

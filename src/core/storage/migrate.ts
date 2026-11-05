@@ -2,15 +2,16 @@ import { defaultSettings } from '../settings/defaults';
 
 /**
  * Upgrades older stored versions to the current one before schema validation (research R11).
- * Version 0 is any object with `version: 0` or no `version` field: fields added in version 1
- * are filled from the defaults. Anything that is not an object, or has an unknown version,
- * is returned unchanged so validation rejects it.
+ * Settings: version 0 is any object with `version: 0` or no `version` field; versions 0 and 1 become
+ * version 2 (decision D13: `aimCorrection` dropped, `labelLevel` turned into `rulerLevelStart` and
+ * `rulerLevelMax`), with missing fields filled from the defaults. Progress: version 0 becomes version 1.
+ * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
 export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   if (!isRecord(raw)) return raw;
   const version = raw.version ?? 0;
-  if (version !== 0) return raw;
-  return kind === 'settings' ? migrateSettingsV0(raw) : migrateProgressV0(raw);
+  if (kind === 'settings') return version === 0 || version === 1 ? migrateSettingsToV2(raw) : raw;
+  return version === 0 ? migrateProgressV0(raw) : raw;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -27,9 +28,19 @@ function mergeDeep(base: Record<string, unknown>, over: Record<string, unknown>)
   return out;
 }
 
-function migrateSettingsV0(raw: Record<string, unknown>): Record<string, unknown> {
-  const merged = mergeDeep(defaultSettings() as unknown as Record<string, unknown>, raw);
-  return { ...merged, version: 1 };
+/** Version 1 `labelLevel` to version 2 `rulerLevelStart`: old level 4 showed only the end points, like new level 5. */
+const RULER_LEVEL_FROM_LABEL_LEVEL: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 5 };
+
+function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unknown> {
+  const { labelLevel, ...over } = raw;
+  delete over.aimCorrection;
+  if (labelLevel !== undefined) {
+    // An unknown label level is kept as is, so validation rejects the stored settings.
+    over.rulerLevelStart = typeof labelLevel === 'number' ? (RULER_LEVEL_FROM_LABEL_LEVEL[labelLevel] ?? labelLevel) : labelLevel;
+    over.rulerLevelMax = 5;
+  }
+  const merged = mergeDeep(defaultSettings() as unknown as Record<string, unknown>, over);
+  return { ...merged, version: 2 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 1,
+      version: 2,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -28,11 +28,11 @@ describe('defaults', () => {
       crossTens: true,
       crossHundreds: false,
       negativeResults: false,
-      labelLevel: 1,
+      rulerLevelStart: 1,
+      rulerLevelMax: 5,
       enemyDifficulty: 'easy',
       help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
       beginnerAssist: true,
-      aimCorrection: false,
       sound: { effects: true, music: false, speech: true },
       roundLength: 10,
       adaptive: true,
@@ -40,6 +40,12 @@ describe('defaults', () => {
       noDamage: false,
       timeLimitSeconds: null,
     });
+  });
+
+  it('have no aimCorrection and no labelLevel (decision D13)', () => {
+    const d = defaultSettings() as unknown as Record<string, unknown>;
+    expect('aimCorrection' in d).toBe(false);
+    expect('labelLevel' in d).toBe(false);
   });
 
   it('pass the schema and validateSettings', () => {
@@ -108,6 +114,31 @@ describe('validateSettings', () => {
     s.range = { preset: 'custom', min: 0.5, max: 50 };
     s.addition.maxResult = 50;
     expect(paths(s)).toContain('range');
+  });
+
+  it('rejects a minimum above 9000', () => {
+    const s = clone(defaultSettings());
+    s.range = { preset: 'custom', min: 9001, max: 9100 };
+    s.addition.maxResult = 9100;
+    expect(paths(s)).toContain('range');
+    s.range = { preset: 'custom', min: 9000, max: 9100 };
+    expect(validateSettings(s)).toEqual({ ok: true });
+  });
+
+  it('accepts the custom ranges 550 to 780 and -20 to 30 (US9 scenario 4)', () => {
+    const a = withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 });
+    expect(validateSettings(a)).toEqual({ ok: true });
+    const b = withRange(defaultSettings(), { preset: 'custom', min: -20, max: 30 });
+    expect(validateSettings(b)).toEqual({ ok: true });
+  });
+
+  it('rejects rulerLevelStart above rulerLevelMax, and accepts equal levels (FR-018)', () => {
+    const s = clone(defaultSettings());
+    s.rulerLevelStart = 4;
+    s.rulerLevelMax = 3;
+    expect(paths(s)).toContain('rulerLevelStart');
+    s.rulerLevelMax = 4;
+    expect(validateSettings(s)).toEqual({ ok: true });
   });
 
   it('rejects a preset whose min and max differ from the preset values', () => {
@@ -226,6 +257,17 @@ describe('withRange', () => {
     const d = defaultSettings();
     withRange(d, { preset: '0-10', min: 0, max: 10 });
     expect(d).toEqual(defaultSettings());
+  });
+
+  it('clamps the linked limits for the custom range 550 to 780', () => {
+    const wide = withRange(defaultSettings(), { preset: '0-1000', min: 0, max: 1000 });
+    wide.addition.maxOperand = 900;
+    wide.subtraction.maxOperand = 1000;
+    const s = withRange(wide, { preset: 'custom', min: 550, max: 780 });
+    expect(validateSettings(s)).toEqual({ ok: true });
+    expect(s.addition.maxResult).toBe(780);
+    expect(s.addition.maxOperand).toBe(230);
+    expect(s.subtraction.maxOperand).toBe(230);
   });
 
   it('gives valid settings for a custom range', () => {

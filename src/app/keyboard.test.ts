@@ -115,3 +115,22 @@ describe('keyToAction: ignored keys (research R22, FR-045)', () => {
     }
   });
 });
+
+describe('keyToAction: no key starts a new scene (amendment 03, FR-070)', () => {
+  it('maps no key to a new round during battle or pause, only Enter and Space at the round end', () => {
+    const keys = [
+      ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-+=.,/;\'[]\\`'.split(''),
+      ' ', 'Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown', 'F5',
+      'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    ];
+    for (const k of keys) {
+      for (const extra of [{}, { shiftKey: true }, { ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+        for (const screen of ['battle', 'paused'] as const) {
+          expect(keyToAction(key(k, extra), screen)?.type, `${screen} ${JSON.stringify(k)}`).not.toBe('newRound');
+        }
+        const atEnd = keyToAction(key(k, extra), 'roundEnd');
+        if (atEnd?.type === 'newRound') expect(['Enter', ' ']).toContain(k);
+      }
+    }
+  });
+});
