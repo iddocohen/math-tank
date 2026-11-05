@@ -18,7 +18,7 @@
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { placedEnemy, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
@@ -109,7 +109,7 @@ export class BattleScene extends Phaser.Scene {
       this.pendingFire?.remove();
       this.pendingFire = null;
       this.startedShot = null;
-      this.enemy.setAim(s.player.x < s.enemy.x ? 150 : 30);
+      this.enemy.setAim(s.playerSide === 'left' ? 150 : 30);
       this.player.setAim(fixedAngle(s));
       this.enemy.setTarget(true);
       if (s.phase !== 'roundOver') this.showYouMarker();
@@ -119,15 +119,19 @@ export class BattleScene extends Phaser.Scene {
     this.player.sync(s.player, newRound);
     this.player.setLives(s.lives, LIVES);
     const destroyed = !newRound && s.lastShot !== prev?.lastShot && s.lastShot?.hit === true;
-    this.enemy.sync(s.enemy, newRound || destroyed);
+    // A hidden enemy (guided search) has no coordinates in the state; its view keeps the last ones, invisible.
+    const placed = placedEnemy(s);
+    if (placed) this.enemy.sync(placed, newRound || destroyed);
     this.enemy.setHidden(!s.enemyFound, !newRound);
     if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
     if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
-    if (destroyed && prev) {
-      // The large explosion where the destroyed enemy stood; then the new enemy fades in at its new number.
-      const c = tankCenter(prev.enemy);
+    // The large explosion where the destroyed enemy stood; then the new enemy fades in at its new number. In free
+    // play the previous state holds the destroyed enemy; in a guided search it was hidden and the hit state reveals it.
+    const gone = destroyed && prev ? (placedEnemy(prev) ?? placed) : null;
+    if (gone) {
+      const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
       this.enemy.appear(NEW_ENEMY_DELAY_MS);
     }

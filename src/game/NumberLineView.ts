@@ -31,7 +31,7 @@ import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
 import { ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
-import { tankCenter } from '../core/battle/round';
+import { tankCenter, visibleEnemy } from '../core/battle/round';
 import type { RoundState, TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
@@ -245,12 +245,12 @@ export class NumberLineView {
       g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
       this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
 
-      const enemyVisible = s.enemyFound && s.enemy.alive;
+      const enemy = visibleEnemy(s);
       if (shot.nearMiss) {
         // A near miss on the tank body: both numbers and the distance (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
-      } else if (s.mode === 'freePlay' && !shot.hit && enemyVisible && shot.landed !== s.enemy.position) {
-        this.drawBracket(lx, numberToX(s.enemy.position, min, max), t().battle.steps(Math.abs(shot.landed - s.enemy.position)));
+      } else if (s.mode === 'freePlay' && !shot.hit && enemy && shot.landed !== enemy.position) {
+        this.drawBracket(lx, numberToX(enemy.position, min, max), t().battle.steps(Math.abs(shot.landed - enemy.position)));
       } else {
         this.stepsText.setVisible(false);
       }
@@ -291,7 +291,8 @@ export class NumberLineView {
   /** Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073). */
   private drawPointerLines(s: RoundState): void {
     const g = this.marks;
-    const visible: TankState[] = [...(s.enemyFound && s.enemy.alive ? [s.enemy] : []), ...s.decoys.filter((d) => d.alive)];
+    const enemy = visibleEnemy(s);
+    const visible: TankState[] = [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)];
     g.lineStyle(2, POINTER, 0.8);
     g.fillStyle(POINTER, 0.9);
     for (const tank of visible) {

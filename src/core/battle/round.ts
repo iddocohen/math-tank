@@ -3,7 +3,7 @@
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { Challenge, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
+import type { BattleState, Challenge, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
 import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { generateChallenge } from '../math/generate';
@@ -28,18 +28,35 @@ export function tankCenter(tank: TankState): Point {
   return { x: tank.x, y: tank.y + TANK_HEIGHT / 2 };
 }
 
+/** The enemy with its number and coordinates, or null while getState() hides them during a guided search. */
+export function placedEnemy(s: RoundState): TankState | null {
+  return 'position' in s.enemy ? s.enemy : null;
+}
+
+/** The enemy when it is drawn: found (or free play, or readPosition), alive and placed; otherwise null (FR-073). */
+export function visibleEnemy(s: RoundState): TankState | null {
+  return s.enemyFound && s.enemy.alive ? placedEnemy(s) : null;
+}
+
+/** What getState() reports: while the enemy is hidden it has only its id, kind and alive (FR-010). */
+export function publicState(s: BattleState): RoundState {
+  if (s.enemyFound) return s;
+  const { id, alive } = s.enemy;
+  return { ...s, enemy: { id, kind: 'enemy', alive } };
+}
+
 /** Where shells leave the cannon. */
 export function muzzle(tank: TankState): Point {
   return { x: tank.x, y: tank.y + MUZZLE_HEIGHT };
 }
 
-function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: RoundState['terrain']): TankState {
+function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
   return { id, kind, position, x, y: settleY(terrain, x), alive: true };
 }
 
 /** Until the difficulty ladders exist (Phase 21), every skill is on step 0. */
-const FIRST_STEPS: Record<Skill, number> = {
+export const FIRST_STEPS: Record<Skill, number> = {
   positions: 0,
   countForward: 0,
   countBackward: 0,
@@ -86,7 +103,7 @@ export function freePlayChallenge(
  * the enemy at a seeded position at least minEnemyGap away. Free play starts in 'aiming' with the enemy visible
  * and standing at the answer of a "read the ruler" challenge.
  */
-export function createRound(settings: Settings, seed: number, side: 'left' | 'right', mode: RoundState['mode'] = 'freePlay'): RoundState {
+export function createRound(settings: Settings, seed: number, side: 'left' | 'right', mode: RoundState['mode'] = 'freePlay'): BattleState {
   const { min, max } = settings.range;
   const terrain = generateTerrain(deriveSeed(seed, 0), WORLD_WIDTH, WORLD_HEIGHT);
   const playerPosition = side === 'left' ? min : max;
@@ -142,7 +159,7 @@ export function enemyPositionFor(settings: Settings, side: 'left' | 'right', rng
 }
 
 /** Moves a tank to a new number and settles it on the surface. */
-export function moveTank(tank: TankState, position: number, settings: Settings, terrain: RoundState['terrain']): TankState {
+export function moveTank(tank: TankState, position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
   return { ...tank, position, x, y: settleY(terrain, x) };
 }
@@ -177,7 +194,7 @@ export interface DamageRules {
  * at the fired number is destroyed. The player's own shell never harms the player. Sets lastShot for player shells
  * and lastEnemyHit for enemy shells.
  */
-export function applyImpact(state: RoundState, impact: Impact, blastRadius: number, rules: DamageRules): RoundState {
+export function applyImpact(state: BattleState, impact: Impact, blastRadius: number, rules: DamageRules): BattleState {
   if (impact.outOfBounds) return impact.shooter === 'enemy' ? { ...state, lastEnemyHit: false } : state;
   const terrain = carveCrater(state.terrain, impact.point.x, impact.point.y, blastRadius, FLOOR);
   const settle = (tank: TankState, destroyed = false): TankState => ({

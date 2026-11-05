@@ -3,9 +3,9 @@ import { BattleController } from './controller';
 import { memoryProgressStore } from './ports';
 import type { Digit } from './entry';
 import { enemyHitsPlayer, LIVES } from './hitRule';
-import { applyImpact, createRound, muzzle, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from './round';
+import { applyImpact, createRound, muzzle, placedEnemy, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from './round';
 import { defaultSettings } from '../settings/defaults';
-import type { RoundState, Settings } from '../types';
+import type { BattleState, RoundState, Settings, TankState } from '../types';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { settleY } from '../physics/terrain';
@@ -14,6 +14,13 @@ import { solveArcToX } from '../physics/arc';
 
 function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
   return { ...defaultSettings(), freePlay: true, ...overrides };
+}
+
+/** The enemy with its number; the free-play enemy is always placed. Throws while a guided search hides it. */
+function enemyOf(s: RoundState): TankState {
+  const enemy = placedEnemy(s);
+  if (!enemy) throw new Error('the enemy is hidden');
+  return enemy;
 }
 
 function makeController(overrides: Partial<Settings> = {}, seed = 1234) {
@@ -26,13 +33,13 @@ function makeController(overrides: Partial<Settings> = {}, seed = 1234) {
 
 /** Fire at the enemy's number: the enemy is destroyed (amendment 06). */
 function fireAtEnemy(c: BattleController): void {
-  c.fireAt(c.getState().enemy.position);
+  c.fireAt(enemyOf(c.getState()).position);
 }
 
 /** Fire 1 away from the enemy, toward the player: a near miss on the body where the body is at least 1 wide. */
 function fireNextToEnemy(c: BattleController): void {
   const s = c.getState();
-  c.fireAt(s.enemy.position + Math.sign(s.player.position - s.enemy.position));
+  c.fireAt(enemyOf(s).position + Math.sign(s.player.position - enemyOf(s).position));
 }
 
 /** Fire at the player's own number: far from the enemy (at least minEnemyGap), harms nobody. */
@@ -43,7 +50,7 @@ function fireAtOwnNumber(c: BattleController): void {
 /** Fire halfway between the tanks: away from both, without digging a pit around the player tank. */
 function fireBetween(c: BattleController): void {
   const s = c.getState();
-  c.fireAt(Math.round((s.player.position + s.enemy.position) / 2));
+  c.fireAt(Math.round((s.player.position + enemyOf(s).position) / 2));
 }
 
 /** One player shot and its animation, then the enemy's shot and its animation when the enemy fires (every 2nd shot). */
@@ -82,7 +89,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(s.player.position).toBe(s.playerSide === 'left' ? min : max);
     expect(s.player.x).toBe(numberToX(s.player.position, min, max));
     expect(s.player.y).toBeCloseTo(settleY(s.terrain, s.player.x), 6);
-    expect(s.enemy.x).toBe(numberToX(s.enemy.position, min, max));
+    expect(enemyOf(s).x).toBe(numberToX(enemyOf(s).position, min, max));
     expect(s.lives).toBe(LIVES);
     expect(s.enemiesDestroyed).toBe(0);
     expect(s.shotsSinceEnemyFire).toBe(0);
@@ -125,10 +132,10 @@ describe('BattleController free play (US1, amendment 01)', () => {
         if (previousSide) expect(s.playerSide).not.toBe(previousSide);
         previousSide = s.playerSide;
         expect(s.player.position).toBe(s.playerSide === 'left' ? min : max);
-        expect(Number.isInteger(s.enemy.position)).toBe(true);
-        expect(s.enemy.position).toBeGreaterThanOrEqual(min);
-        expect(s.enemy.position).toBeLessThanOrEqual(max);
-        expect(Math.abs(s.enemy.position - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(min, max));
+        expect(Number.isInteger(enemyOf(s).position)).toBe(true);
+        expect(enemyOf(s).position).toBeGreaterThanOrEqual(min);
+        expect(enemyOf(s).position).toBeLessThanOrEqual(max);
+        expect(Math.abs(enemyOf(s).position - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(min, max));
       }
     }
   });
@@ -287,7 +294,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
   it('the exact number destroys the enemy: crater, score + 1, a new enemy at a new number, no enemy turn (amendment 06, FR-066)', () => {
     const { controller } = makeController({ enemyDifficulty: 'normal' });
     controller.startRound('freePlay');
-    const n = controller.getState().enemy.position;
+    const n = enemyOf(controller.getState()).position;
     controller.fireAt(n);
     const before = controller.getState();
     controller.shotAnimationDone();
@@ -301,11 +308,11 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(after.phase).toBe('aiming');
     expect(after.shot).toBeNull();
     expect(after.enemy.alive).toBe(true);
-    expect(after.enemy.position).not.toBe(n);
-    expect(after.challenge?.answer).toBe(after.enemy.position);
+    expect(enemyOf(after).position).not.toBe(n);
+    expect(after.challenge?.answer).toBe(enemyOf(after).position);
     expect(after.lives).toBe(LIVES);
     expect(after.player.y).toBeCloseTo(settleY(after.terrain, after.player.x), 6);
-    expect(after.enemy.y).toBeCloseTo(settleY(after.terrain, after.enemy.x), 6);
+    expect(enemyOf(after).y).toBeCloseTo(settleY(after.terrain, enemyOf(after).x), 6);
     expect(after.lastPlayerPath).toEqual(before.shot!.path);
     expect(after.turn).toBe(1);
   });
@@ -314,12 +321,12 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const { controller } = makeController();
     controller.startRound('freePlay');
     const s = controller.getState();
-    const n = s.enemy.position + (s.enemy.position < 100 ? 1 : -1);
+    const n = enemyOf(s).position + (enemyOf(s).position < 100 ? 1 : -1);
     controller.fireAt(n);
     controller.shotAnimationDone();
     const after = controller.getState();
-    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: true, hitTankId: null, distance: 1, enemyNumber: s.enemy.position });
-    expect(after.enemy.position).toBe(s.enemy.position);
+    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: true, hitTankId: null, distance: 1, enemyNumber: enemyOf(s).position });
+    expect(enemyOf(after).position).toBe(enemyOf(s).position);
     expect(after.enemy.alive).toBe(true);
     expect(after.challenge).toBe(s.challenge);
     expect(after.enemiesDestroyed).toBe(0);
@@ -331,16 +338,16 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const { controller } = makeController();
     controller.startRound('freePlay');
     const s = controller.getState();
-    const n = s.enemy.position + (s.enemy.position < 97 ? 3 : -3);
+    const n = enemyOf(s).position + (enemyOf(s).position < 97 ? 3 : -3);
     controller.fireAt(n);
     controller.shotAnimationDone();
-    expect(controller.getState().lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: false, hitTankId: null, distance: 3, enemyNumber: s.enemy.position });
+    expect(controller.getState().lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: false, hitTankId: null, distance: 3, enemyNumber: enemyOf(s).position });
   });
 
   it('the body width follows the range: 4 away is a near miss in 550 to 780, 1 away a plain miss in 0 to 10', () => {
     const wide = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2 }, 99).controller;
     wide.startRound('freePlay');
-    const e = wide.getState().enemy.position;
+    const e = enemyOf(wide.getState()).position;
     wide.fireAt(e + (e <= 776 ? 4 : -4));
     wide.shotAnimationDone();
     expect(wide.getState().lastShot).toMatchObject({ hit: false, nearMiss: true, distance: 4 });
@@ -348,7 +355,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
     const narrow = makeController({ range: { preset: '0-10', min: 0, max: 10 } }, 7).controller;
     narrow.startRound('freePlay');
-    const m = narrow.getState().enemy.position;
+    const m = enemyOf(narrow.getState()).position;
     narrow.fireAt(m + (m < 10 ? 1 : -1));
     narrow.shotAnimationDone();
     expect(narrow.getState().lastShot).toMatchObject({ hit: false, nearMiss: false });
@@ -362,7 +369,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     controller.shotAnimationDone();
     const after = controller.getState();
     expect(after.lives).toBe(LIVES);
-    expect(after.lastShot).toEqual({ fired: s.player.position, landed: s.player.position, hit: false, nearMiss: false, hitTankId: null, distance: Math.abs(s.player.position - s.enemy.position), enemyNumber: s.enemy.position });
+    expect(after.lastShot).toEqual({ fired: s.player.position, landed: s.player.position, hit: false, nearMiss: false, hitTankId: null, distance: Math.abs(s.player.position - enemyOf(s).position), enemyNumber: enemyOf(s).position });
   });
 
   it('the enemy fires once after every 2 shots that do not destroy it, hit or miss (FR-081)', () => {
@@ -378,7 +385,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(s.phase).toBe('enemyTurn');
     expect(s.shotsSinceEnemyFire).toBe(0);
     expect(s.shot?.shooter).toBe('enemy');
-    expect(s.shot?.path[0]).toEqual(muzzle(s.enemy));
+    expect(s.shot?.path[0]).toEqual(muzzle(enemyOf(s)));
     controller.enemyShotAnimationDone();
     s = controller.getState();
     expect(s.phase).toBe('aiming');
@@ -418,30 +425,30 @@ describe('BattleController free play (US1, amendment 01)', () => {
       const { controller } = makeController({ range: { preset: 'custom', min, max }, noDamage: true }, seed);
       controller.startRound('freePlay');
       for (let i = 0; i < 3; i++) {
-        const old = controller.getState().enemy.position;
+        const old = enemyOf(controller.getState()).position;
         playTurn(controller, fireAtEnemy);
         const s = controller.getState();
         expect(s.phase).toBe('aiming');
-        expect(s.enemy.position).not.toBe(old);
+        expect(enemyOf(s).position).not.toBe(old);
         expect(s.enemy.alive).toBe(true);
-        expect(Number.isInteger(s.enemy.position)).toBe(true);
-        expect(Math.abs(s.enemy.position - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(min, max));
-        expect(s.enemy.x).toBe(numberToX(s.enemy.position, min, max));
-        expect(s.enemy.y).toBeCloseTo(settleY(s.terrain, s.enemy.x), 6);
+        expect(Number.isInteger(enemyOf(s).position)).toBe(true);
+        expect(Math.abs(enemyOf(s).position - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(min, max));
+        expect(enemyOf(s).x).toBe(numberToX(enemyOf(s).position, min, max));
+        expect(enemyOf(s).y).toBeCloseTo(settleY(s.terrain, enemyOf(s).x), 6);
         expect(s.enemyFound).toBe(true);
         expect(s.enemiesDestroyed).toBe(i + 1);
       }
       // After a miss the enemy stays.
-      const old = controller.getState().enemy.position;
+      const old = enemyOf(controller.getState()).position;
       playTurn(controller, fireAtOwnNumber);
-      expect(controller.getState().enemy.position).toBe(old);
+      expect(enemyOf(controller.getState()).position).toBe(old);
     }
   });
 
   it('a scripted round fired with typeDigit plus confirm: "Gegner pro Runde" 2 ends after the second hit with goalReached (FR-082)', () => {
     const { controller } = makeController({ roundType: 'enemyCount', roundLength: 2 }, 77);
     controller.startRound('freePlay');
-    for (const ch of String(controller.getState().enemy.position)) controller.typeDigit(Number(ch) as Digit);
+    for (const ch of String(enemyOf(controller.getState()).position)) controller.typeDigit(Number(ch) as Digit);
     controller.confirm();
     controller.shotAnimationDone();
     expect(controller.getState().enemiesDestroyed).toBe(1);
@@ -519,8 +526,8 @@ describe('BattleController free play (US1, amendment 01)', () => {
     // An enemy shell does not touch lastShot.
     expect(applyImpact(s, onPlayer, BLAST_RADIUS, rules).lastShot).toBeNull();
 
-    const n = s.enemy.position;
-    const atEnemy = { point: { x: s.enemy.x, y: s.enemy.y }, hitTargetId: null, outOfBounds: false, shooter: 'player' as const, fired: n, landed: n };
+    const n = enemyOf(s).position;
+    const atEnemy = { point: { x: enemyOf(s).x, y: enemyOf(s).y }, hitTargetId: null, outOfBounds: false, shooter: 'player' as const, fired: n, landed: n };
     expect(applyImpact(s, atEnemy, BLAST_RADIUS, rules).enemy.alive).toBe(false);
     expect(applyImpact(s, { ...atEnemy, fired: n + 1, landed: n + 1 }, BLAST_RADIUS, rules).enemy.alive).toBe(true);
     // The player's shell at the player's own number never harms the player.
@@ -534,7 +541,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       const x = numberToX(position, 0, 100);
       return { id, kind: 'decoy' as const, position, x, y: settleY(base.terrain, x), label: position, alive: true };
     };
-    const s: RoundState = { ...base, decoys: [decoyAt('d1', 30), decoyAt('d2', 32)] };
+    const s: BattleState = { ...base, decoys: [decoyAt('d1', 30), decoyAt('d2', 32)] };
     const impact = { point: { x: s.decoys[0]!.x, y: s.decoys[0]!.y }, hitTargetId: null, outOfBounds: false, shooter: 'player' as const, fired: 30, landed: 30 };
     const next = applyImpact(s, impact, BLAST_RADIUS, { noDamage: false, range: { min: 0, max: 100 } });
     expect(next.decoys[0]).toMatchObject({ alive: false });
@@ -679,7 +686,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const a = run();
     const b = run();
     expect(b.seed).toBe(a.seed);
-    expect(b.enemy.position).toBe(a.enemy.position);
+    expect(enemyOf(b).position).toBe(enemyOf(a).position);
     expect(b.lives).toBe(a.lives);
     expect(b.lastShot).toEqual(a.lastShot);
     expect(Array.from(b.terrain)).toEqual(Array.from(a.terrain));
@@ -704,7 +711,7 @@ describe('BattleController newScene (amendment 03, FR-070)', () => {
     expect(before.turn).toBeGreaterThan(0);
     expect(before.enemiesDestroyed).toBe(1);
     // An unfinished choice is pending when the scene is replaced.
-    controller.selectNumber(before.enemy.position);
+    controller.selectNumber(enemyOf(before).position);
 
     controller.newScene();
     const after = controller.getState();
@@ -771,7 +778,7 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
       const s = controller.getState();
       expect(s.phase).toBe('aiming');
       expect(s.challenge?.kind).toBe('readPosition');
-      expect(s.challenge?.answer).toBe(s.enemy.position);
+      expect(s.challenge?.answer).toBe(enemyOf(s).position);
       expect(s.challenge?.rulerLevel).toBe(s.rulerLevel);
       expect(s.enemyFound).toBe(true);
       // After a miss the challenge stays; after a hit a new one follows.
@@ -787,14 +794,14 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
     controller.fireAt(near);
     controller.shotAnimationDone();
     expect(controller.getState().lastShot).toMatchObject({ fired: near, hit: false, nearMiss: true, enemyNumber: answer, distance: 1 });
-    expect(controller.getState().enemy.position).toBe(answer);
+    expect(enemyOf(controller.getState()).position).toBe(answer);
     controller.fireAt(answer);
     controller.shotAnimationDone();
     // The destroyed enemy is replaced, but the feedback keeps the number it stood at.
     const next = controller.getState();
     expect(next.lastShot).toMatchObject({ fired: answer, hit: true, enemyNumber: answer });
-    expect(next.enemy.position).not.toBe(answer);
-    expect(next.challenge!.answer).toBe(next.enemy.position);
+    expect(enemyOf(next).position).not.toBe(answer);
+    expect(next.challenge!.answer).toBe(enemyOf(next).position);
     expect(next.challenge).not.toHaveProperty('hitTolerance');
   });
 
@@ -822,9 +829,9 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
         const s = controller.getState();
         expect([550, 780]).toContain(s.player.position);
         expect(s.player.position).toBe(s.playerSide === 'left' ? 550 : 780);
-        expect(s.enemy.position % 10).toBe(0);
-        expect(s.enemy.position).toBeGreaterThanOrEqual(550);
-        expect(s.enemy.position).toBeLessThanOrEqual(780);
+        expect(enemyOf(s).position % 10).toBe(0);
+        expect(enemyOf(s).position).toBeGreaterThanOrEqual(550);
+        expect(enemyOf(s).position).toBeLessThanOrEqual(780);
         playTurn(controller, fireAtEnemy);
       }
     }
@@ -989,7 +996,7 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
     const mid = controller.getState();
     expect(mid.rulerLevel).toBe(1);
     expect(mid.challenge?.answer).toBeLessThanOrEqual(20);
-    expect(mid.enemy.position).toBeLessThanOrEqual(20);
+    expect(enemyOf(mid).position).toBeLessThanOrEqual(20);
     expect(controller.getRoundSettings().range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(controller.getRoundSettings().enemyDifficulty).toBe('easy');
     expect(controller.getRoundSettings().challengeTypes.addition).toBe(true);
@@ -1010,5 +1017,383 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
     controller.updateSettings(freePlaySettings({ enemyDifficulty: 'challenging' }));
     controller.startRound('freePlay');
     expect(controller.getRoundSettings().enemyDifficulty).toBe('challenging');
+  });
+});
+
+function guidedController(overrides: Partial<Settings> = {}, seed = 1234) {
+  let now = 1_000;
+  const clock = () => now;
+  const progress = memoryProgressStore();
+  const controller = new BattleController({ settings: { ...defaultSettings(), ...overrides }, progress, clock, seed, sessionId: 'test-session' });
+  return { controller, progress, advance: (ms: number) => (now += ms), now: () => now };
+}
+
+/** The first seeded guided round whose first search matches `accept`. */
+function guidedRoundWhere(accept: (s: RoundState) => boolean, overrides: Partial<Settings> = {}) {
+  for (let seed = 1; seed < 400; seed++) {
+    const g = guidedController(overrides, seed);
+    g.controller.startRound('guided');
+    if (accept(g.controller.getState())) return g;
+  }
+  throw new Error('no seed found');
+}
+
+const hiddenSearch = (s: RoundState) => s.challenge !== null && s.challenge.kind !== 'readPosition';
+
+type Guided = ReturnType<typeof guidedController>;
+
+/** Waits until the challenge is answerable, fires at n and plays the animations; the enemy's shot too when it fires. */
+function answer(g: Guided, n: number): void {
+  g.advance(1_000);
+  g.controller.fireAt(n);
+  g.controller.shotAnimationDone();
+  if (g.controller.getState().phase === 'enemyTurn') g.controller.enemyShotAnimationDone();
+}
+
+/** A number halfway between the player and the answer: off the enemy's body and away from the player. */
+function missNumber(s: RoundState): number {
+  return Math.round((s.player.position + s.challenge!.answer) / 2);
+}
+
+/** 1 away from the answer, toward the player: on the enemy's body in 0 to 100. */
+function nearNumber(s: RoundState): number {
+  const a = s.challenge!.answer;
+  return a + Math.sign(s.player.position - a);
+}
+
+function typeNumber(c: BattleController, n: number): void {
+  for (const ch of String(n)) c.typeDigit(Number(ch) as Digit);
+}
+
+describe('BattleController guided turn flow (US2, T060)', () => {
+  it("startRound('guided') begins in challenge with the enemy hidden, 3 hearts and score 0", () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s = g.controller.getState();
+    expect(s.mode).toBe('guided');
+    expect(s.phase).toBe('challenge');
+    expect(s.enemyFound).toBe(false);
+    expect(s.lives).toBe(LIVES);
+    expect(s.enemiesDestroyed).toBe(0);
+    expect(s.shotsSinceEnemyFire).toBe(0);
+    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [] });
+    expect(Math.abs(s.challenge!.answer - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(0, 100));
+  });
+
+  it('getState() exposes no enemy coordinates while the enemy is hidden; subscribers get the same view', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const seen: RoundState[] = [];
+    g.controller.subscribe((s) => seen.push(s));
+    expect(g.controller.getState().enemy).toEqual({ id: 'enemy', kind: 'enemy', alive: true });
+    g.controller.selectNumber(40);
+    expect(seen.at(-1)!.enemy).toEqual({ id: 'enemy', kind: 'enemy', alive: true });
+    expect(seen.at(-1)!.enemy).not.toHaveProperty('position');
+    expect(seen.at(-1)!.enemy).not.toHaveProperty('x');
+  });
+
+  it('ignores fires before answerableAt, 1 second after the challenge appears (edge case "Rapid tapping or typing")', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s = g.controller.getState();
+    expect(s.answerableAt).toBe(g.now() + 1_000);
+    g.controller.fireAt(missNumber(s));
+    g.controller.selectNumber(missNumber(s));
+    g.controller.confirm('pointer');
+    g.advance(999);
+    g.controller.confirm('pointer');
+    expect(g.controller.getState().phase).toBe('challenge');
+    expect(g.controller.getState().turn).toBe(0);
+    expect(g.controller.getState().help.wrongAnswers).toBe(0);
+    g.advance(1);
+    g.controller.confirm('pointer');
+    expect(g.controller.getState().phase).toBe('playerShot');
+  });
+
+  it('selectNumber and typeDigit change only selection, entry and inputMethod', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const before = g.controller.getState();
+    g.controller.selectNumber(42);
+    const a = g.controller.getState();
+    expect(without(a, 'selection', 'entry', 'inputMethod')).toEqual(without(before, 'selection', 'entry', 'inputMethod'));
+    expect(a.selection).toBe(42);
+    expect(a.inputMethod).toBe('pointer');
+    g.controller.typeDigit(7);
+    const b = g.controller.getState();
+    expect(without(b, 'selection', 'entry', 'inputMethod')).toEqual(without(before, 'selection', 'entry', 'inputMethod'));
+    expect(b.selection).toBe(7);
+    expect(b.entry.typed).toBe('7');
+    expect(b.inputMethod).toBe('keyboard');
+  });
+
+  it('with no input yet or keyboard input no search is findNumber; after pointer answers findNumber follows (FR-076)', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const g = guidedController({}, seed);
+      g.controller.startRound('guided');
+      expect(g.controller.getState().challenge!.kind).not.toBe('findNumber');
+    }
+    const keyboard = guidedController({ noDamage: true }, 7);
+    keyboard.controller.startRound('guided');
+    for (let i = 0; i < 40; i++) {
+      keyboard.advance(1_000);
+      typeNumber(keyboard.controller, keyboard.controller.getState().challenge!.answer);
+      keyboard.controller.confirm();
+      keyboard.controller.shotAnimationDone();
+      expect(keyboard.controller.getState().challenge!.kind).not.toBe('findNumber');
+    }
+    const pointer = guidedController({ noDamage: true }, 7);
+    pointer.controller.startRound('guided');
+    const kinds = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      pointer.advance(1_000);
+      pointer.controller.selectNumber(pointer.controller.getState().challenge!.answer);
+      pointer.controller.confirm('pointer');
+      pointer.controller.shotAnimationDone();
+      kinds.add(pointer.controller.getState().challenge!.kind);
+    }
+    expect(kinds.has('findNumber')).toBe(true);
+  });
+
+  it('confirm fires at the selection and moves to playerShot', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    g.advance(1_000);
+    g.controller.selectNumber(50);
+    g.controller.confirm('pointer');
+    const s = g.controller.getState();
+    expect(s.phase).toBe('playerShot');
+    expect(s.shot!.shooter).toBe('player');
+    expect(xToNumber(s.shot!.impact.x, 0, 100)).toBe(50);
+  });
+
+  it('a first miss returns to challenge with the landing number, help level 1 and one shot counted; no heart is lost', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s0 = g.controller.getState();
+    const n = missNumber(s0);
+    answer(g, n);
+    const s = g.controller.getState();
+    expect(s.phase).toBe('challenge');
+    expect(s.challenge!.id).toBe(s0.challenge!.id);
+    expect(s.lastShot!.landed).toBe(n);
+    expect(s.lastShot!.hit).toBe(false);
+    expect(s.lastShot!.nearMiss).toBe(false);
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(1);
+    expect(s.shotsSinceEnemyFire).toBe(1);
+    expect(s.lives).toBe(LIVES);
+    expect(s.enemyFound).toBe(false);
+  });
+
+  it('a near miss on the body counts as a miss and sets lastShot.nearMiss (FR-066)', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    answer(g, nearNumber(g.controller.getState()));
+    const s = g.controller.getState();
+    expect(s.phase).toBe('challenge');
+    expect(s.lastShot!.nearMiss).toBe(true);
+    expect(s.lastShot!.hit).toBe(false);
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(1);
+    expect(s.shotsSinceEnemyFire).toBe(1);
+    expect(s.enemiesDestroyed).toBe(0);
+  });
+
+  it('the second shot that is not a hit goes to enemyTurn and then back to challenge in the same search (FR-081)', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const id = g.controller.getState().challenge!.id;
+    answer(g, missNumber(g.controller.getState()));
+    g.advance(1_000);
+    g.controller.fireAt(nearNumber(g.controller.getState()));
+    g.controller.shotAnimationDone();
+    const firing = g.controller.getState();
+    expect(firing.phase).toBe('enemyTurn');
+    expect(firing.shot!.shooter).toBe('enemy');
+    expect(firing.shotsSinceEnemyFire).toBe(0);
+    g.controller.enemyShotAnimationDone();
+    const s = g.controller.getState();
+    expect(s.phase).toBe('challenge');
+    expect(s.challenge!.id).toBe(id);
+    expect(s.help.wrongAnswers).toBe(2);
+  });
+
+  it('the exact number reveals and destroys the enemy, then a new search starts with a new hidden enemy and no enemy turn', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s0 = g.controller.getState();
+    const target = s0.challenge!.answer;
+    const seen: RoundState[] = [];
+    g.controller.subscribe((s) => seen.push(s));
+    answer(g, missNumber(s0));
+    seen.length = 0;
+    g.advance(1_000);
+    g.controller.fireAt(target);
+    g.controller.shotAnimationDone();
+    expect(seen.some((s) => s.phase === 'enemyTurn')).toBe(false);
+    const revealed = seen.find((s) => s.enemyFound);
+    expect(revealed).toBeDefined();
+    expect(revealed!.enemy).toMatchObject({ position: target, alive: false });
+    expect(revealed!.lastShot).toMatchObject({ fired: target, hit: true, enemyNumber: target });
+    const s = g.controller.getState();
+    expect(s.phase).toBe('challenge');
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.shotsSinceEnemyFire).toBe(0);
+    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [] });
+    expect(s.challenge!.id).not.toBe(s0.challenge!.id);
+    expect(Math.abs(s.challenge!.answer - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(0, 100));
+    expect(s.answerableAt).toBe(g.now() + 1_000);
+    if (s.challenge!.kind === 'readPosition') {
+      expect(s.enemyFound).toBe(true);
+    } else {
+      expect(s.enemyFound).toBe(false);
+      expect(s.enemy).toEqual({ id: 'enemy', kind: 'enemy', alive: true });
+    }
+  });
+});
+
+describe('BattleController guided misses, help and round end (US2, T061)', () => {
+  it('three misses in one search: the enemy fires once, help reaches 3, the selection is the answer and confirm destroys the enemy', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    let enemyTurns = 0;
+    g.controller.subscribe((s) => {
+      if (s.phase === 'enemyTurn') enemyTurns++;
+    });
+    const s0 = g.controller.getState();
+    for (let i = 0; i < 3; i++) answer(g, missNumber(s0));
+    const s = g.controller.getState();
+    expect(enemyTurns).toBe(1);
+    expect(s.help.level).toBe(3);
+    expect(s.help.wrongAnswers).toBe(3);
+    expect(s.selection).toBe(s0.challenge!.answer);
+    expect(s.challenge!.id).toBe(s0.challenge!.id);
+    g.advance(1_000);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().enemiesDestroyed).toBe(1);
+    expect(enemyTurns).toBe(1);
+  });
+
+  it("'Gegner pro Runde' 3 ends the round with goalReached after the third destroyed enemy (FR-082)", () => {
+    const g = guidedController({ roundType: 'enemyCount', roundLength: 3 });
+    g.controller.startRound('guided');
+    for (let i = 0; i < 3; i++) {
+      expect(g.controller.getState().phase).toBe('challenge');
+      answer(g, g.controller.getState().challenge!.answer);
+    }
+    const s = g.controller.getState();
+    expect(s.phase).toBe('roundOver');
+    expect(s.outcome).toBe('goalReached');
+    expect(s.enemiesDestroyed).toBe(3);
+  });
+
+  it("'Bis alle Herzen weg' ends only when the hearts are gone", () => {
+    const g = guidedController({ enemyDifficulty: 'challenging' });
+    g.controller.startRound('guided');
+    for (let i = 0; i < 8; i++) answer(g, g.controller.getState().challenge!.answer);
+    expect(g.controller.getState().phase).toBe('challenge');
+    expect(g.controller.getState().enemiesDestroyed).toBe(8);
+    for (let i = 0; i < 300 && g.controller.getState().phase !== 'roundOver'; i++) {
+      // Away from the enemy: the player's own shell never costs a heart, so only enemy shells end the round.
+      answer(g, missNumber(g.controller.getState()));
+    }
+    const s = g.controller.getState();
+    expect(s.outcome).toBe('heartsGone');
+    expect(s.lives).toBe(0);
+    expect(s.enemiesDestroyed).toBe(8);
+  });
+
+  it('a guided readPosition search starts with the enemy visible at the answer; a near miss does not hit, only the exact number', () => {
+    const g = guidedRoundWhere((s) => s.challenge?.kind === 'readPosition');
+    const s0 = g.controller.getState();
+    expect(s0.enemyFound).toBe(true);
+    expect(s0.phase).toBe('challenge');
+    expect(s0.enemy).toMatchObject({ position: s0.challenge!.answer, alive: true });
+    answer(g, nearNumber(s0));
+    expect(g.controller.getState().lastShot!.nearMiss).toBe(true);
+    expect(g.controller.getState().enemiesDestroyed).toBe(0);
+    answer(g, s0.challenge!.answer);
+    expect(g.controller.getState().enemiesDestroyed).toBe(1);
+  });
+
+  it('has no bonus challenge method or state (amendment 01)', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    expect('requestBonusChallenge' in g.controller).toBe(false);
+    expect(g.controller.getState()).not.toHaveProperty('challengePurpose');
+  });
+});
+
+describe('BattleController attempts (US2, T063, decision D5)', () => {
+  it('records one attempt per finished search', () => {
+    const g = guidedController({ noDamage: true });
+    g.controller.startRound('guided');
+    const challenges: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const s = g.controller.getState();
+      challenges.push(s.challenge!.id);
+      answer(g, missNumber(s));
+      answer(g, s.challenge!.answer);
+    }
+    const attempts = g.progress.getProgress().attempts;
+    expect(attempts.map((a) => a.challengeId)).toEqual(challenges);
+    expect(attempts.every((a) => a.sessionId === 'test-session' && a.rangeKey === '0-100' && a.exact && !a.guess)).toBe(true);
+  });
+
+  it('records nothing while a shot is in flight; a hit on the first shot without help is independent', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s0 = g.controller.getState();
+    g.advance(1_500);
+    g.controller.fireAt(s0.challenge!.answer);
+    expect(g.progress.getProgress().attempts).toHaveLength(0);
+    g.controller.shotAnimationDone();
+    expect(g.progress.getProgress().attempts).toEqual([
+      expect.objectContaining({
+        challengeId: s0.challenge!.id,
+        seed: s0.challenge!.seed,
+        kind: s0.challenge!.kind,
+        skills: s0.challenge!.skills,
+        difficultyStep: s0.challenge!.difficultyStep,
+        solved: true,
+        independent: true,
+        exact: true,
+        helpLevel: 0,
+        wrongAnswers: 0,
+        responseMs: 500,
+        guess: false,
+      }),
+    ]);
+  });
+
+  it('a near miss on the body followed by the exact number is stored with wrongAnswers 1 and independent false (FR-075)', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    const s0 = g.controller.getState();
+    answer(g, nearNumber(s0));
+    answer(g, s0.challenge!.answer);
+    const [a] = g.progress.getProgress().attempts;
+    expect(a).toMatchObject({ solved: true, independent: false, wrongAnswers: 1, helpLevel: 1, exact: true });
+  });
+
+  it('a shot at the shown solution is stored as not solved with help level 3', () => {
+    const g = guidedRoundWhere(hiddenSearch, { noDamage: true });
+    const s0 = g.controller.getState();
+    for (let i = 0; i < 3; i++) answer(g, missNumber(s0));
+    g.advance(1_000);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    const [a] = g.progress.getProgress().attempts;
+    expect(a).toMatchObject({ solved: false, independent: false, helpLevel: 3, wrongAnswers: 3 });
+  });
+
+  it('records no attempt in free play and none for a search dropped by newScene', () => {
+    const g = guidedRoundWhere(hiddenSearch);
+    answer(g, missNumber(g.controller.getState()));
+    g.controller.newScene();
+    g.controller.startRound('freePlay');
+    g.advance(1_000);
+    g.controller.fireAt(g.controller.getState().challenge!.answer);
+    g.controller.shotAnimationDone();
+    expect(g.progress.getProgress().attempts).toHaveLength(0);
+  });
+});
+
+describe('BattleController round ruler level (T064, FR-018)', () => {
+  it('rulerLevelStart 3 gives state.rulerLevel 3 in both modes', () => {
+    const g = guidedController({ rulerLevelStart: 3, freePlay: true });
+    g.controller.startRound('guided');
+    expect(g.controller.getState().rulerLevel).toBe(3);
+    g.controller.startRound('freePlay');
+    expect(g.controller.getState().rulerLevel).toBe(3);
   });
 });

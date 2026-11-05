@@ -167,6 +167,16 @@ export interface TankState {
   alive: boolean;
 }
 
+/**
+ * The enemy as getState() reports it during a guided position search: no number and no coordinates, so nothing
+ * outside the controller can show where it hides (FR-010, FR-073).
+ */
+export interface HiddenTank {
+  id: string;
+  kind: 'enemy';
+  alive: boolean;
+}
+
 /** How the child chose the last number: keyboard (digits, Enter) or pointer (ruler, fire button); amendment 05. */
 export type InputMethod = 'pointer' | 'keyboard';
 
@@ -188,7 +198,8 @@ export interface RoundState {
   phase: Phase;
   terrain: Heightmap;
   player: TankState;
-  enemy: TankState;
+  /** A HiddenTank while enemyFound is false; see BattleState for the controller's own full state. */
+  enemy: TankState | HiddenTank;
   /** Comparison turns only. */
   decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
@@ -246,4 +257,9 @@ export interface ShotInFlight {
   /** True when the shell left the battlefield over a side edge. */
   outOfBounds: boolean;
   blastRadius: number;
+}
+
+/** The controller's full round state: the enemy always has its number and coordinates. getState() hides them. */
+export interface BattleState extends Omit<RoundState, 'enemy'> {
+  enemy: TankState;
 }

@@ -23,6 +23,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
+import { visibleEnemy } from '../core/battle/round';
 import type { LastShot, RoundState } from '../core/types';
 import { t } from '../i18n';
 
@@ -38,7 +39,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const { min, max } = controller.getRoundSettings().range;
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
   const answerable = state.challenge !== null && state.answerableAt !== null && state.phase === 'challenge';
-  const enemyVisible = state.enemyFound && state.enemy.alive;
+  const enemy = visibleEnemy(state);
   // Typed digits are shown exactly as typed (a lone "-" too). A number chosen by pointing is not shown (FR-019).
   const readout = state.entry.typed !== '' ? state.entry.typed : '?';
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
@@ -61,7 +62,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-selection={state.selection ?? undefined}
       data-last-landing={state.lastShot?.landed ?? undefined}
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
-      data-enemy-number={enemyVisible ? state.enemy.position : undefined}
+      data-enemy-number={enemy?.position}
     >
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (

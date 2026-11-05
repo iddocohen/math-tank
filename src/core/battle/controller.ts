@@ -4,7 +4,11 @@
  * Each change produces a new RoundState object, so `useSyncExternalStore` sees it.
  *
  * Amendment 01: the player aims by choosing a number. The cannon is fixed and solveArcToX computes the arc,
- * so the shell always lands at the chosen number. This phase covers free play; guided mode arrives later.
+ * so the shell always lands at the chosen number.
+ *
+ * Guided mode (US2, guided.ts): every fire is an answer to the search's challenge. During a position search the enemy
+ * hides: getState() reports it without number or coordinates. A miss raises the help step; the exact number reveals
+ * and destroys the enemy, records an Attempt and starts a new search with a new hidden enemy.
  *
  * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
  * The enemy fires once after every ENEMY_FIRE_EVERY shots of the child at the same enemy; each enemy hit costs one
@@ -12,7 +16,7 @@
  * roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
+import type { BattleState, InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
 import { simulateShot } from '../physics/ballistics';
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
@@ -21,12 +25,15 @@ import { enemyShot } from '../ai/enemy';
 import { ENEMY_FIRE_EVERY } from './hitRule';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
+import { afterMiss, startSearch } from './guided';
+import { buildAttempt } from './attempt';
 import {
   applyImpact,
   createRound,
   freePlayChallenge,
   moveTank,
   muzzle,
+  publicState,
   tankCenter,
   TANK_HIT_RADIUS,
   WORLD_HEIGHT,
@@ -42,6 +49,8 @@ export interface BattleDeps {
   /** Base seed; each round derives its own seed from it. Defaults to the clock. */
   seed?: number;
   speaker?: Speaker;
+  /** Session id stored with each attempt (FR-035). Defaults to one derived from the clock at construction. */
+  sessionId?: string;
 }
 
 type Listener = (s: RoundState) => void;
@@ -52,7 +61,12 @@ export class BattleController {
   private nextSettings: Settings;
   /** Settings snapshot for the current round (FR-049). */
   private settings: Settings;
-  private state: RoundState;
+  /** The full state; `view` is what getState() and subscribers receive. */
+  private state: BattleState;
+  private view: RoundState;
+  private readonly sessionId: string;
+  /** Clock time of the player's shot in flight, for the attempt's response time. */
+  private firedAt = 0;
   private readonly listeners = new Set<Listener>();
   private roundIndex = 0;
   private nextSide: 'left' | 'right';
@@ -72,6 +86,8 @@ export class BattleController {
     this.nextSide = createRng(deriveSeed(this.baseSeed, 0)).next() < 0.5 ? 'left' : 'right';
     // A placeholder round until startRound; it is never shown.
     this.state = { ...createRound(this.settings, this.baseSeed, this.nextSide), phase: 'roundOver' };
+    this.view = publicState(this.state);
+    this.sessionId = deps.sessionId ?? `session-${Math.floor(deps.clock())}`;
   }
 
   /** Time played this round in milliseconds: stopped while paused and once the round is over (FR-084). */
@@ -81,7 +97,7 @@ export class BattleController {
   }
 
   getState(): RoundState {
-    return this.state;
+    return this.view;
   }
 
   /** The settings snapshot of the current round (range and label level for the views). */
@@ -105,7 +121,6 @@ export class BattleController {
   }
 
   startRound(mode: 'guided' | 'freePlay'): void {
-    if (mode === 'guided') throw new Error('Guided mode is not implemented yet; start a free-play round.');
     this.settings = structuredClone(this.nextSettings);
     const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
     const side = this.nextSide;
@@ -116,7 +131,8 @@ export class BattleController {
     this.firedNumber = null;
     this.runningSince = this.deps.clock();
     // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
-    this.set({ ...createRound(this.settings, seed, side, mode), inputMethod: this.state.inputMethod });
+    const round: BattleState = { ...createRound(this.settings, seed, side, mode), inputMethod: this.state.inputMethod };
+    this.set(mode === 'guided' ? startSearch(round, this.settings, this.deps.clock(), null) : round);
   }
 
   /**
@@ -187,6 +203,7 @@ export class BattleController {
     });
     const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS };
     this.firedNumber = n;
+    this.firedAt = this.deps.clock();
     this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
   }
 
@@ -197,24 +214,33 @@ export class BattleController {
     const fired = this.firedNumber ?? xToNumber(shot.impact.x, min, max);
     this.firedNumber = null;
     const s = this.impact({ point: shot.impact, hitTargetId: null, outOfBounds: false, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) }, shot.blastRadius);
-    const next: RoundState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
+    const next: BattleState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
+    const guided = next.mode === 'guided';
     if (next.lastShot?.hit) {
       // One hit, one destroyed enemy; the count for the enemy's fire starts again for the new enemy (FR-066, FR-081).
-      const destroyed: RoundState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, shotsSinceEnemyFire: 0 };
+      // In a guided search the hit reveals the enemy where it stood, so the renderer can show it explode.
+      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, shotsSinceEnemyFire: 0, enemyFound: true };
+      if (guided) this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
+        return;
+      }
+      if (guided) {
+        this.set(destroyed);
+        this.set(startSearch(destroyed, this.settings, this.deps.clock(), destroyed.enemy.position));
         return;
       }
       this.set(this.nextReadPosition(destroyed));
       return;
     }
-    const shots = next.shotsSinceEnemyFire + 1;
+    const missed = guided ? afterMiss(next, this.deps.clock()) : next;
+    const shots = missed.shotsSinceEnemyFire + 1;
     if (shots >= ENEMY_FIRE_EVERY) {
-      const firing: RoundState = { ...next, shotsSinceEnemyFire: 0 };
+      const firing: BattleState = { ...missed, shotsSinceEnemyFire: 0 };
       this.set({ ...firing, phase: 'enemyTurn', shot: this.nextEnemyShot(firing) });
       return;
     }
-    this.set({ ...next, shotsSinceEnemyFire: shots, phase: 'aiming' });
+    this.set({ ...missed, shotsSinceEnemyFire: shots, phase: this.choosingPhase() });
   }
 
   enemyShotAnimationDone(): void {
@@ -225,7 +251,30 @@ export class BattleController {
       this.endRound(s, 'heartsGone');
       return;
     }
-    this.set({ ...s, phase: 'aiming' });
+    this.set({ ...s, phase: this.choosingPhase() });
+  }
+
+  /** The phase in which the child chooses a number: a guided search or free-play aiming. */
+  private choosingPhase(): 'challenge' | 'aiming' {
+    return this.state.mode === 'guided' ? 'challenge' : 'aiming';
+  }
+
+  /**
+   * Stores the finished search through the ProgressStore (FR-035). Called after the shot animation, between turns,
+   * never while a shell is in flight. Free play records nothing (decision D14).
+   */
+  private recordAttempt(s: BattleState): void {
+    if (!s.challenge || s.answerableAt === null) return;
+    const attempt = buildAttempt({
+      challenge: s.challenge,
+      help: s.help,
+      answerableAt: s.answerableAt,
+      answeredAt: this.firedAt,
+      range: this.settings.range,
+      sessionId: this.sessionId,
+      at: this.deps.clock(),
+    });
+    this.deps.progress.record(attempt);
   }
 
   pause(): void {
@@ -246,7 +295,7 @@ export class BattleController {
   }
 
   /** Stops the time for good and ends the round (FR-008, FR-084). */
-  private endRound(s: RoundState, outcome: NonNullable<RoundState['outcome']>): void {
+  private endRound(s: BattleState, outcome: NonNullable<RoundState['outcome']>): void {
     const elapsedMs = this.elapsedMs();
     this.runningSince = null;
     this.set({ ...s, elapsedMs, phase: 'roundOver', outcome });
@@ -268,14 +317,14 @@ export class BattleController {
    * Free play: after a hit a new "read the ruler" challenge follows and a new enemy stands at its answer, a new
    * visible position (decision D12, FR-066, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
    */
-  private nextReadPosition(s: RoundState): RoundState {
+  private nextReadPosition(s: BattleState): BattleState {
     const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position);
     const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, this.settings, s.terrain), alive: true };
     return { ...s, phase: 'aiming', challenge, enemy };
   }
 
   /** The enemy's shell on the state after the player's impact (enemy aiming, research R18). */
-  private nextEnemyShot(s: RoundState): ShotInFlight {
+  private nextEnemyShot(s: BattleState): ShotInFlight {
     const origin = muzzle(s.enemy);
     const aim = enemyShot({
       difficulty: this.settings.enemyDifficulty,
@@ -293,14 +342,16 @@ export class BattleController {
     return { shooter: 'enemy', path: r.path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius: BLAST_RADIUS };
   }
 
-  private impact(impact: Impact, blastRadius: number): RoundState {
+  private impact(impact: Impact, blastRadius: number): BattleState {
     const rules: DamageRules = { noDamage: this.settings.noDamage, range: this.settings.range };
     return applyImpact(this.state, impact, blastRadius, rules);
   }
 
-  private set(next: RoundState): void {
+  private set(next: BattleState): void {
     this.state = next;
-    for (const listener of [...this.listeners]) listener(next);
+    const view = publicState(next);
+    this.view = view;
+    for (const listener of [...this.listeners]) listener(view);
   }
 }
 

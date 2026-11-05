@@ -8,11 +8,20 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore } from '../core/battle/ports';
+import { placedEnemy } from '../core/battle/round';
+import type { RoundState, TankState } from '../core/types';
 import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
 import { useRoundState } from './useController';
+
+/** The enemy with its number; free play always places it. */
+function enemyOf(s: RoundState): TankState {
+  const enemy = placedEnemy(s);
+  if (!enemy) throw new Error('the enemy is hidden');
+  return enemy;
+}
 
 function Overlay({ controller }: { controller: BattleController }) {
   const state = useRoundState(controller);
@@ -89,7 +98,7 @@ describe('BattleOverlay (amendment 06)', () => {
     expect(score.textContent).toBe('0');
     expect(score.querySelector('svg')).not.toBeNull();
     act(() => {
-      controller.fireAt(controller.getState().enemy.position);
+      controller.fireAt(enemyOf(controller.getState()).position);
       controller.shotAnimationDone();
     });
     expect(screen.getByTestId('score').textContent).toBe('1');
@@ -98,7 +107,7 @@ describe('BattleOverlay (amendment 06)', () => {
 
   it('after a hit shows "Getroffen!" with the number the enemy stood at, and data-last-shot hit', () => {
     const { controller } = setup();
-    const n = controller.getState().enemy.position;
+    const n = enemyOf(controller.getState()).position;
     act(() => {
       controller.fireAt(n);
       controller.shotAnimationDone();
@@ -109,7 +118,7 @@ describe('BattleOverlay (amendment 06)', () => {
 
   it('after a near miss shows "Ganz knapp! Triff die Linie." with both numbers, and data-last-shot near', () => {
     const { controller } = setup();
-    const e = controller.getState().enemy.position;
+    const e = enemyOf(controller.getState()).position;
     const near = e + (e < 100 ? 1 : -1);
     act(() => {
       controller.fireAt(near);
