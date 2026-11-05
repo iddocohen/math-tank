@@ -6,7 +6,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `10` | `10` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; `migrate` upgrades version 0 to 9 data (see below) |
+| `version` | `11` | `11` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; version 11 (amendment 21) adds `enemiesAtOnce` and `lineStyle`; `migrate` upgrades version 0 to 10 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -31,6 +31,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `pointAfterFullHelp` | `boolean` | `true` | "Punkt nach voller Hilfe" (amendment 18, FR-129), in the "Hilfe" group next to "Zeitlimit". When `false`, an enemy destroyed after help step 3 does not raise `enemiesDestroyed`, so it gives no star and does not count toward "Gegner pro Runde" or the personal best; the attempt is recorded as with help either way |
 | `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
 | `aimCross` | `{ mode: 'always' \| 'upToLevel' \| 'never'; level: 1 \| 2 \| 3 \| 4 \| 5 }` | `{ mode: 'always', level: 2 }` | "Zielkreuz" (amendment 19, FR-134): the yellow target marker, its guide line, the point on the ruler and the typed-number label on the ruler. `'always'` shows it ("Immer"); `'upToLevel'` shows it while the round's `rulerLevel` is at most `level` ("Bis Zahlenstrahl-Stufe N"); `'never'` hides it ("Nie"). `level` is kept when the mode is not `'upToLevel'`, so switching back restores it. `aimCrossShown(aimCross, rulerLevel)` in `src/core/battle/aimCross.ts` decides |
+| `enemiesAtOnce` | `1 \| 2 \| 3 \| 4` | `1` | "Gegner gleichzeitig" (amendment 21, FR-136): the size of a wave in "Nur Zahlenstrahl" and in the `readPosition` searches of "Gemischt" (FR-137). 1 keeps one enemy, as before |
+| `lineStyle` | `'straight' \| 'curved' \| 'tangled'` | `'straight'` | "Linien" (amendment 21, FR-144): "Gerade", "Gebogen", "Gebogen und verschlungen". The settings page offers `'tangled'` only when `enemiesAtOnce >= 2`, and setting `enemiesAtOnce` to 1 turns a chosen `'tangled'` into `'curved'`. A stored `'tangled'` with `enemiesAtOnce` 1 stays valid and is drawn as `'curved'` (`effectiveLineStyle`) |
 | `numberPad` | `'auto' \| 'always' \| 'never'` | `'auto'` | "Zahlenfeld" (amendment 12, FR-102): `'auto'` shows the on-screen number pad in battle when the main pointer is not fine or the screen is narrower than 1100 CSS pixels; `'always'` shows it on every screen; `'never'` hides it |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
@@ -50,6 +52,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 8** (amendment 18): `pointAfterFullHelp` is added with `true` unless already set; `version` becomes 9. Version 0 to 7 data and version 2 transfer codes go through every step.
 
 **Migration from version 9** (amendment 19): `aimCross` is added with `{ mode: 'always', level: 2 }` unless already set; `version` becomes 10. Version 0 to 8 data and version 2 transfer codes go through every step.
+
+**Migration from version 10** (amendment 21): `enemiesAtOnce` is added with `1` and `lineStyle` with `'straight'` unless already set; `version` becomes 11. Version 0 to 9 data and version 2 transfer codes go through every step. The frozen transfer base (`TRANSFER_V2_SETTINGS_BASE`) gains both defaults, so codes made before amendment 21 read as 1 and `'straight'`.
 
 **Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
@@ -358,7 +362,8 @@ interface RoundState {
   terrainSeed: number;             // seed of the current ground (amendment 13, FR-101): deriveSeed(seed, 0) at round start, new after every destroyed enemy; newScene makes a new round seed and with it a new terrain seed
   terrain: Heightmap;              // Float32Array of surface heights per column
   player: TankState;
-  enemy: TankState;
+  enemy: TankState;                // the help target (amendment 21, FR-141): with a wave, the standing enemy nearest the last landing number (the leftmost before any shot); challenge.answer is its number
+  wave: TankState[];               // amendment 21 (FR-137): the other enemies of the current wave, kind 'enemy', ids `wave-<challenge root id>-<i>`; a destroyed one stays with alive false until the wave ends; [] for a wave of one and in every other search
   decoys: TankState[];             // comparison searches: one decoy at each option other than the answer, [] otherwise (amendment 10); a destroyed decoy stays with alive false until the search ends
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
   challenge: Challenge | null;     // mode 'ruler': always a readPosition challenge; mode 'math': never readPosition or findNumber
@@ -372,7 +377,7 @@ interface RoundState {
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
   stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
-  shot: ShotInFlight | null;       // shell in flight for the renderer to replay; ShotInFlight.decoyShells holds the harmless shells of the standing decoys in a comparison volley ({ shooterId, path, impact }[], empty otherwise; bug report B2, FR-043a)
+  shot: ShotInFlight | null;       // shell in flight for the renderer to replay; ShotInFlight.shooterId names the enemy that fires an enemy shell (amendment 21: in a wave, one standing enemy chosen by a seeded draw; absent means `enemy`); ShotInFlight.decoyShells holds the harmless shells of the standing decoys in a comparison volley ({ shooterId, path, impact }[], empty otherwise; bug report B2, FR-043a)
   outcome: 'goalReached' | 'heartsGone' | null;   // goalReached: roundLength enemies destroyed with roundType 'enemyCount'
 }
 
@@ -387,6 +392,7 @@ interface LastShot {
   targetNumber: number;            // the number the step count refers to: the enemy's, or in comparison turns the nearest tank still standing (amendment 10, FR-072)
   distance: number | null;         // steps from the landed number to targetNumber
   enemyNumber: number;             // the enemy's number when the shell landed; feedback shows it after the enemy moved
+  wave?: boolean;                  // amendment 21: 2 or more enemies stood when the shell landed; a miss then shows "Du: N · K Schritte" to the nearest standing enemy (FR-140)
   uncounted?: boolean;             // true for a hit after help step 3 with pointAfterFullHelp off: not counted, feedback "Getroffen, mit Hilfe." (amendment 18, FR-129)
 }
 
@@ -426,3 +432,32 @@ The player tank stands at `range.min` (left side) or `range.max` (right side) fo
 In comparison turns (amendment 10, replacing amendment 09 item 1), one tank stands at each option the banner names: the enemy at the correct option and a decoy (`kind: 'decoy'`, id `decoy-<challenge id>-<i>`) at each other option. Decoys look exactly like the enemy and carry no number plate. A destroyed decoy stays gone for the rest of the search; the next search replaces `decoys`. The search right after `newScene` is never a comparison (amendment 08 item 1, restored by amendment 10 item 10).
 
 **Enemy shot** (amendment 07, FR-041 to FR-043a, FR-081; `src/core/ai/enemy.ts`): after every player shot that does not destroy the enemy, the enemy fires once. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: the shot hits with probability `ENEMY_HIT_CHANCE` (`easy` 1/6, `normal` 1/4, `challenging` 1/3), never on `shotIndexInRound` 0. A hit aims at the child's tank center. Otherwise the shell aims at a point `NEAR_MISS_MIN` (40) to `NEAR_MISS_MAX` (100) world units left or right of the child's tank, outside the hit area (half the tank width, 30 units); the side comes from the draw, and when that side would leave the battlefield the other side is used. The path is the arc of `solveArcToX` from the enemy's muzzle, so the shell lands at the aimed x. In comparison turns (amendment 10, FR-043a) the path is `topShellPath` instead: the shell enters at the top edge at `topShellEntryX(roundSeed, shotIndex, playerX)`, an x that depends on nothing about the enemy, and falls onto the same impact. The draw reads only the round seed, the shot index and the difficulty, never answers, help or mistakes (FR-042).
+
+## Enemy wave (not persisted, amendment 21)
+
+- **Placement** (`waveFor` in `src/core/battle/wave.ts`, FR-137): the first enemy stands at the answer of the generated `readPosition` challenge. The other N - 1 positions are drawn with `createRng(deriveSeed(seed, 10, turn))` from `readPositionAnswers(settings, rulerLevel)`, leaving out every position closer than `minTankGap` to the child's tank or to an enemy already placed. When no position is left, the wave is smaller (at least 1).
+- **Who is in a wave**: `MODE_TRAITS[mode].kinds === 'readPosition'` ("Nur Zahlenstrahl"), or mode `'mixed'` with a `readPosition` challenge. Comparison, arithmetic and the other number-line searches keep one enemy.
+- **Challenges**: each enemy has the `readPosition` challenge of the wave with its own `answer` and the id `<root>` for the first enemy and `<root>/<i>` for wave enemy i. The prompt key is `readPositionWave` ("Wo stehen die Gegner?") while 2 or more enemies stand, otherwise `readPosition`.
+- **Help target** (FR-141): `enemy`. Before any shot of the wave it is the leftmost enemy. After a miss it becomes the standing enemy nearest the landing number (on a tie the leftmost); `help.level`, `wrongAnswers` and `wrongAnswerTimes` carry over and `help.content` is rebuilt for the new target. After a hit with enemies still standing, it is the standing enemy nearest the landing number, with help reset and `answerableAt = now + ANSWER_DELAY_MS`.
+- **Enemy fire** (FR-140): `deriveSeed(seed, 9, shotIndexInRound)` picks the shooter among the standing enemies; the hit decision and the near miss come from `enemyShot` as before.
+- **Attempts** (FR-143): the hit help target is recorded with its help and wrong answers; another hit enemy is recorded with `helpLevel 0` and `wrongAnswers 0`, with the same `answerableAt`.
+
+## Pointer curves (not persisted, amendment 21)
+
+`pointerCurves(tanks, input)` in `src/core/view/pointerCurve.ts` returns one curve per visible tank, in screen coordinates:
+
+```ts
+interface PointerCurve {
+  tankId: string;
+  number: number;
+  points: Point[];         // from the tank's center to the tip on the ruler line (AXIS_Y); the end x is numberToX(number)
+  bow: number;             // the largest sideways distance from the end x, in world units
+  shape: 'straight' | 'arc' | 's';
+  color: number | null;    // 'tangled' only: one of LINE_COLORS, by order from left to right; null otherwise
+}
+const LINE_COLORS = [0xe69f00, 0x56b4e9, 0x009e73, 0xcc79a7];   // Okabe-Ito orange, sky blue, bluish green, reddish purple
+```
+
+- The curve runs from the tank's center down to `RULER_TOP - 8` with the sideways offset `bow * f(u)` (arc: `sin(pi u)^2`; S: `sin(pi u)^2 cos(pi u)` scaled so its largest value is 1), and from there straight down to `AXIS_Y`.
+- Seeded per tank with `deriveSeed(seed, 11, number)`: shape, side and bow from 8% to 20% of the ruler width (1440 world units). In `'tangled'` the bow is at least 12% and turns toward the nearest other tank.
+- Fairness (FR-145): every point inside the battlefield (x from 8 to 1592); no point within 6 world units of another tank's body box; in `'curved'` no crossing with an earlier curve. Candidates in order: the seeded one, the other side, the other shape, then smaller bows down to 8%; when none fits, a straight line.

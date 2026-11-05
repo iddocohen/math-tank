@@ -306,3 +306,27 @@ The product owner found ruler levels 4 and 5 unfair: "I think it is however unre
   - `ticksFor` keeps its `seed` argument, which no longer changes the result, so callers did not change. `smallestVisibleStep` is removed: the smallest drawn step is always the minor step.
 
 The spec (US2 scenario 5, US9 scenario 5, FR-016, FR-017, FR-027, FR-067, Amendments), the data model (ruler level table, readPosition placement), the contracts (core-api `ticksFor` guarantees, ui-flows ruler and previews), quickstart (scenario 16) and tasks (Phase 24e, T370 to T377) were updated to match.
+
+## Amendment 21
+
+**Date**: 2026-11-05
+
+The product owner asked for several enemies that the child hits "at one go" while the ruler is shown ("I would like to have multiple tanks as well as an option, where he needs to hit several when the ruler is there at one go"), and then for curved pointer lines as one more difficulty level ("not have a straight line but a curved line from the ruler to a tank, such that he does not follow just a straight line down and see what ruler it is, but he needs to think where the curved line is actually landing").
+
+- **PRD section 3 (number line learning)** is kept: every enemy of a wave stands on a drawn line, only the exact number hits (amendment 06), and the step count after a miss still teaches distance on the ruler. The wave adds practice in reading several numbers in a row.
+- **Amendment 13 (new hills after every destroyed enemy)** is changed for waves: the hills renew when the last enemy of a wave is destroyed. With one enemy at once nothing changes.
+- **Amendment 10 (decoys)**: comparison turns keep one enemy and their decoys; the wave applies only to "read the ruler" searches, because one question has one answer.
+- Decisions of this update that the amendment does not state:
+  - The help target stays in `RoundState.enemy`; the other enemies of the wave are in `RoundState.wave`. So every rule that reads `enemy` (the answer, help steps, the solution) keeps working for the help target, and a wave of one is the round state from before.
+  - When a miss lands nearer another enemy, that enemy becomes the help target and the help steps reached so far carry over, so the help keeps growing with the child's misses as the amendment's miss rules ask. After a destroyed enemy the help starts again for the next target, with the 1-second answer delay, so each destroyed enemy is a separate attempt with its own response time.
+  - An enemy destroyed while it was not the help target is recorded with no help and no wrong answer, because the amendment counts misses only for the help target.
+  - The extra enemies are drawn from the same positions as a "read the ruler" enemy (drawn lines of the minor grid), seeded by the round seed and the turn, not limited by the ladder's number fraction; only the first enemy follows the ladder.
+  - "Neue Landschaft" places a new wave of the full "Gegner gleichzeitig" size, as "a new wave of the same size".
+  - The amendment says the curved line ends "offset sideways from the tank" but also that "the tank stays at its number". The orchestrator's clarification decides: the curve starts at the tank and ends exactly at the tank's own number on the ruler, and bows sideways in between (one arc or an S shape) by 8% to 20% of the ruler width at its widest, never leaving the battlefield.
+  - The last part of each curve inside the ruler band is vertical, which keeps every curve away from the ruler labels (they sit below the ruler line) and from the other lines' ends.
+  - In "Gebogen" curves of different tanks do not cross; crossing is what "Gebogen und verschlungen" adds. When no seeded bow fits the fairness rules, a smaller bow is used and, as the last resort, a straight line.
+  - The color set is the Okabe-Ito set without yellow and vermillion: orange, sky blue, bluish green and reddish purple, because the aiming cross is yellow and the landing marker is orange-red.
+  - A stored "Gebogen und verschlungen" with one enemy at once stays valid and is drawn as "Gebogen", so changing the number of enemies never resets the settings.
+  - The pulsing target ring and the help step 1 line highlight show only with 2 or more enemies at once or with a curved style, so the default settings look as before.
+
+The spec (User Story 12, FR-046, FR-136 to FR-146, Key Entities, Amendments), the data model (Settings version 11, Round state `wave`, `LastShot.wave`, `ShotInFlight.shooterId`, Enemy wave, Pointer curves), the contracts (core-api `core/battle/wave` and `core/view/pointerCurve`, ui-flows enemy waves, pointer line styles and settings page), quickstart (scenario 36) and tasks (Phases 24f and 24g) were updated.

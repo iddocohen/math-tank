@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [amendment-12-tablet-phone.md](./amendment-12-tablet-phone.md), [amendment-19-star-shop-aim-cross.md](./amendment-19-star-shop-aim-cross.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [amendment-12-tablet-phone.md](./amendment-12-tablet-phone.md), [amendment-19-star-shop-aim-cross.md](./amendment-19-star-shop-aim-cross.md), [amendment-20-ruler-always-lines.md](./amendment-20-ruler-always-lines.md), [amendment-21-enemy-waves.md](./amendment-21-enemy-waves.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -932,6 +932,42 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24f: Amendment 21 enemy waves
+
+**Purpose**: [Amendment 21](./amendment-21-enemy-waves.md) items 1 to 10. The setting "Gegner gleichzeitig" (1 to 4, default 1) places a wave of enemies in "Nur Zahlenstrahl" and in the "read the ruler" searches of "Gemischt" (FR-136, FR-137). Each exact hit destroys one enemy and counts (FR-138); misses show the steps to the nearest standing enemy and one standing enemy fires back (FR-140); help works on the help target (FR-141); a cleared wave brings new hills and the next wave (FR-142); each destroyed enemy is one attempt (FR-143). Settings become version 11, with `lineStyle` added for Phase 24g. With 1 enemy the game behaves exactly as before: the existing tests stay unchanged.
+
+**Independent test**: `tests/e2e/wave.spec.ts` sets "Gegner gleichzeitig" to 3, plays "Nur Zahlenstrahl" with the keyboard, destroys the three enemies one by one (the counter goes 1, 2, 3, no enemy fires after a hit), and sees new hills with three new enemies.
+
+- [ ] T378 [P] [US12] Write the settings tests before the code: `src/core/settings/settings.test.ts` (defaults `enemiesAtOnce` 1 and `lineStyle` 'straight', version 11; 0, 5 and 2.5 enemies rejected; an unknown line style rejected; 'tangled' with 1 enemy accepted; `effectiveLineStyle` gives 'curved' for it), `src/core/storage/storage.test.ts` (version 10 settings migrate to version 11 with 1 and 'straight' and keep their other values; version 0 data go through every step), `src/core/transfer/transfer.test.ts` and `src/core/storage/exportImport.test.ts` (both settings round-trip; a code made before amendment 21 reads as 1 and 'straight') (FR-136, FR-144)
+- [ ] T379 [US12] Implement until T378 passes: `src/core/settings/schema.ts`, `defaults.ts`, `validate.ts`, `src/core/storage/migrate.ts` (`migrateSettingsToV11`), `src/core/transfer/transfer.ts` (`TRANSFER_V2_SETTINGS_BASE` gains both defaults), `src/core/view/pointerCurve.ts` (`effectiveLineStyle` only); update the tests that name settings version 10 (FR-136, FR-144)
+- [ ] T380 [P] [US12] Write the wave tests before the code: `src/core/battle/wave.test.ts` (`wavePositions`: N positions on drawn lines of the minor grid, each at least `minTankGap` from the player and from each other, deterministic for a seed, fewer and at least 1 when the range is too small, for 0 to 10, 0 to 100, 550 to 780 and 0 to 1000; `waveSize` is N in "Nur Zahlenstrahl" and in "Gemischt" readPosition searches and 1 for every other kind; `nearestEnemy` picks the leftmost on a tie) and `src/core/battle/battleController.test.ts` (a describe block "amendment 21 waves": 3 enemies after `startRound('ruler')`; the leftmost is the help target; a hit destroys only the hit enemy and raises `enemiesDestroyed` and `enemiesHit` by 1, resets the misses in a row, sends no enemy shot and keeps the terrain; the next target is the standing enemy nearest the landing number with help 0 and the answer delay; a miss sets `lastShot.wave`, `targetNumber` to the nearest standing enemy and retargets with the help kept; the enemy shot after a miss comes from a standing enemy's muzzle with `shooterId`, seeded; the third hit renews the terrain and places a new wave of 3; `newScene` replaces the wave; each destroyed enemy records one readPosition attempt, a non-target with help 0 and no wrong answers; "Gemischt" readPosition searches get a wave with the prompt key `readPositionWave` while 2 or more stand and other kinds one enemy; `roundType` 'enemyCount' ends the round in the middle of a wave; with `enemiesAtOnce` 1 the state has `wave: []` and the same states as before for a fixed seed) (FR-137 to FR-143)
+- [ ] T381 [US12] Implement until T380 passes: `src/core/types.ts` (`RoundState.wave`, `LastShot.wave`, `ShotInFlight.shooterId`), `src/core/battle/wave.ts`, `src/core/battle/round.ts` (`createRound`, `renewTerrain`, `applyImpact` read the wave), `src/core/battle/guided.ts` (`startSearch` places the wave), `src/core/battle/controller.ts` (hit, miss, retarget, shooter, wave cleared), `src/core/math/readPosition.ts` (nothing new unless needed) (FR-137 to FR-143)
+- [ ] T382 [P] [US12] Write the screen tests before the code: `src/app/BattleOverlay.test.tsx` (the "Gemischt" banner reads "Wo stehen die Gegner?" with the prompt key `readPositionWave`; `data-enemy-number` is the help target's number) and `src/i18n/i18n.test.ts` (the new prompt and the new settings texts exist) (FR-139, FR-141)
+- [ ] T383 [US12] Implement until T382 passes, and draw the wave: `src/i18n/de.ts`, `src/app/BattleOverlay.tsx`, `src/game/BattleScene.ts` (a view per wave enemy, mapped by tank id; a destroyed wave enemy explodes and fades out; enemies that come alive fade in; the shooter of `shotInFlight.shooterId` turns and fires; `data-help-target`), `src/game/TankView.ts` (`fadeOut`, pulsing target ring), `src/game/NumberLineView.ts` (pointer lines from every standing enemy; a wave miss shows "Du: N · K Schritte") (FR-137, FR-140, FR-141)
+- [ ] T384 [US12] Write `tests/e2e/wave.spec.ts` and see it fail before T381 and T383: with "Gegner gleichzeitig" 3 set through stored settings, "Nur Zahlenstrahl" with `?seed=1`, read the three numbers from `data-pointer-lines`, fire at each with the keyboard; after each hit `data-enemies-destroyed` rises by 1, `data-lives` stays 3 and no enemy shell flies; after the third the terrain seed changes and three new numbers stand (FR-137, FR-138, FR-142)
+
+**Checkpoint**: A parent can turn on waves of up to 4 enemies; the child clears them one number at a time.
+
+---
+
+## Phase 24g: Amendment 21 curved pointer lines
+
+**Purpose**: [Amendment 21](./amendment-21-enemy-waves.md) items 11 to 15 and the orchestrator's clarification. The setting "Linien" draws straight, curved or curved-and-tangled pointer lines (FR-144) under the fairness rules (FR-145); help step 1 lights up the help target's curve (FR-146).
+
+**Independent test**: `tests/e2e/lineStyles.spec.ts` plays a 3-enemy wave with each style; the canvas reports the style, each curve's end x equals the tank's ruler x, bows are 0 for "Gerade" and at least 8% of the ruler width for the curved styles where the rules allow; help step 1 sets `data-curve-highlight`; with `SCREENSHOT_DIR` it saves a screenshot of each style and of the highlight.
+
+- [ ] T385 [P] [US12] Write `src/core/view/pointerCurve.test.ts` before the code: over 300 seeds, ranges 0 to 100, 0 to 20, 550 to 780 and 0 to 1000, and 1 to 4 enemies plus decoy-like tanks on generated terrain: every curve's last point is `numberToX` of its number within 0.5 and at `AXIS_Y`; ends are distinct; all points inside x 8 to 1592 and between the tank's center and `AXIS_Y`; every point below `RULER_TOP - 8` has the end x (label avoidance); no point within 6 units of another tank's body box; 'curved' curves never cross; colors only in 'tangled', distinct per curve, from `LINE_COLORS`; bow at most 20% of the ruler width, and at least 8% in at least 95% of the curves; the same input gives the same curves (FR-144, FR-145)
+- [ ] T386 [US12] Implement `src/core/view/pointerCurve.ts` until T385 passes (`pointerCurves`, `curveLength`, `pointAlong`, `LINE_COLORS`) (FR-144, FR-145, FR-146)
+- [ ] T387 [P] [US12] Write the settings page tests before the code: `src/app/SettingsPage.test.tsx` ("Gegner gleichzeitig" offers 1 to 4 and saves; "Linien" offers "Gerade" and "Gebogen" with 1 enemy, and also "Gebogen und verschlungen" with 2 or more; choosing 1 enemy while "Gebogen und verschlungen" is chosen switches to "Gebogen"; explanations show) (FR-136, FR-144)
+- [ ] T388 [US12] Implement until T387 passes: `src/app/SettingsPage.tsx`, `src/i18n/de.ts` (FR-136, FR-144)
+- [ ] T389 [US12] Draw the styles: `src/game/NumberLineView.ts` (dashed curves with the end triangle from `pointerCurves`, colored in 'tangled'; the moving highlight along the help target's curve for about 2 seconds at help step 1; `data-line-style`, `data-pointer-curves`, `data-curve-highlight`), `src/game/TankView.ts` (a small flag in the line's color in 'tangled'), `src/game/BattleScene.ts` (passes the colors to the tank views) (FR-144, FR-146)
+- [ ] T390 [US12] Write `tests/e2e/lineStyles.spec.ts` and see it fail before T389: a 3-enemy "Nur Zahlenstrahl" wave with each style; `data-line-style` matches; every `data-pointer-curves` end x equals the x of its number; bows are 0 for "Gerade", 115 to 288 for the curved styles where the rules allow; H after a miss with a curved style sets `data-curve-highlight` to the help target's number and clears it after about 2 seconds; screenshots with `SCREENSHOT_DIR` (FR-144 to FR-146)
+- [ ] T391 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project); take muted headless screenshots of a 3-enemy wave with straight, curved and tangled lines and of help step 1 with a curved line, stored in the session scratchpad, and check them for readability and fairness
+
+**Checkpoint**: Pointer lines can bend and tangle, stay fair, and the help shows the target's line.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies
@@ -973,6 +1009,8 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 24c (amendment 18)**: depends on Phases 24a (play modes, settings version 8) and 24b. T349 runs before T350, T351 before T352, T353 before T354; T350 before T352 (the controller reads the setting) and T354; T355 after T352 and T354; T356 last.
 - **Phase 24d (amendment 19)**: depends on Phases 22d, 22e (the garage), 22j (the transfer) and 24c (settings version 9). T358 runs before T359, T360 before T361, T362 before T363, T364 before T365; T359 before T361 (storage and transfer read the new garage) and T363; T361 and T363 before T365; T366 after T365; T367 last.
 - **Phase 24e (amendment 20)**: depends on Phases 22b (medium lines and label rows) and 24d (the aiming cross reads the ruler level). T370 runs before T371, T372 before T373, T374 before T375; T371 runs before T373 and T375 (both read `ticksFor`); T376 after T375; T377 last.
+- **Phase 24f (amendment 21 waves)**: depends on Phases 24a (play modes), 24c (counted kills), 24d (settings version 10) and 24e (readPosition on drawn lines). T378 runs before T379, T380 before T381, T382 before T383; T379 before T381 (the controller reads `enemiesAtOnce`); T381 before T383; T384 is written before T381 and passes after T383.
+- **Phase 24g (amendment 21 curved lines)**: depends on Phase 24f. T385 runs before T386, T387 before T388; T386 before T389; T390 is written before T389 and passes after it; T391 last.
 
 ### User story dependencies
 
@@ -1010,6 +1048,8 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 22i**: T285, T286, T287, T288, T290 and T292 together; then T289; then T291 and T293; T294 last.
 - **Phase 22j**: T295, T296, T298 and T300 together; then T297; then T299; T301 last.
 - **Phase 24d**: T358, T360, T362 and T364 together; then T359; then T361 and T363; then T365; T366; T367 last.
+- **Phase 24f**: T378, T380 and T382 together; then T379; then T381; then T383; T384 last.
+- **Phase 24g**: T385 and T387 together; then T386 and T388; then T389; T390; T391 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -1084,10 +1124,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330, T349, T350, T360, T361, T364, T365 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330, T349, T350, T360, T361, T364, T365, T378, T379 |
 | FR-047 | T011, T013, T112, T113, T175, T176, T329, T330 |
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
-| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295, T349, T360, T361, T362 |
+| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295, T349, T360, T361, T362, T378, T379 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154, T278, T303, T304, T343 |
 | FR-051 | T003, T134, T139, T304 |
@@ -1110,10 +1150,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181, T372, T373, T376 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
 | FR-069 | T112, T113, T182, T235, T374, T375, T376 |
-| FR-070 | T185, T200, T208, T243, T246, T247, T249, T267 |
+| FR-070 | T185, T200, T208, T243, T246, T247, T249, T267, T380, T381 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
 | FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233, T246, T247, T248, T250 |
-| FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226, T249, T250 |
+| FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226, T249, T250, T383, T389 |
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
 | FR-076 | T060, T062, T065, T183, T195, T196, T197, T199, T275 |
@@ -1155,7 +1195,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-112 | T290, T291, T293, T294 |
 | FR-113 | T287, T289, T292, T293, T294 |
 | FR-114 | T290, T291, T294 |
-| FR-115 | T297, T298, T299, T300, T301, T349 |
+| FR-115 | T297, T298, T299, T300, T301, T349, T378, T379 |
 | FR-116 | T295, T297, T300, T360, T361 |
 | FR-117 | T295, T297, T300, T305 |
 | FR-118 | T295, T296, T297, T298, T299, T300, T301, T305 |
@@ -1176,6 +1216,17 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-133 | T358, T359, T360, T361, T366 |
 | FR-134 | T360, T361, T364, T365, T366 |
 | FR-135 | T360, T361, T365, T366 |
+| FR-136 | T378, T379, T387, T388 |
+| FR-137 | T380, T381, T383, T384 |
+| FR-138 | T380, T381, T384 |
+| FR-139 | T380, T381, T382, T383 |
+| FR-140 | T380, T381, T383 |
+| FR-141 | T380, T381, T382, T383, T390 |
+| FR-142 | T380, T381, T384 |
+| FR-143 | T380, T381 |
+| FR-144 | T378, T379, T385, T386, T387, T388, T389, T390 |
+| FR-145 | T385, T386, T390 |
+| FR-146 | T386, T389, T390 |
 | SC-001 | T043, T046, T150, T165, T345 |
 | SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1208,3 +1259,5 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 18 | T349 to T356 |
 | Amendment 19 | T358 to T367 |
 | Amendment 20 | T370 to T377 |
+| US12 | T378 to T391 |
+| Amendment 21 | T378 to T391 |
