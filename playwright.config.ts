@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { FIRE_BARS_HEIGHT, FIRE_DEVICES, silkUserAgent } from './tests/e2e/silk';
 
 /** Specs that run only in the device projects (amendment 12, T136, T306). */
 const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
@@ -6,6 +7,32 @@ const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
 const BASE_PATH_SPEC = /basePath\.spec\.ts$/;
 /** The frame rate test runs alone, after every other project (T150). */
 const PERFORMANCE_SPEC = /performance\.spec\.ts$/;
+/** Amendment 16: the Fire tablet spec runs only in the Fire projects; the throttled speed check runs alone, last. */
+const FIRE_SPEC = /fire\.spec\.ts$/;
+const FIRE_PERFORMANCE_SPEC = /firePerformance\.spec\.ts$/;
+
+function fireProjects() {
+  return FIRE_DEVICES.flatMap((d) =>
+    (['landscape', 'portrait'] as const).map((orientation) => {
+      const screen = orientation === 'landscape' ? d.screen : { width: d.screen.height, height: d.screen.width };
+      return {
+        name: `${d.id}-${orientation}`,
+        testMatch: FIRE_SPEC,
+        use: {
+          ...devices['Desktop Chrome'],
+          userAgent: silkUserAgent(d.model),
+          viewport: { width: screen.width, height: screen.height - FIRE_BARS_HEIGHT },
+          screen,
+          deviceScaleFactor: d.scale,
+          isMobile: true,
+          hasTouch: true,
+          launchOptions: { args: ['--mute-audio'] },
+        },
+      };
+    }),
+  );
+}
+const FIRE_PROJECTS = fireProjects();
 /**
  * Chromium draws WebGL with the graphics card only when asked; headless it uses software rendering (SwiftShader),
  * which is far slower than a child's computer. On macOS the performance project uses Metal through ANGLE.
@@ -33,9 +60,9 @@ export default defineConfig({
   },
   projects: [
     // Test runs stay silent; tests/e2e/fixtures.ts also silences audio in every browser.
-    { name: 'chromium', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC], use: { ...devices['Desktop Chrome'], launchOptions: { args: ['--mute-audio'] } } },
-    { name: 'webkit', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC], use: { ...devices['Desktop Safari'] } },
-    { name: 'firefox', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC], use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'media.volume_scale': '0.0' } } } },
+    { name: 'chromium', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Chrome'], launchOptions: { args: ['--mute-audio'] } } },
+    { name: 'webkit', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Safari'] } },
+    { name: 'firefox', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'media.volume_scale': '0.0' } } } },
     // Amendment 12 (T278): iPad held sideways and upright, and a phone held sideways, in WebKit with touch. They run
     // only the device specs, which keeps the e2e run short.
     { name: 'ipad-landscape', testMatch: DEVICE_SPECS, use: { ...devices['iPad Mini landscape'] } },
@@ -45,6 +72,9 @@ export default defineConfig({
       testMatch: DEVICE_SPECS,
       use: { ...devices['iPhone 13 landscape'], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
     },
+    // Amendment 16: Fire 7, Fire HD 8 and Fire HD 10 held sideways and upright, in Chromium with Silk's user agent and
+    // touch. They run only tests/e2e/fire.spec.ts.
+    ...FIRE_PROJECTS,
     // P11 (T304): the build for GitHub Pages under /math-tank/, in Chromium.
     { name: 'base-path', testMatch: BASE_PATH_SPEC, use: { ...devices['Desktop Chrome'], baseURL: BASE_PATH_URL, launchOptions: { args: ['--mute-audio'] } } },
     // T150: start time and frame rate in Chromium, after all other projects so no other browser renders at the same
@@ -52,8 +82,15 @@ export default defineConfig({
     {
       name: 'performance',
       testMatch: PERFORMANCE_SPEC,
-      dependencies: ['chromium', 'webkit', 'firefox', 'ipad-landscape', 'ipad-portrait', 'iphone-landscape', 'base-path'],
+      dependencies: ['chromium', 'webkit', 'firefox', 'ipad-landscape', 'ipad-portrait', 'iphone-landscape', 'base-path', ...FIRE_PROJECTS.map((p) => p.name)],
       use: { ...devices['Desktop Chrome'], launchOptions: { args: ['--mute-audio', ...GPU_ARGS] } },
+    },
+    // Amendment 16 (FR-127): the Fire 7 size with the processor slowed 4 times, after the frame rate test, alone.
+    {
+      name: 'fire-performance',
+      testMatch: FIRE_PERFORMANCE_SPEC,
+      dependencies: ['performance'],
+      use: { ...FIRE_PROJECTS[0]!.use, launchOptions: { args: ['--mute-audio', ...GPU_ARGS] } },
     },
   ],
   webServer: [

@@ -13,6 +13,7 @@ import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
+import { boxOf, expectBattleFits, expectNoScroll, expectPadKeys, inside } from './layout';
 
 const m = t();
 
@@ -21,13 +22,6 @@ const EXPECTED_LAYOUT: Record<string, string> = {
   'ipad-portrait': 'portrait',
   'iphone-landscape': 'side',
 };
-
-interface Box {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 async function store(page: Page, settings: unknown): Promise<void> {
   await page.addInitScript(([key, value]: [string, string]) => {
@@ -52,38 +46,11 @@ async function startBattle(page: Page): Promise<Locator> {
   return overlay;
 }
 
-async function boxOf(locator: Locator): Promise<Box> {
-  const box = await locator.boundingBox();
-  expect(box, 'element has a box').not.toBeNull();
-  return box!;
-}
-
-function inside(box: Box, width: number, height: number): boolean {
-  const e = 0.5;
-  return box.x >= -e && box.y >= -e && box.x + box.width <= width + e && box.y + box.height <= height + e;
-}
-
-function overlap(a: Box, b: Box): boolean {
-  const e = 0.5;
-  return a.x + e < b.x + b.width && b.x + e < a.x + a.width && a.y + e < b.y + b.height && b.y + e < a.y + a.height;
-}
-
 /** Holds a touch pointer on the gear for 2.3 seconds, the parent gate's press and hold (FR-045, FR-105). */
 async function holdGear(gear: Locator): Promise<void> {
   await gear.dispatchEvent('pointerdown', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
   await gear.page().waitForTimeout(2300);
   await gear.dispatchEvent('pointerup', { pointerType: 'touch', button: 0, isPrimary: true, pointerId: 1 });
-}
-
-async function expectNoScroll(page: Page): Promise<void> {
-  const size = await page.evaluate(() => ({
-    sw: document.documentElement.scrollWidth,
-    sh: document.documentElement.scrollHeight,
-    w: window.innerWidth,
-    h: window.innerHeight,
-  }));
-  expect(size.sw).toBeLessThanOrEqual(size.w);
-  expect(size.sh).toBeLessThanOrEqual(size.h);
 }
 
 function layoutName(info: TestInfo): string {
@@ -96,13 +63,7 @@ test('the battle shows the number pad, and nothing is cut off or overlapping', a
   await expect(page.getByTestId('battle-main')).toHaveAttribute('data-layout', layoutName(testInfo));
   await expect(overlay).toHaveAttribute('data-number-pad', 'true');
 
-  const keys = await page.getByTestId('pad-key').all();
-  expect(keys.length).toBe(11);
-  for (const key of keys) {
-    const b = await boxOf(key);
-    expect(b.width, `pad key ${await key.getAttribute('data-key')}`).toBeGreaterThanOrEqual(48);
-    expect(b.height, `pad key ${await key.getAttribute('data-key')}`).toBeGreaterThanOrEqual(48);
-  }
+  await expectPadKeys(page);
 
   // The banner starts large in the middle of the sky and must fit there too.
   const banner = page.getByTestId('challenge-banner');
@@ -115,41 +76,7 @@ test('the battle shows the number pad, and nothing is cut off or overlapping', a
   await page.waitForTimeout(600);
   await screenshot(page, `battle-${testInfo.project.name}`);
 
-  const named: Array<[string, Locator]> = [
-    ['canvas', page.locator('canvas')],
-    ['banner', banner],
-    ['help', page.getByTestId('help-button')],
-    ['gear', page.getByTestId('parent-gate')],
-    ['new scene', page.getByTestId('new-scene')],
-    // Pause and fullscreen in the battle (T140, T141); fullscreen only where the browser allows it (FR-106).
-    ['pause', page.getByTestId('pause-button')],
-    ...((await page.getByTestId('battle-fullscreen').count()) > 0 ? [['fullscreen', page.getByTestId('battle-fullscreen')] as [string, Locator]] : []),
-    ...((await page.getByTestId('speaker-button').count()) > 0 ? [['speaker', page.getByTestId('speaker-button')] as [string, Locator]] : []),
-    ['fire', page.locator('.fire-button')],
-    ['readout', page.getByTestId('readout')],
-    ...keys.map((k, i): [string, Locator] => [`key ${i}`, k]),
-  ];
-  const boxes = new Map<string, Box>();
-  for (const [name, locator] of named) {
-    const b = await boxOf(locator);
-    expect(inside(b, viewport.width, viewport.height), `${name} inside ${viewport.width} by ${viewport.height}: ${JSON.stringify(b)}`).toBe(true);
-    boxes.set(name, b);
-  }
-  // No two interactive targets overlap; the canvas does not overlap the pad, the fire key, the readout or the help
-  // button (which would cover the "Du" arrow or a tank).
-  const targets = [...boxes.keys()].filter((n) => n !== 'canvas' && n !== 'banner' && n !== 'readout');
-  for (let i = 0; i < targets.length; i++) {
-    for (let j = i + 1; j < targets.length; j++) {
-      expect(overlap(boxes.get(targets[i]!)!, boxes.get(targets[j]!)!), `${targets[i]} and ${targets[j]} overlap`).toBe(false);
-    }
-  }
-  for (const name of [...targets.filter((n) => n.startsWith('key') || n === 'fire' || n === 'help'), 'readout']) {
-    expect(overlap(boxes.get('canvas')!, boxes.get(name)!), `canvas and ${name} overlap`).toBe(false);
-  }
-  // The banner covers no control and not the tank counter: it sits over the sky.
-  for (const name of targets) expect(overlap(boxes.get('banner')!, boxes.get(name)!), `banner and ${name} overlap`).toBe(false);
-  expect(overlap(boxes.get('banner')!, await boxOf(page.getByTestId('score'))), 'banner and counter overlap').toBe(false);
-  await expectNoScroll(page);
+  await expectBattleFits(page);
 
   const fontSize = await banner.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(fontSize).toBeGreaterThanOrEqual(16);
