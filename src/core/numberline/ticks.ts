@@ -1,12 +1,11 @@
 /**
  * Tick lines and labels for a view of the number line (research R8 and R23, FR-016, FR-017, FR-018).
  * The view is the part of the line that is visible: the whole range or a zoomed help interval.
- * Every line of the minor grid is returned; `visible` and `labeled` follow the ruler level.
+ * Every line of the minor grid is returned and drawn on every ruler level (amendment 20); `labeled` follows the level.
  */
-import { createRng } from '../rng';
 import { DEFAULT_LAYOUT } from './mapping';
 
-/** Line length class (T235): major lines, medium lines at half of a major step on levels 1 to 3, and minor lines. */
+/** Line length class (T235): major lines, medium lines at half of a major step (every level, amendment 20), and minor lines. */
 export type TickSize = 'major' | 'medium' | 'minor';
 
 export interface Tick {
@@ -14,7 +13,7 @@ export interface Tick {
   major: boolean;
   /** How long and bold the line is drawn (T235, FR-016). */
   size: TickSize;
-  /** Drawn at this ruler level. */
+  /** Drawn: true for every line on every level since amendment 20. */
   visible: boolean;
   labeled: boolean;
   /** Label row (T217): 0 directly under the line, 1 below it. Only level 1 uses row 1. */
@@ -23,7 +22,7 @@ export interface Tick {
   shift: number;
 }
 
-/** Ruler detail level (FR-017): 1 shows the most, 5 only the end points. */
+/** Ruler detail level (FR-017, amendment 20): every level draws every line; 1 labels the most numbers, 5 only the end points. */
 export type RulerLevel = 1 | 2 | 3 | 4 | 5;
 
 export const MAX_TICKS = 101;
@@ -71,12 +70,6 @@ export function stepsFor(view: { min: number; max: number }): { majorStep: numbe
   return { majorStep: 100, minorStep: 10 };
 }
 
-/** The step between neighboring visible lines: minor on levels 1 to 3, major on 4 and 5 (FR-068). */
-export function smallestVisibleStep(view: { min: number; max: number }, level: RulerLevel): number {
-  const { majorStep, minorStep } = stepsFor(view);
-  return level <= 3 ? minorStep : majorStep;
-}
-
 /** Values of all lines in the view: the minor grid plus both end points, at most MAX_TICKS. */
 function lineValues(min: number, max: number, majorStep: number, minorStep: number): number[] {
   let inner: number[] = [];
@@ -96,17 +89,22 @@ function lineValues(min: number, max: number, majorStep: number, minorStep: numb
   return [min, ...inner, max];
 }
 
+/**
+ * The lines and labels of `view` at ruler `level` (FR-016, FR-017, amendment 20). Every line is drawn on every level;
+ * the level only chooses the labels. `_seed` no longer changes the result (level 3 chose its labels by seed until
+ * amendment 20); callers keep passing it.
+ */
 export function ticksFor(
   view: { min: number; max: number },
   level: RulerLevel,
-  seed: number,
+  _seed: number,
   opts: { allLines?: boolean } = {},
 ): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean; labelRows: 1 | 2 } {
   const { min, max } = view;
   const { majorStep, minorStep } = stepsFor(view);
-  // Medium lines (T235): half of each major step, on levels 1 to 3, when that half lies on the minor grid.
+  // Medium lines (T235): half of each major step, on every level (amendment 20), when that half lies on the minor grid.
   const half = majorStep / 2;
-  const hasMedium = level <= 3 && Number.isInteger(half) && isMultiple(half, minorStep);
+  const hasMedium = Number.isInteger(half) && isMultiple(half, minorStep);
   const sizeOf = (value: number): TickSize => {
     if (isMultiple(value, majorStep)) return 'major';
     if (hasMedium && isMultiple(value, half)) return 'medium';
@@ -116,19 +114,18 @@ export function ticksFor(
     value,
     major: isMultiple(value, majorStep),
     size: sizeOf(value),
-    visible: false,
+    visible: true,
     labeled: false,
     row: 0,
     shift: 0,
   }));
   const isEnd = (t: Tick) => t.value === min || t.value === max;
-  const mark = (t: Tick, visible: boolean, labeled: boolean) => {
-    t.visible = visible || isEnd(t);
+  const mark = (t: Tick, labeled: boolean) => {
     t.labeled = labeled || isEnd(t);
   };
 
   if (opts.allLines) {
-    for (const t of ticks) mark(t, true, true);
+    for (const t of ticks) mark(t, true);
     return { majorStep, minorStep, ticks, labelTypedNumber: false, labelRows: 1 };
   }
 
@@ -148,24 +145,29 @@ export function ticksFor(
           t.shift = 0;
         }
       }
-      for (const t of ticks) mark(t, true, labelTypedNumber ? t.major : !skipped!.has(t));
+      for (const t of ticks) mark(t, labelTypedNumber ? t.major : !skipped!.has(t));
       break;
     }
     case 2:
-      for (const t of ticks) mark(t, true, t.major);
+      for (const t of ticks) mark(t, t.major);
       break;
-    case 3: {
-      for (const t of ticks) mark(t, true, false);
-      // Label a seed-chosen half (rounded down) of the major lines between the end points.
-      const innerMajors = ticks.filter((t) => t.major && !isEnd(t));
-      for (const t of createRng(seed).shuffled(innerMajors).slice(0, Math.floor(innerMajors.length / 2))) t.labeled = true;
+    case 3:
+      // Every second major line: the multiples of twice the major step (0 to 100: 20, 40, 60, 80).
+      for (const t of ticks) mark(t, t.major && isMultiple(t.value, 2 * majorStep));
+      break;
+    case 4: {
+      // The major line nearest to the middle of the view; of two equally near, the lower one.
+      const mid = (min + max) / 2;
+      let middle: Tick | undefined;
+      for (const t of ticks) {
+        if (!t.major || isEnd(t)) continue;
+        if (!middle || Math.abs(t.value - mid) < Math.abs(middle.value - mid)) middle = t;
+      }
+      for (const t of ticks) mark(t, t === middle);
       break;
     }
-    case 4:
-      for (const t of ticks) mark(t, t.major, t.major);
-      break;
     case 5:
-      for (const t of ticks) mark(t, false, false);
+      for (const t of ticks) mark(t, false);
       break;
   }
 

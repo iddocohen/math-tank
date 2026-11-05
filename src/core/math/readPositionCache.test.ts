@@ -35,7 +35,7 @@ describe('readPositionAnswers cache', () => {
   it('gives the same answers as the ruler lines, for each range and level, also after another range was asked', () => {
     const a = { ...defaultSettings(), range: { preset: 'custom' as const, min: 0, max: 100 } };
     const b = { ...defaultSettings(), range: { preset: 'custom' as const, min: 0, max: 1000 } };
-    for (const level of [1, 2, 3] as const) {
+    for (const level of [1, 2, 3, 4, 5] as const) {
       const expected = (s: typeof a) => {
         const { minorStep, ticks: all } = ticks.ticksFor(s.range, level, 0);
         return all.filter((t) => t.visible && ticks.isMultiple(t.value, minorStep)).map((t) => t.value);
@@ -44,6 +44,8 @@ describe('readPositionAnswers cache', () => {
       expect([...readPositionAnswers(b, level)]).toEqual(expected(b));
       expect([...readPositionAnswers(a, level)]).toEqual(expected(a));
     }
-    expect([...readPositionAnswers(b, 4)]).toEqual(Array.from({ length: 1001 }, (_, i) => i));
+    // Amendment 20: levels 4 and 5 draw every line, so they give the same answers as level 1.
+    expect([...readPositionAnswers(b, 5)]).toEqual([...readPositionAnswers(b, 1)]);
+    expect([...readPositionAnswers(b, 4)]).toEqual(Array.from({ length: 101 }, (_, i) => i * 10));
   });
 });

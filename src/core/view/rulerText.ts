@@ -82,7 +82,7 @@ export function rulerLabelBoxes(
 ): RulerLabelBox[] {
   const { ticks, labelRows } = ruled;
   return ticks
-    .filter((t) => t.visible && t.labeled)
+    .filter((t) => t.labeled)
     .map((t) => ({
       value: t.value,
       box: textBox(numberToX(t.value, range.min, range.max) + t.shift, t.row === 1 ? LABEL_ROW_2_Y : LABEL_Y, String(t.value), labelFontSize(t, labelRows, range), 0),

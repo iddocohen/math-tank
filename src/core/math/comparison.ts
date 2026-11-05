@@ -3,8 +3,10 @@
  * ladder"). The banner names 2 or 3 options; exactly one answers the question, and the enemy stands at it. A decoy tank
  * stands at each other option (amendment 10), so every two options are at least minOptionGap apart (which is at least
  * minTankGap) and every option is at least minTankGap from the player tank. The prompt carries the options in banner
- * order as o1, o2 and o3.
+ * order as o1, o2 and o3. Every option stands on a drawn line of the minor grid (amendment 20): where the minor step is
+ * 10 or more, only its multiples.
  */
+import { isMultiple, stepsFor } from '../numberline/ticks';
 import type { Rng } from '../rng';
 import type { Challenge, DifficultyStep, Settings } from '../types';
 import { minOptionGap, minTankGap } from './gaps';
@@ -37,6 +39,19 @@ function clearOfPlayer(n: number, settings: Settings, playerPosition: number | u
   return playerPosition === undefined || Math.abs(n - playerPosition) >= minTankGap(min, max);
 }
 
+/** Whether a tank may stand at n on the ruler: on a drawn line of the minor grid (amendment 20, FR-027). */
+export function onRulerLine(n: number, settings: Settings): boolean {
+  return isMultiple(n, stepsFor(settings.range).minorStep);
+}
+
+/** The numbers where the enemy of a comparison may stand: the minor grid inside the range (amendment 20). */
+export function comparisonAnswers(settings: Settings): number[] {
+  const { min, max } = settings.range;
+  const out: number[] = [];
+  for (let n = min; n <= max; n++) if (onRulerLine(n, settings)) out.push(n);
+  return out;
+}
+
 /**
  * Whether the kind's options fit: whole numbers of the range at least minTankGap from the player, every two at least
  * minOptionGap apart (greedy from the left). When they do not, the generator skips the kind (edge case "Comparison
@@ -48,7 +63,7 @@ export function comparisonFits(kind: ComparisonKind, settings: Settings, playerP
   let taken = 0;
   let last = -Infinity;
   for (let n = min; n <= max; n++) {
-    if (!clearOfPlayer(n, settings, playerPosition) || n - last < gap) continue;
+    if (!onRulerLine(n, settings) || !clearOfPlayer(n, settings, playerPosition) || n - last < gap) continue;
     taken++;
     last = n;
     if (taken >= optionCount(kind)) return true;
@@ -104,7 +119,7 @@ function pickOthers(
     for (let n = Math.max(min, answer - spread); n <= Math.min(max, answer + spread); n++) {
       if (side === 'below' && n >= answer) continue;
       if (side === 'above' && n <= answer) continue;
-      if (!clearOfPlayer(n, settings, playerPosition)) continue;
+      if (!onRulerLine(n, settings) || !clearOfPlayer(n, settings, playerPosition)) continue;
       if (taken.every((t) => Math.abs(n - t) >= gap)) free.push(n);
     }
     if (free.length === 0) return null;
@@ -126,7 +141,7 @@ export function buildComparison(
   playerPosition?: number,
 ): ChallengeDraft | null {
   const { min, max } = settings.range;
-  if (!Number.isInteger(answer) || answer < min || answer > max || !clearOfPlayer(answer, settings, playerPosition)) return null;
+  if (!Number.isInteger(answer) || answer < min || answer > max || !onRulerLine(answer, settings) || !clearOfPlayer(answer, settings, playerPosition)) return null;
   const others = pickOthers(kind, answer, settings, step, rng, playerPosition);
   if (!others) return null;
   const options = rng.shuffled([answer, ...others]);
@@ -214,6 +229,7 @@ export function comparisonErrors(c: Challenge, settings: Settings, playerPositio
     }
   }
   for (const o of options) {
+    if (!onRulerLine(o, settings)) errors.push(`option ${o} is not on a line of the minor grid`);
     if (!clearOfPlayer(o, settings, playerPosition)) errors.push(`option ${o} is closer than ${minTankGap(settings.range.min, settings.range.max)} to the player at ${playerPosition}`);
   }
   const correct = correctOptions(c);

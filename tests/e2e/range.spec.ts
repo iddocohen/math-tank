@@ -99,3 +99,21 @@ test('"Gegner pro Runde" 1: one exact hit ends the round with the score, the tim
   await expect(page.getByTestId('record')).toHaveText(m.roundEnd.yourRecord(1));
   await expect(page.getByTestId('new-record')).toHaveCount(0);
 });
+
+test('range 0 to 1000 at a fixed level 5: every line is drawn, only the ends are labeled, the enemy stands on a line (amendment 20)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const wide: Settings = { ...withRange(defaultSettings(), { preset: '0-1000', min: 0, max: 1000 }), rulerLevelStart: 5, rulerLevelMax: 5 };
+  const overlay = await startFreePlay(page, wide);
+  const canvas = page.locator('canvas');
+  await expect(canvas).toHaveAttribute('data-ruler-lines', '101');
+  await expect(canvas).toHaveAttribute('data-ruler-labels', '0,1000');
+  // Three enemies in a row: each stands on a drawn line, a multiple of 10 (FR-067).
+  for (let i = 0; i < 3; i++) {
+    const enemy = await enemyNumber(overlay);
+    expect(enemy % 10, `enemy ${enemy}`).toBe(0);
+    await typeAndFire(page, overlay, enemy);
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', String(i + 1));
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  }
+  await expect(canvas).toHaveAttribute('data-ruler-lines', '101');
+});

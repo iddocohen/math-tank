@@ -4,7 +4,7 @@
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
-import { COMPARISON_KINDS, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
+import { COMPARISON_KINDS, comparisonAnswers, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, PlayMode, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { answerCandidates, NUMBER_LINE_KINDS, numberLineBuilders, type Builder, type ChallengeDraft } from './numberLine';
@@ -70,6 +70,8 @@ const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: Diffi
   readPosition: (settings, step) => readPositionAnswers(settings, step.rulerLevel ?? 1),
   addition: additionAnswers,
   subtraction: subtractionAnswers,
+  // Comparison tanks stand on a drawn line of the minor grid (amendment 20).
+  ...Object.fromEntries(COMPARISON_KINDS.map((kind) => [kind, comparisonAnswers])),
 };
 
 /** The kinds the parent's challenge-type switches turn on. */

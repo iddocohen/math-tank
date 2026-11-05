@@ -3,7 +3,8 @@
  * ruler drawn with the game's tick and label rules (`ticksFor`, `labelFontSize`, the label rows of T217) and the
  * game's layout (`DEFAULT_LAYOUT`, `numberToX`), so it shows what the game ruler shows. The SVG fills the width of
  * its container; `width` is the logical width the layout is scaled to (the game's world width by default).
- * Medium lines at half of each major step on levels 1 to 3 (T235) are drawn between the minor and major lengths.
+ * Every level draws every line (amendment 20); medium lines at half of each major step (T235) are drawn between the
+ * minor and major lengths, and the level only chooses the labels.
  */
 import { DEFAULT_LAYOUT, numberToX } from '../core/numberline/mapping';
 import { labelFontSize, ticksFor, type RulerLevel } from '../core/numberline/ticks';
@@ -28,7 +29,6 @@ export function RulerPreview({ range, level, width = DEFAULT_LAYOUT.worldWidth }
   const k = width / DEFAULT_LAYOUT.worldWidth;
   const layout = { worldWidth: width, left: DEFAULT_LAYOUT.left * k, right: DEFAULT_LAYOUT.right * k };
   const { ticks, labelRows } = ticksFor(range, level, 0);
-  const visible = ticks.filter((tk) => tk.visible);
   const isEnd = (v: number) => v === range.min || v === range.max;
   const x = (v: number) => numberToX(v, range.min, range.max, layout);
   return (
@@ -41,7 +41,7 @@ export function RulerPreview({ range, level, width = DEFAULT_LAYOUT.worldWidth }
       width="100%"
     >
       <line x1={layout.left} x2={layout.right} y1={AXIS_Y * k} y2={AXIS_Y * k} strokeWidth={4 * k} />
-      {visible.map((tk) => {
+      {ticks.map((tk) => {
         const big = tk.major || isEnd(tk.value);
         const size = big ? 'major' : tk.size;
         const len = (size === 'major' ? MAJOR_TICK : size === 'medium' ? MEDIUM_TICK : MINOR_TICK) * k;
@@ -60,7 +60,7 @@ export function RulerPreview({ range, level, width = DEFAULT_LAYOUT.worldWidth }
           />
         );
       })}
-      {visible
+      {ticks
         .filter((tk) => tk.labeled)
         .map((tk) => (
           <text

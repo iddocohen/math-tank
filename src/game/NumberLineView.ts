@@ -664,6 +664,7 @@ export class NumberLineView {
     this.labelBoxes = [];
     this.renderChips();
     this.scene.game.canvas.dataset.rulerLabels = '';
+    this.scene.game.canvas.dataset.rulerLines = '0';
   }
 
   private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
@@ -682,8 +683,8 @@ export class NumberLineView {
     const ruled = ticksFor({ min, max }, rulerLevel, seed);
     const { ticks, labelTypedNumber, labelRows } = ruled;
     this.ruled = { ticks, labelTypedNumber };
+    // Every level draws every line (amendment 20); the level only chooses the labels.
     for (const tick of ticks) {
-      if (!tick.visible) continue;
       const x = numberToX(tick.value, min, max);
       const end = tick.value === min || tick.value === max;
       const [len, width] = lineSize(end ? 'major' : tick.size);
@@ -700,8 +701,9 @@ export class NumberLineView {
     }
     this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, seed, ruled);
     this.renderChips();
+    this.scene.game.canvas.dataset.rulerLines = String(ticks.length);
     this.scene.game.canvas.dataset.rulerLabels = ticks
-      .filter((tick) => tick.visible && tick.labeled)
+      .filter((tick) => tick.labeled)
       .map((tick) => tick.value)
       .join(',');
   }

@@ -17,10 +17,32 @@ describe('RulerPreview', () => {
     expect(minor.length).toBeGreaterThan(10);
   });
 
-  it('level 5 shows only the two end points', () => {
+  it('level 5 draws every line and labels only the two end points (amendment 20)', () => {
     render(<RulerPreview range={{ min: 550, max: 780 }} level={5} />);
     expect(labels()).toEqual([550, 780]);
-    expect(lines()).toHaveLength(2);
+    expect(lines()).toHaveLength(24);
+  });
+
+  it('levels 1 to 5 at 0 to 100 each draw all 101 lines with the 10 medium lines; labels per level (amendment 20)', () => {
+    const expected: Record<2 | 3 | 4 | 5, number[]> = {
+      2: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+      3: [0, 20, 40, 60, 80, 100],
+      4: [0, 50, 100],
+      5: [0, 100],
+    };
+    for (const level of [1, 2, 3, 4, 5] as const) {
+      const { unmount } = render(<RulerPreview range={{ min: 0, max: 100 }} level={level} />);
+      expect(lines(), `level ${level}`).toHaveLength(101);
+      expect(lines().filter((l) => l.dataset.size === 'medium'), `level ${level}`).toHaveLength(10);
+      if (level !== 1) expect(labels(), `level ${level}`).toEqual(expected[level]);
+      unmount();
+    }
+  });
+
+  it('0 to 1000 at level 5 draws 101 lines and labels 0 and 1000 (amendment 20)', () => {
+    render(<RulerPreview range={{ min: 0, max: 1000 }} level={5} />);
+    expect(lines()).toHaveLength(101);
+    expect(labels()).toEqual([0, 1000]);
   });
 
   it('places the end points at the edges of the preview width and keeps lines in order', () => {
@@ -29,7 +51,7 @@ describe('RulerPreview', () => {
     expect(xs[0]).toBeGreaterThanOrEqual(0);
     expect(xs.at(-1)).toBeLessThanOrEqual(300);
     expect([...xs].sort((a, b) => a - b)).toEqual(xs);
-    expect(labels()).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    expect(labels()).toEqual([0, 50, 100]);
   });
 
   it('updates when the range or level props change', () => {
@@ -88,8 +110,8 @@ describe('RulerPreview', () => {
     }
   });
 
-  it('level 4 has no medium lines', () => {
+  it('level 4 has the same medium lines as level 1 (amendment 20)', () => {
     render(<RulerPreview range={{ min: 0, max: 100 }} level={4} />);
-    expect(lines().filter((l) => l.dataset.size === 'medium')).toHaveLength(0);
+    expect(lines().filter((l) => l.dataset.size === 'medium')).toHaveLength(10);
   });
 });

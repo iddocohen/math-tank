@@ -6,7 +6,6 @@ import {
   MIN_LABEL_SPACING,
   labelFontSize,
   labelWidth,
-  smallestVisibleStep,
   ticksFor,
   typedNumberLabels,
   type RulerLevel,
@@ -178,32 +177,38 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
       }
     });
 
-    it(`level 3 draws all lines and labels the end points and a subset of major lines (${label})`, () => {
-      for (let seed = 0; seed < 20; seed++) {
+    it(`every level draws every line of level 1, with the same sizes, medium lines included (amendment 20) (${label})`, () => {
+      const all = ticksFor(view, 1, 3).ticks;
+      for (const level of LEVELS) {
+        const r = ticksFor(view, level, 3);
+        expect(values(r.ticks)).toEqual(values(all));
+        expect(r.ticks.map((t) => t.size)).toEqual(all.map((t) => t.size));
+        expect(r.ticks.every((t) => t.visible)).toBe(true);
+      }
+    });
+
+    it(`level 3 labels the major lines at multiples of twice the major step and both end points, whatever the seed (amendment 20) (${label})`, () => {
+      const { majorStep } = expectedSteps(view.min, view.max);
+      const expected = (t: Tick) => isEnd(t, view) || (t.major && isMultiple(t.value, 2 * majorStep));
+      for (let seed = 0; seed < 5; seed++) {
         const { ticks, labelTypedNumber } = ticksFor(view, 3, seed);
         expect(labelTypedNumber).toBe(false);
-        const innerMajors = ticks.filter((t) => t.major && !isEnd(t, view));
-        for (const t of ticks) {
-          expect(t.visible).toBe(true);
-          if (isEnd(t, view)) expect(t.labeled).toBe(true);
-          else if (!t.major) expect(t.labeled).toBe(false);
-        }
-        const labeledMajors = innerMajors.filter((t) => t.labeled).length;
-        expect(labeledMajors).toBeLessThanOrEqual(Math.floor(innerMajors.length / 2));
-        if (innerMajors.length >= 2) expect(labeledMajors).toBeGreaterThan(0);
+        for (const t of ticks) expect(t.labeled, `${t.value}`).toBe(expected(t));
       }
     });
 
-    it(`level 4 draws and labels major lines and end points, no minor lines (${label})`, () => {
-      for (const t of ticksFor(view, 4, 3).ticks) {
-        expect(t.visible).toBe(t.major || isEnd(t, view));
-        expect(t.labeled).toBe(t.major || isEnd(t, view));
-      }
+    it(`level 4 labels both end points and the middle major line (amendment 20) (${label})`, () => {
+      const inner = ticksFor(view, 1, 3).ticks.filter((t) => t.major && !isEnd(t, view)).map((t) => t.value);
+      const mid = (view.min + view.max) / 2;
+      const middle = inner.reduce<number | undefined>((best, v) => (best === undefined || Math.abs(v - mid) < Math.abs(best - mid) ? v : best), undefined);
+      for (const t of ticksFor(view, 4, 3).ticks) expect(t.labeled, `${t.value}`).toBe(isEnd(t, view) || t.value === middle);
     });
 
-    it(`level 5 draws and labels only the end points (${label})`, () => {
-      for (const t of ticksFor(view, 5, 3).ticks) {
-        expect(t.visible).toBe(isEnd(t, view));
+    it(`level 5 labels only the end points and still draws every line (amendment 20) (${label})`, () => {
+      const r = ticksFor(view, 5, 3);
+      expect(r.ticks.length).toBe(ticksFor(view, 1, 3).ticks.length);
+      for (const t of r.ticks) {
+        expect(t.visible).toBe(true);
         expect(t.labeled).toBe(isEnd(t, view));
       }
     });
@@ -312,20 +317,44 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
     }
   });
 
-  it('level 3 chooses the major labels by seed, and the same seed gives the same labels', () => {
-    const view = { min: 0, max: 100 };
-    const labeled = (seed: number) =>
-      ticksFor(view, 3, seed)
-        .ticks.filter((t) => t.labeled && !isEnd(t, view))
+  it('labels per level on the presets and on 550 to 780 match the amendment 20 table', () => {
+    const labels = (view: { min: number; max: number }, level: RulerLevel) =>
+      ticksFor(view, level, 7)
+        .ticks.filter((t) => t.labeled)
         .map((t) => t.value);
-    expect(labeled(5)).toEqual(labeled(5));
-    const distinct = new Set([0, 1, 2, 3, 4, 5, 6, 7].map((s) => labeled(s).join(',')));
-    expect(distinct.size).toBeGreaterThan(1);
+    const hundred = { min: 0, max: 100 };
+    expect(labels(hundred, 2)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    expect(labels(hundred, 3)).toEqual([0, 20, 40, 60, 80, 100]);
+    expect(labels(hundred, 4)).toEqual([0, 50, 100]);
+    expect(labels(hundred, 5)).toEqual([0, 100]);
+    expect(labels({ min: 550, max: 780 }, 3)).toEqual([550, 600, 700, 780]);
+    expect(labels({ min: 550, max: 780 }, 4)).toEqual([550, 650, 780]);
+    expect(labels({ min: 0, max: 1000 }, 3)).toEqual([0, 200, 400, 600, 800, 1000]);
+    expect(labels({ min: 0, max: 1000 }, 4)).toEqual([0, 500, 1000]);
+    expect(labels({ min: 0, max: 1000 }, 5)).toEqual([0, 1000]);
+    expect(labels({ min: 0, max: 50 }, 4)).toEqual([0, 20, 50]);
   });
 
-  it('level 4 on 15 to 45 draws majors 20, 30, 40 and the end points', () => {
+  it('every level draws all lines of every range preset and of 550 to 780 (amendment 20)', () => {
+    for (const [view, count] of [
+      [{ min: 0, max: 10 }, 11],
+      [{ min: 0, max: 20 }, 21],
+      [{ min: 0, max: 50 }, 51],
+      [{ min: 0, max: 100 }, 101],
+      [{ min: 0, max: 1000 }, 101],
+      [{ min: 550, max: 780 }, 24],
+    ] as const) {
+      for (const level of LEVELS) {
+        const { ticks } = ticksFor(view, level, 1);
+        expect(ticks.filter((t) => t.visible).length, `${view.min}-${view.max} level ${level}`).toBe(count);
+      }
+    }
+  });
+
+  it('level 4 on 15 to 45 draws every line and labels 15, 30 and 45', () => {
     const { ticks } = ticksFor({ min: 15, max: 45 }, 4, 1);
-    expect(ticks.filter((t) => t.visible).map((t) => t.value)).toEqual([15, 20, 30, 40, 45]);
+    expect(ticks.filter((t) => t.visible).length).toBe(31);
+    expect(ticks.filter((t) => t.labeled).map((t) => t.value)).toEqual([15, 30, 45]);
   });
 
   it('always draws and labels the end points, at every level, also for custom ranges', () => {
@@ -361,10 +390,10 @@ describe('medium lines at half of each major step (T235, FR-016, amendment 02 it
     expect(sizes({ min: 550, max: 780 }, 1, 'medium')).toEqual([]);
   });
 
-  it('levels 4 and 5 have no medium lines and draw the same lines as before', () => {
+  it('levels 4 and 5 have the same medium lines as level 1 (amendment 20)', () => {
     for (const level of [4, 5] as RulerLevel[]) {
-      expect(sizes({ min: 0, max: 100 }, level, 'medium')).toEqual([]);
-      for (const t of ticksFor({ min: 0, max: 100 }, level, 1).ticks) expect(t.size).toBe(t.major ? 'major' : 'minor');
+      expect(sizes({ min: 0, max: 100 }, level, 'medium')).toEqual([5, 15, 25, 35, 45, 55, 65, 75, 85, 95]);
+      expect(sizes({ min: 0, max: 1000 }, level, 'medium')).toEqual([50, 150, 250, 350, 450, 550, 650, 750, 850, 950]);
     }
   });
 
@@ -376,22 +405,5 @@ describe('medium lines at half of each major step (T235, FR-016, amendment 02 it
   it('the zoomed help view follows the same rule for its own steps', () => {
     const zoom = ticksFor({ min: 20, max: 50 }, 1, 1, { allLines: true });
     expect(zoom.ticks.filter((t) => t.size === 'medium').map((t) => t.value)).toEqual([25, 35, 45]);
-  });
-});
-
-describe('smallestVisibleStep (FR-068)', () => {
-  it('is the minor step on levels 1 to 3 and the major step on levels 4 and 5', () => {
-    for (const [view, minor, major] of [
-      [{ min: 0, max: 100 }, 1, 10],
-      [{ min: 550, max: 780 }, 10, 50],
-      [{ min: 0, max: 1000 }, 10, 100],
-      [{ min: 0, max: 10 }, 1, 5],
-    ] as const) {
-      expect(smallestVisibleStep(view, 1)).toBe(minor);
-      expect(smallestVisibleStep(view, 2)).toBe(minor);
-      expect(smallestVisibleStep(view, 3)).toBe(minor);
-      expect(smallestVisibleStep(view, 4)).toBe(major);
-      expect(smallestVisibleStep(view, 5)).toBe(major);
-    }
   });
 });

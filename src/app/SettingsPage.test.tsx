@@ -127,21 +127,23 @@ describe('SettingsPage', () => {
     expect(screen.getByText(m.settings.previewStart)).toBeTruthy();
     expect(screen.getByText(m.settings.previewMax)).toBeTruthy();
 
-    // Defaults: 0 to 100, starting level 1 (every number labeled except the 17 small labels crowding a large one, T231), hardest level 5 (only the end points).
+    // Defaults: 0 to 100, starting level 1 (every number labeled except the 17 small labels crowding a large one, T231),
+    // hardest level 5 (every line, only the end points labeled, amendment 20).
     expect(start().getAttribute('aria-label')).toBe(m.settings.preview(0, 100, 1));
     expect(labelsOf(start())).toHaveLength(84);
     expect(labelsOf(hardest())).toEqual([0, 100]);
-    expect(linesOf(hardest())).toBe(2);
+    expect(linesOf(hardest())).toBe(101);
 
-    // Starting level 1 -> 4: only the starting preview changes.
+    // Starting level 1 -> 4: only the starting preview changes; every line stays, labels 0, 50 and 100 (amendment 20).
     setValue(L.rulerLevelStart, '4');
-    expect(labelsOf(start())).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
-    expect(linesOf(start())).toBe(11);
+    expect(labelsOf(start())).toEqual([0, 50, 100]);
+    expect(linesOf(start())).toBe(101);
     expect(labelsOf(hardest())).toEqual([0, 100]);
 
     // Hardest level 5 -> 4: only the hardest preview changes.
     setValue(L.rulerLevelMax, '4');
-    expect(linesOf(hardest())).toBe(11);
+    expect(linesOf(hardest())).toBe(101);
+    expect(labelsOf(hardest())).toEqual([0, 50, 100]);
     expect(hardest().getAttribute('aria-label')).toBe(m.settings.preview(0, 100, 4));
 
     // Range preset 0 to 100 -> 0 to 20: both previews change.
@@ -153,13 +155,15 @@ describe('SettingsPage', () => {
     setValue(L.rangePreset, 'custom');
     setValue(L.rangeMin, '550');
     setValue(L.rangeMax, '780');
-    expect(labelsOf(start())).toEqual([550, 600, 650, 700, 750, 780]);
+    expect(labelsOf(start())).toEqual([550, 650, 780]);
+    expect(linesOf(start())).toBe(24);
     expect(start().getAttribute('aria-label')).toBe(m.settings.preview(550, 780, 4));
     setValue(L.rangeMin, '600');
-    expect(labelsOf(start())).toEqual([600, 650, 700, 750, 780]);
-    expect(labelsOf(hardest())).toEqual([600, 650, 700, 750, 780]);
+    expect(labelsOf(start())).toEqual([600, 700, 780]);
+    expect(labelsOf(hardest())).toEqual([600, 700, 780]);
     setValue(L.rangeMax, '700');
-    expect(labelsOf(hardest())).toEqual([600, 610, 620, 630, 640, 650, 660, 670, 680, 690, 700]);
+    expect(labelsOf(hardest())).toEqual([600, 650, 700]);
+    expect(linesOf(hardest())).toBe(101);
   });
 
   it('does not show "Genau treffen" (amendment 06), an aim-correction or a label-level field', () => {

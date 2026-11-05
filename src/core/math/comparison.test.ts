@@ -5,6 +5,7 @@ import type { Challenge, ChallengeKind, DifficultyStep, Settings } from '../type
 import { buildComparison, COMPARISON_KINDS, comparisonFits, optionCount, optionParams, type ComparisonKind } from './comparison';
 import { COMPARISON_47_74 } from './fixtures';
 import { generateChallenge } from './generate';
+import { stepsFor } from '../numberline/ticks';
 import { minEnemyGap, minOptionGap, minTankGap } from './gaps';
 import type { ChallengeDraft } from './numberLine';
 import { validateChallenge } from './validate';
@@ -39,8 +40,18 @@ function correctOptions(d: ChallengeDraft): number[] {
   }
 }
 
+const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
+
+/** The nearest number with a line on the minor grid inside the range (amendment 20). */
+function onGrid(v: number, range: { min: number; max: number }): number {
+  const { minorStep } = stepsFor(range);
+  const n = Math.round(v / minorStep) * minorStep;
+  return n < range.min ? n + minorStep : n > range.max ? n - minorStep : n;
+}
+
 function checkDraft(d: ChallengeDraft, settings: Settings, playerPosition?: number): void {
   const { min, max } = settings.range;
+  const { minorStep } = stepsFor(settings.range);
   const gap = minOptionGap(min, max);
   const options = d.options!;
   expect(options).toHaveLength(optionCount(d.kind as ComparisonKind));
@@ -49,6 +60,8 @@ function checkDraft(d: ChallengeDraft, settings: Settings, playerPosition?: numb
     expect(Number.isInteger(o)).toBe(true);
     expect(o).toBeGreaterThanOrEqual(min);
     expect(o).toBeLessThanOrEqual(max);
+    // Amendment 20: every tank stands on a drawn line of the minor grid.
+    expect(isMultiple(o, minorStep), `option ${o} on the minor grid`).toBe(true);
   }
   for (let i = 0; i < options.length; i++) {
     for (let j = i + 1; j < options.length; j++) expect(Math.abs(options[i]! - options[j]!)).toBeGreaterThanOrEqual(gap);
@@ -110,7 +123,7 @@ describe('comparison builders (FR-026, FR-027, US4 scenario 6, AC-06)', () => {
         for (let seed = 0; seed < SEEDS; seed++) {
           const rng = createRng(seed);
           const player = seed % 2 === 0 ? range.min : range.max;
-          const d = buildComparison(kind, rng.int(range.min, range.max), settings, STEP, rng, player);
+          const d = buildComparison(kind, onGrid(rng.int(range.min, range.max), range), settings, STEP, rng, player);
           if (!d) continue;
           built++;
           expect(d.kind).toBe(kind);
@@ -172,6 +185,46 @@ describe('comparison builders (FR-026, FR-027, US4 scenario 6, AC-06)', () => {
       kinds.add(c.kind);
     }
     expect([...kinds].sort()).toEqual([...COMPARISON_KINDS].sort());
+  });
+});
+
+describe('comparison tanks stand on a drawn line (amendment 20, FR-027)', () => {
+  for (const [min, max] of [
+    [0, 1000],
+    [550, 780],
+    [7, 893],
+  ] as const) {
+    it(`in ${min} to ${max} every option of every generated comparison is a multiple of 10`, () => {
+      const settings = onlyComparison({ preset: 'custom', min, max });
+      for (let seed = 0; seed < 500; seed++) {
+        const player = seed % 2 === 0 ? min : max;
+        const c = generateChallenge({ ...COMPARISON_47_74.input, settings, roundSeed: seed, playerPosition: player });
+        expect(validateChallenge(c, settings, player)).toEqual([]);
+        for (const o of c.options!) expect(o % 10, `option ${o}`).toBe(0);
+      }
+    });
+  }
+
+  it('in 0 to 100 the options are still any whole number', () => {
+    const settings = onlyComparison();
+    const odd = new Set<number>();
+    for (let seed = 0; seed < 300; seed++) {
+      const c = generateChallenge({ ...COMPARISON_47_74.input, settings, roundSeed: seed, playerPosition: 0 });
+      for (const o of c.options!) if (o % 10 !== 0) odd.add(o);
+    }
+    expect(odd.size).toBeGreaterThan(0);
+  });
+
+  it('a builder returns null for an answer between two lines, and validateChallenge rejects an option between two lines', () => {
+    const settings = onlyComparison({ preset: '0-1000', min: 0, max: 1000 });
+    for (let seed = 0; seed < 50; seed++) expect(buildComparison('greater', 537, settings, STEP, createRng(seed), 0)).toBeNull();
+    let c: Challenge | undefined;
+    for (let seed = 0; !c || c.kind !== 'greater'; seed++) c = generateChallenge({ ...COMPARISON_47_74.input, settings, roundSeed: seed, playerPosition: 0 });
+    const other = c.options!.find((o) => o !== c.answer)!;
+    const moved = other + (other > c.answer ? 3 : -3);
+    const options = c.options!.map((o) => (o === other ? moved : o));
+    const bad: Challenge = { ...c, options, prompt: { ...c.prompt, params: { ...c.prompt.params, o1: options[0]!, o2: options[1]! } } };
+    expect(validateChallenge(bad, settings, 0).some((e) => e.includes('minor grid'))).toBe(true);
   });
 });
 
