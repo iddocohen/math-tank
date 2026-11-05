@@ -52,7 +52,7 @@ describe('ruler band below the battlefield (T184, FR-015, FR-058)', () => {
 
   it('tanks stay above the ruler after repeated hits at their positions', () => {
     const settings = defaultSettings();
-    const rules = { enemyDamageFactor: 0, noDamage: true };
+    const rules = { enemyDamageFactor: 0, noDamage: true, exactHit: false, range: settings.range };
     for (let seed = 0; seed < 40; seed++) {
       let s = createRound(settings, seed, seed % 2 === 0 ? 'left' : 'right');
       expectTanksAboveRuler(s, `seed ${seed} start`);

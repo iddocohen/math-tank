@@ -4,13 +4,17 @@ import { defaultSettings } from '../settings/defaults';
  * Upgrades older stored versions to the current one before schema validation (research R11).
  * Settings: version 0 is any object with `version: 0` or no `version` field; versions 0 and 1 become
  * version 2 (decision D13: `aimCorrection` dropped, `labelLevel` turned into `rulerLevelStart` and
- * `rulerLevelMax`), with missing fields filled from the defaults. Progress: version 0 becomes version 1.
+ * `rulerLevelMax`), with missing fields filled from the defaults. Version 2 becomes version 3 (amendment 04:
+ * `exactHit` added, default false), so versions 0 and 1 go through both steps. Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
 export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   if (!isRecord(raw)) return raw;
   const version = raw.version ?? 0;
-  if (kind === 'settings') return version === 0 || version === 1 ? migrateSettingsToV2(raw) : raw;
+  if (kind === 'settings') {
+    if (version === 0 || version === 1) return migrateSettingsToV3(migrateSettingsToV2(raw));
+    return version === 2 ? migrateSettingsToV3(raw) : raw;
+  }
   return version === 0 ? migrateProgressV0(raw) : raw;
 }
 
@@ -41,6 +45,11 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
   }
   const merged = mergeDeep(defaultSettings() as unknown as Record<string, unknown>, over);
   return { ...merged, version: 2 };
+}
+
+/** Version 2 to 3 (amendment 04): adds "Genau treffen", off unless already set. */
+function migrateSettingsToV3(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, exactHit: raw.exactHit ?? false, version: 3 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

@@ -30,7 +30,18 @@ export const de = {
     enemyTurn: 'Der Gegner ist dran.',
     enemyFound: 'Gefunden!',
     newScene: 'Neue Landschaft',
-    hitAt: (n: number) => `Treffer! Der Gegner stand bei ${n}.`,
+    /** Amendment 04: the exact number (FR-071). */
+    bullseye: 'Volltreffer!',
+    /** Amendment 04: a hit on the tank body that is not exact (FR-066). */
+    bodyHit: 'Treffer!',
+    /** Amendment 04, "Genau treffen": on the tank body but not exact, no damage (FR-074). */
+    close: 'Ganz knapp!',
+    /** Amendment 04: both numbers and the distance after a body hit that is not exact (FR-072). */
+    compare: (you: number, enemy: number) => {
+      const d = Math.abs(you - enemy);
+      return `Du: ${you} · Gegner: ${enemy} · ${d === 1 ? '1 Schritt' : `${d} Schritte`}`;
+    },
+    enemyStoodAt: (n: number) => `Der Gegner stand bei ${n}.`,
     landedAt: (n: number) => `Gelandet bei ${n}`,
     steps: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
@@ -130,6 +141,8 @@ export const de = {
       adaptive: 'Schwierigkeit automatisch anpassen',
       freePlay: 'Freies Spiel erlauben',
       noDamage: 'Ohne Schaden spielen',
+      exactHit: 'Genau treffen',
+      exactHitHint: 'Nur die genaue Zahl trifft.',
       timeLimit: 'Zeitlimit (Sekunden)',
     },
   },

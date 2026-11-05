@@ -14,15 +14,24 @@
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
  *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
+ * - After a hit on the tank body that is not exact, a bracket from the child's number to the number the enemy
+ *   stood at, with "Du: 30 · Gegner: 31 · 1 Schritt" (amendment 04, FR-072), in every mode.
+ * - Pointer lines (amendment 04, FR-073): a thin dashed vertical line from the center of every visible tank (the
+ *   enemy once found, and every decoy) down to the ruler, ending in a small triangle on the ruler line
+ *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
+ *   number from the ruler. The canvas carries `data-pointer-lines`, the numbers of those tanks, for the end-to-end
+ *   tests only; nothing is drawn from it.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
 import { ticksFor, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
-import type { RoundState } from '../core/types';
+import { tankCenter } from '../core/battle/round';
+import type { RoundState, TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
+import { pointerLine } from '../core/view/pointerLine';
 import { t } from '../i18n';
 
 const AXIS_Y = 742;
@@ -36,6 +45,7 @@ const RULER_BG = 0x14203a;
 const LINE = 0xf4f6fb;
 const SELECT = 0xffd54a;
 const LANDED = 0xff8a65;
+const POINTER = 0xf4f6fb;
 /** The zoomed ten: a box this wide and tall, its top this far below the top of the world. */
 const ZOOM_WIDTH = 640;
 const ZOOM_HEIGHT = 110;
@@ -226,15 +236,11 @@ export class NumberLineView {
       this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
 
       const enemyVisible = s.enemyFound && s.enemy.alive;
-      if (s.mode === 'freePlay' && !shot.hit && enemyVisible && shot.landed !== s.enemy.position) {
-        const ex = numberToX(s.enemy.position, min, max);
-        const y = RULER_BOTTOM + 14;
-        g.lineStyle(4, SELECT, 1);
-        g.lineBetween(lx, y - 10, lx, y);
-        g.lineBetween(lx, y, ex, y);
-        g.lineBetween(ex, y - 10, ex, y);
-        const steps = Math.abs(shot.landed - s.enemy.position);
-        this.stepsText.setText(t().battle.steps(steps)).setPosition((lx + ex) / 2, y + 4).setVisible(true);
+      if (shot.bodyHit && !shot.bullseye) {
+        // On the tank body but not exact: both numbers and the distance (FR-072).
+        this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
+      } else if (s.mode === 'freePlay' && !shot.hit && enemyVisible && shot.landed !== s.enemy.position) {
+        this.drawBracket(lx, numberToX(s.enemy.position, min, max), t().battle.steps(Math.abs(shot.landed - s.enemy.position)));
       } else {
         this.stepsText.setVisible(false);
       }
@@ -242,6 +248,8 @@ export class NumberLineView {
       this.landedText.setVisible(false);
       this.stepsText.setVisible(false);
     }
+
+    this.drawPointerLines(s);
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
     const choosing = s.phase === 'aiming' || s.phase === 'challenge' || s.phase === 'paused';
@@ -262,6 +270,33 @@ export class NumberLineView {
     g.fillCircle(x, AXIS_Y, 10);
     // While dragging, the chosen number shows in large digits above the finger.
     this.selectionText.setText(String(s.selection)).setPosition(x, Math.min(groundY - 40, RULER_TOP - 70)).setVisible(this.dragging);
+  }
+
+  /** Bracket below the ruler from x0 to x1 with a text under its middle. */
+  private drawBracket(x0: number, x1: number, text: string): void {
+    const g = this.marks;
+    const y = RULER_BOTTOM + 14;
+    g.lineStyle(4, SELECT, 1);
+    g.lineBetween(x0, y - 10, x0, y);
+    g.lineBetween(x0, y, x1, y);
+    g.lineBetween(x1, y - 10, x1, y);
+    this.stepsText.setText(text).setPosition((x0 + x1) / 2, y + 4).setVisible(true);
+  }
+
+  /** Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073). */
+  private drawPointerLines(s: RoundState): void {
+    const g = this.marks;
+    const visible: TankState[] = [...(s.enemyFound && s.enemy.alive ? [s.enemy] : []), ...s.decoys.filter((d) => d.alive)];
+    g.lineStyle(2, POINTER, 0.8);
+    g.fillStyle(POINTER, 0.9);
+    for (const tank of visible) {
+      const c = tankCenter(tank);
+      const line = pointerLine({ x: c.x, y: toScreenY(c.y, this.worldHeight) }, AXIS_Y);
+      for (const d of line.dashes) g.lineBetween(d.x, d.y0, d.x, d.y1);
+      const [a, b, tip] = line.triangle;
+      g.fillTriangle(a.x, a.y, b.x, b.y, tip.x, tip.y);
+    }
+    this.scene.game.canvas.dataset.pointerLines = visible.map((tank) => tank.position).join(',');
   }
 
   private onDown(p: Phaser.Input.Pointer): void {

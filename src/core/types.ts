@@ -68,11 +68,13 @@ export interface Challenge {
   steps?: number[];
   /** readPosition only: the ruler level the challenge was built for. */
   rulerLevel?: RulerLevel;
-  /** readPosition only: 0 when the enemy stands on a visible line, otherwise half the smallest visible step (FR-068). */
-  hitTolerance?: number;
 }
 
-export type RecentOutcome = 'independent' | 'assisted' | 'unsolved';
+/**
+ * Progress outcome of a non-guess attempt. 'close' (amendment 04, FR-075): a hit on the tank body that is not exact,
+ * without help or misses; it counts neither toward raising nor toward lowering difficulty, and not toward mastery.
+ */
+export type RecentOutcome = 'independent' | 'close' | 'assisted' | 'unsolved';
 
 export interface Attempt {
   challengeId: string;
@@ -84,8 +86,10 @@ export interface Attempt {
   difficultyStep: number;
   /** True if a correct answer was given before the solution was shown. */
   solved: boolean;
-  /** solved and no help was used and no wrong answer. */
+  /** solved at the exact number, with no help and no wrong answer (amendment 04, FR-075). */
   independent: boolean;
+  /** The shot that ended the search was at the enemy's exact number (Volltreffer). */
+  exact: boolean;
   /** Highest help step reached; 3 means the solution was shown. */
   helpLevel: 0 | 1 | 2 | 3;
   wrongAnswers: number;
@@ -205,11 +209,15 @@ export interface LastShot {
   fired: number;
   /** The number under the impact point. */
   landed: number;
-  /** The enemy was hit (exact number, FR-066). */
+  /** The enemy took damage: a body hit, or with exactHit only a Volltreffer (amendment 04, FR-066, FR-074). */
   hit: boolean;
-  /** Inside the enemy's blast radius without a hit: the enemy shakes, no damage. */
+  /** The landing point was on the enemy tank's body, exact or not. */
+  bodyHit: boolean;
+  /** Volltreffer: the fired number was the enemy's number (FR-071). */
+  bullseye: boolean;
+  /** Inside the enemy's blast radius without damage: the enemy shakes. */
   nearMiss: boolean;
-  /** The tank whose number was fired at (enemy or decoy), or null. */
+  /** The damaged enemy or the destroyed decoy, or null. */
   hitTankId: string | null;
   /** Steps from the landed number to the enemy's number. */
   distance: number | null;

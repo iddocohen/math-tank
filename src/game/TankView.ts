@@ -3,6 +3,7 @@
  * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss without damage (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
  * Fade in and out and a fully hidden state are here for the search turns of later phases.
+ * `setBullseye` draws a target on the tank's center line while "Genau treffen" is on (amendment 04, FR-074).
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -29,6 +30,7 @@ export class TankView {
   private readonly body: Phaser.GameObjects.Image;
   private readonly turret: Phaser.GameObjects.Image;
   private readonly bar: Phaser.GameObjects.Graphics;
+  private readonly bullseye: Phaser.GameObjects.Graphics;
   private readonly color: number;
   private tint: number;
   private lastY: number | null = null;
@@ -45,7 +47,9 @@ export class TankView {
     this.turret = scene.add.image(0, -TURRET_PIVOT, TEX.turret).setOrigin(0, 0.5).setTint(this.color);
     this.body = scene.add.image(0, 0, TEX.tankBody).setOrigin(0.5, 1).setTint(this.color);
     this.bar = scene.add.graphics();
-    this.container = scene.add.container(0, 0, [this.turret, this.body, this.bar]);
+    this.bullseye = scene.add.graphics().setVisible(false);
+    drawBullseye(this.bullseye);
+    this.container = scene.add.container(0, 0, [this.turret, this.body, this.bullseye, this.bar]);
   }
 
   /**
@@ -82,9 +86,14 @@ export class TankView {
     this.scene.tweens.add({ targets: this.turret, angle: -angleDeg, duration: ms, ease: 'Sine.easeInOut' });
   }
 
+  /** Shows or hides the bullseye on the tank's center line ("Genau treffen", FR-074). */
+  setBullseye(on: boolean): void {
+    this.bullseye.setVisible(on);
+  }
+
   /** Short side-to-side shake of body and turret; the container keeps its position on the number. */
   shake(): void {
-    const parts = [this.body, this.turret];
+    const parts = [this.body, this.turret, this.bullseye];
     this.scene.tweens.add({ targets: parts, x: SHAKE_PX, duration: SHAKE_MS, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => parts.forEach((p) => (p.x = 0)) });
   }
 
@@ -126,7 +135,20 @@ export class TankView {
   }
 
   destroy(): void {
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.bullseye]);
     this.container.destroy();
   }
+}
+
+/** Two rings and a dot on the body's center line: the exact number is the only place that hits. */
+function drawBullseye(g: Phaser.GameObjects.Graphics): void {
+  const y = -TANK_BODY_HEIGHT / 2;
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(0, y, 11);
+  g.fillStyle(0xd32f2f, 1);
+  g.fillCircle(0, y, 8);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(0, y, 5);
+  g.fillStyle(0xd32f2f, 1);
+  g.fillCircle(0, y, 2.5);
 }

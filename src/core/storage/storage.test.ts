@@ -29,6 +29,7 @@ function sampleProgress(): Progress {
         difficultyStep: 2,
         solved: true,
         independent: false,
+        exact: false,
         helpLevel: 1,
         wrongAnswers: 1,
         responseMs: 5300,
@@ -40,8 +41,8 @@ function sampleProgress(): Progress {
     skills: {
       'subtraction|0-100': {
         step: 2,
-        recent: ['independent', 'assisted'],
-        masteryWindow: ['independent', 'assisted', 'unsolved'],
+        recent: ['independent', 'close', 'assisted'],
+        masteryWindow: ['independent', 'close', 'assisted', 'unsolved'],
         guesses: 0,
         attempts: 3,
         independentCorrect: 1,
@@ -151,7 +152,7 @@ describe('unavailable storage', () => {
 });
 
 describe('migrate', () => {
-  it('turns a version 0 settings fixture into a valid version 2 object', () => {
+  it('turns a version 0 settings fixture into a valid version 3 object', () => {
     const v0 = {
       version: 0,
       challengeTypes: { numberLine: true, addition: false, subtraction: true, comparison: true },
@@ -165,7 +166,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(2);
+    expect(parsed.data?.version).toBe(3);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -178,14 +179,15 @@ describe('migrate', () => {
     const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel, aimCorrection };
     delete v1.rulerLevelStart;
     delete v1.rulerLevelMax;
+    delete v1.exactHit;
     return v1;
   }
 
-  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 2 with level 5 to 5 (decision D13)', () => {
+  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 3 with level 5 to 5 (decision D13)', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(2);
+    expect(parsed.data?.version).toBe(3);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -205,7 +207,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(2);
+    expect(settings.version).toBe(3);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -231,13 +233,44 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(2);
+    expect(settings.version).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
 
-  it('leaves version 2 settings unchanged', () => {
-    const s = defaultSettings();
+  it('turns version 2 settings into version 3 with exactHit false and every other field unchanged (amendment 04)', () => {
+    const v2: Record<string, unknown> = { ...defaultSettings(), version: 2, roundLength: 7, rulerLevelStart: 3 };
+    delete v2.exactHit;
+    const migrated = migrate(v2, 'settings') as Record<string, unknown>;
+    expect(migrated).toEqual({ ...v2, version: 3, exactHit: false });
+    expect(settingsSchema.safeParse(migrated).success).toBe(true);
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 3, exactHit: false });
+  });
+
+  it('loadSettings upgrades stored version 2 settings without a reset', () => {
+    const kv = memoryKeyValue();
+    const v2: Record<string, unknown> = { ...defaultSettings(), version: 2, freePlay: true };
+    delete v2.exactHit;
+    kv.set(SETTINGS_KEY, JSON.stringify(v2));
+    const { settings, resetReason } = loadSettings(kv);
+    expect(resetReason).toBe('none');
+    expect(settings).toMatchObject({ version: 3, exactHit: false, freePlay: true });
+  });
+
+  it('leaves version 3 settings unchanged', () => {
+    const s = { ...defaultSettings(), exactHit: true };
     expect(migrate(s, 'settings')).toEqual(s);
+  });
+
+  it('the progress schema accepts the outcome close and attempts with or without exact (missing means true)', () => {
+    const p = sampleProgress();
+    expect(progressSchema.safeParse(p).success).toBe(true);
+    const old: Record<string, unknown> = { ...p.attempts[0]! };
+    delete old.exact;
+    const parsed = progressSchema.safeParse({ ...p, attempts: [old] });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.attempts[0]?.exact).toBe(true);
+    const bad = { ...p, skills: { 'x|0-100': { ...p.skills['subtraction|0-100']!, recent: ['nearly'] } } };
+    expect(progressSchema.safeParse(bad).success).toBe(false);
   });
 });
 

@@ -38,7 +38,7 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 | Elsewhere | nothing | landing number | free play: bracket with the step count |
 
 - The overlay root carries `data-last-shot`: `bullseye`, `body`, `close` (body hit without damage under "Genau treffen") or `miss`, for the end-to-end tests.
-- Pointer line (FR-073): whenever a tank is visible (the enemy in free play, in "read the ruler" and after a guided search reveals it; every numbered tank in comparison turns), a thin vertical line runs from the tank's center down to the ruler. A hidden enemy has no line.
+- Pointer line (FR-073): whenever a tank is visible (the enemy in free play, in "read the ruler" and after a guided search reveals it; every numbered tank in comparison turns), a thin dashed vertical line runs from the tank's center down to the ruler and ends in a small triangle on the ruler line. No number is drawn at or near it and no ruler label is highlighted; the enemy's number appears only in the hit feedback after a hit. A hidden enemy has no line.
 - With "Genau treffen" on, the enemy tank shows a bullseye (two rings and a dot) on its center line.
 
 ## Guided turn flow (one search per player turn)

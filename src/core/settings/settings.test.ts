@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 2,
+      version: 3,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -38,6 +38,7 @@ describe('defaults', () => {
       adaptive: true,
       freePlay: false,
       noDamage: false,
+      exactHit: false,
       timeLimitSeconds: null,
     });
   });
@@ -52,6 +53,16 @@ describe('defaults', () => {
     const d = defaultSettings();
     expect(settingsSchema.safeParse(d).success).toBe(true);
     expect(validateSettings(d)).toEqual({ ok: true });
+  });
+
+  it('the schema requires a boolean exactHit ("Genau treffen", amendment 04, FR-074)', () => {
+    const d = defaultSettings() as unknown as Record<string, unknown>;
+    expect(settingsSchema.safeParse({ ...d, exactHit: true }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...d, exactHit: 'yes' }).success).toBe(false);
+    const without = { ...d };
+    delete without.exactHit;
+    expect(settingsSchema.safeParse(without).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, version: 2 }).success).toBe(false);
   });
 
   it('returns a fresh object each call', () => {

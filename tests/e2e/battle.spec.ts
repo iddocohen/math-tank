@@ -67,18 +67,20 @@ test('play a free-play round with the keyboard only and start another', async ({
   const startHealth = await healths(overlay);
   expect(startHealth).toEqual(['100', '100']);
 
-  // A wrong number: the shell lands there, the enemy keeps its health, then the enemy takes its turn (FR-066).
+  // A number off the tank body (5 away; the body covers about 2 numbers either side in 0 to 100): the shell lands
+  // there, the enemy keeps its health, then the enemy takes its turn (FR-066, amendment 04).
   const enemy = await enemyNumber(overlay);
-  const wrong = enemy === max ? enemy - 1 : enemy + 1;
+  const wrong = enemy - 5 >= min ? enemy - 5 : enemy + 5;
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
   await expect(overlay).toHaveAttribute('data-enemy-health', '100');
   await expect(overlay).toHaveAttribute('data-phase', /^(enemyTurn|aiming|roundOver)$/);
   await expect(overlay).toHaveAttribute('data-phase', /^(aiming|roundOver)$/, { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-turn', '1');
 
-  // The enemy's number: a hit, the enemy loses health.
+  // The enemy's number: a Volltreffer, the enemy loses health (FR-071).
   let shots = 1;
   if ((await overlay.getAttribute('data-phase')) === 'aiming') {
     const target = await enemyNumber(overlay);
@@ -86,6 +88,7 @@ test('play a free-play round with the keyboard only and start another', async ({
     await page.keyboard.press('Enter');
     shots++;
     await expect.poll(async () => Number(await overlay.getAttribute('data-enemy-health')), { timeout: 15_000 }).toBeLessThan(100);
+    await expect(overlay).toHaveAttribute('data-last-shot', 'bullseye');
   }
 
   // Keep firing at the enemy's number until the round ends.

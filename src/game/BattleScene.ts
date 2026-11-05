@@ -6,12 +6,15 @@
  * - Replays the shell path in state.shot, then calls shotAnimationDone or enemyShotAnimationDone.
  * - The ruler (NumberLineView) handles tapping and dragging; the cannon cannot be dragged (FR-003).
  * - The player's turret shows the fixed 65-degree angle and turns to the arc's launch angle just before a
- *   raised or lifted shot (FR-065). The enemy shakes when the player's shell lands near it (lastShot.nearMiss).
+ *   raised or lifted shot (FR-065). The enemy shakes when the player's shell lands near it without damage
+ *   (lastShot.nearMiss), and a Volltreffer gets a larger explosion at the enemy (amendment 04, FR-071).
+ * - With "Genau treffen" on, the enemy shows a bullseye on its center line (FR-074).
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import type { RoundState, ShotInFlight, TankState } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
@@ -99,6 +102,7 @@ export class BattleScene extends Phaser.Scene {
       this.startedShot = null;
       this.enemy.setAim(s.player.x < s.enemy.x ? 150 : 30);
       this.player.setAim(fixedAngle(s));
+      this.enemy.setBullseye(this.controller.getRoundSettings().exactHit);
     }
 
     this.terrain.update(s.terrain);
@@ -108,6 +112,10 @@ export class BattleScene extends Phaser.Scene {
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
     if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
+    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.bullseye && s.lastShot.hit) {
+      const c = tankCenter(s.enemy);
+      this.effects.bullseye(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
+    }
     this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
     this.projectile.setTrail(s.phase === 'playerShot' ? null : s.lastPlayerPath);

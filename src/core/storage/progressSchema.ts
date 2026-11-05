@@ -34,7 +34,7 @@ export const challengeKindSchema = z.enum([
   'between',
 ]);
 
-export const recentOutcomeSchema = z.enum(['independent', 'assisted', 'unsolved']);
+export const recentOutcomeSchema = z.enum(['independent', 'close', 'assisted', 'unsolved']);
 
 export const attemptSchema: z.ZodType<Attempt> = z.object({
   challengeId: z.string(),
@@ -45,6 +45,8 @@ export const attemptSchema: z.ZodType<Attempt> = z.object({
   difficultyStep: z.number().int().min(0),
   solved: z.boolean(),
   independent: z.boolean(),
+  /** Missing in attempts stored before amendment 04, which needed the exact number to hit. */
+  exact: z.boolean().default(true),
   helpLevel: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
   wrongAnswers: z.number().int().min(0),
   responseMs: z.number().min(0),

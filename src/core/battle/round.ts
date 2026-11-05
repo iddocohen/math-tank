@@ -1,5 +1,5 @@
 /**
- * Building a round and applying explosions (FR-001, FR-005 to FR-007, FR-010a, FR-043, FR-044, FR-066).
+ * Building a round and applying explosions (FR-001, FR-005 to FR-007, FR-010a, FR-043, FR-044, FR-066, FR-071, FR-074).
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
@@ -8,7 +8,8 @@ import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { generateChallenge } from '../math/generate';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
-import { damageAt, MAX_DAMAGE } from '../physics/damage';
+import { damageAt } from '../physics/damage';
+import { enemyDamage, shotKind } from './hitRule';
 import { emptyEntry } from './entry';
 
 /** Logical world size (research R5). */
@@ -159,6 +160,10 @@ export interface DamageRules {
   enemyDamageFactor: number;
   /** FR-044: the player tank takes no damage. */
   noDamage: boolean;
+  /** "Genau treffen" (FR-074): only the exact number damages the enemy. */
+  exactHit: boolean;
+  /** The round's number range: the tank body's width in numbers follows from it. */
+  range: { min: number; max: number };
 }
 
 /**
@@ -166,9 +171,10 @@ export interface DamageRules {
  * A shell that left the battlefield changes nothing.
  *
  * Enemy shells damage every tank in the blast by distance (FR-006), measured where the tanks stood.
- * The player's shell follows the number (decision D10, FR-066): the enemy loses MAX_DAMAGE only when the
- * fired number equals its number, a decoy at the fired number is destroyed, a shell inside the enemy's blast
- * radius without a hit is a near miss, and the player's own shell never damages the player. Sets lastShot.
+ * The player's shell follows the tank-body rule (amendment 04, decision D10, FR-066, FR-071, FR-074): a shell on
+ * the enemy's body costs it MAX_DAMAGE, the exact number twice that, and with exactHit only the exact number
+ * counts. A decoy at the fired number is destroyed. A shell inside the enemy's blast radius that does no damage
+ * is a near miss (the enemy shakes). The player's own shell never damages the player. Sets lastShot.
  */
 export function applyImpact(state: RoundState, impact: Impact, blastRadius: number, rules: DamageRules): RoundState {
   if (impact.outOfBounds) return state;
@@ -189,13 +195,17 @@ export function applyImpact(state: RoundState, impact: Impact, blastRadius: numb
 
   const { fired, landed } = impact;
   const enemy = state.enemy;
-  const hit = enemy.alive && fired === enemy.position;
+  const kind = enemy.alive ? shotKind(fired, enemy.position, rules.range) : 'miss';
+  const damage = enemyDamage(kind, rules.exactHit);
+  const hit = damage > 0;
   const decoyHit = state.decoys.find((d) => d.alive && d.position === fired) ?? null;
   const nearMiss = !hit && enemy.alive && Math.hypot(tankCenter(enemy).x - impact.point.x, tankCenter(enemy).y - impact.point.y) < blastRadius;
   const lastShot: LastShot = {
     fired,
     landed,
     hit,
+    bodyHit: kind !== 'miss',
+    bullseye: kind === 'bullseye',
     nearMiss,
     hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
     distance: Math.abs(landed - enemy.position),
@@ -205,7 +215,7 @@ export function applyImpact(state: RoundState, impact: Impact, blastRadius: numb
     ...state,
     terrain,
     player: settle(state.player, 0),
-    enemy: settle(enemy, hit ? MAX_DAMAGE : 0),
+    enemy: settle(enemy, damage),
     decoys: state.decoys.map((d) => settle(d, d === decoyHit ? d.health : 0)),
     lastShot,
   };

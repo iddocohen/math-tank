@@ -1,12 +1,11 @@
 /**
  * "Read the ruler" challenges (amendment 02, FR-067, FR-068, data-model.md "readPosition placement").
  * The enemy is visible and no number is given; the child fires at the number under the enemy.
+ * Whether a shot hits follows the tank-body rule in core/battle/hitRule.ts (amendment 04); there is no tolerance.
  */
-import { smallestVisibleStep, ticksFor, type RulerLevel } from '../numberline/ticks';
+import { ticksFor, type RulerLevel } from '../numberline/ticks';
 import type { Settings } from '../types';
 import type { Builder } from './numberLine';
-
-type View = { min: number; max: number };
 
 const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
 
@@ -28,12 +27,6 @@ export function readPositionAnswers(settings: Settings, level: RulerLevel): numb
   return ticks.filter((t) => t.visible && isMultiple(t.value, minorStep)).map((t) => t.value);
 }
 
-/** 0 when the answer is on a visible line, otherwise half of the smallest visible step (FR-068). */
-export function hitTolerance(answer: number, view: View, level: RulerLevel): number {
-  const onLine = ticksFor(view, level, 0).ticks.some((t) => t.visible && t.value === answer);
-  return onLine ? 0 : smallestVisibleStep(view, level) / 2;
-}
-
 export const buildReadPosition: Builder = (answer, settings, step) => {
   const level = step.rulerLevel ?? DEFAULT_RULER_LEVEL;
   if (!readPositionAnswers(settings, level).includes(answer)) return null;
@@ -43,6 +36,5 @@ export const buildReadPosition: Builder = (answer, settings, step) => {
     operands: [],
     answer,
     rulerLevel: level,
-    hitTolerance: hitTolerance(answer, settings.range, level),
   };
 };

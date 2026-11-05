@@ -6,9 +6,15 @@
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
  * `data-enemy-number` is set only while the enemy is visible, so a test cannot read a hidden enemy's number.
+ * `data-last-shot` names the result of the last player shot (amendment 04): `bullseye`, `body`, `close` (on the tank
+ * body without damage under "Genau treffen") or `miss`.
+ *
+ * Hit feedback (amendment 04, FR-071, FR-072, FR-074, contracts/ui-flows.md): a Volltreffer names the enemy's
+ * number; a body hit that is not exact shows "Treffer!" or, under "Genau treffen", "Ganz knapp!", with both
+ * numbers and the distance; a miss shows the landing number.
  */
 import type { BattleController } from '../core/battle/controller';
-import type { RoundState } from '../core/types';
+import type { LastShot, RoundState } from '../core/types';
 import { t } from '../i18n';
 
 interface Props {
@@ -43,6 +49,7 @@ export function BattleOverlay({ controller, state }: Props) {
       data-challenge-answerable={answerable}
       data-selection={state.selection ?? undefined}
       data-last-landing={state.lastShot?.landed ?? undefined}
+      data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemyVisible ? state.enemy.position : undefined}
     >
       <div className="top-bars">
@@ -53,10 +60,16 @@ export function BattleOverlay({ controller, state }: Props) {
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
-        ) : lastShot?.hit ? (
-          // A hit names the exact number the enemy stood at, also after it has moved (FR-068).
-          <span className="landed hit" data-testid="hit-feedback">
-            {m.battle.hitAt(lastShot.enemyNumber)}
+        ) : lastShot?.bullseye && lastShot.hit ? (
+          // A Volltreffer names the number the enemy stood at, also after it has moved (FR-068, FR-071).
+          <span className="landed hit bullseye" data-testid="hit-feedback">
+            {m.battle.bullseye} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
+          </span>
+        ) : lastShot?.bodyHit ? (
+          // On the tank body but not exact: both numbers and the distance, never "falsch" (FR-072, FR-074).
+          <span className={lastShot.hit ? 'landed hit' : 'landed close'} data-testid="hit-feedback">
+            {lastShot.hit ? m.battle.bodyHit : m.battle.close}{' '}
+            <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>
           </span>
         ) : lastShot ? (
           <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
@@ -99,6 +112,12 @@ export function BattleOverlay({ controller, state }: Props) {
       </div>
     </div>
   );
+}
+
+function lastShotKind(shot: LastShot): 'bullseye' | 'body' | 'close' | 'miss' {
+  if (shot.bullseye && shot.hit) return 'bullseye';
+  if (shot.bodyHit) return shot.hit ? 'body' : 'close';
+  return 'miss';
 }
 
 function HealthBar({ label, health, kind }: { label: string; health: number; kind: 'player' | 'enemy' }) {

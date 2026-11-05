@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { smallestVisibleStep, ticksFor, type RulerLevel } from '../numberline/ticks';
+import { ticksFor, type RulerLevel } from '../numberline/ticks';
 import { defaultSettings } from '../settings/defaults';
 import { withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { generateChallenge } from './generate';
-import { hitTolerance } from './readPosition';
 import { checkAnswer, validateChallenge } from './validate';
 
 const ZERO_STEPS: Record<Skill, number> = {
@@ -98,50 +97,26 @@ describe('readPosition challenge (FR-067, FR-068, US9 scenario 5)', () => {
     }
   });
 
-  it('hitTolerance is 0 on a visible line and half the smallest visible step otherwise', () => {
-    const view = { min: 0, max: 100 };
-    for (const level of [1, 2, 3] as const) expect(hitTolerance(37, view, level)).toBe(0);
-    expect(hitTolerance(40, view, 4)).toBe(0);
-    expect(hitTolerance(37, view, 4)).toBe(5);
-    expect(hitTolerance(100, view, 5)).toBe(0);
-    expect(hitTolerance(37, view, 5)).toBe(5);
-    expect(hitTolerance(637, { min: 550, max: 780 }, 5)).toBe(25);
-    expect(hitTolerance(637, { min: 0, max: 1000 }, 4)).toBe(50);
-    expect(smallestVisibleStep(view, 5) / 2).toBe(5);
-  });
-
-  it('each challenge carries the tolerance for its answer and level', () => {
+  it('challenges carry no hit tolerance: the tank-body rule decides hits (amendment 04)', () => {
     for (const [min, max] of ranges) {
       const settings = rangeSettings(min, max);
       for (const level of LEVELS) {
         for (let seed = 0; seed < 50; seed++) {
-          const c = readPosition(settings, level, seed, min);
-          expect(c.hitTolerance).toBe(hitTolerance(c.answer, settings.range, level));
+          expect(readPosition(settings, level, seed, min)).not.toHaveProperty('hitTolerance');
         }
       }
     }
   });
 
-  it('checkAnswer accepts a fired number within the tolerance and nothing further away', () => {
+  it('checkAnswer accepts only the exact answer on every ruler level', () => {
     const settings = rangeSettings(0, 100);
-    let checked = 0;
-    for (let seed = 0; seed < 200; seed++) {
-      const c = readPosition(settings, 5, seed, 0);
-      const tol = c.hitTolerance ?? 0;
-      expect(checkAnswer(c, c.answer)).toBe(true);
-      expect(checkAnswer(c, c.answer + tol)).toBe(true);
-      expect(checkAnswer(c, c.answer - tol)).toBe(true);
-      expect(checkAnswer(c, c.answer + tol + 1)).toBe(false);
-      expect(checkAnswer(c, c.answer - tol - 1)).toBe(false);
-      if (tol > 0) checked++;
-    }
-    expect(checked).toBeGreaterThan(0);
-
-    for (let seed = 0; seed < 50; seed++) {
-      const c = readPosition(settings, 1, seed, 0);
-      expect(c.hitTolerance).toBe(0);
-      expect(checkAnswer(c, c.answer)).toBe(true);
-      expect(checkAnswer(c, c.answer + 1)).toBe(false);
+    for (const level of LEVELS) {
+      for (let seed = 0; seed < 50; seed++) {
+        const c = readPosition(settings, level, seed, 0);
+        expect(checkAnswer(c, c.answer)).toBe(true);
+        expect(checkAnswer(c, c.answer + 1)).toBe(false);
+        expect(checkAnswer(c, c.answer - 1)).toBe(false);
+      }
     }
   });
 

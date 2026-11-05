@@ -72,6 +72,18 @@ describe('de table', () => {
     expect(t().challenge.findNumber(42)).toContain('42');
   });
 
+  it('has the amendment 04 hit feedback (FR-071, FR-072, FR-074)', () => {
+    const b = t().battle;
+    expect(b.bullseye).toBe('Volltreffer!');
+    expect(b.bodyHit).toBe('Treffer!');
+    expect(b.close).toBe('Ganz knapp!');
+    expect(b.compare(30, 31)).toBe('Du: 30 · Gegner: 31 · 1 Schritt');
+    expect(b.compare(630, 637)).toBe('Du: 630 · Gegner: 637 · 7 Schritte');
+    expect(b.enemyStoodAt(637)).toBe('Der Gegner stand bei 637.');
+    expect(t().settings.labels.exactHit).toBe('Genau treffen');
+    expect(t().settings.labels.exactHitHint).toBe('Nur die genaue Zahl trifft.');
+  });
+
   it('t() returns the German table', () => {
     expect(t()).toBe(de);
     expect(t().encouragements).toBe(encouragements);

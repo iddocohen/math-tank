@@ -253,7 +253,12 @@ export class BattleController {
   }
 
   private impact(impact: Impact, blastRadius: number): RoundState {
-    const rules: DamageRules = { enemyDamageFactor: enemyDamageFactor(this.settings.enemyDifficulty), noDamage: this.settings.noDamage };
+    const rules: DamageRules = {
+      enemyDamageFactor: enemyDamageFactor(this.settings.enemyDifficulty),
+      noDamage: this.settings.noDamage,
+      exactHit: this.settings.exactHit,
+      range: this.settings.range,
+    };
     return applyImpact(this.state, impact, blastRadius, rules);
   }
 
