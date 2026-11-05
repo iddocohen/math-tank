@@ -53,7 +53,7 @@ export function applyBattleAction(controller: BattleController, action: KeyActio
       controller.resume();
       return true;
     case 'help':
-      // Help steps arrive with guided mode; free play has no help step yet.
+      controller.requestHelp();
       return true;
     case 'start':
     case 'newRound':

@@ -30,6 +30,14 @@
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
  *   number from the ruler. The canvas carries `data-pointer-lines`, the numbers of those tanks, for the end-to-end
  *   tests only; nothing is drawn from it.
+ * - Addition and subtraction (US3, T082, T083): the starting number is highlighted on the ruler with a blue ring and
+ *   its number on a chip, while the child chooses a number. After a help request (state.stepAnimation, stepPath) a
+ *   small tank icon moves from the starting number one unit at a time (core/view/stepFrames.ts) and the count of
+ *   steps shows above it. It pauses at each stop: each crossed ten in beginner assistance, the intermediate result of
+ *   a two-step exercise, and the result, whose numbers are labeled under the line. Every line of the passed area is drawn while it
+ *   moves, whatever the ruler level (FR-018). The canvas carries `data-start-highlight` (the highlighted number, ''
+ *   when none), `data-step-animation` (the path, '' when none) and `data-step-count` (steps shown so far) for the
+ *   end-to-end tests only.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -41,6 +49,8 @@ import type { RoundState, TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
 import { pointerLine } from '../core/view/pointerLine';
+import { stepFrames, stepMs, type StepFrame } from '../core/view/stepFrames';
+import { TEX } from './textures';
 import { t } from '../i18n';
 
 const AXIS_Y = 742;
@@ -57,6 +67,10 @@ const LANDED = 0xff8a65;
 const POINTER = 0xf4f6fb;
 const PULSE = 0x9be89f;
 const PULSE_MS = 700;
+/** The starting number of an addition or subtraction, and the step animation's marker (US3). */
+const START = 0x7ec8ff;
+/** The step animation pauses this long at each stop (a crossed ten, the intermediate result). */
+const STOP_PAUSE_MS = 700;
 /** The zoomed ten: a box this wide and tall, its top this far below the top of the world. */
 const ZOOM_WIDTH = 640;
 const ZOOM_HEIGHT = 110;
@@ -91,6 +105,17 @@ export class NumberLineView {
   /** The ring that pulses on the ruler at the destroyed enemy's number after a hit. */
   private readonly pulse: Phaser.GameObjects.Graphics;
   private pulsedShot: RoundState['lastShot'] = null;
+  /** The starting number's chip on the ruler (US3, T083). */
+  private readonly startChip: Phaser.GameObjects.Graphics;
+  private readonly startText: Phaser.GameObjects.Text;
+  /** Step animation (T082): passed lines and stops, the tank icon, the step count and the stop labels. */
+  private readonly stepLines: Phaser.GameObjects.Graphics;
+  private readonly stepIcon: Phaser.GameObjects.Image;
+  private readonly stepCount: Phaser.GameObjects.Text;
+  private stepLabels: Phaser.GameObjects.Text[] = [];
+  private stepTimer: Phaser.Time.TimerEvent | null = null;
+  /** The stepAnimation array being shown, so a state update never starts it twice. */
+  private animated: number[] | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -115,6 +140,23 @@ export class NumberLineView {
       .setDepth(12)
       .setVisible(false);
 
+    this.startChip = scene.add.graphics().setDepth(12).setVisible(false);
+    this.startText = scene.add
+      .text(0, 0, '', { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: '#14203a' })
+      .setOrigin(0.5, 0)
+      .setDepth(12)
+      .setVisible(false);
+    this.stepLines = scene.add.graphics().setDepth(12);
+    this.stepIcon = scene.add.image(0, 0, TEX.tankBody).setOrigin(0.5, 1).setScale(0.7).setTint(START).setDepth(14).setVisible(false);
+    this.stepCount = scene.add
+      .text(0, 0, '', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: '#ffffff', stroke: '#14203a', strokeThickness: 6 })
+      .setOrigin(0.5, 1)
+      .setDepth(14)
+      .setVisible(false);
+
+    scene.game.canvas.dataset.stepAnimation = '';
+    scene.game.canvas.dataset.stepCount = '0';
+
     scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.onDown, this);
     scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
     scene.input.on(Phaser.Input.Events.POINTER_UP, this.onUp, this);
@@ -134,6 +176,87 @@ export class NumberLineView {
     }
     this.drawMarks(s, min, max);
     this.pulseHit(s, min, max);
+    this.drawStart(s, min, max);
+    if (s.stepAnimation !== this.animated) this.startSteps(s.stepAnimation, min, max);
+  }
+
+  /** The starting number of an addition or subtraction: a ring on the ruler and its number on a chip (T083). */
+  private drawStart(s: RoundState, min: number, max: number): void {
+    const c = s.challenge;
+    const choosing = s.phase === 'challenge' || s.phase === 'paused';
+    const start = choosing && c && (c.kind === 'addition' || c.kind === 'subtraction') ? c.operands[0] : undefined;
+    this.startChip.clear().setVisible(false);
+    this.startText.setVisible(false);
+    this.scene.game.canvas.dataset.startHighlight = start === undefined ? '' : String(start);
+    if (start === undefined) return;
+    const x = numberToX(start, min, max);
+    this.startText.setText(String(start)).setPosition(x, LABEL_Y).setVisible(true);
+    const w = this.startText.width + 16;
+    const h = this.startText.height + 6;
+    const g = this.startChip.setVisible(true);
+    g.lineStyle(5, START, 1);
+    g.strokeCircle(x, AXIS_Y, 14);
+    g.fillStyle(START, 1);
+    g.fillRoundedRect(x - w / 2, LABEL_Y - 3, w, h, 8);
+  }
+
+  /** Starts the step animation along `path`, or clears it when path is null (T082, FR-024). */
+  private startSteps(path: number[] | null, min: number, max: number): void {
+    this.stopSteps();
+    this.animated = path;
+    const canvas = this.scene.game.canvas;
+    canvas.dataset.stepAnimation = path ? path.join(',') : '';
+    canvas.dataset.stepCount = '0';
+    if (!path || path.length < 2) return;
+    const frames = stepFrames(path);
+    const ms = stepMs(frames.length);
+    const x0 = numberToX(path[0]!, min, max);
+    this.stepIcon.setPosition(x0, AXIS_Y - 2).setVisible(true);
+    let i = 0;
+    const next = (): void => {
+      const frame = frames[i++];
+      if (!frame) {
+        this.stepTimer = null;
+        return;
+      }
+      this.showStep(path[0]!, frame, min, max);
+      this.stepTimer = this.scene.time.delayedCall(frame.stop ? ms + STOP_PAUSE_MS : ms, next);
+    };
+    this.stepTimer = this.scene.time.delayedCall(STOP_PAUSE_MS, next);
+  }
+
+  /** One unit step: every line from the start to here, the icon on the new number, the count above it. */
+  private showStep(start: number, frame: StepFrame, min: number, max: number): void {
+    const g = this.stepLines;
+    const x = numberToX(frame.value, min, max);
+    g.lineStyle(3, START, 1);
+    g.lineBetween(numberToX(start, min, max), AXIS_Y, x, AXIS_Y);
+    g.lineStyle(frame.stop ? 4 : 2, LINE, 1);
+    const len = frame.stop ? MAJOR_TICK : MINOR_TICK;
+    g.lineBetween(x, AXIS_Y - len / 2, x, AXIS_Y + len / 2);
+    this.stepIcon.setPosition(x, AXIS_Y - 2);
+    this.stepCount.setText(String(frame.count)).setPosition(x, RULER_TOP - 2).setVisible(true);
+    if (frame.stop) this.stepLabel(frame.value, min, max);
+    this.scene.game.canvas.dataset.stepCount = String(frame.count);
+  }
+
+  /** A stop's number under the ruler line, over the ruler's own label for it. */
+  private stepLabel(n: number, min: number, max: number): void {
+    const label = this.scene.add
+      .text(numberToX(n, min, max), LABEL_Y, String(n), { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#7ec8ff', stroke: '#14203a', strokeThickness: 6 })
+      .setOrigin(0.5, 0)
+      .setDepth(14);
+    this.stepLabels.push(label);
+  }
+
+  private stopSteps(): void {
+    this.stepTimer?.remove();
+    this.stepTimer = null;
+    this.stepLines.clear();
+    this.stepIcon.setVisible(false);
+    this.stepCount.setVisible(false);
+    for (const label of this.stepLabels) label.destroy();
+    this.stepLabels = [];
   }
 
   /** A short pulse on the ruler where the destroyed enemy stood, once per hit (T066). */
@@ -212,6 +335,7 @@ export class NumberLineView {
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.onUp, this);
     this.hideZoom();
+    this.stopSteps();
     this.scene.tweens.killTweensOf(this.pulse);
   }
 

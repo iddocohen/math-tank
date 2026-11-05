@@ -15,7 +15,7 @@ export interface ArithmeticRules {
   kind: ArithmeticKind;
   /** +1 for addition, -1 for subtraction. */
   sign: 1 | -1;
-  /** Largest added or subtracted number; for addition also the largest start (every operand, US3 scenario 5). */
+  /** Largest added or subtracted number (every operand after the start, T216); the start is any number in the range. */
   maxOperand: number;
   /** 1: a ± b; 2: a ± b ± c. */
   steps: 1 | 2;
@@ -39,8 +39,7 @@ export function arithmeticRules(kind: ArithmeticKind, settings: Settings, step?:
 export function validPoint(n: number, isStart: boolean, rules: ArithmeticRules, settings: Settings): boolean {
   if (!Number.isInteger(n)) return false;
   if (isStart) {
-    if (n < settings.range.min || n > settings.range.max) return false;
-    return rules.kind === 'subtraction' || n <= rules.maxOperand;
+    return n >= settings.range.min && n <= settings.range.max;
   }
   return n >= rules.lowest && n <= rules.highest;
 }
@@ -94,7 +93,7 @@ export function arithmeticDraft(kind: ArithmeticKind, operands: number[]): Chall
 }
 
 /**
- * Results that pass the simple limits (range, lowest and highest result, the largest reachable sum), so the
+ * Results that pass the simple limits (range, lowest and highest result, the smallest reachable sum), so the
  * generator does not try answers that can never work. Crossing rules can still rule an answer out.
  */
 export function arithmeticAnswers(rules: ArithmeticRules, settings: Settings): number[] {
@@ -103,7 +102,6 @@ export function arithmeticAnswers(rules: ArithmeticRules, settings: Settings): n
   let hi = Math.min(rules.highest, max);
   if (rules.kind === 'addition') {
     lo = Math.max(lo, min + rules.steps);
-    hi = Math.min(hi, rules.maxOperand * (rules.steps + 1));
   } else {
     hi = Math.min(hi, max - rules.steps);
   }

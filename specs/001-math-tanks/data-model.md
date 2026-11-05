@@ -9,7 +9,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `version` | `4` | `4` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; `migrate` upgrades version 0 to 3 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
-| `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max` |
+| `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
 | `crossTens` | `boolean` | `true` | |
 | `crossHundreds` | `boolean` | `false` | |
@@ -75,7 +75,7 @@ interface Challenge {
 }
 ```
 
-**Validation** (`validateChallenge(c, settings, playerPosition)`): every value in `operands`, `options`, `steps` and `answer` is inside `[range.min, range.max]`; addition and subtraction respect operand, result, crossing and step rules; comparison has exactly one correct option and distinct options; `answer` is at least `minEnemyGap` from the player tank position; every comparison option is at least `minTankGap` from every other option and from the player tank.
+**Validation** (`validateChallenge(c, settings, playerPosition)`): every value in `options`, `steps` and `answer` and the starting operand is inside `[range.min, range.max]` (the added or subtracted numbers may lie outside it, for example 560 + 5 in 550 to 780); addition and subtraction respect operand, result, crossing and step rules; comparison has exactly one correct option and distinct options; `answer` is at least `minEnemyGap` from the player tank position; every comparison option is at least `minTankGap` from every other option and from the player tank.
 
 **Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`. When the range cannot fit 2 options at `minTankGap` on the side away from the player, comparison is skipped for that configuration.
 
@@ -219,6 +219,7 @@ interface RoundState {
   lastShot: LastShot | null;       // landed number shown large; distance in steps shown in free play
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
+  stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
   shot: ShotInFlight | null;       // shell in flight for the renderer to replay
   outcome: 'goalReached' | 'heartsGone' | null;   // goalReached: roundLength enemies destroyed with roundType 'enemyCount'
 }

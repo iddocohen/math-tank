@@ -420,10 +420,12 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 **Independent Test**: In `pnpm dev` with only subtraction on and the 43 − 7 fixture seed, press H and view the marker move 43 → 40 → 36; type 36 and press Enter; the enemy is hit.
 
-- [ ] T080 [P] [US3] Add a test to `src/core/battle/battleController.test.ts`: for an addition or subtraction challenge, `requestHelp` sets `state.stepAnimation` to `stepPath(challenge, settings.beginnerAssist)` and does not change lives, `turn` or `shotsSinceEnemyFire` (FR-024, FR-030, FR-081)
-- [ ] T081 [US3] Implement `requestHelp` for addition and subtraction in `src/core/battle/controller.ts` (sets `stepAnimation`; general help escalation follows in Phase 19) and add `stepAnimation: number[] | null` to `RoundState` in `src/core/types.ts` (FR-024)
-- [ ] T082 [US3] Add the step animation to `src/game/NumberLineView.ts`: a small tank icon moves one unit at a time along `stepAnimation`, pausing at each ten boundary when `beginnerAssist` is on, with each step counted on screen and all lines of the passed area shown (FR-018, FR-024, US3 scenarios 1 and 2, AC-05)
-- [ ] T083 [US3] Add addition and subtraction prompts to `src/i18n/de.ts` (for example "Der Gegner ist bei {a} − {b}"), and show the starting number highlighted on the ruler in `src/game/NumberLineView.ts` (FR-056, FR-057, AC-05)
+- [X] T080 [P] [US3] Add a test to `src/core/battle/battleController.test.ts`: for an addition or subtraction challenge, `requestHelp` sets `state.stepAnimation` to `stepPath(challenge, settings.beginnerAssist)` and does not change lives, `turn` or `shotsSinceEnemyFire` (FR-024, FR-030, FR-081)
+- [X] T081 [US3] Implement `requestHelp` for addition and subtraction in `src/core/battle/controller.ts` (sets `stepAnimation`; general help escalation follows in Phase 19) and add `stepAnimation: number[] | null` to `RoundState` in `src/core/types.ts` (FR-024)
+- [X] T082 [US3] Add the step animation to `src/game/NumberLineView.ts`: a small tank icon moves one unit at a time along `stepAnimation`, pausing at each ten boundary when `beginnerAssist` is on, with each step counted on screen and all lines of the passed area shown (FR-018, FR-024, US3 scenarios 1 and 2, AC-05)
+- [X] T083 [US3] Add addition and subtraction prompts to `src/i18n/de.ts` (for example "Der Gegner ist bei {a} − {b}"), and show the starting number highlighted on the ruler in `src/game/NumberLineView.ts` (FR-056, FR-057, AC-05)
+
+- [X] T216 [US3] Addition limit applies only to the added numbers (FR-022, amendment 02): `addition.maxOperand` limits every operand after the first, like `subtraction.maxOperand`; the starting number can be any number in the range, so in ranges such as 550 to 780 addition is no longer skipped. Tests first in `src/core/math/addition.test.ts` (550 to 780 with `maxOperand` 10 generates exercises such as 560 + 5 and finds an addition for every allowed answer; US3 scenario 5 with range 0 to 20, `maxOperand` 10, `maxResult` 20: no added number above 10, no result above 20) and `src/core/math/generator.property.test.ts`; then `src/core/math/arithmetic.ts`, spec FR-022 and data-model.md
 
 **Checkpoint**: US3 works on its own with only addition or subtraction enabled.
 

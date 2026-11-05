@@ -227,6 +227,11 @@ export interface RoundState {
   lastPlayerPath: Point[] | null;
   /** The shell in flight during 'playerShot' and 'enemyTurn', for the renderer to replay; otherwise null. */
   shot: ShotInFlight | null;
+  /**
+   * The step animation of an addition or subtraction after a help request: the numbers the marker stops at, from the
+   * starting number to the result, e.g. [43, 40, 36] (stepPath, FR-024). Null when no animation is shown.
+   */
+  stepAnimation: number[] | null;
   /** goalReached: roundLength enemies destroyed with roundType 'enemyCount'; heartsGone: no lives left (FR-082). */
   outcome: 'goalReached' | 'heartsGone' | null;
 }

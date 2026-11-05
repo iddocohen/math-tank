@@ -50,8 +50,6 @@ export const COMING_SOON: readonly SettingField[] = [
   'help.countSteps',
   'help.zoom',
   'help.stepAnimation',
-  // Phase 17: step animation split at ten boundaries.
-  'beginnerAssist',
   // Phase 23: spoken instructions. Music has no task yet.
   'sound.speech',
   'sound.music',

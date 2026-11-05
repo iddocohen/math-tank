@@ -12,6 +12,8 @@ import { minEnemyGap } from '../math/gaps';
 import { settleY } from '../physics/terrain';
 import { BLAST_RADIUS } from '../physics/damage';
 import { solveArcToX } from '../physics/arc';
+import { SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
+import { stepPath } from '../math/stepPath';
 
 function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
   return { ...defaultSettings(), freePlay: true, ...overrides };
@@ -113,7 +115,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'enemyFound', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'orderTaps', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'shotsSinceEnemyFire', 'elapsedMs', 'lastEnemyHit',
+        'lives', 'enemiesDestroyed', 'shotsSinceEnemyFire', 'elapsedMs', 'lastEnemyHit', 'stepAnimation',
       ].sort(),
     );
   });
@@ -1461,5 +1463,76 @@ describe('BattleController hidden enemy stays hidden while it fires (T215, FR-01
     const firing = seen.find((s) => s.phase === 'enemyTurn')!;
     expect(firing.enemyFound).toBe(true);
     expect(firing.shot!.path[0]).toEqual(muzzle(enemyOf(firing)));
+  });
+});
+
+describe('BattleController step animation for addition and subtraction (US3, T080)', () => {
+  const onlySubtraction = SUBTRACTION_43_MINUS_7.settings;
+  const onlyAddition: Partial<Settings> = { challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } };
+
+  function fixtureRound(beginnerAssist = true) {
+    const g = guidedController({ ...onlySubtraction, beginnerAssist }, SUBTRACTION_43_MINUS_7.seed);
+    g.controller.startRound('guided');
+    return g;
+  }
+
+  it('the fixture seed starts with 43 − 7 and no step animation', () => {
+    const s = fixtureRound().controller.getState();
+    expect(s.challenge!.operands).toEqual([43, 7]);
+    expect(s.stepAnimation).toBeNull();
+  });
+
+  it('requestHelp on 43 − 7 sets the step path 43, 40, 36 and changes no heart, turn or shot count (FR-024, FR-030, FR-081)', () => {
+    const g = fixtureRound();
+    const before = g.controller.getState();
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.stepAnimation).toEqual([43, 40, 36]);
+    expect(s.stepAnimation).toEqual(stepPath(s.challenge!, true));
+    expect(s.lives).toBe(before.lives);
+    expect(s.turn).toBe(before.turn);
+    expect(s.shotsSinceEnemyFire).toBe(before.shotsSinceEnemyFire);
+    expect(s.phase).toBe('challenge');
+    // Help use is recorded: the search is no longer independent (D5).
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(0);
+  });
+
+  it('without beginner assistance the step path has no stop at the ten: 43, 36', () => {
+    const g = fixtureRound(false);
+    g.controller.requestHelp();
+    expect(g.controller.getState().stepAnimation).toEqual([43, 36]);
+  });
+
+  it('for an addition the step path is stepPath(challenge, beginnerAssist)', () => {
+    const g = guidedRoundWhere((s) => s.challenge?.kind === 'addition', onlyAddition);
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.stepAnimation).toEqual(stepPath(s.challenge!, true));
+    expect(s.stepAnimation![0]).toBe(s.challenge!.operands[0]);
+    expect(s.stepAnimation!.at(-1)).toBe(s.challenge!.answer);
+  });
+
+  it('after the help, firing at 36 destroys the enemy and the new search has no step animation', () => {
+    const g = fixtureRound();
+    g.controller.requestHelp();
+    answer(g, 36);
+    const s = g.controller.getState();
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.phase).toBe('challenge');
+    expect(s.stepAnimation).toBeNull();
+  });
+
+  it('requestHelp is ignored while a shell is in flight and in free play', () => {
+    const g = fixtureRound();
+    g.advance(1_000);
+    g.controller.fireAt(50);
+    g.controller.requestHelp();
+    expect(g.controller.getState().stepAnimation).toBeNull();
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    controller.requestHelp();
+    expect(controller.getState().stepAnimation).toBeNull();
+    expect(controller.getState().help.level).toBe(0);
   });
 });

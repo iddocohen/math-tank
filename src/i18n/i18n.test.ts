@@ -115,8 +115,10 @@ describe('de table', () => {
       promptText({ key: 'addition', params: { a: 24, b: 8 } }),
       promptText({ key: 'addition', params: { a: 24, b: 8, c: 5 } }),
     ];
-    expect(prompts).toEqual(['43 − 7 = ?', '52 − 4 − 9 = ?', '24 + 8 = ?', '24 + 8 + 5 = ?']);
-    for (const p of prompts) expect(wordCount(p), p).toBeLessThanOrEqual(8);
+    // T083, US3, amendment 01: the prompt says where the enemy is.
+    expect(prompts).toEqual(['Der Gegner ist bei 43 − 7', 'Der Gegner ist bei 52 − 4 − 9', 'Der Gegner ist bei 24 + 8', 'Der Gegner ist bei 24 + 8 + 5']);
+    // Numbers and signs are not words (FR-057 counts text): 4 words each.
+    for (const p of prompts) expect(p.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length, p).toBeLessThanOrEqual(8);
   });
 
   it('t() returns the German table', () => {

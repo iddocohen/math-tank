@@ -1,6 +1,7 @@
 /**
  * Addition builder, answer first (FR-022, FR-025, research R10): a + b = answer, or a + b + c = answer with
- * `addition.steps: 2`. Every operand is at most addition.maxOperand, every sum at most addition.maxResult.
+ * `addition.steps: 2`. Every added number is at most addition.maxOperand (T216: the start can be any number in the
+ * range, for example 560 + 5 in 550 to 780), every sum at most addition.maxResult.
  */
 import type { DifficultyStep, Settings } from '../types';
 import { arithmeticAnswers, arithmeticDraft, arithmeticRules, searchOperands } from './arithmetic';

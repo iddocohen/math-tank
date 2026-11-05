@@ -219,11 +219,11 @@ describe('SettingsPage', () => {
     };
     const { persistence } = setup(stored);
     expect(COMING_SOON.length).toBeGreaterThan(0);
-    // Addition and subtraction limits work since Phase 16 and can be changed.
-    for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps]) {
+    // Addition and subtraction limits work since Phase 16, beginner assistance since Phase 17; they can be changed.
+    for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps, L.beginnerAssist]) {
       expect(field(label).disabled, label).toBe(false);
     }
-    for (const label of [L.comparison, L.helpNearestTen, L.music, L.speech, L.adaptive, L.beginnerAssist, L.timeLimit]) {
+    for (const label of [L.comparison, L.helpNearestTen, L.music, L.speech, L.adaptive, L.timeLimit]) {
       const input = field(label);
       expect(input.disabled, label).toBe(true);
       const note = document.getElementById(input.getAttribute('aria-describedby') ?? '');

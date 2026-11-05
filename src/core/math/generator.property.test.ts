@@ -159,11 +159,14 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
         'custom -20 to 30, negative results on',
         custom(-20, 30, { negativeResults: true, addition: { maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { maxOperand: 10, steps: 2 } }),
       ],
-      // The start is above any addition operand limit the settings page allows (at most the span), so only
-      // subtraction can come.
+      // The addition limit applies to the added numbers only, so the start can be any number in the range (T216).
       [
         'custom 550 to 780, operands up to 230',
         custom(550, 780, { addition: { maxOperand: 230, maxResult: 780, steps: 1 }, subtraction: { maxOperand: 230, steps: 2 } }),
+      ],
+      [
+        'custom 550 to 780, operands up to 10',
+        custom(550, 780, { addition: { maxOperand: 10, maxResult: 780, steps: 2 }, subtraction: { maxOperand: 10, steps: 1 } }),
       ],
     ];
 
@@ -181,7 +184,7 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
         }
         expect(problems).toEqual([]);
         expect(kinds.get('subtraction') ?? 0).toBeGreaterThan(SEEDS * 0.3);
-        if (name !== 'custom 550 to 780, operands up to 230') expect(kinds.get('addition') ?? 0).toBeGreaterThan(SEEDS * 0.1);
+        expect(kinds.get('addition') ?? 0).toBeGreaterThan(SEEDS * 0.3);
       });
     }
   });

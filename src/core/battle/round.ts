@@ -126,6 +126,7 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     shotsSinceEnemyFire: 0,
     elapsedMs: 0,
     lastEnemyHit: false,
+    stepAnimation: null,
     phase: 'aiming',
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),

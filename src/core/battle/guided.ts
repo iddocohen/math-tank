@@ -7,6 +7,7 @@
 import { deriveSeed } from '../rng';
 import type { BattleState, Challenge, InputMethod, RulerLevel, Settings } from '../types';
 import { generateChallenge } from '../math/generate';
+import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { FIRST_STEPS, moveTank } from './round';
 
@@ -66,6 +67,7 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
     selection: null,
     entry: emptyEntry(),
     orderTaps: [],
+    stepAnimation: null,
   };
 }
 
@@ -74,6 +76,18 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
  * solution step the selection is the answer, so one tap on fire or Enter fires at it (FR-013). The full help
  * escalation (time limit, help button, visuals) comes with US5.
  */
+/**
+ * The help button or H during a search (FR-030): the next help step, not a shot, no heart. For addition and
+ * subtraction the marker steps along stepPath (FR-024, US3). The help steps of the other kinds come with US5.
+ */
+export function afterHelpRequest(s: BattleState, settings: Settings): BattleState {
+  const c = s.challenge;
+  if (!c || (c.kind !== 'addition' && c.kind !== 'subtraction')) return s;
+  const level = Math.min(SOLUTION_HELP_LEVEL, s.help.level + 1) as BattleState['help']['level'];
+  const selection = level === SOLUTION_HELP_LEVEL ? c.answer : s.selection;
+  return { ...s, help: { ...s.help, level }, selection, stepAnimation: stepPath(c, settings.beginnerAssist) };
+}
+
 export function afterMiss(s: BattleState, now: number): BattleState {
   const wrongAnswers = s.help.wrongAnswers + 1;
   const level = Math.min(SOLUTION_HELP_LEVEL, Math.max(s.help.level, wrongAnswers)) as BattleState['help']['level'];

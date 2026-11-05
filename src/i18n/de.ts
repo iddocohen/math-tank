@@ -62,8 +62,9 @@ export const de = {
     missingBetween: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
     midpoint: (a: number, b: number) => `Welche Zahl liegt mitten zwischen ${a} und ${b}?`,
     readPosition: 'Wo steht der Gegner?',
-    addition: (a: number, b: number, c?: number) => `${a} + ${b}${c === undefined ? '' : ` + ${c}`} = ?`,
-    subtraction: (a: number, b: number, c?: number) => `${a} − ${b}${c === undefined ? '' : ` − ${c}`} = ?`,
+    // US3: the result of the exercise is the enemy's number (T083).
+    addition: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} + ${b}${c === undefined ? '' : ` + ${c}`}`,
+    subtraction: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} − ${b}${c === undefined ? '' : ` − ${c}`}`,
     greater: 'Tippe auf die größere Zahl.',
     smaller: 'Tippe auf die kleinere Zahl.',
     largest3: 'Tippe auf die größte Zahl.',

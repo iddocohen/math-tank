@@ -25,7 +25,7 @@ import { enemyShot } from '../ai/enemy';
 import { ENEMY_FIRE_EVERY } from './hitRule';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
-import { afterMiss, startSearch } from './guided';
+import { afterHelpRequest, afterMiss, startSearch } from './guided';
 import { buildAttempt } from './attempt';
 import { hiddenShellEntryX, hiddenShellPath } from './hiddenShell';
 import {
@@ -212,6 +212,17 @@ export class BattleController {
     this.firedNumber = n;
     this.firedAt = this.deps.clock();
     this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
+  }
+
+  /**
+   * Help button or H (FR-030): the next help step during a guided search. It is not a shot and costs no heart, so
+   * lives, turn and shotsSinceEnemyFire stay (FR-081). Addition and subtraction get the step animation (FR-024);
+   * the help steps of the other kinds come with US5 (Phase 19).
+   */
+  requestHelp(): void {
+    if (this.state.mode !== 'guided' || this.state.phase !== 'challenge') return;
+    const next = afterHelpRequest(this.state, this.settings);
+    if (next !== this.state) this.set(next);
   }
 
   shotAnimationDone(): void {

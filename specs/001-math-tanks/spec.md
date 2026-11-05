@@ -83,7 +83,7 @@ Some challenges are additions or subtractions whose result is the enemy's positi
 2. **Given** the exercise 24 + 8, **When** the step animation runs, **Then** the marker moves right from 24 to 30 and then to 32.
 3. **Given** crossing tens is turned off, **When** exercises are generated, **Then** no exercise crosses a ten boundary (for example 24 + 8 is never generated, but 24 + 5 can be).
 4. **Given** negative results are turned off (the default), **When** subtraction exercises are generated, **Then** no result is below 0 or below the range minimum.
-5. **Given** the parent sets maximum operand 10 and maximum result 20 for addition, **When** addition exercises are generated, **Then** no operand is above 10 and no result is above 20.
+5. **Given** the parent sets maximum operand 10 and maximum result 20 for addition, **When** addition exercises are generated, **Then** no added number is above 10 and no result is above 20.
 
 ---
 
@@ -279,7 +279,7 @@ A parent can choose 0 to 50, 0 to 1000 or any whole-number range with a width fr
 
 **Addition and subtraction**
 
-- **FR-022**: Addition challenges MUST respect parent limits for the maximum operand, the maximum result, crossing tens on or off, and crossing hundreds on or off, and MUST support single-step (a + b) and two-step (a + b + c) exercises.
+- **FR-022**: Addition challenges MUST respect parent limits for the maximum operand (the numbers added: every number after the starting number), the maximum result, crossing tens on or off, and crossing hundreds on or off, and MUST support single-step (a + b) and two-step (a + b + c) exercises. The starting number can be any number in the range, so in the range 550 to 780 with maximum operand 10 the game builds exercises such as 560 + 5. *(Clarified with amendment 02: before, the maximum operand also limited the starting number, so no addition could be built in ranges such as 550 to 780.)*
 - **FR-023**: Subtraction challenges MUST respect parent limits for the maximum operand (the number subtracted), the range, crossing tens on or off, crossing hundreds on or off, and negative results on or off (default off), and MUST support single-step and two-step exercises.
 - **FR-024**: Addition and subtraction MUST be visualizable on the number line as a marker moving right (addition) or left (subtraction) one step at a time from the starting number; in beginner assistance, the movement MUST pause at each crossed ten boundary.
 - **FR-025**: Addition and subtraction challenges MUST be generated so that the result is the target's position on the battlefield.

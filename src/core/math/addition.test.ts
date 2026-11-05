@@ -46,11 +46,12 @@ describe('buildAddition (FR-022, FR-025, US3 scenarios 3 and 5)', () => {
     { preset: '0-20' as const, min: 0, max: 20 },
     { preset: '0-100' as const, min: 0, max: 100 },
   ]) {
-    it(`with maximum operand 10 and maximum result 20 in ${range.min} to ${range.max}, no operand is above 10 and no result above 20`, () => {
+    it(`with maximum operand 10 and maximum result 20 in ${range.min} to ${range.max}, no added number is above 10 and no result above 20`, () => {
       const all = draws(settingsWith({ range }, { maxOperand: 10, maxResult: 20 }));
       expect(all.length).toBeGreaterThan(0);
       for (const d of all) {
-        for (const n of d.operands) expect(n, text(d)).toBeLessThanOrEqual(10);
+        // T216: the limit applies to the added numbers only; the start can be any number in the range.
+        for (const n of d.operands.slice(1)) expect(n, text(d)).toBeLessThanOrEqual(10);
         expect(d.answer, text(d)).toBeLessThanOrEqual(20);
         expect(d.operands[0]!).toBeGreaterThanOrEqual(range.min);
         expect(d.operands[1]!).toBeGreaterThanOrEqual(1);
@@ -96,7 +97,7 @@ describe('buildAddition (FR-022, FR-025, US3 scenarios 3 and 5)', () => {
         expect(n).toBeGreaterThanOrEqual(0);
         expect(n).toBeLessThanOrEqual(40);
       }
-      for (const n of d.operands) expect(n).toBeLessThanOrEqual(20);
+      for (const n of d.operands.slice(1)) expect(n).toBeLessThanOrEqual(20);
       expect(d.prompt).toEqual({ key: 'addition', params: { a, b, c } });
     }
   });
@@ -119,9 +120,43 @@ describe('buildAddition (FR-022, FR-025, US3 scenarios 3 and 5)', () => {
     }
   });
 
+  it('the start may be above the maximum operand: 0 to 100 with maximum operand 10 builds 50 from a start of 40 to 49 (T216)', () => {
+    const settings = settingsWith({}, { maxOperand: 10, maxResult: 100 });
+    expect(additionAnswers(settings, FULL_STEP)).toContain(50);
+    const d = buildAddition(50, settings, FULL_STEP, createRng(1));
+    expect(d).not.toBeNull();
+    expect(d!.operands[0]).toBeGreaterThanOrEqual(40);
+    expect(d!.operands[1]).toBeLessThanOrEqual(10);
+  });
+
+  it('with range 550 to 780 and maximum operand 10, additions such as 560 + 5 come and every answer finds one (T216, FR-022)', () => {
+    const range = { preset: 'custom' as const, min: 550, max: 780 };
+    for (const steps of [1, 2] as const) {
+      const settings = settingsWith({ range }, { maxOperand: 10, maxResult: 780, steps });
+      const answers = additionAnswers(settings, FULL_STEP);
+      expect(answers.length).toBeGreaterThan(200);
+      for (const answer of answers) {
+        const d = buildAddition(answer, settings, FULL_STEP, createRng(answer));
+        expect(d, `no addition for ${answer}`).not.toBeNull();
+        for (const n of d!.steps!) {
+          expect(n, text(d!)).toBeGreaterThanOrEqual(550);
+          expect(n, text(d!)).toBeLessThanOrEqual(780);
+        }
+        for (const n of d!.operands.slice(1)) {
+          expect(n, text(d!)).toBeGreaterThanOrEqual(1);
+          expect(n, text(d!)).toBeLessThanOrEqual(10);
+        }
+      }
+    }
+    const seen = new Set(draws(settingsWith({ range }, { maxOperand: 10, maxResult: 780 })).map(text));
+    expect(seen.has('560 + 5')).toBe(true);
+  });
+
   it('returns null when no addition reaches the answer under the limits', () => {
     const settings = settingsWith({}, { maxOperand: 10, maxResult: 100 });
-    expect(buildAddition(50, settings, FULL_STEP, createRng(1))).toBeNull();
-    expect(additionAnswers(settings, FULL_STEP)).not.toContain(50);
+    expect(buildAddition(0, settings, FULL_STEP, createRng(1))).toBeNull();
+    expect(additionAnswers(settings, FULL_STEP)).not.toContain(0);
+    const capped = settingsWith({}, { maxOperand: 10, maxResult: 30 });
+    expect(buildAddition(31, capped, FULL_STEP, createRng(1))).toBeNull();
   });
 });
