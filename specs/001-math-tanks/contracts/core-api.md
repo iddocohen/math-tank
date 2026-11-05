@@ -173,6 +173,38 @@ submitResult(r: Records, key: string, result: BestResult): { records: Records; n
 formatTime(ms: number): string                                         // m:ss, e.g. 372000 -> "6:12"
 ```
 
+## `core/rewards` (pure, amendment 11)
+
+```ts
+// items.ts
+GARAGE_ITEMS: readonly GarageItem[]          // all 17 items in garage order (colors, flags, trails, hats; standard item first in each)
+UNLOCK_ORDER: readonly ItemId[]               // the 13 unlockable items in the fixed order of FR-090; item i needs 10 * (i + 1) stars
+STANDARD_LOOK: Look                           // { color: 'blue', flag: 'star', trail: 'plain', hat: 'none' }
+itemById(id: string): GarageItem | undefined
+// garage.ts
+emptyGarage(): Garage                         // { version: 1, stars: 0, look: STANDARD_LOOK }
+newlyDestroyed(seen: number, current: number): number   // current - seen when current > seen, else 0
+addStars(g: Garage, n: number): { garage: Garage; unlocked: GarageItem[] }
+unlockedBetween(from: number, to: number): GarageItem[] // items with from < item.stars <= to, in unlock order
+isUnlocked(stars: number, id: ItemId): boolean
+starsNeeded(stars: number, id: ItemId): number          // 0 when unlocked
+equip(g: Garage, id: ItemId): Garage                    // unchanged when id is locked or unknown
+resetStars(): Garage                                     // same as emptyGarage()
+sanitizeLook(look: Look, stars: number): Look           // locked or unknown parts become the standard item
+lookKey(look: Look): string                              // 'color:sky flag:rocket trail:plain hat:none'
+garageSchema; migrateGarage(raw: unknown): unknown       // version 0 (no version) -> 1
+// looks.ts
+tankColor(id: ColorId): number                           // 0xRRGGBB; hue 175 to 235 degrees
+colorStripes(id: ColorId): boolean                       // true for navyStripes
+flagShapes(id: FlagId): Shape[]; hatShapes(id: HatId): Shape[]   // tank coordinates: x right, y up from the tank base
+trailStyle(id: TrailId): { line: number[]; dots: 'none' | 'sparkles' | 'bubbles' }
+type Shape = { type: 'poly'; points: [number, number][]; fill: number; stroke?: number }
+           | { type: 'circle'; x: number; y: number; r: number; fill: number; stroke?: number }
+           | { type: 'line'; from: [number, number]; to: [number, number]; width: number; color: number }
+```
+
+Guarantees: stars never go down except through `resetStars`; `addStars(g, 0)` unlocks nothing; `unlockedBetween(9, 10)` is the rocket flag; `unlockedBetween(0, 130)` is all 13 items; `equip` never chooses a locked item.
+
 ## `core/battle/entry` (pure)
 
 ```ts
@@ -190,10 +222,12 @@ loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
 loadRecords(kv: KeyValue): { records: Records; resetReason: 'none' | 'invalid' | 'unavailable' }   // key mathtanks.records.v1 (amendment 06)
 saveRecords(kv: KeyValue, r: Records): { ok: boolean }
-migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 -> 4 per data-model.md
-exportData(settings: Settings, progress: Progress, records: Records, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
-importData(text: string): { ok: true; settings: Settings; progress: Progress; records: Records } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' }
-                                                                      // a file without records imports with empty records
+loadGarage(kv: KeyValue): { garage: Garage; resetReason: 'none' | 'invalid' | 'unavailable' }   // key mathtanks.garage.v1 (amendment 11)
+saveGarage(kv: KeyValue, g: Garage): { ok: boolean }
+migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 -> 4 -> 5 per data-model.md
+exportData(settings: Settings, progress: Progress, records: Records, garage: Garage, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
+importData(text: string): { ok: true; settings: Settings; progress: Progress; records: Records; garage: Garage | null } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' | 'invalidGarage' }
+                                                                      // a file without records imports with empty records; without garage, garage is null and the caller keeps its own
 ```
 
 ## `i18n`

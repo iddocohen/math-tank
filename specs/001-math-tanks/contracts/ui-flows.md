@@ -1,17 +1,18 @@
 # Contract: screens and player flows
 
-Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen") [amendment 05](../amendment-05-no-shortcuts-settings-early.md) (no stepping shortcuts, no number while pointing, clear tanks, settings early) and [amendment 06](../amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire after every 2 shots, score, time and personal best) and [amendment 07](../amendment-07-visible-enemy-return-fire.md) (the enemy is always visible, the step count after every miss, the enemy fires back after every shot that does not destroy it).
+Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen") [amendment 05](../amendment-05-no-shortcuts-settings-early.md) (no stepping shortcuts, no number while pointing, clear tanks, settings early) and [amendment 06](../amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire after every 2 shots, score, time and personal best) and [amendment 07](../amendment-07-visible-enemy-return-fire.md) (the enemy is always visible, the step count after every miss, the enemy fires back after every shot that does not destroy it) and [amendment 11](../amendment-11-tank-garage.md) (stars, the garage, the chosen look in battle).
 
 ## Screens
 
 | Screen | Built with | Opens from | Content |
 |--------|-----------|-----------|---------|
-| Start | React | App load | Large "Spielen" button, "Freies Spiel" when the parent allows it, gear icon (press and hold), fullscreen button. Enter or Space starts guided mode |
+| Start | React | App load | Large "Spielen" button, "Freies Spiel" when the parent allows it, a large "Garage" button and a star symbol with the star total (both only with "Garage und Sterne" on, amendment 11), gear icon (press and hold), fullscreen button. Enter or Space starts guided mode; G opens the garage |
+| Garage | React | "Garage" button or G on the start screen | A preview tank (SVG) with the chosen color, flag, hat and a piece of the chosen trail; the star total; four groups (Farbe, Flagge, Spur, Hut) of numbered item buttons, at least 48 by 48 CSS pixels: unlocked items show their drawing and name and are chosen with one tap, the chosen one is marked; locked items show a grey silhouette and "noch N Sterne" and do not react; "Zurück" button (Escape). `data-testid="garage"`, `data-look` with `lookKey` of the chosen look |
 | Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield with the child's tank (3 hearts above it) and the enemy tank (no health bar, a target ring where the pointer line meets it), ruler (number line), tank counter at the top left (and the clock beside it when "Uhr beim Spielen zeigen" is on), challenge banner, large readout of typed digits, fire button, help button, speaker icon, pause, fullscreen, gear icon |
-| Round end | React overlay | Round over | Encouraging message, the result "9 Panzer getroffen in 6:12", then "Neuer Rekord!" with a short celebration, or the record in small neutral text "Dein Rekord: 12" (neither when "Rekord zeigen" is off), "Nochmal" button (Enter or Space), back to start |
+| Round end | React overlay | Round over | Encouraging message, the result "9 Panzer getroffen in 6:12", then "Neuer Rekord!" with a short celebration, or the record in small neutral text "Dein Rekord: 12" (neither when "Rekord zeigen" is off); with "Garage und Sterne" on, the line "Neu freigeschaltet: Raketen-Flagge!" with sparkles when the round unlocked items, and the star total; "Nochmal" button (Enter or Space), back to start |
 | Parent gate | React | Gear held for 2 s with mouse or touch | Opens a parent menu with "Einstellungen" and "Fortschritt". No key opens it |
 | Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with two ruler previews, "Am Anfang" and "Schwerste Stufe", for the chosen range), Hilfe, Gegner, Ton, Runde ("Rundenende" with "Bis alle Herzen weg" or "Gegner pro Runde" and the number of enemies, "Uhr beim Spielen zeigen", "Rekord zeigen"). Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
-| Progress | React | Parent menu | Per-skill table, sessions list, personal bests per range, starting level and round type (amendment 06), reset button with confirmation |
+| Progress | React | Parent menu | Per-skill table, sessions list, personal bests per range, starting level and round type (amendment 06), reset button with confirmation (keeps the stars); the star total and "Sterne zurücksetzen" with its own confirmation (amendment 11) |
 
 There are no angle or power controls, and the cannon cannot be dragged (amendment 01).
 
@@ -75,6 +76,13 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 3. The end screen shows an encouraging message ("Super! Alle Gegner getroffen." or "Gut gekämpft! Noch eine Runde?"), the result "9 Panzer getroffen in 6:12" ("1 Panzer" for one), and with "Rekord zeigen" on either "Neuer Rekord!" with a short pop and sparkle (no motion with reduced motion), or "Dein Rekord: 12" in small neutral text when a best exists. It never says "verloren" or "nicht geschafft" and never compares the two numbers.
 4. "Zum Start" during a round ends it without a result. "Neue Landschaft" does not end the round (amendment 08): new hills and one new enemy, while hearts, score and time continue. Free play has no other challenge and no bonus.
 
+## Garage and the chosen look (amendment 11, FR-089 to FR-097)
+
+1. Each enemy the child destroys adds 1 star at once (decoys add none), with "Garage und Sterne" on or off.
+2. The garage chooses the look: one tap on an unlocked item, or its number typed and Enter. The choice is stored at once.
+3. A battle draws the child's tank in the chosen color (dark blue with stripes adds light stripes on the body), with the chosen flag on the antenna and the chosen hat on the turret; the child's shells draw the chosen trail (sparkles: small white and yellow stars along the path; rainbow: several colored lines side by side; bubbles: light circles). With "Garage und Sterne" off, the standard look is used. The canvas carries `data-player-look` with `lookKey` of the look in use, for the end-to-end tests only (D4).
+4. The end screen compares the star total at the start of the round with the total now and names every item unlocked in between.
+
 ## Keyboard map (FR-059 to FR-064)
 
 | Key | Start screen | Battle (`challenge`, `aiming`) | Solution step (help level 3) | Paused | Round end |
@@ -86,6 +94,9 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 | Space | start guided round | none | fire at the solution | resume | new round |
 | H | none | next help step | none | none | none |
 | Escape | none | pause | pause | resume | none |
+| G | open the garage (only with "Garage und Sterne" on) | none | none | none | none |
+
+In the garage (amendment 11, FR-092): 0 to 9 type the number of an item (at most 2 digits; the item is selected and the preview shows it when it is unlocked), Backspace deletes the last digit, Enter chooses the selected item when it is unlocked, Escape goes back to the start screen. Space and every other key do nothing.
 
 - No other key does anything. The arrow keys were removed by amendment 05, because stepping toward the answer is a shortcut.
 - Keys are ignored while a shell is in flight (`playerShot`, `enemyTurn`), so a held Enter never fires twice.
@@ -104,7 +115,8 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 
 - Ruler previews (T218, FR-069): two rulers as wide as the settings page, "Am Anfang" at the starting level and "Schwerste Stufe" at the hardest level, drawn with `ticksFor` and the game's layout and label rows (T217) for the chosen range, and redrawn on every change of the range preset, the custom minimum or maximum, or either level.
 - "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
-- "Daten sichern" also includes the personal bests.
+- "Daten sichern" also includes the personal bests, the stars and the chosen look (amendment 11).
+- "Garage und Sterne" switch in the group Runde (on), amendment 11.
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.
 - A setting for a feature that is not built yet is shown disabled, with the note "kommt bald" (coming soon), instead of being hidden (amendment 05, FR-079).

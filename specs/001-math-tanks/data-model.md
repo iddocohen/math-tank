@@ -1,12 +1,12 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed) and [amendment 09](./amendment-09-comparison-one-enemy.md) (comparison with one enemy and the options in the banner; decoys, number plates, `orderTaps`, `notOnTank`, `orderAnswer` and the kinds `'equal'` and `'order3'` removed; `'middle3'` added) and [amendment 10](./amendment-10-decoys-without-plates.md) (decoy tanks without number plates at the other options; `decoys`, the `'decoy'` tank kind, `tapTank` and the shell from the top edge in comparison turns are back; options keep the tank gap).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed) and [amendment 09](./amendment-09-comparison-one-enemy.md) (comparison with one enemy and the options in the banner; decoys, number plates, `orderTaps`, `notOnTank`, `orderAnswer` and the kinds `'equal'` and `'order3'` removed; `'middle3'` added) and [amendment 10](./amendment-10-decoys-without-plates.md) (decoy tanks without number plates at the other options; `decoys`, the `'decoy'` tank kind, `tapTank` and the shell from the top edge in comparison turns are back; options keep the tank gap) and [amendment 11](./amendment-11-tank-garage.md) (stars, garage items and the chosen look in `mathtanks.garage.v1`; settings version 5 adds `garage`).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `4` | `4` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; `migrate` upgrades version 0 to 3 data (see below) |
+| `version` | `5` | `5` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; `migrate` upgrades version 0 to 4 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand`; `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -28,6 +28,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `showClock` | `boolean` | `false` | Shows an up-counting clock at the top during play (FR-084) |
 | `showRecords` | `boolean` | `true` | Shows "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086); the best is stored either way |
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
+| `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
 
@@ -36,6 +37,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 2**: `exactHit` is added with `false`; `version` becomes 3. Version 0 and 1 data go through both steps.
 
 **Migration from version 3** (amendment 06): `exactHit` is dropped; `roundType` is added with `'untilHearts'`, or `'enemyCount'` when `noDamage` is `true`; `showClock` is added with `false` and `showRecords` with `true`; `roundLength` is kept as the number of enemies, clamped to 1 to 20 (a whole number; anything else is left for validation to reject); `version` becomes 4. Version 0, 1 and 2 data go through every step.
+
+**Migration from version 4** (amendment 11): `garage` is added with `true` unless already set; `version` becomes 5. Version 0 to 3 data go through every step.
 
 `withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 
@@ -141,7 +144,7 @@ interface SessionSummary { id: string; startedAt: number; lastActiveAt: number; 
 
 A new session starts on game load, when `now - lastActiveAt > 30 minutes`, or when the calendar day of `now` differs from `startedAt`. Progress is saved after each attempt, between turns, never during a shot animation.
 
-**Export file**: `{ app: 'math-tanks', exportedAt, settings, progress, records }` as JSON; import validates every part with the same schemas and migrations as loading. A file without `records` (exported before amendment 06) imports with empty records.
+**Export file**: `{ app: 'math-tanks', exportedAt, settings, progress, records, garage }` as JSON; import validates every part with the same schemas and migrations as loading. A file without `records` (exported before amendment 06) imports with empty records. A file without `garage` (exported before amendment 11) keeps the garage of this browser, because stars are never lost (FR-096).
 
 ## Records (persisted: `mathtanks.records.v1`, amendment 06)
 
@@ -151,6 +154,31 @@ interface Records { version: 1; best: Record<string, BestResult> } // keyed by r
 ```
 
 `recordKey(s) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` (FR-086), from the round's settings snapshot. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
+
+## Garage (persisted: `mathtanks.garage.v1`, amendment 11)
+
+```ts
+type GarageKind = 'color' | 'flag' | 'trail' | 'hat';
+type ColorId = 'blue' | 'sky' | 'teal' | 'turquoise' | 'navyStripes';
+type FlagId = 'star' | 'rocket' | 'dragon' | 'football' | 'lightning';
+type TrailId = 'plain' | 'sparkles' | 'rainbow' | 'bubbles';
+type HatId = 'none' | 'crown' | 'helmet';
+interface Look { color: ColorId; flag: FlagId; trail: TrailId; hat: HatId }
+interface GarageItem { id: ColorId | FlagId | TrailId | HatId; kind: GarageKind; stars: number }  // stars needed; 0 for the standard items
+interface Garage { version: 1; stars: number; look: Look }   // stars: whole number >= 0
+```
+
+`GARAGE_ITEMS` (src/core/rewards/items.ts) lists every item in the order the garage shows them, grouped by kind (colors, flags, trails, hats), with the standard item first in each group; the garage numbers them 1 to 17 in this order. `UNLOCK_ORDER` is the fixed unlock order of FR-090; item `i` (0-based) of it needs `10 * (i + 1)` stars: `rocket` 10, `sky` 20, `sparkles` 30, `crown` 40, `dragon` 50, `teal` 60, `rainbow` 70, `helmet` 80, `football` 90, `turquoise` 100, `bubbles` 110, `lightning` 120, `navyStripes` 130. `STANDARD_LOOK = { color: 'blue', flag: 'star', trail: 'plain', hat: 'none' }`.
+
+- Unlocked items are not stored: `isUnlocked(stars, id)` is `stars >= item.stars` (FR-097).
+- `addStars(garage, n)` returns `{ garage, unlocked }` with `unlocked` the items whose threshold lies in `(stars, stars + n]`, in unlock order. `unlockedBetween(from, to)` gives the same list for any two totals; the end screen uses it with the star total at the start of the round.
+- `newlyDestroyed(seen, current)` is `current - seen` when `current > seen`, else 0; the app calls it with each new `RoundState.enemiesDestroyed`, which counts enemies only, never decoys (FR-083), and resets `seen` when a new round starts at 0.
+- `equip(garage, id)` returns the garage with `id` chosen for its kind when it is unlocked, else the garage unchanged. `resetStars()` returns `{ version: 1, stars: 0, look: STANDARD_LOOK }`.
+- `starsNeeded(stars, id)` is `max(0, item.stars - stars)`, shown as "noch N Sterne".
+- `lookKey(look)` is `color:<id> flag:<id> trail:<id> hat:<id>`, the canvas attribute `data-player-look` in battle.
+- `looks.ts` gives each item's drawing as plain shapes in tank coordinates (polygons, circles and lines with colors), drawn by Phaser in battle and by SVG in the garage preview, and `tankColor(id)` the body color. Every tank color has a hue between 175 and 235 degrees (blue to blue-green), far from the red enemy (hue near 0).
+
+**Loading** (`loadGarage`): a missing key gives `resetStars()`. Data without `version` (version 0) gets `version: 1`, a whole-number `stars` of at least 0 (anything else gives 0) and a full `look` (missing parts from `STANDARD_LOOK`). After the schema check, every part of `look` that is unknown or not unlocked for `stars` becomes the standard item of its kind. Damaged JSON or a failed schema check loads `resetStars()` and reports `'invalid'` like settings. "Fortschritt zurücksetzen" never touches this key; "Sterne zurücksetzen" writes `resetStars()`.
 
 ## Difficulty ladders
 

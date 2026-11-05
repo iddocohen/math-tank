@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -16,7 +16,7 @@ description: "Task list for Math Tanks implementation"
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: can run in parallel (different files, no dependency on an unfinished task in the same phase)
-- **[Story]**: the user story the task belongs to (US1 to US9)
+- **[Story]**: the user story the task belongs to (US1 to US10)
 - Each task names its file paths, the FR, SC and AC IDs it covers, and a done condition where the result is not obvious.
 
 ## Path Conventions
@@ -46,6 +46,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **D17**: Amendment 05 arrived after Phase 11a. Phase 11b removes `nudge`, the arrow keys and the −1 and +1 buttons, hides every number while pointing, tracks `RoundState.inputMethod` so that keyboard input skips `findNumber`, and builds the clear tank identity. The settings phases moved directly after Phase 11b and were renumbered 12 and 13 (they keep task IDs T103 to T116 and T182); the guided phases that followed became Phases 14 to 20. The progress page stays in Phase 22, because it needs the attempt records of guided mode; until then the parent menu shows "Fortschritt" disabled with "kommt bald". Phase 12 works on free play alone: `updateSettings` applies at the next `startRound` in either mode. New tasks start at T194.
 - **D18**: Amendment 06 arrived after Phase 13. Phase 13a builds it on free play: `shotKind` returns `'hit'` (exact number, the enemy is destroyed and replaced), `'near'` (on the body, the enemy shakes, a miss) or `'miss'`; `TankState.health`, `MAX_DAMAGE`, `damageAt`, `enemyDamage`, `enemyDamageFactor`, `exactHit` and the outcome `'close'` are removed from new code (a stored `'close'` still loads). `RoundState` gains `lives` (3), `enemiesDestroyed`, `shotsSinceEnemyFire`, `elapsedMs` and `lastEnemyHit`; `outcome` becomes `'goalReached' | 'heartsGone'`. The enemy fires after every 2 shots of the child, misses included, in both modes; this changes the amendment 01 rule that a miss never gives the enemy a turn (FR-013, SC-005). Settings become version 4 (`roundType`, `showClock`, `showRecords`; `roundLength` 1 to 20 counts enemies). Personal bests live in `src/core/records/records.ts` under the storage key `mathtanks.records.v1` and are part of the export file. Later unchecked tasks that assumed health, damage values, the Volltreffer, `'close'`, `exactHit` or rounds counted in turns were rewritten in place; new tasks start at T204.
 - **D19**: Amendment 07 arrived after Phase 18a. Phase 18b makes the enemy and its pointer line visible in every mode and challenge kind (removing `enemyFound`, `HiddenTank`, `publicState` and the reduced `getState()` built in Phase 14 and T215), shows the step count after every miss in every mode (replacing D12's guided rule and the T068 and T215 rule that hid it during a search), and makes the enemy fire after every shot that does not destroy it (removing `shotsSinceEnemyFire` and `ENEMY_FIRE_EVERY` from Phase 13a). The enemy's aim becomes a seeded hit draw (1/6, 1/4, 1/3; never the first shot of a round) and a deliberate near miss 40 to 100 world units beside the child's tank. In comparison turns the shell still falls from the top edge. `data-shots-since-enemy-fire` (D4) is removed. Later unchecked tasks that assumed a hidden enemy or the every-2-shots rhythm (T095, T098, the Phase 19 goal) were rewritten in place; new tasks start at T220.
+- **D22**: Amendment 11 arrived after Phase 22c. Phases 22d (engine-free core and storage) and 22e (screens and battle look) build it before Phase 23. The reward logic lives in `src/core/rewards/` (`items.ts`, `garage.ts`, `looks.ts`) with no React or Phaser import. Stars and the chosen look are stored under their own key `mathtanks.garage.v1` (version 1), so the progress reset (FR-040) cannot touch them; unlocked items follow from the star total and are not stored. Settings become version 5 (`garage`, default `true`). The app counts stars from `RoundState.enemiesDestroyed`, which already excludes decoys (FR-083), so the controller does not change. The garage keyboard uses typed numbers like answers: items are numbered 1 to 17, Enter chooses. The battle canvas gets `data-player-look` (D4). New tasks start at T252.
 
 ---
 
@@ -618,6 +619,41 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 
 ---
 
+## Phase 22d: Amendment 11 stars, unlocks and storage
+
+**Goal**: Engine-free star counting, the fixed unlock list, the chosen look and its storage, export and import ([amendment 11](./amendment-11-tank-garage.md)), so Phase 22e only draws them.
+
+**Independent Test**: `pnpm test` passes for `src/core/rewards/`, `src/core/storage/`, `src/core/settings/` and `src/app/persistence.test.ts`: 9 stars plus 1 destroyed enemy unlock the rocket flag; a progress reset keeps the stars; an export and import keeps stars and look.
+
+- [ ] T252 [P] [US10] Write `src/core/rewards/garage.test.ts` before the code: `GARAGE_ITEMS` has 17 items (5 colors, 5 flags, 4 trails, 3 hats, standard item first in each kind, unique ids); `UNLOCK_ORDER` is rocket, sky, sparkles, crown, dragon, teal, rainbow, helmet, football, turquoise, bubbles, lightning, navyStripes with thresholds 10 to 130 in steps of 10, and standard items need 0; `newlyDestroyed` (0 to 3 gives 3, 3 to 3 gives 0, 3 to 0 at a new round gives 0); `addStars` from 9 by 1 unlocks the rocket flag, from 15 by 30 unlocks sky, sparkles and crown in order, by 0 unlocks nothing, and never lowers the total; `unlockedBetween(0, 130)` lists all 13 and `unlockedBetween(130, 200)` none; `starsNeeded(14, 'sky')` is 6; `equip` chooses an unlocked item for its kind and ignores a locked or unknown one; `resetStars` gives 0 stars and `STANDARD_LOOK`; `sanitizeLook` replaces locked parts; `lookKey` format (FR-089, FR-090, FR-093, FR-096, FR-097)
+- [ ] T253 [P] [US10] Write `src/core/rewards/looks.test.ts` before the code: every `tankColor` has a hue from 175 to 235 degrees and differs from the enemy color 0xb3261e; only `navyStripes` has stripes; every flag except none and every hat except `none` has at least one shape, `hatShapes('none')` is empty; every shape point lies within the tank's drawing area (x -60 to 60, y 0 to 110); `trailStyle('plain')` has one line color and no dots, the other trails differ from it (FR-077, FR-090, FR-093)
+- [ ] T254 [US10] Implement until T252 and T253 pass: `src/core/rewards/items.ts`, `src/core/rewards/garage.ts` (with `garageSchema` and `migrateGarage`), `src/core/rewards/looks.ts` (FR-089, FR-090, FR-093, FR-097)
+- [ ] T255 [P] [US10] Update tests before the code: `src/core/settings/settings.test.ts` (version 5, `garage` default `true`, the schema requires a boolean `garage`); `src/core/storage/storage.test.ts` (version 4 settings migrate to version 5 with `garage: true`, older versions go through every step; `loadGarage` gives 0 stars for a missing key, `'invalid'` and 0 stars for damaged JSON or negative stars, migrates data without `version`, replaces a locked or unknown look part with the standard item; `saveGarage` round trip); `src/core/storage/exportImport.test.ts` (the export contains `garage`; import round trip keeps stars and look; a file without `garage` gives `garage: null`; a damaged `garage` gives `invalidGarage`) (FR-046, FR-048, FR-048a, FR-096, FR-097)
+- [ ] T256 [US10] Implement until T255 passes: `garage` in `src/core/settings/schema.ts` and `src/core/settings/defaults.ts`; the version 4 to 5 step in `src/core/storage/migrate.ts`; `GARAGE_KEY`, `loadGarage` and `saveGarage` in `src/core/storage/storage.ts`; `garage` in `src/core/storage/exportImport.ts` (FR-046, FR-048, FR-048a, FR-097)
+- [ ] T257 [P] [US10] Update `src/app/persistence.test.ts` before the code: `garage()` loads the stored garage; `addStars(n)` saves at once and returns the unlocked items; `saveProgress(emptyProgress())` keeps the stars; `equip(id)` saves the look and ignores locked items; `resetStars()` saves 0 stars and the standard look; `exportText` contains the garage; `importText` of a file without garage keeps the stars; a damaged garage key adds `'invalid'` to `resetReason` (FR-040, FR-048a, FR-089, FR-096, FR-097)
+- [ ] T258 [US10] Implement until T257 passes: `garage`, `addStars`, `equip`, `resetStars` and the garage in export and import in `src/app/persistence.ts` (FR-048a, FR-089, FR-096)
+
+**Checkpoint**: Stars, unlocks and the chosen look are counted, stored, migrated, exported and imported by tested core code.
+
+---
+
+## Phase 22e: Amendment 11 garage screen, end screen and battle look
+
+**Goal**: The child opens the garage from the start screen with the mouse, touch or G, chooses unlocked items, sees the look in battle, and reads new items and the star total on the end screen; the parent can turn the garage off and reset the stars ([amendment 11](./amendment-11-tank-garage.md)).
+
+**Independent Test**: `tests/e2e/garage.spec.ts` passes in Chromium, WebKit and Firefox: with 9 stored stars and one enemy per round, destroying the enemy shows "Neu freigeschaltet: Raketen-Flagge!" and 10 stars; G, 7 and Enter choose the rocket flag; the next battle's canvas has `data-player-look` with `flag:rocket`.
+
+- [ ] T259 [P] [US10] Update `src/app/keyboard.test.ts` before the code: on the start screen G and g give `{ type: 'garage' }` only with `garage: true` in the context, else nothing; Enter and Space still start; on the new screen `'garage'` digits give `digit`, Backspace `backspace`, Enter `confirm`, Escape `back`, and Space, H, Minus and letters give nothing (FR-062, FR-092)
+- [ ] T260 [P] [US10] Write and update component tests before the code: new `src/app/Garage.test.tsx` (all 17 items in four groups with their numbers; with 14 stars the rocket flag is a button that equips on click and the sky color shows "noch 6 Sterne", a grey silhouette and does nothing on click; typing 7 and Enter with the keyboard handler equips the rocket flag; the preview's `data-look` follows the choice; every item button is at least 48 by 48 CSS pixels by its CSS class; "Zurück" calls `onBack`); `src/app/StartScreen.test.tsx` (the "Garage" button and the star total only with the garage setting on); `src/app/RoundEnd.test.tsx` (the unlock line names one or two items in one line, the star total shows; neither without garage data); `src/app/ProgressPage.test.tsx` ("Fortschritt zurücksetzen" keeps the stars; "Sterne zurücksetzen" asks first and then sets 0); `src/app/SettingsPage.test.tsx` (the "Garage und Sterne" switch saves `garage`) (FR-040, FR-053, FR-091, FR-092, FR-094, FR-095, FR-096)
+- [ ] T261 [P] [US10] Write `tests/e2e/garage.spec.ts` before the code, keyboard only, in Chromium, WebKit and Firefox: stored settings (free play, "Gegner pro Runde" 1) and a stored garage with 9 stars; `/?seed=3&mode=free`, Enter, type the enemy's number and Enter; the end screen shows "Neu freigeschaltet: Raketen-Flagge!" and the star total 10; reload, the start screen shows 10 stars; G opens the garage; 7 and Enter choose the rocket flag (`data-look` has `flag:rocket`); Escape returns to the start screen; Enter starts a round whose canvas has `data-player-look` with `flag:rocket`; a second case turns `garage` off in stored settings and checks that there is no garage button, no star total and that G does nothing (FR-062, FR-089, FR-091 to FR-096, US10 scenarios 3, 4, 6, 7 and 8)
+- [ ] T262 [US10] Implement the screens until T259 and T260 pass: `src/app/keyboard.ts` (`'garage'` screen, `garage` and `back` actions); new `src/app/Garage.tsx` and `src/app/TankPreview.tsx` (SVG drawing from `src/core/rewards/looks.ts`); `src/app/StartScreen.tsx` (button and star total); `src/app/RoundEnd.tsx` (unlock line with sparkles, star total); `src/app/ProgressPage.tsx` (star total, "Sterne zurücksetzen" with confirmation); `src/app/SettingsPage.tsx` and `src/app/comingSoon.ts` (`garage` field); `src/app/App.tsx` (the garage screen, star counting with `newlyDestroyed`, the star total at round start); `src/app/styles.css`; texts in `src/i18n/de.ts` (FR-040, FR-046, FR-053, FR-056, FR-062, FR-089, FR-091, FR-092, FR-094, FR-095, FR-096)
+- [ ] T263 [US10] Implement the battle look until T261 passes: `look` option in `src/game/createGame.ts` and `src/game/BattleScene.ts` (`data-player-look` on the canvas); the chosen color, stripes, flag and hat for the child's tank in `src/game/TankView.ts`; the chosen trail for the child's shells in `src/game/ProjectileView.ts`; the enemy and decoys keep their look (FR-077, FR-093)
+- [ ] T264 [US10] Run lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox; take muted headless screenshots of the garage and of a battle with an equipped look, stored in the session scratchpad (FR-091, FR-093)
+
+**Checkpoint**: US10 complete: the tank garage works with mouse, touch and keyboard, the look shows in battle, and the parent controls it.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
@@ -678,6 +714,8 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phase 22a (amendment 09)**: depends on Phases 18, 18b, 20 and 22. Blocks Phase 23, whose keyboard spec T183 types the comparison answer. T236 runs before T237, T238 before T239, T240 before T241, and T242 last.
 - **Phase 22b (UI polish)**: depends on Phase 22a. Runs before Phase 23. T228 runs before T229 (same test file); T231 and T235 both change `src/core/numberline/ticks.ts`; T230 runs before T233 and T234 (same overlay code). Task IDs T228 to T231 and T233 to T235 are new; T232 was already used by amendment 08, so P10 is T243.
 - **Phase 22c (amendment 10)**: depends on Phases 22a and 22b. Runs before Phase 23. T244 runs before T245, T246 before T247, T248 and T249 before T250, and T251 last. T245 runs before T247, because the battle tests use the comparison fixture.
+- **Phase 22d (amendment 11 core)**: depends on Phases 13a and 22c. T252 and T253 run before T254, T255 before T256, T257 before T258; T254 and T256 run before T257.
+- **Phase 22e (amendment 11 screens and battle look)**: depends on Phase 22d. T259, T260 and T261 run before T262 and T263; T264 runs last. Runs before Phase 23, whose keyboard spec T183 must also allow G on the start screen.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -692,6 +730,7 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - US6 (P2): uses US1 screens and the version 3 settings; independent of US2 to US5; built before US2's guided mode by amendment 05.
 - US7 (P3): core logic independent; integration needs US2 and US6.
 - US8 (P3): needs a playable guided game (US2); the keyboard spec needs US4 and US5.
+- US10 (P2, amendment 11): needs the score of amendment 06 (FR-083), the settings and progress pages (US6, US7) and the decoys of amendment 10.
 
 ### Within each phase
 
@@ -710,6 +749,8 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phase 18b**: T220, T222 and T224 together; then T221, T223 and T225; then T226; T227 last.
 - **Phase 16 (US3)**: T071, T072, T073, T074 together.
 - **Phase 21 (US7)**: T117, T118, T119, T120 together; Phase 21 as a whole can run in parallel with Phases 11 to 20.
+- **Phase 22d**: T252, T253 and T255 together; then T254 and T256; then T257; T258 last.
+- **Phase 22e**: T259, T260 and T261 together; then T262 and T263; T264 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -777,32 +818,32 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-037 | T118, T122, T123, T129, T130 |
 | FR-038 | T117, T121, T129, T130 |
 | FR-039 | T119, T124 |
-| FR-040 | T127, T128, T132, T133 |
+| FR-040 | T127, T128, T132, T133, T257, T260, T262 |
 | FR-041 | T026, T027, T220, T221, T222, T223 |
 | FR-042 | T026, T027, T034, T220, T221, T222 |
 | FR-043 | T026, T027, T032, T208, T209, T220, T221, T222 |
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262 |
 | FR-047 | T011, T013, T112, T113, T175, T176 |
-| FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207 |
-| FR-048a | T103, T104, T114, T205, T207, T210, T211 |
+| FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256 |
+| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154 |
 | FR-051 | T003, T134, T139 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
-| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234, T249, T250 |
+| FR-053 | T046, T047, T050, T068, T089, T136, T147, T153, T168, T170, T199, T201, T234, T249, T250, T260, T262 |
 | FR-054 | T032, T041, T111, T140, T141 |
 | FR-055 | T137, T138 |
-| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179 |
+| FR-056 | T006, T015, T049, T069, T083, T091, T116, T133, T151, T172, T179, T262 |
 | FR-057 | T014, T049, T069, T083, T152, T153, T172, T179, T230 |
 | FR-058 | T029, T035, T050, T136, T184 |
 | FR-059 | T141, T153, T163, T165, T166, T167, T171, T183 |
 | FR-060 | T145, T146, T157, T161, T163, T165, T166, T167, T183 |
 | FR-061 | T158, T163, T165, T166, T167, T183, T194, T195, T197, T202 |
-| FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202 |
+| FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202, T259, T261, T262 |
 | FR-063 | T157, T158, T161, T170, T183 |
 | FR-064 | T087, T088, T145, T146, T183, T238, T246, T247, T249, T250 |
 | FR-065 | T156, T160, T163, T169 |
@@ -817,7 +858,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
 | FR-076 | T060, T062, T065, T183, T195, T196, T197, T199 |
-| FR-077 | T198, T200, T202, T241, T248, T250 |
+| FR-077 | T198, T200, T202, T241, T248, T250, T253, T263 |
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
@@ -827,8 +868,17 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
 | FR-085 | T206, T210, T211, T214 |
 | FR-086 | T205, T206, T207, T210, T211, T213, T214 |
-| FR-087 | T127, T128, T132, T133 |
+| FR-087 | T127, T128, T132, T133, T252 |
 | FR-088 | T234 |
+| FR-089 | T252, T254, T257, T258, T261, T262 |
+| FR-090 | T252, T253, T254 |
+| FR-091 | T260, T261, T262, T264 |
+| FR-092 | T259, T260, T261, T262 |
+| FR-093 | T252, T253, T254, T261, T263, T264 |
+| FR-094 | T260, T261, T262 |
+| FR-095 | T260, T261, T262 |
+| FR-096 | T252, T255, T257, T258, T260, T261, T262 |
+| FR-097 | T252, T254, T255, T256, T257 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -852,3 +902,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-08 | T109, T116, T155, T214 |
 | AC-09 | T118, T129, T155 |
 | AC-10 | T134, T142, T155 |
+| US10 | T252 to T264 |

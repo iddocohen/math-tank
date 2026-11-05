@@ -130,3 +130,17 @@ After playing amendment 09, the product owner said: "I liked the decoy tanks, th
 - Unchanged from amendment 09: the banner question, the removed kinds "equal" and "order3", the "middle of three" kind, help steps 1 and 2, and the learning records.
 
 The spec (US4, Edge Cases, FR-010, FR-026, FR-027, FR-031, FR-043a, FR-064, FR-066, FR-070, FR-072, FR-073, FR-077, FR-081, Key Entities, Assumptions), amendment 08 item 1, the data model, the contracts, quickstart (AC-06) and tasks (Phase 22c) were updated to match.
+
+## Amendment 11
+
+**Date**: 2026-11-05
+
+The product owner asked: "What is one missing feature that would make this game from good to great for a child", accepted the recommended tank garage, and said "Yes do it". This is an intended addition, not drift.
+
+- **[Amendment 11](./amendment-11-tank-garage.md)** implements PRD section 7.3 (rewards: new tank appearances, projectile visual effects, unlockable cosmetic upgrades), which PRD section 14 had deferred until the core experience works. The spec's Assumptions listed these rewards as deferred; that entry now names only what stays deferred (achievement badges, advanced AI, detailed analytics, battlefield themes).
+- PRD section 7.3 requires that rewards do not depend on perfect performance and have no gambling-like mechanics or monetization. Stars come from every destroyed enemy, mistakes never cost stars, items unlock in a fixed order every 10 stars, and there is no chance, no shop and no comparison with other people (FR-087, FR-089, FR-090).
+- PRD section 8 (low frustration) is kept: the end screen names only new items and the star total, never how many stars are missing, and nothing is shown during play (FR-094, FR-095).
+- The parent can turn the garage off, export and import the stars, and reset them separately from the learning progress (FR-096).
+- Decisions of this update that the amendment does not state: 13 items (the amendment says "about 12" and names 4 colors, 4 new flags, 3 trails and 2 hats); unlocked items are derived from the star total and not stored separately; the garage numbers items 1 to 17, so items above 9 take two digits; with the garage off the child's tank uses the standard look; stars live under their own storage key `mathtanks.garage.v1` so "Fortschritt zurücksetzen" cannot touch them.
+
+The spec (new US10, Edge Cases, FR-040, FR-046, FR-048a, FR-062, FR-087, new FR-089 to FR-097, Key Entities, Assumptions), the data model (Settings version 5, Garage), the contracts (`core/rewards`, `core/storage`, garage screen, keyboard map), quickstart (scenario 23) and tasks (Phases 22d and 22e) were updated to match.
