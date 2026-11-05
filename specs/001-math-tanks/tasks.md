@@ -38,7 +38,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **D11**: Keyboard: `keyToAction` in `src/app/keyboard.ts` and `applyKey` in `src/core/battle/entry.ts` are pure and unit-tested; `useKeyboard` listens on `window`; the app root gets focus on load and on screen changes; keys with Ctrl, Alt or Meta, and repeated Enter or Space, are ignored; the gear ignores keys (research R22).
 - **D12**: Miss display: guided misses show the landing number large and, from help step 1, the direction; the step count from the landing number appears at help step 2. Free play shows a distance bracket with the step count after every miss. After each free-play hit the enemy moves to a new visible position.
 - **D13**: Settings become version 2 in one migration (Phase 10): drop `aimCorrection`, replace `labelLevel` with `rulerLevelStart` and `rulerLevelMax`. The storage keys keep their names.
-- **D14**: Free play uses only `readPosition` and records no attempts. *(The level 5 tolerance note is superseded by amendment 04: there is no read-the-ruler tolerance.)*
+- **D14**: Free play uses only `readPosition` and records no attempts. *(Reversed by amendment 17: "Nur Zahlenstrahl" replaces free play and records attempts; Phase 24a.)* *(The level 5 tolerance note is superseded by amendment 04: there is no read-the-ruler tolerance.)*
 - **D16**: Amendment 04 arrived after Phase 11. Phase 11a builds the hit rule, the Volltreffer, the pointer line, the `exactHit` setting (settings version 3) and the `'close'` outcome type, and finishes T181. Later unchecked tasks that assumed exact-only hits or the read-the-ruler tolerance were rewritten in place; new tasks start at T186.
 - **D15**: *Superseded by amendment 09 (Phase 22a).* There are no tank labels, no tank tapping and no `order3`: a typed number in a comparison is fired like in every other challenge.
 - **D20**: Amendment 09 arrived after Phase 22. Phase 22a removes the decoy tanks, number plates, `tapTank`, order badges, `notOnTank`, `orderAnswer`, the kinds `'equal'` and `'order3'` and `src/core/battle/topShell.ts`, and adds `'middle3'`. The banner names the options from `prompt.params` (`o1`, `o2`, `o3`). Options are at least `minOptionGap = max(2, ceil(0.02 * (max - min)))` apart. The comparison ladder's `maxNumberFraction` also limits the option spread around the answer (data-model.md "Comparison ladder"). Stored attempts with `'equal'` or `'order3'` still load (`StoredChallengeKind`). FR-070 keeps "no comparison right after Neue Landschaft", although a comparison turn now also shows one enemy, because amendment 09 does not change FR-070.
@@ -827,6 +827,28 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - [X] T325 C1 to C8 and dead code: comments that described removed rules now describe the current ones (`src/core/battle/controller.ts` enemy hits follow the misses in a row, `src/core/battle/hitRule.ts` and `round.ts` no hit circle, `src/app/BattleOverlay.tsx` no health bars, `src/core/math/readPosition.ts` exact number only, `EncodedTransfer.code` is `v2.`); the saved simplifier patch is applied: `src/core/physics/aim.ts` and its test removed (`solveAim` was unused since amendment 07; contracts/core-api.md updated), `barColor`, `TANK_HIT_RADIUS`, `turnsLeft`, `isNumberLineKind` and `checkAnswer` removed, `stepCount` in `src/i18n/de.ts`, `cssColor` in `src/core/view/shade.ts`, `isMultiple` from `ticks.ts` reused, nested ternaries turned into `if` statements
 - [X] T326 Low review items that were small and safe: L3 "Daten sichern" catches a refused download and says "Die Sicherung konnte nicht heruntergeladen werden.", and revokes the file address after 60 seconds instead of at once; R6 the file name uses the local date; L4 a failed service worker update waits for the next start screen instead of an unhandled rejection, and a failed registration is logged; R7 the speaker prefers German voices on the device (`localService`) to network voices; T4 `roundLength` and `timeLimitSeconds` are whole numbers in the schema, and `parseSettings` in `src/core/storage/migrate.ts` is the one function that storage, the file import and the transfer use to read settings; P9 the e2e checks that a tap or a help request fires nothing read every `data-phase` of the wait (`recordPhases` in `tests/e2e/fixtures.ts`); P10 `tests/e2e/help.spec.ts` waits `GUESS_RESPONSE_MS + 400` ms instead of a fixed 1600. Tests: `src/app/SettingsPage.test.tsx`, `src/app/swUpdate.test.ts`, `src/audio/speaker.test.ts`, `src/core/settings/settings.test.ts`
   - Deferred: L5 (speech `onerror` hiding the speaker button after `not-allowed`, and the AudioContext left open after a failed `resume()` or in the `interrupted` state on iOS). It changes audio behaviour that only real iOS devices show; the test browsers have their audio silenced on purpose, so a fix could not be observed working. It belongs to the device check of T155.
+
+## Phase 24a: Amendment 17 play modes and faster adaptive difficulty
+
+**Purpose**: [Amendment 17](./amendment-17-modes-faster-adaptive.md). Three play modes on the start screen ("Gemischt", "Nur Zahlenstrahl", "Nur Rechnen"), chosen by the parent; "Nur Zahlenstrahl" replaces free play; every mode records attempts; a skill goes up after 3 independent answers in a row and down when 2 of the last 3 needed help.
+
+**Independent test**: `tests/e2e/modes.spec.ts` starts a round in each mode from the start screen with the keyboard and sees the step of the number-positions skill rise after 3 independent hits in one round.
+
+- [ ] T327 [P] Write the new adaptive rule tests in `src/core/progress/adaptive.test.ts`: 3 independent non-guess answers in a row raise the step; 2 independent then an assisted answer do not; guesses between them neither count nor break the row; 2 assisted or unsolved of the last 3 lower the step; the row starts again after a step change; a stored `'close'` is left out; the step never goes above the top the settings allow or below 0; `rowToRaise` gives 3, 2, 1 and `null` at the top or with adaptive off. Replace the tests of the old 5-of-6 and 3-of-5 rule (FR-037, FR-038, FR-040)
+- [ ] T328 Implement the rule and `rowToRaise` in `src/core/progress/adaptive.ts` (FR-037)
+- [ ] T329 [P] Write settings version 8 tests: `src/core/settings/settings.test.ts` (defaults have `playModes` all on and no `freePlay`; `noPlayMode` when all three are off; `noChallengeTypes` when no challenge type is on and "Gemischt" or "Nur Rechnen" is offered, none when only "Nur Zahlenstrahl" is offered); `src/core/storage/storage.test.ts` (version 7 with `freePlay: true` and no challenge type migrates to only `ruler`; any other version 7 settings to all three; version 6 data goes through every step); `src/core/transfer/transfer.test.ts` (a version 2 code made from version 6 settings reads as version 8 with `playModes`) (FR-046, FR-047, FR-121)
+- [ ] T330 Implement settings version 8: `playModes` in `src/core/settings/schema.ts` and `defaults.ts`, the rules in `validate.ts` with the error key `noPlayMode` and its German text in `src/i18n/de.ts`, and the version 7 to 8 step in `src/core/storage/migrate.ts` (FR-046, FR-047, FR-121)
+- [ ] T331 [P] Write generation and help tests: `src/core/math/generator.property.test.ts` (with `noRulerKinds` and the math-mode kinds no `readPosition` or `findNumber` over every preset, 2000 seeds each, both player positions and keyboard input; with `kindsAllowed: ['readPosition']` always `readPosition`); `src/core/battle/help.test.ts` (mode `'math'`: step 1 without `nearestMajor`, step 2 with the ten around the answer as `zoom` and no `count`, addition keeps its `stepPath`, comparison keeps its option markers and has no `zoom`) (FR-122, FR-123)
+- [ ] T332 Implement `noRulerKinds` in `src/core/math/generate.ts` and the `mode` parameter of `nextHelp` in `src/core/battle/help.ts` (FR-123)
+- [ ] T333 Write controller tests in `src/core/battle/battleController.test.ts`: `startRound('ruler')` gives only `readPosition` searches in phase `challenge` and records an attempt of the number-positions skill for each destroyed enemy; `startRound('math')` never gives `readPosition` or `findNumber` and records attempts; `startRound('mixed')` is the guided flow; with adaptive on, 3 independent hits in a row raise `challenge.difficultyStep` of the next positions search within the same round; help works in every mode. Replace the free-play tests (FR-122, FR-123, FR-124)
+- [ ] T334 Implement `PlayMode` in `src/core/types.ts`, the mode in `src/core/battle/round.ts` (remove `freePlayChallenge`), `searchChallenge` and `raiseHelp` by mode in `src/core/battle/guided.ts`, and `src/core/battle/controller.ts` (every mode is a search and records attempts; remove the free-play path) (FR-122, FR-123, FR-124)
+- [ ] T335 [P] Write records and progress tests: `src/core/records/records.test.ts` (`recordKey` with mode `'mixed'` is the key without a mode part, `'ruler'` and `'math'` add `|ruler` and `|math`); `src/core/progress/summarize.test.ts` (each skill row has `toRaise` with settings; best rows carry the mode, old keys read as `'mixed'`); `src/app/ProgressPage.test.tsx` (the column "Bis zur nächsten Stufe" shows "noch 2 richtig in Folge" and "höchste Stufe"; the bests list names the mode) (FR-040, FR-086)
+- [ ] T336 Implement `recordKey(settings, mode)` in `src/core/records/records.ts`, `toRaise` and the mode of best rows in `src/core/progress/summarize.ts`, the column and the mode in `src/app/ProgressPage.tsx`, and the texts in `src/i18n/de.ts` (FR-040, FR-086)
+- [ ] T337 [P] Write screen tests: `src/app/StartScreen.test.tsx` (three picture buttons with `data-mode` in the order mixed, ruler, math; only the offered ones; one "Spielen" button with one mode; `keyStartMode` with `?mode=`); `src/app/keyboard.test.ts` (1, 2 and 3 on the start screen give `{ type: 'start', mode }`, other digits nothing); `src/app/BattleOverlay.test.tsx` (no banner in mode `ruler`, a banner in `math`, `data-mode` and `data-skill-step`); `src/app/SettingsPage.test.tsx` (three switches for the play modes replace "Freies Spiel erlauben"; all off shows the error) (FR-121, FR-122, FR-123)
+- [ ] T338 Implement the screens: `src/app/StartScreen.tsx` (picture buttons with icons and labels from `src/i18n/de.ts`, styles in `src/app/styles.css`), `src/app/keyboard.ts`, `src/app/App.tsx` (start mode from the key, `?mode=mixed|ruler|math`, the record key with the round's mode, no speech in mode `ruler`, the number pad in mode `math` unless "Nie"), `src/app/BattleOverlay.tsx` and `src/app/SettingsPage.tsx`; remove `freePlay` from `src/app/comingSoon.ts` (FR-121, FR-122, FR-123)
+- [ ] T339 Implement "Nur Rechnen" in `src/game/NumberLineView.ts`: in mode `math` no ruler band, lines, labels or pointer lines (`data-ruler-labels` and `data-pointer-lines` empty) and no number selection by pointer; the landing number and the step count still show; the zoomed ten of help step 2 shows while that step shows (FR-123)
+- [ ] T340 Write `tests/e2e/modes.spec.ts`: the start screen shows three buttons; a round in each mode started with 1, 2 and 3 and played with the keyboard; mode `ruler` has no banner and a pointer line; mode `math` has a banner, no ruler labels and no pointer lines, and after misses and H help step 2 sets `data-help-zoom`; in mode `ruler` 3 independent hits raise `data-skill-step` from 0 to 1 within one round. Update every spec that used "Freies Spiel" or `?mode=free` (`battle`, `range`, `persistence`, `garage`, `enemyZeroIn`, `visuals`, `guided`, `rulerPreview`) (FR-121 to FR-124)
+- [ ] T341 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project), and take muted headless screenshots of the start screen with three buttons, a "Nur Zahlenstrahl" battle and a "Nur Rechnen" battle at help step 2
 ---
 
 ## Dependencies and Execution Order
@@ -865,6 +887,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
+- **Phase 24a (amendment 17)**: depends on Phase 24. T327 runs before T328, T329 before T330, T331 before T332, T333 before T334, T335 before T336, T337 before T338; T330 and T332 run before T334; T334 before T336 to T339; T340 after T338 and T339; T341 last.
 
 ### User story dependencies
 
@@ -942,7 +965,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-011 | Removed by amendment 01 |
 | FR-012 | Removed by amendment 01 |
 | FR-013 | T060, T061, T062, T065, T066, T095, T096, T208, T222 |
-| FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181, T190, T193, T214 |
+| FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181, T190, T193, T214, replaced by FR-121 and FR-122 (amendment 17) |
 | FR-015 | T028, T029, T168, T184 |
 | FR-016 | T051, T052, T147, T149, T173, T174, T235 |
 | FR-017 | T051, T052, T147, T173, T174, T182, T201, T228, T231, T235 |
@@ -965,18 +988,18 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-034 | T095, T096, T101 |
 | FR-035 | T010, T063, T123, T129, T130, T131 |
 | FR-036 | T010, T056, T122, T123, T237 |
-| FR-037 | T118, T122, T123, T129, T130 |
-| FR-038 | T117, T121, T129, T130, T265, T266 |
+| FR-037 | T118, T122, T123, T129, T130, T327, T328, T333 |
+| FR-038 | T117, T121, T129, T130, T265, T266, T327 |
 | FR-039 | T119, T124 |
-| FR-040 | T127, T128, T132, T133, T257, T260, T262 |
+| FR-040 | T127, T128, T132, T133, T257, T260, T262, T327, T335, T336 |
 | FR-041 | T026, T027, T220, T221, T222, T223, T265, T266, T267 |
 | FR-042 | T026, T027, T034, T220, T221, T222, T265, T266 |
 | FR-043 | T026, T027, T032, T208, T209, T220, T221, T222, T265, T266, T267 |
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276 |
-| FR-047 | T011, T013, T112, T113, T175, T176 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330 |
+| FR-047 | T011, T013, T112, T113, T175, T176, T329, T330 |
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
 | FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295 |
 | FR-049 | T034, T105, T106, T113 |
@@ -993,7 +1016,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-059 | T141, T153, T163, T165, T166, T167, T171, T183 |
 | FR-060 | T145, T146, T157, T161, T163, T165, T166, T167, T183 |
 | FR-061 | T158, T163, T165, T166, T167, T183, T194, T195, T197, T202 |
-| FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202, T259, T261, T262 |
+| FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202, T259, T261, T262, T337, T338 |
 | FR-063 | T157, T158, T161, T170, T183 |
 | FR-064 | T087, T088, T145, T146, T183, T238, T246, T247, T249, T250 |
 | FR-065 | T156, T160, T163, T169 |
@@ -1017,7 +1040,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-083 | T208, T209, T210, T211, T214 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
 | FR-085 | T206, T210, T211, T214 |
-| FR-086 | T205, T206, T207, T210, T211, T213, T214 |
+| FR-086 | T205, T206, T207, T210, T211, T213, T214, T335, T336 |
 | FR-087 | T127, T128, T132, T133, T252 |
 | FR-088 | T234 |
 | FR-089 | T252, T254, T257, T258, T261, T262 |
@@ -1052,6 +1075,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-118 | T295, T296, T297, T298, T299, T300, T301, T305 |
 | FR-119 | T298, T299, T300, T301 |
 | FR-120 | T295, T297, T299, T300, T301 |
+| FR-121 | T329, T330, T337, T338, T340 |
+| FR-122 | T331, T333, T334, T337, T338, T340 |
+| FR-123 | T331, T332, T333, T334, T337, T338, T339, T340 |
+| FR-124 | T333, T334, T340 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150, T292, T293 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1079,3 +1106,5 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 12 | T272 to T280; T136 and T141 changed |
 | Amendment 14 | T285 to T294 |
 | Amendment 15 | T295 to T301 |
+| US11 | T327 to T341 |
+| Amendment 17 | T327 to T341 |

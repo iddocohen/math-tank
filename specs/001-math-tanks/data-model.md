@@ -6,8 +6,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `7` | `7` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; `migrate` upgrades version 0 to 6 data (see below) |
-| `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
+| `version` | `8` | `8` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; `migrate` upgrades version 0 to 7 data (see below) |
+| `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
@@ -23,7 +23,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `roundType` | `'untilHearts' \| 'enemyCount'` | `'untilHearts'` | How a round ends (FR-082): "Bis alle Herzen weg" or "Gegner pro Runde". `'untilHearts'` with `noDamage: true` is invalid (it would never end) |
 | `roundLength` | `number` | `5` | Enemies per round for `roundType: 'enemyCount'`, whole number 1 to 20 (amendment 06). Ignored for `'untilHearts'` |
 | `adaptive` | `boolean` | `true` | |
-| `freePlay` | `boolean` | `false` | When `true`, the start screen also offers "Freies Spiel"; guided stays the default |
+| `playModes` | `{ mixed: boolean; ruler: boolean; math: boolean }` | all `true` | The play modes the start screen offers (amendment 17, FR-121): "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen". At least one `true` (error key `noPlayMode`). Replaces `freePlay` (version 7 and older) |
 | `noDamage` | `boolean` | `false` | FR-044 |
 | `showClock` | `boolean` | `false` | Shows an up-counting clock at the top during play (FR-084) |
 | `showRecords` | `boolean` | `true` | Shows "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086); the best is stored either way |
@@ -42,6 +42,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 4** (amendment 11): `garage` is added with `true` unless already set; `version` becomes 5. Version 0 to 3 data go through every step.
 
 **Migration from version 5** (amendment 12): `numberPad` is added with `'auto'` unless already set; `version` becomes 6. Version 0 to 4 data go through every step.
+
+**Migration from version 7** (amendment 17): `freePlay` is dropped and `playModes` is added: when `freePlay` was `true` and every challenge type was off (the parent offered only free play), `{ mixed: false, ruler: true, math: false }`; otherwise all three `true`. `version` becomes 8. Version 0 to 6 data and version 2 transfer codes (whose frozen base is version 6) go through every step.
 
 **Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
@@ -124,7 +126,7 @@ Keyed by `${skill}|${rangeKey}`.
 | Field | Type | Notes |
 |-------|------|-------|
 | `step` | `number` | Current difficulty step for this skill (index into the skill's step ladder) |
-| `recent` | `RecentOutcome[]` (max 6) | Non-guess outcomes since the last step change, `'independent' \| 'assisted' \| 'unsolved'` (a stored `'close'` from amendment 04 is still read), newest last. Used only by the adaptive rule; cleared on a step change |
+| `recent` | `RecentOutcome[]` (max 6) | Non-guess outcomes since the last step change, `'independent' \| 'assisted' \| 'unsolved'` (a stored `'close'` from amendment 04 is still read), newest last. Used only by the adaptive rule; cleared on a step change. Amendment 17: the row of correct answers is the number of `'independent'` entries at the end of `recent` (a stored `'close'` is skipped and does not break it), so no new field is stored |
 | `masteryWindow` | `RecentOutcome[]` (max 10) | Last 10 non-guess outcomes in this skill and range; never cleared by step changes |
 | `guesses` | `number` | Count of attempts flagged as guesses |
 | `attempts` | `number` | |
@@ -155,10 +157,10 @@ A new session starts on game load, when `now - lastActiveAt > 30 minutes`, or wh
 
 ```ts
 interface BestResult { enemies: number; ms: number; at: number }   // enemies destroyed, time played in ms, epoch ms when set
-interface Records { version: 1; best: Record<string, BestResult> } // keyed by recordKey(settings)
+interface Records { version: 1; best: Record<string, BestResult> } // keyed by recordKey(settings, mode)
 ```
 
-`recordKey(s) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` (FR-086), from the round's settings snapshot. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
+`recordKey(s, mode) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` for `mode` `'mixed'`, and the same key with `|ruler` or `|math` appended for the other two play modes (FR-086, amendment 17), from the round's settings snapshot. Keys stored before amendment 17 have no mode part and so belong to "Gemischt"; no migration is needed. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
 
 ## Garage (persisted: `mathtanks.garage.v1`, amendment 11)
 
@@ -251,9 +253,11 @@ interface DifficultyStep {
 }
 ```
 
-**Adaptive rule** (`nextStep(sp, settings)`, FR-037): if `adaptive` is off, the generator uses the parent settings directly (the top of every ladder, clamped by settings) and the parent's label level. Otherwise each skill starts at step 0: up one step when at least 5 of the last 6 entries in `recent` are `'independent'`; down one step when at least 3 of the last 5 are `'assisted'` or `'unsolved'`. Guesses never enter `recent` or `masteryWindow`. After a change, `recent` is cleared so the next change needs new evidence; `masteryWindow` is kept. Parent settings are ceilings: a step never allows numbers, operands or crossings that the settings forbid.
+**Adaptive rule** (`nextStep(sp, settings)`, FR-037): if `adaptive` is off, the generator uses the parent settings directly (the top of every ladder, clamped by settings) and the parent's label level. Otherwise each skill starts at step 0. Amendment 17 (FR-037): up one step when the last 3 entries in `recent` are `'independent'` (3 in a row); down one step when at least 2 of the last 3 entries are `'assisted'` or `'unsolved'`. A stored `'close'` is left out of both counts. `rowToRaise(sp, skill, settings)` gives how many more independent answers in a row raise the step (3 minus the row), or `null` at the highest step the settings allow or with `adaptive` off; the progress page shows it (FR-040). Before amendment 17: up after 5 of the last 6, down after 3 of the last 5. Guesses never enter `recent` or `masteryWindow`. After a change, `recent` is cleared so the next change needs new evidence; `masteryWindow` is kept. Parent settings are ceilings: a step never allows numbers, operands or crossings that the settings forbid.
 
 **Ruler level** (FR-018): when adaptive is off, `rulerLevelStart`. When adaptive is on, the level comes from the `positions` skill's step (`rulerLevel` on its ladder), clamped to `[rulerLevelStart, rulerLevelMax]`. Other skills' ladders have no `rulerLevel`, so the ruler does not change between challenge kinds. Help steps draw all lines of the zoomed area whatever the level.
+
+**Help in "Nur Rechnen"** (amendment 17, FR-123): `nextHelp(challenge, level, landed, settings, mode)` with mode `'math'` gives step 1 the direction only (no `nearestMajor`), and step 2 for a challenge that is not a comparison the ten around the answer as `zoom` (with `help.zoom` on) and no `count`; addition and subtraction keep their `stepPath`. The view draws the zoom box only while that step shows; the ruler band itself is not drawn in this mode.
 
 ## Ruler (not persisted)
 
@@ -275,9 +279,11 @@ Steps follow spec FR-016 for the view's width. Both end points are always drawn 
 ## Round state (not persisted)
 
 ```ts
+type PlayMode = 'mixed' | 'ruler' | 'math';   // amendment 17: "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen"
+
 type Phase =
   | 'challenge'        // guided: challenge shown; the child chooses a number and fires; every fire is an answer
-  | 'aiming'           // free play: the enemy is visible ("read the ruler"); the child chooses a number and fires
+  | 'aiming'           // no longer entered since amendment 17 (every play mode is a search in 'challenge'); kept for the placeholder state before the first round
   | 'playerShot'       // shell in flight
   | 'enemyTurn'        // enemy aiming and shot in flight
   | 'roundOver'
@@ -285,7 +291,7 @@ type Phase =
 
 interface RoundState {
   seed: number;
-  mode: 'guided' | 'freePlay';
+  mode: PlayMode;                  // 'mixed' | 'ruler' | 'math' (amendment 17, FR-121 to FR-123); replaces 'guided' | 'freePlay'
   turn: number;                    // player shots fired this round (challenge ids use it)
   lives: number;                   // child's hearts, 3 at the start (LIVES), 0 ends the round (FR-080)
   enemiesDestroyed: number;        // score (FR-083)
@@ -299,7 +305,7 @@ interface RoundState {
   enemy: TankState;
   decoys: TankState[];             // comparison searches: one decoy at each option other than the answer, [] otherwise (amendment 10); a destroyed decoy stays with alive false until the search ends
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
-  challenge: Challenge | null;     // in free play always a readPosition challenge
+  challenge: Challenge | null;     // mode 'ruler': always a readPosition challenge; mode 'math': never readPosition or findNumber
   answerableAt: number | null;     // clock time when answers became possible (1 s after display)
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
   selection: number | null;        // previewed number; fired by the fire button or Enter
@@ -339,19 +345,17 @@ Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (o
 **State transitions**
 
 ```text
-start → challenge (guided search, enemy visible) | aiming (freePlay, readPosition, enemy visible)
+start → challenge (a search in every play mode, enemy visible; mode 'ruler' always readPosition, mode 'math' never readPosition or findNumber)
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
-playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
-playerShot (guided) --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, missStreak + 1, or + 2 for a fast guess, lastShot with the step count shown)
+playerShot --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
+playerShot --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, missStreak + 1, or + 2 for a fast guess, lastShot with the step count shown)
 playerShot (guided, comparison) --decoy's exact number--> decoy destroyed (alive false, lastShot.decoyHit), a miss --> enemyTurn (help.level + 1; the enemy and every standing decoy fire together from their own barrels, bug report B2)
 playerShot (guided, comparison) --hit--> enemy destroyed, every decoy alive false (folded away) --> new search
 challenge (comparison) --tapTank(id) of a standing enemy or decoy--> as confirm at that tank's number
 challenge --help (button or H) or time limit--> challenge (help.level + 1)
 challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
-playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1, missStreak 0 --> roundOver (goalReached) | new landscape and aiming with a new readPosition challenge and a new visible enemy at its answer
-playerShot (freePlay) --miss--> enemyTurn (missStreak + 1)
 enemyTurn --impact--> when the enemy's plan was a hit (missStreak at the difficulty's limit, not the first enemy shot of the round): missStreak 0 and lives - 1 unless noDamage; lives 0 --> roundOver (heartsGone), otherwise the phase the child left (challenge or aiming)
 any (except roundOver) --pause (button or Escape)--> paused --resume--> previous phase
 ```

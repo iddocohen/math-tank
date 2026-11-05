@@ -38,7 +38,8 @@ generateChallenge(input: {
   turn: number;
   playerPosition: number;                 // range.min or range.max, fixed for the round
   rulerLevel: RulerLevel;                 // decides where a readPosition enemy may stand (FR-067)
-  kindsAllowed?: ChallengeKind[];         // free play passes ['readPosition']
+  kindsAllowed?: ChallengeKind[];         // play mode 'ruler' passes ['readPosition']; 'math' passes the enabled kinds without readPosition and findNumber
+  noRulerKinds?: boolean;                 // play mode 'math' (amendment 17, FR-123): the fallbacks use 'after' and 'before' instead of readPosition and findNumber
   inputMethod?: 'pointer' | 'keyboard';   // amendment 05 (FR-076): 'keyboard' skips findNumber; the fallback is then readPosition. Omitted: no restriction
 }): Challenge
 mainSkillOf(kind: ChallengeKind): Skill
@@ -69,9 +70,11 @@ classifyAttempt(a: { solved: boolean; exact: boolean; helpLevel: number; wrongAn
 isFastGuess(a: { responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): boolean   // amendment 13: responseMs < 1500 or 3+ wrongAnswerTimes within 5000 ms before submittedAt;
                                                                                                 // classifyAttempt's guess is solved && isFastGuess; the controller applies it to a miss (FR-098)
 startOrContinueSession(p: Progress, now: number): Progress   // 30-minute idle and new-day rules
-recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule
+recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule (amendment 17: up after 3 independent in a row, down when 2 of the last 3 needed help or were unsolved)
 skillStatus(sp: SkillProgress): 'mastered' | 'developing'
-summarize(p: Progress): ProgressSummary                                   // data for the progress page
+summarize(p: Progress, records: Records, settings?: Settings): ProgressSummary   // data for the progress page; with settings each SkillRow has toRaise (amendment 17)
+rowToRaise(sp: SkillProgress, skill: Skill, settings: Settings): number | null   // more independent answers in a row that raise the step (1 to 3); null at the top step or with adaptive off (FR-037, FR-040)
+nextHelp(c: Challenge, level: number, landed: number | null, settings: Settings, mode: PlayMode = 'mixed'): HelpContent   // core/battle/help.ts; mode 'math' (amendment 17, FR-123): step 1 direction only, step 2 the zoomed ten around the answer (not for comparison), no count
 ladders: Record<Skill, DifficultyStep[]>
 effectiveStep(p: Progress, skill: Skill, rangeKey: string, settings: Settings): DifficultyStep
 ```
@@ -118,7 +121,7 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
+  startRound(mode: PlayMode): void   // 'mixed' | 'ruler' | 'math' (amendment 17); every mode starts a search and records attempts; 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
                                            // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed,
                                            // turn, round time, enemy shot index and missStreak stay (amendment 13); no enemy shot; an unfinished challenge is dropped
@@ -176,7 +179,7 @@ Guarantees: `shotKind(n, n, r)` is `'hit'` for every range; in 0 to 100 a shot 2
 interface BestResult { enemies: number; ms: number; at: number }
 interface Records { version: 1; best: Record<string, BestResult> }
 emptyRecords(): Records
-recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>): string   // `${min}-${max}|${level}|${roundType}`
+recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>, mode: PlayMode = 'mixed'): string   // `${min}-${max}|${level}|${roundType}`, plus `|ruler` or `|math` for those play modes (amendment 17)
 submitResult(r: Records, key: string, result: BestResult): { records: Records; newRecord: boolean; best: BestResult | null }
                                                                       // newRecord when enemies >= 1 and enemies > the stored best (or none)
 formatTime(ms: number): string                                         // m:ss, e.g. 372000 -> "6:12"
