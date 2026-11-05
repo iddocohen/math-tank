@@ -33,3 +33,10 @@ The product owner: "Regarding the multiple tanks that he needs to hit, I would l
 13. **Help step 1** lights up the help target's curve from tank to end (a moving highlight along the curve) for about 2 seconds, in addition to today's step 1 hint.
 14. "Zielkreuz" (amendment 19) is independent. The line style applies in every mode that shows pointer lines.
 15. **Tests first**: curve end x equals numberToX(enemy number) within 0.5 units; ends distinct; curves inside bounds; label-avoidance; setting migration (default "Gerade"); tangled option hidden unless 2+ enemies; screenshot check of each style with 3 enemies.
+
+## Addition: "Keine Linien" (same day)
+
+The curved styles always end straight below their tank, because every tank stands above its own number (the core rule that the shell lands at the typed number's battlefield position). So curves only distract; looking straight down still finds the number. The product owner chose to keep "Gerade", "Gebogen" and "Gebogen und verschlungen" and to add:
+
+16. **"Keine Linien"** (no lines): no pointer line at all, for every enemy; the target ring stays on the tank. The child must judge which ruler number is straight below the tank. This is the hardest line level. Help step 1 shows the help target's straight pointer line briefly (about 2 seconds) and then hides it again; help steps 2 and 3 are unchanged.
+17. Settings migration: none needed beyond adding the new value to `lineStyle` (`'none'`); default stays "Gerade".
