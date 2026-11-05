@@ -76,4 +76,15 @@ describe('StartScreen fullscreen button (amendment 12, FR-106)', () => {
     render(<StartScreen onPlay={vi.fn()} freePlay={false} />);
     expect(screen.queryByRole('button', { name: t().start.fullscreen })).toBeNull();
   });
+
+  it('shows a small parent hint when saving failed, and none otherwise (review H1)', () => {
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} saveFailed={true} />);
+    const hint = screen.getByTestId('save-failed-hint');
+    expect(hint.textContent).toBe(t().start.saveFailed);
+    // The hint does not block the game: "Spielen" still works.
+    expect(screen.getByRole('button', { name: t().start.play })).toBeTruthy();
+    cleanup();
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} />);
+    expect(screen.queryByTestId('save-failed-hint')).toBeNull();
+  });
 });

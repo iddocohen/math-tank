@@ -177,6 +177,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
       <div className="settings-notices" role="status" aria-live="polite">
         {status.resetReason === 'invalid' && <p className="notice warn">{m.parent.storageReset}</p>}
         {status.resetReason === 'unavailable' && <p className="notice warn">{m.parent.storageUnavailable}</p>}
+        {status.saveFailed && <p className="notice warn">{m.parent.saveFailedData(status.failedData.map((k) => m.parent.dataNames[k]).join(', '))}</p>}
         {status.persistent === 'denied' && <p className="notice">{m.settings.persistDenied}</p>}
         {!valid && <p className="notice warn">{m.settings.checkFields}</p>}
         {notice && <p className={`notice ${notice.kind}`}>{notice.text}</p>}

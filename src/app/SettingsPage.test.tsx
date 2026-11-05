@@ -242,6 +242,25 @@ describe('SettingsPage', () => {
     expect(screen.getByText(m.parent.storageReset)).toBeTruthy();
   });
 
+  it('shows a save failure that happened during play, naming the data, until that data saves (review H1)', () => {
+    const inner = memoryKeyValue();
+    const failing = new Set([PROGRESS_KEY]);
+    const kv = {
+      ...inner,
+      set: (k: string, v: string) => {
+        if (failing.has(k)) throw new Error('full');
+        inner.set(k, v);
+      },
+    };
+    const persistence = createPersistence({ kv, storage: undefined });
+    persistence.saveProgress(persistence.progress());
+    render(<SettingsPage persistence={persistence} onSaved={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText(m.parent.saveFailedData(m.parent.dataNames.progress))).toBeTruthy();
+    fireEvent.click(saveButton());
+    // A working settings save does not hide the failed progress save.
+    expect(screen.getByText(m.parent.saveFailedData(m.parent.dataNames.progress))).toBeTruthy();
+  });
+
   it('shows every field of FR-046', () => {
     setup({ timeLimitSeconds: 30, roundType: 'enemyCount' });
     for (const label of [

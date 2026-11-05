@@ -34,7 +34,7 @@ describe('createPersistence (FR-048)', () => {
     const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
     expect(p.settings()).toEqual(defaultSettings());
     expect(p.progress()).toEqual(emptyProgress());
-    expect(p.status()).toEqual({ resetReason: 'none', saveFailed: false, persistent: 'notAsked' });
+    expect(p.status()).toEqual({ resetReason: 'none', saveFailed: false, failedData: [], persistent: 'notAsked' });
   });
 
   it('saves settings so a new instance on the same store loads them', () => {
@@ -276,5 +276,43 @@ describe('saveData and applyTransfer (amendment 15, FR-119)', () => {
     expect(p.applyTransfer({ settings: changedSettings(), progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() })).toEqual({ ok: false });
     expect(p.status().saveFailed).toBe(true);
     expect(p.settings()).toEqual(changedSettings());
+  });
+});
+
+/** A key-value store whose writes fail for the keys in `failing`. */
+function failingKeys(kv: KeyValue, failing: Set<string>): KeyValue {
+  return {
+    ...kv,
+    get: (key) => kv.get(key),
+    set: (key, value) => {
+      if (failing.has(key)) throw new DOMException('quota', 'QuotaExceededError');
+      kv.set(key, value);
+    },
+  };
+}
+
+describe('save failures per data kind (review H1, H2)', () => {
+  it('a failed progress save stays reported after a later settings save works', () => {
+    const failing = new Set([PROGRESS_KEY]);
+    const p = createPersistence({ kv: failingKeys(memoryKeyValue(), failing), storage: undefined });
+    expect(p.saveProgress(emptyProgress())).toEqual({ ok: false });
+    expect(p.saveSettings(changedSettings())).toEqual({ ok: true });
+    expect(p.status().saveFailed).toBe(true);
+    expect(p.status().failedData).toEqual(['progress']);
+  });
+
+  it('the failure clears only when that data saves again', () => {
+    const failing = new Set([PROGRESS_KEY, GARAGE_KEY]);
+    const p = createPersistence({ kv: failingKeys(memoryKeyValue(), failing), storage: undefined });
+    p.saveProgress(emptyProgress());
+    p.addStars(2);
+    expect(p.status().failedData).toEqual(['progress', 'garage']);
+    failing.delete(PROGRESS_KEY);
+    p.saveProgress(emptyProgress());
+    expect(p.status().failedData).toEqual(['garage']);
+    expect(p.status().saveFailed).toBe(true);
+    failing.delete(GARAGE_KEY);
+    p.addStars(1);
+    expect(p.status()).toMatchObject({ saveFailed: false, failedData: [] });
   });
 });

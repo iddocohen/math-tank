@@ -17,6 +17,8 @@ export const de = {
     garage: 'Garage',
     /** FR-055: spoken once by the "Spielen" start, so tablet browsers allow speech for the session. */
     greeting: 'Los geht es!',
+    /** Review H1: a small note for the parent when saving failed during play; it does not block the game. */
+    saveFailed: 'Speichern klappt gerade nicht.',
   },
 
   /** Amendment 11 (FR-089 to FR-095): the tank garage. Short words for a child. */
@@ -169,6 +171,11 @@ export const de = {
     importData: 'Daten laden',
     storageReset: 'Gespeicherte Daten konnten nicht gelesen werden. Die Standardwerte gelten.',
     storageUnavailable: 'Speichern ist in diesem Browser nicht möglich.',
+    /** The four kinds of stored data, for the notices on the settings page (review H1, M3). */
+    dataNames: { settings: 'Einstellungen', progress: 'Fortschritt', records: 'Rekorde', garage: 'Sterne und Garage' },
+    /** Review H1: shown while the latest save of these data failed, also when it happened during play. */
+    saveFailedData: (names: string) =>
+      `Speichern hat nicht geklappt (${names}). Diese Daten gelten nur, bis der Browser geschlossen wird. Bitte „Daten sichern“ nutzen.`,
   },
 
   /** Parent progress page (FR-040, FR-087). Shown to parents. */

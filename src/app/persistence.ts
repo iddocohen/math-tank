@@ -6,8 +6,10 @@
  * Amendment 15 (FR-115, FR-119): `saveData` feeds the transfer link and `applyTransfer` takes over a transferred save.
  *
  * Loads them once, saves settings on request, asks the browser once to keep stored data permanently, and reports
- * what the settings page must show: why stored data was reset (`resetReason`) and whether the last save failed
- * (edge cases "Stored data is missing or damaged" and "Browser storage full or blocked").
+ * what the settings page must show: why stored data was reset (`resetReason`) and which data could not be saved
+ * (edge cases "Stored data is missing or damaged" and "Browser storage full or blocked"). A failed save is kept per
+ * kind of data until that data saves again (review H2), so a failure during play still shows on the settings page and
+ * as a small note on the start screen (review H1).
  */
 import type { Settings } from '../core/settings/schema';
 import { exportData, importData, type ImportResult } from '../core/storage/exportImport';
@@ -28,11 +30,19 @@ export interface StorageManagerLike {
 /** Result of asking the browser to keep stored data; 'notAsked' until the request runs. */
 export type PersistOutcome = 'notAsked' | 'granted' | 'denied' | 'unsupported' | 'failed';
 
+/** The four kinds of stored data, each under its own key. */
+export type DataKind = 'settings' | 'progress' | 'records' | 'garage';
+
 export interface PersistenceStatus {
   /** The worst of the settings, progress, records and garage load results: 'unavailable' before 'invalid' before 'none'. */
   resetReason: ResetReason;
-  /** True when the latest save could not be written; the values still apply for this session. */
+  /**
+   * True while the latest save of any kind of data failed (review H1, H2). A failure stays until that same kind of
+   * data saves again, so a later working save of other data does not hide it. The values still apply for this session.
+   */
   saveFailed: boolean;
+  /** The kinds of data whose latest save failed, in the order settings, progress, records, garage. */
+  failedData: DataKind[];
   persistent: PersistOutcome;
 }
 
@@ -104,12 +114,15 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
   let progress = loadedProgress.progress;
   let records = loadedRecords.records;
   const resetReason = [loadedProgress, loadedRecords, loadedGarage].reduce((r, l) => worse(r, l.resetReason), loadedSettings.resetReason);
-  let saveFailed = false;
+  const failed = new Set<DataKind>();
+  const DATA_ORDER: DataKind[] = ['settings', 'progress', 'records', 'garage'];
   let persistent: PersistOutcome = 'notAsked';
   let request: Promise<Exclude<PersistOutcome, 'notAsked'>> | null = null;
 
-  const record = (r: { ok: boolean }) => {
-    saveFailed = !r.ok;
+  /** Notes the result of saving one kind of data. */
+  const record = (kind: DataKind, r: { ok: boolean }) => {
+    if (r.ok) failed.delete(kind);
+    else failed.add(kind);
     return r;
   };
 
@@ -127,20 +140,20 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
     settings: () => settings,
     progress: () => progress,
     records: () => records,
-    status: () => ({ resetReason, saveFailed, persistent }),
+    status: () => ({ resetReason, saveFailed: failed.size > 0, failedData: DATA_ORDER.filter((k) => failed.has(k)), persistent }),
     saveSettings(s) {
       settings = structuredClone(s);
-      return record(saveSettings(kv, settings));
+      return record('settings', saveSettings(kv, settings));
     },
     saveProgress(p) {
       progress = structuredClone(p);
-      return record(saveProgress(kv, progress));
+      return record('progress', saveProgress(kv, progress));
     },
     submitResult(key, result) {
       const r = submitResult(records, key, result);
       if (r.newRecord) {
         records = r.records;
-        record(saveRecords(kv, records));
+        record('records', saveRecords(kv, records));
       }
       return { newRecord: r.newRecord, best: r.best };
     },
@@ -149,18 +162,18 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       const r = addStars(garage, n);
       if (r.garage === garage) return [];
       garage = r.garage;
-      record(saveGarage(kv, garage));
+      record('garage', saveGarage(kv, garage));
       return r.unlocked;
     },
     equip(id) {
       const next = equip(garage, id);
       if (next === garage) return;
       garage = next;
-      record(saveGarage(kv, garage));
+      record('garage', saveGarage(kv, garage));
     },
     resetStars() {
       garage = resetStars();
-      record(saveGarage(kv, garage));
+      record('garage', saveGarage(kv, garage));
     },
     requestPersistentStorage() {
       request ??= ask().then((outcome) => {
@@ -176,8 +189,13 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       progress = structuredClone(data.progress);
       records = structuredClone(data.records);
       garage = structuredClone(data.garage);
-      const results = [saveSettings(kv, settings), saveProgress(kv, progress), saveRecords(kv, records), saveGarage(kv, garage)];
-      return record({ ok: results.every((r) => r.ok) });
+      const results = [
+        record('settings', saveSettings(kv, settings)),
+        record('progress', saveProgress(kv, progress)),
+        record('records', saveRecords(kv, records)),
+        record('garage', saveGarage(kv, garage)),
+      ];
+      return { ok: results.every((r) => r.ok) };
     },
     importText(text) {
       const r = importData(text);
@@ -185,13 +203,14 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       settings = r.settings;
       progress = r.progress;
       records = r.records;
-      const savedSettings = saveSettings(kv, settings);
-      const savedProgress = saveProgress(kv, progress);
-      const savedRecords = saveRecords(kv, records);
+      record('settings', saveSettings(kv, settings));
+      record('progress', saveProgress(kv, progress));
+      record('records', saveRecords(kv, records));
       // A file without garage data keeps the stars of this browser (FR-096).
-      if (r.garage) garage = r.garage;
-      const savedGarage = r.garage ? saveGarage(kv, garage) : { ok: true };
-      record({ ok: savedSettings.ok && savedProgress.ok && savedRecords.ok && savedGarage.ok });
+      if (r.garage) {
+        garage = r.garage;
+        record('garage', saveGarage(kv, garage));
+      }
       return r;
     },
   };

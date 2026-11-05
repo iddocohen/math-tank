@@ -8,6 +8,8 @@
  * total show; G opens the garage through the app's keyboard listener.
  * Amendment 12 (FR-106): the fullscreen button shows only where the browser lets a web page use fullscreen
  * (`document.fullscreenEnabled`); on iPhone it is hidden and the Home Screen note on the settings page applies.
+ * Review H1: while the latest save failed, a small line at the bottom tells the parent; the settings page says which
+ * data was not saved.
  */
 import type { ReactNode } from 'react';
 import { t } from '../i18n';
@@ -28,9 +30,11 @@ interface Props {
   /** The star total, or null when the parent turned the garage off. */
   garage?: { stars: number } | null;
   onGarage?: () => void;
+  /** True while the latest save failed (review H1): a small note for the parent, not a blocking message. */
+  saveFailed?: boolean;
 }
 
-export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage }: Props) {
+export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage, saveFailed = false }: Props) {
   const m = t();
   const canFullscreen = document.fullscreenEnabled === true;
   const fullscreen = () => {
@@ -67,6 +71,11 @@ export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage }:
           </button>
         )}
       </div>
+      {saveFailed && (
+        <p className="save-failed-hint" data-testid="save-failed-hint">
+          {m.start.saveFailed}
+        </p>
+      )}
     </main>
   );
 }

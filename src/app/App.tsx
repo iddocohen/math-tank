@@ -322,7 +322,14 @@ export function App() {
   return (
     <div className="app-root" ref={root} tabIndex={-1} data-testid="app-root">
       {screen === 'start' ? (
-        <StartScreen onPlay={play} freePlay={persistence.settings().freePlay} gear={gear} garage={garageOn ? garage : null} onGarage={() => setScreen('garage')} />
+        <StartScreen
+          onPlay={play}
+          freePlay={persistence.settings().freePlay}
+          gear={gear}
+          garage={garageOn ? garage : null}
+          onGarage={() => setScreen('garage')}
+          saveFailed={persistence.status().saveFailed}
+        />
       ) : screen === 'garage' ? (
         <Garage garage={garage} onEquip={equip} onBack={() => setScreen('start')} />
       ) : (

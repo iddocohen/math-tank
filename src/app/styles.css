@@ -70,6 +70,18 @@ input:focus-visible {
   gap: 32px;
 }
 
+/* Review H1: a small note for the parent when saving failed; at the bottom, so it never covers a button. */
+.save-failed-hint {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+  opacity: 0.85;
+}
+
 .title {
   margin: 0;
   font-size: clamp(2rem, 6vw, 4rem);
