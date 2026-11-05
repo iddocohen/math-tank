@@ -22,6 +22,11 @@
  * once, with the garage on or off. The end screen names the items unlocked since the round started. The garage screen
  * opens from the start screen (button or G, only with the garage on), and the battle draws the child's tank with the
  * chosen look, or the standard look when the garage is off.
+ *
+ * Amendment 12 (FR-102, FR-104): useScreen picks the battle layout (`data-layout` on the battle: wide, portrait or
+ * side) and whether the number pad shows (`data-number-pad`). A phone held upright shows RotateScreen over the start
+ * screen, the garage and the battle, with the gear on it; while it shows, keys do nothing and a running round is
+ * paused, and turning the phone sideways resumes only what it paused. The settings and progress pages open over it.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -42,6 +47,8 @@ import { Garage } from './Garage';
 import { newlyDestroyed, unlockedBetween } from '../core/rewards/garage';
 import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
+import { RotateScreen } from './RotateScreen';
+import { useScreen } from './useScreen';
 
 type Screen = 'start' | 'garage' | 'battle';
 
@@ -79,6 +86,8 @@ export function App() {
   const pausedByGate = useRef(false);
   // True when hiding the tab paused the battle, so showing it again resumes only what it paused (FR-084).
   const pausedByHiding = useRef(false);
+  // True when the phone was turned upright and that paused the battle (amendment 12, FR-104).
+  const pausedByRotate = useRef(false);
   // The personal best after the latest finished round, by round seed, so each round is compared only once (FR-086).
   const [roundRecord, setRoundRecord] = useState<{ seed: number; record: RoundRecord } | null>(null);
   const state = useRoundState(controller);
@@ -88,6 +97,9 @@ export function App() {
   const seenDestroyed = useRef(0);
   const roundStartStars = useRef(garage.stars);
   const gameParent = useRef<HTMLDivElement>(null);
+  const { layout, numberPad } = useScreen(persistence.settings().numberPad);
+  // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
+  const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
 
   useEffect(() => sfx.installUnlock(document), [sfx]);
 
@@ -116,6 +128,23 @@ export function App() {
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [screen, controller]);
+
+  // A phone held upright pauses the round until it is turned sideways again (amendment 12, FR-104). The phase is a
+  // dependency, so a round that could not pause at once (it was already paused by the gate) is paused later.
+  const upright = layout === 'rotate';
+  const phase = state.phase;
+  useEffect(() => {
+    if (screen !== 'battle') return;
+    if (upright) {
+      if (pausedByRotate.current || phase === 'paused' || phase === 'roundOver') return;
+      controller.pause();
+      pausedByRotate.current = controller.getState().phase === 'paused';
+    } else if (pausedByRotate.current) {
+      pausedByRotate.current = false;
+      // A parent screen or a hidden tab that paused it meanwhile keeps it paused until they end.
+      if (!pausedByGate.current && !pausedByHiding.current) controller.resume();
+    }
+  }, [upright, phase, screen, controller]);
 
   // Compare a finished round with the personal best once (FR-086).
   const roundOverSeed = state.phase === 'roundOver' && state.outcome !== null ? state.seed : null;
@@ -177,7 +206,7 @@ export function App() {
   );
 
   // While a parent screen is open, keys do nothing in the game (FR-045, T115).
-  const keyScreen = parent === 'closed' ? keyScreenFor(screen, state.phase) : null;
+  const keyScreen = parent === 'closed' && !rotate ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
       if (action.type === 'start') play(keyStartMode(window.location.search, persistence.settings().freePlay));
@@ -204,9 +233,9 @@ export function App() {
       ) : screen === 'garage' ? (
         <Garage garage={garage} onEquip={equip} onBack={() => setScreen('start')} />
       ) : (
-        <main className="battle">
+        <main className="battle" data-testid="battle-main" data-layout={layout === 'rotate' ? 'portrait' : layout} data-number-pad={numberPad}>
           <div className="game-parent" ref={gameParent} />
-          <BattleOverlay controller={controller} state={state} gear={gear} />
+          <BattleOverlay controller={controller} state={state} gear={gear} numberPad={numberPad} />
           {roundOver && (
             <RoundEnd
               outcome={state.outcome}
@@ -220,6 +249,7 @@ export function App() {
           )}
         </main>
       )}
+      {rotate && <RotateScreen gear={gear} />}
       {parent === 'settings' && (
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
       )}

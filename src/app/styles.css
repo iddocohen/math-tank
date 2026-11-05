@@ -129,6 +129,8 @@ input:focus-visible {
 /* Battle: Phaser canvas below, React overlay on top (ui-flows.md battle layout). */
 .battle {
   --controls-height: 112px;
+  /* The pad column at the right in the side layout (amendment 12); 0 elsewhere. */
+  --controls-width: 0px;
   position: relative;
   width: 100%;
   height: 100%;
@@ -138,7 +140,7 @@ input:focus-visible {
 /* The canvas fills the space above the control bar, so no control covers the ruler. */
 .game-parent {
   position: absolute;
-  inset: 0 0 var(--controls-height) 0;
+  inset: 0 var(--controls-width) var(--controls-height) 0;
 }
 
 .app-root {
@@ -160,7 +162,7 @@ input:focus-visible {
 /* "Neue Landschaft" at the right side, vertically centered over the battlefield (amendment 03). */
 .new-scene-button {
   position: absolute;
-  right: max(12px, env(safe-area-inset-right));
+  right: calc(var(--controls-width) + max(12px, env(safe-area-inset-right)));
   top: calc((100% - var(--controls-height)) / 2);
   transform: translateY(-50%);
   background: rgb(20 28 48 / 0.7);
@@ -576,6 +578,8 @@ input:focus-visible {
 .parent-gate {
   position: relative;
   -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   touch-action: none;
 }
 
@@ -974,3 +978,263 @@ input:focus-visible {
   color: #ffd54a;
 }
 
+
+/*
+ * Amendment 12 (FR-102 to FR-105, contracts/ui-flows.md "Screen layouts and the number pad"): the on-screen number pad
+ * and the layouts `wide` (pad in the bottom bar), `portrait` (battlefield at full width on top, a large pad below) and
+ * `side` (battlefield on the left, a compact pad column on the right). `data-layout` and `data-number-pad` sit on the
+ * battle root; without the pad every size keeps the bottom bar above. Each key gets its grid area from NumberPad.tsx.
+ */
+.battle .top-right {
+  right: calc(var(--controls-width) + max(12px, env(safe-area-inset-right)));
+}
+
+.battle .challenge-banner {
+  left: calc((100% - var(--controls-width)) / 2);
+}
+
+.battle .status-line {
+  right: var(--controls-width);
+}
+
+.battle .help-timer {
+  left: calc((100% - var(--controls-width)) / 2);
+}
+
+.number-pad {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(6, 56px);
+  grid-auto-rows: 56px;
+  grid-template-areas:
+    'd1 d2 d3 d4 d5 bs'
+    'd6 d7 d8 d9 d0 mi';
+}
+
+/* At least 48 by 48 CSS pixels, 56 by 56 where the layout has room (FR-053). */
+.pad-key {
+  min-width: 48px;
+  min-height: 48px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: #3a4a70;
+  box-shadow: 0 4px 0 #26324d;
+}
+
+.pad-key:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #26324d;
+}
+
+.pad-key-backspace,
+.pad-key-minus {
+  background: #4a5a80;
+}
+
+/* Wide: readout, the pad in two rows and "Feuer!" in a taller bottom bar (iPad held sideways, desktop with "Immer"). */
+.battle[data-number-pad='true'] {
+  --controls-height: 144px;
+}
+
+.battle[data-number-pad='true'] .readout {
+  min-width: 120px;
+}
+
+/* Portrait: the battlefield at full width (16:9) on top; below, the readout over "Feuer!" and a large pad. */
+.battle[data-layout='portrait'][data-number-pad='true'] {
+  --controls-height: calc(100% - 56.25vw);
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'readout pad'
+    'fire pad';
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  column-gap: 40px;
+  row-gap: 24px;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .readout {
+  grid-area: readout;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .fire-button {
+  grid-area: fire;
+  min-width: 200px;
+  min-height: 96px;
+  font-size: 2rem;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .number-pad {
+  grid-area: pad;
+  gap: 12px;
+  grid-template-columns: repeat(3, 96px);
+  grid-auto-rows: 80px;
+  grid-template-areas:
+    'd1 d2 d3'
+    'd4 d5 d6'
+    'd7 d8 d9'
+    'mi d0 bs';
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .pad-key {
+  font-size: 2.25rem;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .help-button {
+  top: calc(56.25vw + 16px);
+  bottom: auto;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .challenge-banner.placement-center {
+  top: calc(56.25vw * 0.4);
+}
+
+/* Side: the battlefield on the left, a compact pad column on the right (a phone held sideways). */
+.battle[data-layout='side'][data-number-pad='true'] {
+  --controls-height: 0px;
+  --controls-width: calc(204px + env(safe-area-inset-right));
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .controls {
+  top: 0;
+  left: auto;
+  height: auto;
+  width: var(--controls-width);
+  display: grid;
+  grid-template-areas:
+    'readout'
+    'pad'
+    'fire';
+  align-content: start;
+  justify-items: center;
+  gap: 6px;
+  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) 8px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .readout {
+  grid-area: readout;
+  flex-direction: row;
+  gap: 8px;
+  min-width: 0;
+  min-height: 56px;
+  justify-self: end;
+  padding-right: 4px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .readout-value {
+  font-size: 1.75rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .number-pad {
+  grid-area: pad;
+  gap: 6px;
+  grid-template-columns: repeat(3, 56px);
+  grid-auto-rows: 56px;
+  grid-template-areas:
+    'd1 d2 d3'
+    'd4 d5 d6'
+    'd7 d8 d9'
+    'mi d0 bs';
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .fire-button {
+  grid-area: fire;
+  width: 180px;
+  min-width: 0;
+  min-height: 52px;
+  font-size: 1.4rem;
+  box-shadow: 0 4px 0 #9e2522;
+}
+
+/* The help button sits at the top left of the pad column, beside the readout, so it covers no tank or arrow. */
+.battle[data-layout='side'][data-number-pad='true'] .help-button {
+  top: max(6px, env(safe-area-inset-top));
+  bottom: auto;
+  left: calc(100% - var(--controls-width) + 12px);
+  width: 56px;
+  height: 56px;
+  font-size: 1.75rem;
+}
+
+/* The banner stays readable, at least 16 px (FR-104), and keeps clear of the counter, the help button and the gear. */
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner {
+  max-width: calc(100% - var(--controls-width) - 220px);
+  padding: 6px 16px;
+  font-size: 1.1rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner.placement-center {
+  padding: 12px 20px;
+  font-size: 1.4rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .status-line {
+  top: calc(max(8px, env(safe-area-inset-top)) + 72px);
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .encouragement,
+.battle[data-layout='side'][data-number-pad='true'] .help-text,
+.battle[data-layout='side'][data-number-pad='true'] .range-hint,
+.battle[data-layout='side'][data-number-pad='true'] .landed {
+  font-size: 1rem;
+}
+
+/* "Bitte dreh das Handy" (FR-104): over the child's screens, below the parent menu and pages. */
+.rotate-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  text-align: center;
+  background: #1f2a44;
+}
+
+.rotate-phone {
+  width: 160px;
+  height: 160px;
+  animation: rotate-phone 2400ms ease-in-out infinite;
+}
+
+.rotate-text {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+@keyframes rotate-phone {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+
+  50%,
+  80% {
+    transform: rotate(-90deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}

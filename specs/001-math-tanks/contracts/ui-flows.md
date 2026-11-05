@@ -32,7 +32,7 @@ The battle root (`main.battle`) carries `data-layout` (`wide`, `portrait`, `side
 |--------|------------------------|-----------------------|----------------------------------|-------------|----------------------------|
 | `wide` | 1024 by 768, 1180 by 820, 1366 by 1024, desktop | Top, above the bar | Bar at the bottom: readout, pad keys in two rows (1 to 5 with ⌫, 6 to 0 with minus), "Feuer!" | Left end of the bar | Top right; right side of the battlefield |
 | `portrait` | 768 by 1024, 820 by 1180 | Top, full width (16:9) | The area below: readout and "Feuer!" in a column, the pad in a large grid (1 2 3 / 4 5 6 / 7 8 9 / minus 0 ⌫) | Top left of the area below | Top right; right side of the battlefield |
-| `side` | 844 by 390, 932 by 430 | Left | Column on the right: readout, the pad as a compact grid (same order as `portrait`), "Feuer!" | Top left, below the tank counter | Top right of the battlefield; right side of the battlefield |
+| `side` | 844 by 390, 932 by 430 | Left | Column on the right: readout, the pad as a compact grid (same order as `portrait`), "Feuer!" | Top of the pad column, left of the readout (never over the battlefield) | Top right of the battlefield; right side of the battlefield |
 | Turn the phone | 390 by 844 | Not shown | Not shown | Not shown | Gear only |
 
 Without the number pad (`numberPad: 'never'`, or `'auto'` on a desktop wider than 1100 px) every size uses the bar at the bottom with the readout and the fire button, as before amendment 12.

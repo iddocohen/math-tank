@@ -50,3 +50,30 @@ describe('StartScreen garage button and star total (amendment 11, FR-091, FR-095
   });
 });
 
+
+describe('StartScreen fullscreen button (amendment 12, FR-106)', () => {
+  const original = Object.getOwnPropertyDescriptor(Document.prototype, 'fullscreenEnabled');
+  function setFullscreenEnabled(value: boolean | undefined): void {
+    Object.defineProperty(document, 'fullscreenEnabled', { value, configurable: true });
+  }
+  afterEach(() => {
+    delete (document as unknown as Record<string, unknown>).fullscreenEnabled;
+    if (original) Object.defineProperty(Document.prototype, 'fullscreenEnabled', original);
+  });
+
+  it('shows the fullscreen button where the browser allows fullscreen', () => {
+    setFullscreenEnabled(true);
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} />);
+    expect(screen.getByRole('button', { name: t().start.fullscreen })).toBeTruthy();
+  });
+
+  it('hides it where fullscreen is not available, as on iPhone', () => {
+    setFullscreenEnabled(false);
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} />);
+    expect(screen.queryByRole('button', { name: t().start.fullscreen })).toBeNull();
+    cleanup();
+    setFullscreenEnabled(undefined);
+    render(<StartScreen onPlay={vi.fn()} freePlay={false} />);
+    expect(screen.queryByRole('button', { name: t().start.fullscreen })).toBeNull();
+  });
+});

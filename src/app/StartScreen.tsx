@@ -6,6 +6,8 @@
  * press and ignores keys (FR-045).
  * Amendment 11 (FR-091, FR-095, FR-096): with the garage on (`garage` not null) a large "Garage" button and the star
  * total show; G opens the garage through the app's keyboard listener.
+ * Amendment 12 (FR-106): the fullscreen button shows only where the browser lets a web page use fullscreen
+ * (`document.fullscreenEnabled`); on iPhone it is hidden and the Home Screen note on the settings page applies.
  */
 import type { ReactNode } from 'react';
 import { t } from '../i18n';
@@ -30,6 +32,7 @@ interface Props {
 
 export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage }: Props) {
   const m = t();
+  const canFullscreen = document.fullscreenEnabled === true;
   const fullscreen = () => {
     const el = document.documentElement;
     if (document.fullscreenElement || !el.requestFullscreen) return;
@@ -41,9 +44,11 @@ export function StartScreen({ onPlay, freePlay, gear, garage = null, onGarage }:
     <main className="start-screen">
       <div className="top-right">
         {gear}
-        <button type="button" className="icon-button" aria-label={m.start.fullscreen} onClick={fullscreen}>
-          <span aria-hidden="true">⛶</span>
-        </button>
+        {canFullscreen && (
+          <button type="button" className="icon-button" aria-label={m.start.fullscreen} onClick={fullscreen}>
+            <span aria-hidden="true">⛶</span>
+          </button>
+        )}
       </div>
       <h1 className="title">{m.appName}</h1>
       {garage && <StarTotal stars={garage.stars} />}
