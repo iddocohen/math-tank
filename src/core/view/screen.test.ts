@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { numberPadShown, PAD_WIDTH_LIMIT, PHONE_WIDTH_LIMIT, screenLayout, SIDE_HEIGHT_LIMIT } from './screen';
+import { layoutFromMedia, mediaFromSize, numberPadShown, PAD_WIDTH_LIMIT, PHONE_WIDTH_LIMIT, SCREEN_QUERIES, screenLayout, SIDE_HEIGHT_LIMIT } from './screen';
 
 // Amendment 12 (FR-102, FR-104): the battle layout from the screen size, and when the number pad shows.
 describe('screenLayout', () => {
@@ -37,9 +37,9 @@ describe('screenLayout', () => {
     expect(screenLayout(w, h)).toBe('rotate');
   });
 
-  it('counts a square screen as wider than tall', () => {
-    expect(screenLayout(800, 800)).toBe('wide');
-    expect(screenLayout(450, 450)).toBe('side');
+  it('counts a square screen as upright, as the CSS media feature orientation does (bug: iPhone rotation in Chrome)', () => {
+    expect(screenLayout(800, 800)).toBe('portrait');
+    expect(screenLayout(450, 450)).toBe('rotate');
   });
 
   it('uses the limits of data-model.md', () => {
@@ -52,27 +52,53 @@ describe('screenLayout', () => {
   });
 });
 
+// Bug "iPhone rotation in Chrome" (Phase 24): the layout follows the CSS media queries, not innerWidth and innerHeight.
+describe('layoutFromMedia', () => {
+  it('upright and narrow is rotate, upright and wide is portrait, sideways and low is side, otherwise wide', () => {
+    expect(layoutFromMedia({ portrait: true, phoneWidth: true, sideHeight: false })).toBe('rotate');
+    expect(layoutFromMedia({ portrait: true, phoneWidth: false, sideHeight: false })).toBe('portrait');
+    expect(layoutFromMedia({ portrait: false, phoneWidth: false, sideHeight: true })).toBe('side');
+    expect(layoutFromMedia({ portrait: false, phoneWidth: false, sideHeight: false })).toBe('wide');
+  });
+
+  it('gives the same layout as the size rule for every example size', () => {
+    for (const [w, h] of [[1024, 768], [768, 1024], [844, 390], [390, 844], [599, 900], [600, 900], [1000, 500], [1000, 501]] as const) {
+      expect(layoutFromMedia(mediaFromSize(w, h, true))).toBe(screenLayout(w, h));
+    }
+  });
+
+  it('uses media queries at the limits of data-model.md', () => {
+    expect(SCREEN_QUERIES).toEqual({
+      portrait: '(orientation: portrait)',
+      phoneWidth: '(max-width: 599.98px)',
+      sideHeight: '(max-height: 500px)',
+      padWidth: '(max-width: 1099.98px)',
+      finePointer: '(pointer: fine)',
+    });
+  });
+});
+
 describe('numberPadShown', () => {
   it('always and never ignore the device', () => {
     for (const finePointer of [true, false]) {
       for (const width of [390, 1024, 1920]) {
-        expect(numberPadShown('always', { finePointer, width })).toBe(true);
-        expect(numberPadShown('never', { finePointer, width })).toBe(false);
+        expect(numberPadShown('always', { finePointer, padWidth: width < PAD_WIDTH_LIMIT })).toBe(true);
+        expect(numberPadShown('never', { finePointer, padWidth: width < PAD_WIDTH_LIMIT })).toBe(false);
       }
     }
   });
 
   it('auto shows the pad without a fine pointer or on a screen narrower than 1100 px', () => {
-    expect(numberPadShown('auto', { finePointer: false, width: 1366 })).toBe(true);
-    expect(numberPadShown('auto', { finePointer: true, width: 1099 })).toBe(true);
-    expect(numberPadShown('auto', { finePointer: true, width: 844 })).toBe(true);
-    expect(numberPadShown('auto', { finePointer: true, width: 1100 })).toBe(false);
-    expect(numberPadShown('auto', { finePointer: true, width: 1280 })).toBe(false);
+    expect(numberPadShown('auto', { finePointer: false, padWidth: false })).toBe(true);
+    expect(numberPadShown('auto', { finePointer: true, padWidth: true })).toBe(true);
+    expect(numberPadShown('auto', { finePointer: true, padWidth: true })).toBe(true);
+    expect(numberPadShown('auto', { finePointer: true, padWidth: false })).toBe(false);
+    expect(numberPadShown('auto', { finePointer: true, padWidth: false })).toBe(false);
   });
 
   it('forced (a play mode without a ruler) makes auto show the pad on every device; always and never stay', () => {
-    expect(numberPadShown('auto', { finePointer: true, width: 1280 }, true)).toBe(true);
-    expect(numberPadShown('never', { finePointer: false, width: 390 }, true)).toBe(false);
-    expect(numberPadShown('always', { finePointer: true, width: 1280 }, true)).toBe(true);
+    expect(numberPadShown('auto', { finePointer: true, padWidth: false }, true)).toBe(true);
+    expect(numberPadShown('never', { finePointer: false, padWidth: true }, true)).toBe(false);
+    expect(numberPadShown('always', { finePointer: true, padWidth: false }, true)).toBe(true);
   });
 });

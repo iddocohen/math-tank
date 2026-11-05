@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { canApplyUpdate, createSwUpdate, type RegisterSW } from './swUpdate';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AUTO_RELOAD_KEY, canApplyUpdate, createSwUpdate, mayAutoReload, UPDATE_CHECK_MS, type RegisterSW, type SwUpdateEnv } from './swUpdate';
+
+// The loop guard keeps its marker in sessionStorage; every test starts without one.
+afterEach(() => sessionStorage.clear());
 
 /** A stand-in for registerSW from virtual:pwa-register: remembers the callbacks and counts updates. */
 function fakeRegister() {
@@ -89,5 +92,116 @@ describe('canApplyUpdate (review R2)', () => {
     sw.setStartScreen(false);
     sw.setStartScreen(true);
     expect(calls).toBe(2);
+  });
+});
+
+/** A test environment: a session store, interval timers that tests run by hand and a document with visibility. */
+function fakeEnv(version = 'v1', stored: Record<string, string> = {}) {
+  const intervals: Array<{ fn: () => void; ms: number }> = [];
+  const visibility: Array<() => void> = [];
+  const doc = { visibilityState: 'visible' as DocumentVisibilityState, addEventListener: (_t: string, fn: () => void) => visibility.push(fn) };
+  const env: SwUpdateEnv = {
+    version,
+    session: { getItem: (k) => stored[k] ?? null, setItem: (k, v) => void (stored[k] = v) },
+    setInterval: (fn, ms) => void intervals.push({ fn, ms }),
+    document: doc,
+  };
+  return { env, stored, intervals, doc, becomeVisible: () => visibility.forEach((fn) => fn()) };
+}
+
+function registration() {
+  return { update: vi.fn(() => Promise.resolve()) };
+}
+
+// Phase 24 "Fast updates and cache cleanup": new builds reach devices quickly, without a reload loop.
+describe('update checks (Phase 24)', () => {
+  it('asks the server for a new version on load, every 30 minutes and when the page comes back to the front', () => {
+    const f = fakeEnv();
+    const reg = registration();
+    const register: RegisterSW = (options) => {
+      options.onRegisteredSW?.('/sw.js', reg as unknown as ServiceWorkerRegistration);
+      return async () => {};
+    };
+    createSwUpdate(f.env).install(register);
+    expect(reg.update).toHaveBeenCalledTimes(1);
+    expect(UPDATE_CHECK_MS).toBe(30 * 60 * 1000);
+    expect(f.intervals.map((i) => i.ms)).toEqual([UPDATE_CHECK_MS]);
+    f.intervals[0]!.fn();
+    expect(reg.update).toHaveBeenCalledTimes(2);
+    f.becomeVisible();
+    expect(reg.update).toHaveBeenCalledTimes(3);
+    f.doc.visibilityState = 'hidden';
+    f.becomeVisible();
+    expect(reg.update).toHaveBeenCalledTimes(3);
+  });
+
+  it('a failed check (offline) is ignored', async () => {
+    const f = fakeEnv();
+    const reg = { update: vi.fn(() => Promise.reject(new Error('offline'))) };
+    const register: RegisterSW = (options) => {
+      options.onRegisteredSW?.('/sw.js', reg as unknown as ServiceWorkerRegistration);
+      return async () => {};
+    };
+    createSwUpdate(f.env).install(register);
+    await Promise.resolve();
+    expect(reg.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mayAutoReload (loop guard, Phase 24)', () => {
+  it('allows one automatic reload per version in a browser tab', () => {
+    expect(mayAutoReload('v1', null)).toBe(true);
+    expect(mayAutoReload('v2', 'v1')).toBe(true);
+    expect(mayAutoReload('v1', 'v1')).toBe(false);
+  });
+});
+
+describe('applying a waiting version (Phase 24, FR-051a)', () => {
+  function setupWith(f: ReturnType<typeof fakeEnv>) {
+    const calls: Array<boolean | undefined> = [];
+    let needRefresh: (() => void) | undefined;
+    const register: RegisterSW = (options) => {
+      needRefresh = options.onNeedRefresh;
+      return async (reload?: boolean) => void calls.push(reload);
+    };
+    const sw = createSwUpdate(f.env);
+    sw.install(register);
+    return { sw, calls, newVersion: () => needRefresh?.() };
+  }
+
+  it('on load on the start screen applies it at once and remembers the version it reloaded from', () => {
+    const f = fakeEnv('v1');
+    const s = setupWith(f);
+    s.newVersion();
+    s.sw.setStartScreen(true);
+    expect(s.calls).toEqual([true]);
+    expect(f.stored[AUTO_RELOAD_KEY]).toBe('v1');
+  });
+
+  it('mid-round it waits for the start screen', () => {
+    const f = fakeEnv('v1');
+    const s = setupWith(f);
+    s.sw.setStartScreen(false);
+    s.newVersion();
+    expect(s.calls).toEqual([]);
+    s.sw.setStartScreen(true);
+    expect(s.calls).toEqual([true]);
+  });
+
+  it('does not reload again when the page already reloaded once from this version (no reload loop)', () => {
+    const f = fakeEnv('v1', { [AUTO_RELOAD_KEY]: 'v1' });
+    const s = setupWith(f);
+    s.sw.setStartScreen(true);
+    s.newVersion();
+    expect(s.calls).toEqual([]);
+  });
+
+  it('after an update to v2, a later version v3 is applied again', () => {
+    const f = fakeEnv('v2', { [AUTO_RELOAD_KEY]: 'v1' });
+    const s = setupWith(f);
+    s.sw.setStartScreen(true);
+    s.newVersion();
+    expect(s.calls).toEqual([true]);
+    expect(f.stored[AUTO_RELOAD_KEY]).toBe('v2');
   });
 });

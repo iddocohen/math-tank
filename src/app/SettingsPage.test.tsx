@@ -15,6 +15,7 @@ import { t } from '../i18n';
 import { emptyRecords } from '../core/records/records';
 import { createPersistence } from './persistence';
 import { SettingsPage } from './SettingsPage';
+import { BUILD_DATE, BUILD_VERSION } from './buildInfo';
 
 const m = t();
 const L = m.settings.labels;
@@ -613,4 +614,10 @@ describe('SettingsPage "Spielstand übertragen" (amendment 15, FR-115, FR-118)',
     expect(new TextEncoder().encode(link).length).toBeLessThanOrEqual(2300);
     expect(within(group).getByTestId('transfer-qr')).toBeTruthy();
   });
+});
+
+// Bug "iPhone rotation in Chrome" (Phase 24): a parent can see which build runs.
+it('shows the build version and date', () => {
+  setup();
+  expect(screen.getByTestId('build-version').textContent).toBe(m.settings.version(BUILD_VERSION, BUILD_DATE));
 });

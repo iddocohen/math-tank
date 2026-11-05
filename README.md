@@ -92,6 +92,22 @@ The browser tests do not run in the workflow. Locally, the Playwright project `b
 
 In the repository settings, Pages uses "GitHub Actions" as its source.
 
+### How updates reach a device
+
+- Each build carries its version: the short git commit (`GITHUB_SHA` in the workflow) and the build day. The settings page shows it at the top, for example "Version 1a2b3c4 vom 2026-11-05".
+- The game asks for a new version when it opens, every 30 minutes while it is open, and when it comes back to the front.
+- A new version found while the start screen shows is applied at once: the page reloads one time by itself. During a round, or while a parent screen or the transfer dialog is open, it waits for the start screen (FR-051a). A tab reloads by itself at most once per version, so a failed update cannot cause a reload loop.
+- The new version removes the files of the old one from the offline cache.
+
+### Troubleshooting on an iPhone or iPad
+
+Each browser on an iPhone keeps its own data. Clearing Safari's data does not clear Chrome's, and the reverse.
+
+- Safari: Settings app, then Apps, then Safari, then "Clear History and Website Data" (older iOS: Settings, then Safari). To clear only this game: Safari, then Advanced, then Website Data, then remove `iddocohen.github.io`.
+- Chrome: in Chrome, the three dots, then "Delete browsing data", choose "All time", and tick "Cookies, site data" and "Cached images and files".
+
+Then open the game again and check the version on the settings page. To see what the game measures on the screen, open https://iddocohen.github.io/math-tank/?debug=screen: a small box in the bottom left corner shows the version, the window size, the viewport size, the orientation, the media query results, the chosen layout and the last event.
+
 ## How it is built
 
 - TypeScript, [Phaser 4](https://phaser.io/) for the battlefield, React 19 for menus and settings, Vite for the build, and a service worker for offline play.

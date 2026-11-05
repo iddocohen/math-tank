@@ -27,6 +27,7 @@ import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/setti
 import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
 import { validateSettings, withRange } from '../core/settings/validate';
 import { t } from '../i18n';
+import { BUILD_DATE, BUILD_VERSION } from './buildInfo';
 import type { DataKind, Persistence } from './persistence';
 import { RulerPreview } from './RulerPreview';
 
@@ -198,6 +199,9 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
             {m.parent.close}
           </button>
         </div>
+        <p className="build-version" data-testid="build-version">
+          {m.settings.version(BUILD_VERSION, BUILD_DATE)}
+        </p>
       </header>
 
       <div className="settings-notices" role="status" aria-live="polite">

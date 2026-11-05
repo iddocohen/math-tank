@@ -29,7 +29,10 @@
  *   (`<number>@<x>,<y>` of each tappable tank, in world units), `data-decoy-bursts` (decoys burst this round) and
  *   `data-help-tanks` (the number of the tank marked by help step 3, or ''), `data-enemy-volley` (the start x of each
  *   shell of the latest enemy shot, in world units, sorted) and `data-trail-points` (points of the trail shown).
- * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
+ * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles. Phaser queues
+ *   `scene.pause()` and `scene.resume()` until its next frame, while `scene.isPaused()` answers at once, so the scene
+ *   keeps the last state it asked for (`pauseAsked`): a pause and a resume within one frame then end resumed
+ *   (bug "iPhone rotation in Chrome", Phase 24; before, the scene stayed paused and the round hung).
  * - Amendment 11 (FR-093): `options.look` gives the child's tank its garage color, flag and hat and the child's shells
  *   their trail; the enemy and decoys keep their look. The canvas carries `data-player-look` (lookKey) for the
  *   end-to-end tests only (D4).
@@ -107,6 +110,8 @@ export class BattleScene extends Phaser.Scene {
   private readonly decoyViews = new Map<string, TankView>();
   private decoyBursts = 0;
   private enemyWarnings = 0;
+  /** Whether the scene last asked Phaser to pause (true) or to resume (false). */
+  private pauseAsked = false;
   /** Delay before a new enemy or decoy fades in: longer while new hills fade in. */
   private appearDelay = NEW_ENEMY_DELAY_MS;
   private projectile!: ProjectileView;
@@ -245,8 +250,12 @@ export class BattleScene extends Phaser.Scene {
       this.startShot(s.shot);
     }
 
-    if (s.phase === 'paused' && !this.scene.isPaused()) this.scene.pause();
-    else if (s.phase !== 'paused' && this.scene.isPaused()) this.scene.resume();
+    const pause = s.phase === 'paused';
+    if (pause !== this.pauseAsked) {
+      this.pauseAsked = pause;
+      if (pause) this.scene.pause();
+      else this.scene.resume();
+    }
   }
 
   /**

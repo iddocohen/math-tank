@@ -1334,6 +1334,23 @@ input:focus-visible {
   background: #1f2a44;
 }
 
+/*
+ * Bug "iPhone rotation in Chrome" (Phase 24): the browser's own layout decides. The picture never shows on a screen held
+ * sideways or at least 600 pixels wide, with the same media queries as SCREEN_QUERIES in src/core/view/screen.ts, also
+ * when the app's script has not caught up with a turn yet.
+ */
+@media (orientation: landscape) {
+  .rotate-screen {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  .rotate-screen {
+    display: none;
+  }
+}
+
 .rotate-phone {
   width: 160px;
   height: 160px;
@@ -1525,4 +1542,25 @@ input:focus-visible {
 
 .hold-ring[data-progress='0'] circle {
   stroke: transparent;
+}
+
+/* The `?debug=screen` overlay (bug "iPhone rotation in Chrome"): above everything, never in the way of a tap. */
+.screen-debug {
+  position: fixed;
+  left: max(4px, env(safe-area-inset-left));
+  bottom: max(4px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  margin: 0;
+  padding: 4px 6px;
+  font: 11px/1.3 ui-monospace, monospace;
+  color: #fff;
+  background: rgb(0 0 0 / 70%);
+  pointer-events: none;
+  white-space: pre;
+}
+
+.build-version {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
 }

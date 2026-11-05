@@ -72,6 +72,7 @@ import { newlyAffordable, newlyDestroyed } from '../core/rewards/garage';
 import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
 import { RotateScreen } from './RotateScreen';
+import { debugScreenRequested, ScreenDebug } from './ScreenDebug';
 import { useScreen } from './useScreen';
 import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
 import { TransferDialog, type TransferDialogState } from './TransferDialog';
@@ -141,7 +142,9 @@ export function App() {
   const gameParent = useRef<HTMLDivElement>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
   // "Nur Rechnen" has no ruler to tap, so "Automatisch" shows the number pad on every screen there (amendment 17).
-  const { layout, numberPad } = useScreen(persistence.settings().numberPad, screen === 'battle' && MODE_TRAITS[state.mode].forcesPad);
+  const { layout, numberPad, lastEvent } = useScreen(persistence.settings().numberPad, screen === 'battle' && MODE_TRAITS[state.mode].forcesPad);
+  // Bug "iPhone rotation in Chrome" (Phase 24): `?debug=screen` shows what the app measured.
+  const [debugScreen] = useState(() => debugScreenRequested(window.location.search));
   // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
   const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
 
@@ -407,6 +410,7 @@ export function App() {
         </main>
       )}
       {rotate && <RotateScreen gear={gear} />}
+      {debugScreen && <ScreenDebug layout={layout} lastEvent={lastEvent} />}
       {parent === 'settings' && (
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
       )}

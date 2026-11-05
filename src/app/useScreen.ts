@@ -1,46 +1,72 @@
 /**
- * The battle layout and whether the number pad shows (amendment 12, FR-102, FR-104), from the window size, the main
- * pointer (`matchMedia('(pointer: fine)')`; no matchMedia counts as a fine pointer) and the parent's "Zahlenfeld"
- * setting. The rule itself is pure, in src/core/view/screen.ts.
+ * The battle layout and whether the number pad shows (amendment 12, FR-102, FR-104), from the CSS media queries of
+ * SCREEN_QUERIES (src/core/view/screen.ts) and the parent's "Zahlenfeld" setting. The rule itself is pure, in
+ * src/core/view/screen.ts.
  *
- * Bug T306 (iPhone rotation): Safari on iOS fires `orientationchange` and `resize` while `window.innerWidth` and
- * `window.innerHeight` still hold the size from before the turn, and often sends no later event with the new size
- * (WebKit bugs 170595 and 231269); the same can happen on page load. So the hook measures on `resize`,
- * `orientationchange`, `visualViewport` resize, a change of the orientation media query or of the main pointer, and
- * when the page comes back to the front (`pageshow`, `visibilitychange`; iOS sends no `resize` to a page in the
- * background), and after each of these measures again on the next animation frame and after REMEASURE_DELAYS_MS.
+ * Bug "iPhone rotation in Chrome" (Phase 24): on an iPhone in Chrome the "Bitte dreh das Handy" picture stayed when the
+ * phone was held sideways. Chrome on iOS can keep reporting `window.innerWidth` and `window.innerHeight` from before a
+ * turn, and send no `resize` or `orientationchange` afterwards, so a comparison of the window width and height kept
+ * the upright layout. The media queries follow the browser's own layout, and their `change` events fire on every turn,
+ * so the hook reads them (`matchMedia`) and listens to their `change` events. The window size is read only when no
+ * matchMedia exists.
+ *
+ * Bug T306 stays as a backup: the hook also measures on `resize`, `orientationchange`, `visualViewport` resize and when
+ * the page comes back to the front (`pageshow`, `visibilitychange`), and after each of these on the next animation
+ * frame and after REMEASURE_DELAYS_MS.
+ *
+ * `lastEvent` names what caused the last measurement that changed something (`mount`, `resize`, `media
+ * (orientation: portrait)`, ...), for the `?debug=screen` overlay.
  */
 import { useEffect, useState } from 'react';
-import { numberPadShown, screenLayout, type NumberPadSetting, type ScreenLayout } from '../core/view/screen';
+import {
+  layoutFromMedia,
+  mediaFromSize,
+  numberPadShown,
+  SCREEN_QUERIES,
+  type NumberPadSetting,
+  type ScreenLayout,
+  type ScreenMedia,
+} from '../core/view/screen';
 
-/** Waits after an event (and after mounting) before measuring again, until iOS reports the new size. */
+/** Waits after an event (and after mounting) before measuring again (bug T306). */
 export const REMEASURE_DELAYS_MS = [100, 300, 700, 1500] as const;
 
-interface Viewport {
-  width: number;
-  height: number;
-  finePointer: boolean;
-}
+const KEYS = Object.keys(SCREEN_QUERIES) as Array<keyof ScreenMedia>;
 
-function query(text: string): MediaQueryList | null {
+function queryList(text: string): MediaQueryList | null {
   return typeof window.matchMedia === 'function' ? window.matchMedia(text) : null;
 }
 
-function readViewport(): Viewport {
-  return { width: window.innerWidth, height: window.innerHeight, finePointer: query('(pointer: fine)')?.matches ?? true };
+/** The media query results; from the window size only without matchMedia (no matchMedia counts as a fine pointer). */
+export function readScreenMedia(): ScreenMedia {
+  if (typeof window.matchMedia !== 'function') return mediaFromSize(window.innerWidth, window.innerHeight, true);
+  const media = {} as ScreenMedia;
+  for (const key of KEYS) media[key] = window.matchMedia(SCREEN_QUERIES[key]).matches;
+  return media;
 }
 
-export function useScreen(setting: NumberPadSetting, forcePad = false): { layout: ScreenLayout; numberPad: boolean } {
-  const [viewport, setViewport] = useState(readViewport);
+function sameMedia(a: ScreenMedia, b: ScreenMedia): boolean {
+  return KEYS.every((key) => a[key] === b[key]);
+}
+
+interface Measured {
+  media: ScreenMedia;
+  lastEvent: string;
+}
+
+export function useScreen(setting: NumberPadSetting, forcePad = false): { layout: ScreenLayout; numberPad: boolean; lastEvent: string } {
+  const [measured, setMeasured] = useState<Measured>(() => ({ media: readScreenMedia(), lastEvent: 'mount' }));
 
   useEffect(() => {
     const timers = new Set<ReturnType<typeof setTimeout>>();
     let frame: number | null = null;
+    let cause = 'mount';
     const measure = () => {
-      const next = readViewport();
-      setViewport((prev) => (prev.width === next.width && prev.height === next.height && prev.finePointer === next.finePointer ? prev : next));
+      const next = readScreenMedia();
+      setMeasured((prev) => (sameMedia(prev.media, next) ? prev : { media: next, lastEvent: cause }));
     };
-    const measureSoon = () => {
+    const measureSoon = (name: string) => {
+      cause = name;
       measure();
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
@@ -54,26 +80,29 @@ export function useScreen(setting: NumberPadSetting, forcePad = false): { layout
         timers.add(timer);
       }
     };
+    const onWindow = (event: Event) => measureSoon(event.type);
+    const onViewport = () => measureSoon('visualViewport resize');
     const onVisibility = () => {
-      if (document.visibilityState !== 'hidden') measureSoon();
+      if (document.visibilityState !== 'hidden') measureSoon('visibilitychange');
     };
-    const queries = [query('(pointer: fine)'), query('(orientation: portrait)')];
+    const queries = KEYS.map((key) => {
+      const list = queryList(SCREEN_QUERIES[key]);
+      const onChange = () => measureSoon(`media ${SCREEN_QUERIES[key]}`);
+      list?.addEventListener?.('change', onChange);
+      return { list, onChange };
+    });
+    const windowEvents = ['resize', 'orientationchange', 'pageshow'] as const;
     const viewportApi = window.visualViewport;
-    window.addEventListener('resize', measureSoon);
-    window.addEventListener('orientationchange', measureSoon);
-    window.addEventListener('pageshow', measureSoon);
+    for (const type of windowEvents) window.addEventListener(type, onWindow);
     document.addEventListener('visibilitychange', onVisibility);
-    viewportApi?.addEventListener('resize', measureSoon);
-    for (const q of queries) q?.addEventListener?.('change', measureSoon);
-    // The size read during the first render can be the one from before a turn or a reload (iOS).
-    measureSoon();
+    viewportApi?.addEventListener('resize', onViewport);
+    // The result read during the first render can be the one from before a turn or a reload (iOS).
+    measureSoon('mount');
     return () => {
-      window.removeEventListener('resize', measureSoon);
-      window.removeEventListener('orientationchange', measureSoon);
-      window.removeEventListener('pageshow', measureSoon);
+      for (const type of windowEvents) window.removeEventListener(type, onWindow);
       document.removeEventListener('visibilitychange', onVisibility);
-      viewportApi?.removeEventListener('resize', measureSoon);
-      for (const q of queries) q?.removeEventListener?.('change', measureSoon);
+      viewportApi?.removeEventListener('resize', onViewport);
+      for (const { list, onChange } of queries) list?.removeEventListener?.('change', onChange);
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
       if (frame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
@@ -81,7 +110,8 @@ export function useScreen(setting: NumberPadSetting, forcePad = false): { layout
   }, []);
 
   return {
-    layout: screenLayout(viewport.width, viewport.height),
-    numberPad: numberPadShown(setting, { finePointer: viewport.finePointer, width: viewport.width }, forcePad),
+    layout: layoutFromMedia(measured.media),
+    numberPad: numberPadShown(setting, measured.media, forcePad),
+    lastEvent: measured.lastEvent,
   };
 }

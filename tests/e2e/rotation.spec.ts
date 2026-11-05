@@ -45,6 +45,41 @@ function iosLateSize(): void {
   Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => read().h });
 }
 
+/**
+ * Bug "iPhone rotation in Chrome" (Phase 24): Chrome on iOS runs in a WKWebView that can report the size from before a
+ * turn for longer than the re-measures of T306 wait, and sends no `resize`, `orientationchange` or `visualViewport`
+ * resize at all. Only the CSS media queries change with the turn. This stub keeps the old size for 3 seconds after
+ * every change and swallows those events before the app sees them.
+ */
+function chromeIosStaleSize(): void {
+  const find = (name: string) => {
+    for (let o: object | null = window; o; o = Object.getPrototypeOf(o) as object | null) {
+      const d = Object.getOwnPropertyDescriptor(o, name);
+      if (d?.get) return d.get;
+    }
+    throw new Error(`no getter for ${name}`);
+  };
+  const realWidth = find('innerWidth');
+  const realHeight = find('innerHeight');
+  let shown = { w: realWidth.call(window) as number, h: realHeight.call(window) as number };
+  let last = { ...shown };
+  let changedAt = -Infinity;
+  const read = () => {
+    const now = { w: realWidth.call(window) as number, h: realHeight.call(window) as number };
+    if (now.w !== last.w || now.h !== last.h) {
+      last = now;
+      changedAt = performance.now();
+    }
+    if (performance.now() - changedAt >= 3000) shown = now;
+    return shown;
+  };
+  Object.defineProperty(window, 'innerWidth', { configurable: true, get: () => read().w });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => read().h });
+  const swallow = (event: Event) => event.stopImmediatePropagation();
+  for (const type of ['resize', 'orientationchange']) window.addEventListener(type, swallow, true);
+  window.visualViewport?.addEventListener('resize', swallow, true);
+}
+
 async function turn(page: Page, size: { width: number; height: number }): Promise<void> {
   await page.setViewportSize(size);
 }
@@ -80,6 +115,45 @@ async function fireWithPad(page: Page, overlay: Locator): Promise<void> {
   await page.locator('.fire-button').tap();
   await expect(overlay).toHaveAttribute('data-last-landing', String(n));
 }
+
+/** Chrome 142 on iOS 18 (iPhone): "CriOS" names Chrome; the page runs in WebKit as every browser on iOS does. */
+const CHROME_IOS_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/142.0.7444.46 Mobile/15E148 Safari/604.1';
+
+test.describe('turning an iPhone in Chrome (size reported 3 s late, no resize event)', () => {
+  test.use({ userAgent: CHROME_IOS_UA });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'iphone-landscape', 'the rotation check runs on the phone only');
+    await page.addInitScript(chromeIosStaleSize);
+    await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } }, { once: true });
+  });
+
+  test('the rotate picture goes when the phone turns sideways and comes back when it turns upright', async ({ page }) => {
+    await turn(page, PORTRAIT);
+    await page.goto('/?seed=5');
+    const rotate = page.getByTestId('rotate-screen');
+    await expect(rotate).toBeVisible();
+
+    // Within the 3 seconds in which the old size is still reported.
+    await turn(page, LANDSCAPE);
+    await expect(rotate).toBeHidden({ timeout: 2000 });
+    await startButton(page).tap();
+    const overlay = page.getByTestId('battle-overlay');
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+    await expect(page.getByTestId('battle-main')).toHaveAttribute('data-layout', 'side', { timeout: 2000 });
+
+    await turn(page, PORTRAIT);
+    await expect(rotate).toBeVisible({ timeout: 2000 });
+    await expect(overlay).toHaveAttribute('data-phase', 'paused', { timeout: 2000 });
+
+    await turn(page, LANDSCAPE);
+    await expect(rotate).toBeHidden({ timeout: 2000 });
+    await expect(overlay).not.toHaveAttribute('data-phase', 'paused', { timeout: 2000 });
+    await expectBattleFits(page);
+    await fireWithPad(page, overlay);
+  });
+});
 
 for (const ios of [false, true]) {
   const name = ios ? ' (size reported late, as on iOS)' : '';

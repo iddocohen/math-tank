@@ -260,6 +260,8 @@ export const de = {
     saved: 'Gespeichert. Die Einstellungen gelten ab der nächsten Runde.',
     saveFailed: 'Speichern hat nicht geklappt. Die Einstellungen gelten nur, bis der Browser geschlossen wird.',
     checkFields: 'Bitte die markierten Felder prüfen.',
+    /** Bug "iPhone rotation in Chrome" (Phase 24): which build runs, the short git commit and the build day. */
+    version: (version: string, date: string) => `Version ${version} vom ${date}`,
     persistDenied: 'Der Browser darf gespeicherte Daten löschen. Bitte die Daten ab und zu sichern.',
     presetCustom: 'Eigener Zahlenraum',
     levelOption: (n: number) => `Stufe ${n}`,
