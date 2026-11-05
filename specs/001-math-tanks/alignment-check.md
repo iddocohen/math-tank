@@ -144,3 +144,21 @@ The product owner asked: "What is one missing feature that would make this game 
 - Decisions of this update that the amendment does not state: 13 items (the amendment says "about 12" and names 4 colors, 4 new flags, 3 trails and 2 hats); unlocked items are derived from the star total and not stored separately; the garage numbers items 1 to 17, so items above 9 take two digits; with the garage off the child's tank uses the standard look; stars live under their own storage key `mathtanks.garage.v1` so "Fortschritt zurücksetzen" cannot touch them.
 
 The spec (new US10, Edge Cases, FR-040, FR-046, FR-048a, FR-062, FR-087, new FR-089 to FR-097, Key Entities, Assumptions), the data model (Settings version 5, Garage), the contracts (`core/rewards`, `core/storage`, garage screen, keyboard map), quickstart (scenario 23) and tasks (Phases 22d and 22e) were updated to match.
+
+## Amendment 13
+
+**Date**: 2026-11-05
+
+The product owner said: "The enemy AI is too simple in the sense he never hits my tank no matter how many times I miss. My child will explore that and just guess all the time, how can this be fixed? Also the terrain after a while does not exist, does it make sense to regenerate the terrain after the enemy has died?" They chose "the enemy zeroes in visibly on consecutive misses; random hits are removed" and "a new landscape after every destroyed enemy". This is an intended change, not drift.
+
+- **Trade-off with PRD section 8.** [source-prd.md](./source-prd.md) section 8 says "The AI must not exploit the player's mathematics difficulties." Since amendment 07, FR-042 kept the enemy's hits independent of the child's answers. [Amendment 13](./amendment-13-enemy-zeroes-in-new-terrain.md) makes the enemy's hits depend on the child's misses in a row (FR-098, FR-099), which include misses from real difficulty, not only guesses. The product owner decided that repeated misses should have a visible consequence, because otherwise a child can guess without cost. The spec limits the effect:
+  - Help still reaches the shown solution at step 3, and firing at it destroys the enemy and sets the count to 0, so a child who uses help can always avoid losing a heart.
+  - Asking for help never changes the enemy's shot, and attempts, progress and challenge data are not inputs to it (FR-042).
+  - The first enemy shot of a round always misses (FR-043), and the warning one miss before the hit is visible (FR-100).
+  - No-damage mode (FR-044) still takes no heart.
+- **Amendment 07 items 5 and 6 are replaced**: the random hit chance (1/6, 1/4, 1/3) and the near-miss band of 40 to 100 world units are removed.
+- **PRD section 8 "Enemy accuracy should vary by difficulty"** is kept: the number of misses in a row before a hit is 4, 3 and 2 by difficulty.
+- **PRD section 5 (terrain)** is extended: the landscape is renewed after every destroyed enemy (FR-101), which also stops craters from wearing the ground down to the bedrock strip.
+- Decisions of this update that the amendment does not state: the shell lands about 35 world units away at 3 misses in a row, not 30, because the hit area reaches 30 world units from the tank's center; a fast guess that adds 2 can skip the warning; free play has no fast-guess rule, so every miss there adds 1; on the enemy's first shot of a round the count is kept even when it reached the limit, so the next miss hits; the new terrain seed comes from the round seed and the number of destroyed enemies, so the challenges stay as they were.
+
+The spec (US1, US2, US5, Edge Cases, FR-041 to FR-044, FR-070, FR-081, Key Entities, new FR-098 to FR-101, Amendments), the data model (`RoundState.missStreak`, `RoundState.terrainSeed`), the contracts (`core/ai`, `isFastGuess`, `renewTerrain`, the battle flow and test attributes), quickstart (scenarios 22 and 24) and tasks (Phase 22f) were updated to match.

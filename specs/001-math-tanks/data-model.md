@@ -232,7 +232,10 @@ interface RoundState {
   lives: number;                   // child's hearts, 3 at the start (LIVES), 0 ends the round (FR-080)
   enemiesDestroyed: number;        // score (FR-083)
   elapsedMs: number;               // play time up to the last pause; final once the round is over (FR-084). The controller's elapsedMs() adds the running part
+  missStreak: number;              // the child's misses in a row (amendment 13, FR-098): + 1 per shot that does not destroy the enemy (near misses and burst decoys included), + 2 for a fast guess (FR-038 rule);
+                                   // 0 after a shot that destroys the enemy and after an enemy hit; kept by newScene; 0 at startRound
   phase: Phase;
+  terrainSeed: number;             // seed of the current ground (amendment 13, FR-101): deriveSeed(seed, 0) at round start, new after every destroyed enemy; newScene makes a new round seed and with it a new terrain seed
   terrain: Heightmap;              // Float32Array of surface heights per column
   player: TankState;
   enemy: TankState;
@@ -282,20 +285,20 @@ start → challenge (guided search, enemy visible) | aiming (freePlay, readPosit
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
-playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded) --> roundOver (goalReached) | new search with a new visible enemy; the destroyed enemy does not fire
-playerShot (guided) --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, lastShot with the step count shown)
+playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
+playerShot (guided) --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, missStreak + 1, or + 2 for a fast guess, lastShot with the step count shown)
 playerShot (guided, comparison) --decoy's exact number--> decoy destroyed (alive false, lastShot.decoyHit), a miss --> enemyTurn (help.level + 1; the shell enters from the top edge)
 playerShot (guided, comparison) --hit--> enemy destroyed, every decoy alive false (folded away) --> new search
 challenge (comparison) --tapTank(id) of a standing enemy or decoy--> as confirm at that tank's number
 challenge --help (button or H) or time limit--> challenge (help.level + 1)
 challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
-playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1 --> roundOver (goalReached) | aiming with a new readPosition challenge and a new visible enemy at its answer
-playerShot (freePlay) --miss--> enemyTurn
-enemyTurn --impact--> lives - 1 when the enemy's draw chose a hit (enemyHitsPlayer) and not noDamage; lives 0 --> roundOver (heartsGone), otherwise the phase the child left (challenge or aiming)
+playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1, missStreak 0 --> roundOver (goalReached) | new landscape and aiming with a new readPosition challenge and a new visible enemy at its answer
+playerShot (freePlay) --miss--> enemyTurn (missStreak + 1)
+enemyTurn --impact--> when the enemy's plan was a hit (missStreak at the difficulty's limit, not the first enemy shot of the round): missStreak 0 and lives - 1 unless noDamage; lives 0 --> roundOver (heartsGone), otherwise the phase the child left (challenge or aiming)
 any (except roundOver) --pause (button or Escape)--> paused --resume--> previous phase
 ```
 
-Round over (amendment 06, FR-008, FR-082) when `lives == 0` (`heartsGone`), or, with `roundType: 'enemyCount'`, when `enemiesDestroyed == roundLength` right after the hit (`goalReached`, before any enemy shot). In `noDamage` mode `lives` never drops. The player's shell follows the hit rule above: only the exact number destroys the enemy; a decoy is destroyed only at its exact number and does not count in the score; a near miss on the body sets `nearMiss` (the enemy shakes). The player's own shell never damages the player.
+Round over (amendment 06, FR-008, FR-082) when `lives == 0` (`heartsGone`), or, with `roundType: 'enemyCount'`, when `enemiesDestroyed == roundLength` right after the hit (`goalReached`, before any enemy shot). In `noDamage` mode `lives` never drops; the enemy's shells still come closer and land on the child's tank at the limit (amendment 13, FR-044). The player's shell follows the hit rule above: only the exact number destroys the enemy; a decoy is destroyed only at its exact number and does not count in the score; a near miss on the body sets `nearMiss` (the enemy shakes). The player's own shell never damages the player.
 
 **Time** (FR-084): `startRound` starts the clock at 0. `pause` adds the running part to `elapsedMs` and stops it; `resume` starts it again; the round end freezes it. The app pauses the battle while the parent gate is open and while the tab is hidden (`visibilitychange`), so those times are not counted. `formatTime(ms)` gives `m:ss` (for example `6:12`; `61:05` past an hour).
 

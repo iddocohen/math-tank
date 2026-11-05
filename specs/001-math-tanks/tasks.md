@@ -654,6 +654,24 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 
 ---
 
+## Phase 22f: Amendment 13 enemy zeroes in and new hills
+
+**Goal**: The enemy's shells come closer with every miss in a row and hit at the difficulty's limit, with a visible warning one miss before; fast guesses count twice; after every destroyed enemy the hills change to a new landscape ([amendment 13](./amendment-13-enemy-zeroes-in-new-terrain.md)).
+
+**Independent Test**: `pnpm test` passes for `src/core/ai/`, `src/core/progress/` and `src/core/battle/`; `tests/e2e/enemyZeroIn.spec.ts` passes in Chromium, WebKit and Firefox: on "Normal" in free play, three slow misses cost exactly one heart at the third, and destroying the enemy changes `data-terrain-seed` while hearts and the counter stay.
+
+- [ ] T265 [P] [US1] Update `src/core/ai/enemy.test.ts` before the code: `HIT_STREAK` is easy 4, normal 3, challenging 2; `ZERO_IN_DISTANCE` is 100, 60, 35 and every value is larger than half the tank width; for every difficulty and 200 seeds, `planEnemyShot` hits exactly when `missStreak >= HIT_STREAK` and `shotIndexInRound > 0`, with `targetX` equal to `playerX`; below the limit it lands at the distance for the streak (streak 0 and 1 give 100, 2 gives 60, 3 and more give 35), on both sides over the seeds, and on the inner side at the ends of the world; the first shot of a round misses at any streak; `isWarningStreak` is true only at `HIT_STREAK - 1`; the input type has `missStreak` and no help, challenge or attempt fields; `ENEMY_HIT_CHANCE`, `NEAR_MISS_MIN` and `NEAR_MISS_MAX` are gone. Update `src/core/progress/classify.test.ts`: `isFastGuess` is true for a response under 1500 ms or 3 misses within the 5 seconds before, and false otherwise; `classifyAttempt` still gives the same `guess` values (FR-038, FR-041 to FR-043, FR-098, FR-099, FR-100)
+- [ ] T266 [US1] Implement until T265 passes: `HIT_STREAK`, `ZERO_IN_DISTANCE`, `missStreak` in `planEnemyShot` and `enemyShot`, and `isWarningStreak` in `src/core/ai/enemy.ts`; `isFastGuess` in `src/core/progress/classify.ts`, used by `classifyAttempt` (FR-038, FR-041 to FR-043, FR-099, FR-100)
+- [ ] T267 [US1] Update `src/core/battle/battleController.test.ts` before the code: `missStreak` starts at 0; a slow miss adds 1 and a miss under 1.5 s after answers became possible adds 2; a near miss and a burst decoy count; on each difficulty the enemy's shell hits at exactly the limit (one heart), the miss distances shrink before it and stay outside the hit area, and the streak is 0 after the hit; with `noDamage` the shell still lands on the tank at the limit and no heart goes; a shot that destroys the enemy, the shot at the shown solution at help step 3 included, sets the streak to 0; `newScene` keeps it and `startRound` sets it to 0; the first enemy shot of a round misses at the limit; after every destroyed enemy `terrainSeed` and `terrain` change, the round `seed` does not, the child's tank keeps its number and side and stands on the new ground, and lives, `enemiesDestroyed`, `turn`, `rulerLevel` and the time stay, in guided and free play; the last enemy of an `enemyCount` round ends it with no new terrain. Replace the amendment 07 test of the random hit draw (FR-041 to FR-044, FR-070, FR-081, FR-098, FR-099, FR-101)
+- [ ] T268 [US1] Implement until T267 passes: `missStreak` and `terrainSeed` in `RoundState` in `src/core/types.ts`; `terrainSeed` in `createRound` and new `renewTerrain` in `src/core/battle/round.ts`; the streak, the fast-guess step, the enemy's shot input, the reset after an enemy hit and the terrain renewal after a destroyed enemy in `src/core/battle/controller.ts` (FR-098, FR-099, FR-101)
+- [ ] T269 [P] [US1] Write `tests/e2e/enemyZeroIn.spec.ts` before the view code, in Chromium, WebKit and Firefox: stored settings with free play, "Normal" and "Gegner pro Runde" 5; three slow misses keep 3 hearts after the first two, show `data-enemy-warnings` 1 on the canvas after the second and cost one heart after the third; `data-miss-streak` follows; destroying the enemy changes `data-terrain-seed` and keeps `data-lives`, `data-round-seed` and the counter + 1; a second case with "Ohne Schaden spielen" keeps 3 hearts at the limit. Update `tests/e2e/help.spec.ts`, which asserted that misses never cost a heart, to the new rule: misses before the limit cost no heart, and the shot at the shown solution sets `data-miss-streak` to 0. Update any other spec that relied on the enemy never hitting (FR-044, FR-098 to FR-101)
+- [ ] T270 [US1] Implement the view until T269 passes: the cross-fade to the new ground after the explosion in `src/game/TerrainView.ts`; the warning wobble and one heart pulse in `src/game/TankView.ts`; in `src/game/BattleScene.ts` the fade, the child's tank settling after it, the next enemy appearing after it, and the canvas attributes `data-terrain-seed` and `data-enemy-warnings`; `data-miss-streak` on the overlay root in `src/app/BattleOverlay.tsx` (FR-100, FR-101)
+- [ ] T271 [US1] Run lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox; take muted headless screenshots of the enemy shell landing at streak 1, 2 and 3 and of the new hills after a destroyed enemy, stored in the session scratchpad (FR-099, FR-101)
+
+**Checkpoint**: The enemy zeroes in on misses in a row, guessing has a visible cost, and every destroyed enemy brings new hills.
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
@@ -716,6 +734,7 @@ Verification for the whole phase: muted headless Chromium screenshots (outside P
 - **Phase 22c (amendment 10)**: depends on Phases 22a and 22b. Runs before Phase 23. T244 runs before T245, T246 before T247, T248 and T249 before T250, and T251 last. T245 runs before T247, because the battle tests use the comparison fixture.
 - **Phase 22d (amendment 11 core)**: depends on Phases 13a and 22c. T252 and T253 run before T254, T255 before T256, T257 before T258; T254 and T256 run before T257.
 - **Phase 22e (amendment 11 screens and battle look)**: depends on Phase 22d. T259, T260 and T261 run before T262 and T263; T264 runs last. Runs before Phase 23, whose keyboard spec T183 must also allow G on the start screen.
+- **Phase 22f (amendment 13)**: depends on Phases 18b, 22c and 22e. T265 runs before T266, T267 before T268, T266 before T267 (the controller uses the new enemy input), T269 before T270; T271 runs last.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -816,14 +835,14 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-035 | T010, T063, T123, T129, T130, T131 |
 | FR-036 | T010, T056, T122, T123, T237 |
 | FR-037 | T118, T122, T123, T129, T130 |
-| FR-038 | T117, T121, T129, T130 |
+| FR-038 | T117, T121, T129, T130, T265, T266 |
 | FR-039 | T119, T124 |
 | FR-040 | T127, T128, T132, T133, T257, T260, T262 |
-| FR-041 | T026, T027, T220, T221, T222, T223 |
-| FR-042 | T026, T027, T034, T220, T221, T222 |
-| FR-043 | T026, T027, T032, T208, T209, T220, T221, T222 |
+| FR-041 | T026, T027, T220, T221, T222, T223, T265, T266, T267 |
+| FR-042 | T026, T027, T034, T220, T221, T222, T265, T266 |
+| FR-043 | T026, T027, T032, T208, T209, T220, T221, T222, T265, T266, T267 |
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
-| FR-044 | T032, T208, T209, T213 |
+| FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
 | FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262 |
 | FR-047 | T011, T013, T112, T113, T175, T176 |
@@ -851,7 +870,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
 | FR-069 | T112, T113, T182, T235 |
-| FR-070 | T185, T200, T208, T243, T246, T247, T249 |
+| FR-070 | T185, T200, T208, T243, T246, T247, T249, T267 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
 | FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233, T246, T247, T248, T250 |
 | FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226, T249, T250 |
@@ -862,7 +881,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
-| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238, T246, T247 |
+| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238, T246, T247, T267 |
 | FR-082 | T061, T205, T207, T208, T209, T213, T214 |
 | FR-083 | T208, T209, T210, T211, T214 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
@@ -879,6 +898,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-095 | T260, T261, T262 |
 | FR-096 | T252, T255, T257, T258, T260, T261, T262 |
 | FR-097 | T252, T254, T255, T256, T257 |
+| FR-098 | T265, T267, T268, T269 |
+| FR-099 | T265, T266, T267, T268, T269, T271 |
+| FR-100 | T265, T266, T269, T270 |
+| FR-101 | T267, T268, T269, T270, T271 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |

@@ -66,6 +66,8 @@ classifyAttempt(a: { solved: boolean; exact: boolean; helpLevel: number; wrongAn
 // outcome: 'independent' when solved, helpLevel 0 and wrongAnswers 0; 'assisted' when solved after help or misses; 'unsolved' when the solution was shown.
 // Amendment 06: every hit is exact, a near miss on the body is a miss, so 'close' is never produced (a stored 'close' still loads and is neutral)
 // guess: solved and responseMs < 1500, or solved and 3+ wrongAnswerTimes within 5000 ms before submittedAt
+isFastGuess(a: { responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): boolean   // amendment 13: responseMs < 1500 or 3+ wrongAnswerTimes within 5000 ms before submittedAt;
+                                                                                                // classifyAttempt's guess is solved && isFastGuess; the controller applies it to a miss (FR-098)
 startOrContinueSession(p: Progress, now: number): Progress   // 30-minute idle and new-day rules
 recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule
 skillStatus(sp: SkillProgress): 'mastered' | 'developing'
@@ -95,12 +97,15 @@ Guarantees: fixed timestep (1/120 s); identical output for identical input; terr
 ## `core/ai`
 
 ```ts
-ENEMY_HIT_CHANCE: Record<Difficulty, number>   // easy 1/6, normal 1/4, challenging 1/3 (FR-041)
-NEAR_MISS_MIN = 40; NEAR_MISS_MAX = 100         // world units from the child's tank center (FR-041)
-planEnemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; playerX: number; worldWidth: number }): { hits: boolean; targetX: number }
-enemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; origin: Point; playerX: number; terrain: Heightmap; worldWidth: number; worldHeight: number }):
+HIT_STREAK: Record<Difficulty, number>          // misses in a row at which the enemy hits: easy 4, normal 3, challenging 2 (amendment 13, FR-041, FR-099)
+ZERO_IN_DISTANCE: readonly [100, 60, 35]        // world units from the child's tank center at 1, 2 and 3 or more misses in a row (FR-099)
+planEnemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; missStreak: number; playerX: number; worldWidth: number }): { hits: boolean; targetX: number }
+enemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; missStreak: number; origin: Point; playerX: number; terrain: Heightmap; worldWidth: number; worldHeight: number }):
   { hits: boolean; targetX: number; path: Point[]; impact: Point }
+isWarningStreak(missStreak: number, difficulty: Difficulty): boolean   // missStreak === HIT_STREAK[difficulty] - 1 (FR-100)
 ```
+
+Changed by amendment 13: `ENEMY_HIT_CHANCE`, `NEAR_MISS_MIN` and `NEAR_MISS_MAX` are removed. `hits` is `missStreak >= HIT_STREAK[difficulty] && shotIndexInRound > 0`; there is no random hit. A miss lands at `playerX ± ZERO_IN_DISTANCE[min(missStreak, 3) - 1]` (a streak of 0 uses the first distance), on a side drawn from `deriveSeed(roundSeed, 6, shotIndexInRound)`, and on the other side when the drawn one is outside `[0, worldWidth]`. Every distance is larger than half the tank width (30), so a miss never lands in the hit area. The input has the miss streak and the difficulty but no field for attempts, help, challenge data or progress (FR-042). The text below describes amendment 07 and is replaced where it differs.
 
 Changed by amendment 07: the enemy no longer aims with `solveAim` plus random error. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: `hits` is true with probability `ENEMY_HIT_CHANCE[difficulty]` and always false for `shotIndexInRound === 0` (FR-043). With `hits`, `targetX` is `playerX`; otherwise it is `playerX ± d` with `d` from 40 to 100 on a drawn side, and the other side when the drawn one is outside `[0, worldWidth]`. `enemyShot` adds the arc of `solveArcToX` from `origin` to `targetX`, so `|impact.x - targetX|` is at most 0.5 units. The input type has no field for attempts, help, mistakes or challenge data, so the draw cannot depend on them (FR-042). Over 3000 seeded shots the hit rate is within 0.03 of the chance for each difficulty. `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
 
@@ -114,10 +119,10 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0
+  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
                                            // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed,
-                                           // turn, round time and enemy shot index stay; no enemy shot; an unfinished challenge is dropped
+                                           // turn, round time, enemy shot index and missStreak stay (amendment 13); no enemy shot; an unfinished challenge is dropped
                                            // without an attempt; ignored in 'playerShot', 'enemyTurn', 'paused' and 'roundOver'
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
   selectNumber(n: number): void            // pointer preview while dragging or after release; clears typed digits; never fires; sets inputMethod 'pointer'
@@ -134,8 +139,11 @@ class BattleController {
   shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new visible enemy
                                            // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help and
                                            // enemy turn at once (FR-066, FR-081, amendment 07); sets lastShot. Comparison (amendment 10): a decoy's
-                                           // exact number destroys the decoy as a miss (lastShot.decoyHit); an enemy hit sets every decoy alive false
-  enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage; 0 hearts -> roundOver 'heartsGone'
+                                           // exact number destroys the decoy as a miss (lastShot.decoyHit); an enemy hit sets every decoy alive false.
+                                           // Amendment 13: a miss adds 1 to missStreak, or 2 when isFastGuess (core/progress) holds for it; the
+                                           // enemy's shot gets missStreak and the round's enemyDifficulty. A shot that destroys the enemy sets
+                                           // missStreak 0 and, unless the round ends, renews the terrain (renewTerrain in round.ts) before the next enemy
+  enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage and sets missStreak 0 (amendment 13); 0 hearts -> roundOver 'heartsGone'
                                            // the shell comes from the enemy's muzzle, except in comparison turns, where it enters from the top edge (FR-043a, amendment 10)
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
@@ -146,6 +154,8 @@ class BattleController {
 Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Removed by amendment 05: `nudge` (no +1 and −1 buttons, no arrow keys). Removed by amendment 09: `tapTank` (no tank tapping, no order badges). `RoundState.inputMethod` records the latest input method; the next search passes it to `generateChallenge` (FR-076). Digits and Enter are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
 
 `getState()` returns the full state; there is no hidden enemy and no reduced view of it (amendment 07 removes `publicState`, `placedEnemy` and `HiddenTank`). `visibleEnemy(state)` in `round.ts` returns the enemy while it is alive. Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
+
+`renewTerrain(s: RoundState, settings: Settings): RoundState` in `core/battle/round.ts` (pure, amendment 13, FR-101): `terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed)`, a new `terrain` from it, the player, the enemy and every decoy moved to their numbers on the new ground; every other field, `seed` included, is unchanged. `createRound` sets `terrainSeed = deriveSeed(seed, 0)`, the seed its terrain was always made from.
 
 ## `core/battle/hitRule` (pure, amendment 04, changed by amendment 06)
 
