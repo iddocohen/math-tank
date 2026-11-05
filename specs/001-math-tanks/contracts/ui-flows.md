@@ -1,16 +1,16 @@
 # Contract: screens and player flows
 
-Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") and [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen").
+Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyboard-only play) [amendment 02](../amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](../amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, pointer line, "Genau treffen") and [amendment 05](../amendment-05-no-shortcuts-settings-early.md) (no stepping shortcuts, no number while pointing, clear tanks, settings early).
 
 ## Screens
 
 | Screen | Built with | Opens from | Content |
 |--------|-----------|-----------|---------|
 | Start | React | App load | Large "Spielen" button, "Freies Spiel" when the parent allows it, gear icon (press and hold), fullscreen button. Enter or Space starts guided mode |
-| Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield, ruler (number line), challenge banner, large number readout, −1 and +1 buttons, fire button, help button, speaker icon, pause, fullscreen, gear icon |
+| Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield with the child's tank and the enemy tank, each with its health bar above it, ruler (number line), challenge banner, large readout of typed digits, fire button, help button, speaker icon, pause, fullscreen, gear icon |
 | Round end | React overlay | Round over | Encouraging message, "Nochmal" button (Enter or Space), back to start |
 | Parent gate | React | Gear held for 2 s with mouse or touch | Opens a parent menu with "Einstellungen" and "Fortschritt". No key opens it |
-| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with a ruler preview for the chosen range and level), Hilfe, Gegner, Ton, Runde. Save button disabled while invalid; errors shown next to fields |
+| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with a ruler preview for the chosen range and level), Hilfe, Gegner, Ton, Runde. Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
 | Progress | React | Parent menu | Per-skill table, sessions list, reset button with confirmation |
 
 There are no angle or power controls, and the cannon cannot be dragged (amendment 01).
@@ -19,13 +19,15 @@ There are no angle or power controls, and the cannon cannot be dragged (amendmen
 
 - Sky and battlefield: y 0 to 700. The battlefield spans exactly the configured range, for example 550 to 780.
 - Ruler: y 720 to 820, x 80 to 1520, same mapping as the battlefield (core-api `numberToX`), always on screen, lines and labels per the ruler level.
-- React overlay (HTML, positioned over the canvas): challenge banner at the top center; help, speaker and pause buttons at the top left; gear and fullscreen at the top right; the large number readout, −1, +1 and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field.
+- React overlay (HTML, positioned over the canvas): challenge banner at the top center; help, speaker and pause buttons at the top left; gear and fullscreen at the top right; the large readout of typed digits and the fire button at the bottom right, below or beside the ruler on narrow screens. There is no text field, there are no −1 and +1 buttons, and there are no health bars or health labels in the corners (amendment 05).
+- Tanks (amendment 05, FR-077, FR-078): the child's tank is blue, with rounded shapes and a yellow star flag on its antenna; the enemy tank is red, with a darker, angular body and a black flag; decoys look exactly like the enemy. Each tank's health bar sits directly above the tank, in the tank's color, with no text. At the start of every round, including after "Neue Landschaft", a large bouncing arrow with "Du" points at the child's tank for 3 seconds.
 
 ## Choosing a number and firing (every mode)
 
-1. The child taps or drags on the ruler (snaps to the nearest whole number), types digits, or uses −1, +1 or the arrow keys. A guide line, a target marker and the large readout follow at once. Releasing or typing only previews.
+1. The child taps or drags on the ruler (snaps to the nearest whole number) or types digits. A guide line and a target marker follow at once. While pointing, no number is shown: no large readout and no label next to the marker. Typed digits appear in the readout as they are typed. Releasing or typing only previews. There is no way to step the preview by 1 or 10 (amendment 05).
 2. The fire button or Enter fires at the previewed number. The cannon stays at its fixed angle (65 degrees, raised up to 85 degrees when a hill blocks the arc), and the shell lands at the chosen number.
 3. After landing: crater; the landing number shown large; the previous path kept as a faint trail.
+4. Input method (amendment 05, FR-076): typing a digit or pressing Enter to fire sets the round's input method to keyboard; tapping or dragging on the ruler or tapping the fire button sets it to pointer. With keyboard input, the next search is never "Finde N".
 
 ## Hit feedback (amendment 04, FR-066, FR-071, FR-072, FR-074)
 
@@ -68,11 +70,10 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 | Backspace | none | delete the last digit | same | none | none |
 | Enter | start guided round | fire at the typed or previewed number; in `order3`, place a badge for the typed tank number | fire at the solution | resume | new round |
 | Space | start guided round | none | fire at the solution | resume | new round |
-| Arrow left, right | none | preview −1, +1 | same | none | none |
-| Arrow up, down | none | preview +10, −10 | same | none | none |
 | H | none | next help step | none | none | none |
 | Escape | none | pause | pause | resume | none |
 
+- No other key does anything. The arrow keys were removed by amendment 05, because stepping toward the answer is a shortcut.
 - Keys are ignored while a shell is in flight (`playerShot`, `enemyTurn`), so a held Enter never fires twice.
 - A typed number outside the range is not fired; the preview stays at the nearest end, and a hint shows the range, for example "Zahlen von 550 bis 780".
 - Focus starts in the game when the app loads (the app root has `tabIndex={-1}` and receives focus), and the keyboard listener is on the window, so typing works without a click. No key opens the parent gate; the gear button ignores keyboard activation.
@@ -91,4 +92,5 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 - "Genau treffen" (aim exactly) switch with a one-line explanation: "Nur die genaue Zahl trifft." (only the exact number hits).
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.
+- A setting for a feature that is not built yet is shown disabled, with the note "kommt bald" (coming soon), instead of being hidden (amendment 05, FR-079).
 - A notice appears when stored data was reset or cannot be saved.

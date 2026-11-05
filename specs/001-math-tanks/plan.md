@@ -6,7 +6,7 @@
 
 ## Summary
 
-A static, offline-capable browser game. A Phaser 4 canvas draws a side-view artillery battle whose horizontal axis is the number line of the configured range (any whole-number range of width 5 to 1000, such as 550 to 780). The child aims by choosing a number with the ruler, the +1 and −1 buttons or the keyboard; the cannon has a fixed angle and the shell lands at that number. A React overlay shows the challenge, help, controls, parent gate, settings and progress page. All learning logic (challenge generation, validation, number-line mapping and ticks, adaptive difficulty, mastery) and all game logic (terrain heightmap, fixed-step ballistics, the automatic arc to a chosen number, damage, enemy aiming, turn state machine, keyboard entry) live in engine-free TypeScript modules under `src/core/`, which are deterministic for a given seed and covered by Vitest. Settings and progress are stored in `localStorage` with Zod validation. A generated service worker precaches the build for offline play.
+A static, offline-capable browser game. A Phaser 4 canvas draws a side-view artillery battle whose horizontal axis is the number line of the configured range (any whole-number range of width 5 to 1000, such as 550 to 780). The child aims by choosing a number with the ruler or the keyboard (amendment 05 removed the +1 and −1 buttons and the arrow keys); the cannon has a fixed angle and the shell lands at that number. A React overlay shows the challenge, help, controls, parent gate, settings and progress page. All learning logic (challenge generation, validation, number-line mapping and ticks, adaptive difficulty, mastery) and all game logic (terrain heightmap, fixed-step ballistics, the automatic arc to a chosen number, damage, enemy aiming, turn state machine, keyboard entry) live in engine-free TypeScript modules under `src/core/`, which are deterministic for a given seed and covered by Vitest. Settings and progress are stored in `localStorage` with Zod validation. A generated service worker precaches the build for offline play.
 
 ## Technical Context
 
@@ -167,7 +167,7 @@ Amendments 01 and 02 arrived after US1 and the number-line generators were built
 | Keyboard focus lost to a browser control (address bar, devtools) or to an iframe host | Listener on `window`, focus moved to the app root on load and after every screen change; tested in all three browsers |
 | A held Enter key fires several times | Keys ignored while a shell is in flight; `keydown` with `repeat: true` ignored for Enter and Space |
 | Read-the-ruler tolerance on level 5 is ambiguous in amendment 02 | Major step used; flagged in spec Assumptions for the product owner |
-| Width 1000 gives 1.44 logical units per number, too small to tap exactly | Typing, +1 and −1 and arrow keys reach every number (FR-020) |
+| Width 1000 gives 1.44 logical units per number, too small to tap exactly | Typing reaches every number (FR-020); the +1 and −1 buttons and the arrow keys were removed by amendment 05 |
 
 ## Complexity Tracking
 

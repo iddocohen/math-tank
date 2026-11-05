@@ -1,6 +1,6 @@
 # Contract: engine-free core modules (`src/core/`)
 
-These functions are the boundary between the learning logic, the physics, and the two user interfaces (Phaser and React). They are pure unless stated otherwise and never import Phaser, React or DOM APIs. Types are defined in [data-model.md](../data-model.md). Changed by [amendment 01](../amendment-01-number-aiming.md), [amendment 02](../amendment-02-ruler-ranges-and-detail.md) and [amendment 04](../amendment-04-hit-rule.md).
+These functions are the boundary between the learning logic, the physics, and the two user interfaces (Phaser and React). They are pure unless stated otherwise and never import Phaser, React or DOM APIs. Types are defined in [data-model.md](../data-model.md). Changed by [amendment 01](../amendment-01-number-aiming.md), [amendment 02](../amendment-02-ruler-ranges-and-detail.md), [amendment 04](../amendment-04-hit-rule.md) and [amendment 05](../amendment-05-no-shortcuts-settings-early.md).
 
 ## `core/rng`
 
@@ -37,6 +37,7 @@ generateChallenge(input: {
   playerPosition: number;                 // range.min or range.max, fixed for the round
   rulerLevel: RulerLevel;                 // decides where a readPosition enemy may stand (FR-067)
   kindsAllowed?: ChallengeKind[];         // free play passes ['readPosition']
+  inputMethod?: 'pointer' | 'keyboard';   // amendment 05 (FR-076): 'keyboard' skips findNumber; the fallback is then readPosition. Omitted: no restriction
 }): Challenge
 mainSkillOf(kind: ChallengeKind): Skill
 minTankGap(min: number, max: number): number
@@ -104,12 +105,12 @@ class BattleController {
   subscribe(listener: (s: RoundState) => void): () => void
 
   startRound(mode: 'guided' | 'freePlay'): void
-  selectNumber(n: number): void            // pointer preview while dragging or after release; clears typed digits; never fires
-  nudge(delta: 1 | -1 | 10 | -10): void    // +1 / -1 buttons and arrow keys; clamped to the range
-  typeDigit(d: 0|1|2|3|4|5|6|7|8|9): void  // keyboard digit (FR-060)
+  selectNumber(n: number): void            // pointer preview while dragging or after release; clears typed digits; never fires; sets inputMethod 'pointer'
+  typeDigit(d: 0|1|2|3|4|5|6|7|8|9): void  // keyboard digit (FR-060); sets inputMethod 'keyboard' (also typeMinus and backspace)
   typeMinus(): void                        // accepted only as the first character when range.min < 0
   backspace(): void
-  confirm(): void                          // Enter, Space at the solution step, or the fire button: fires at the selection;
+  confirm(method?: 'pointer' | 'keyboard'): void   // Enter and Space pass nothing ('keyboard'), the fire button passes 'pointer'; fires at the selection;
+                                           // a fired shot sets inputMethod to method (FR-076);
                                            // out-of-range entry -> no shot, range hint (FR-063); in order3 places a badge for the typed tank number
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
   tapTank(tankId: string): void            // comparison: fires at the tank's number; order3 places a badge without firing
@@ -123,7 +124,7 @@ class BattleController {
 }
 ```
 
-Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Digits, Enter and arrow keys are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
+Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Removed by amendment 05: `nudge` (no +1 and −1 buttons, no arrow keys). `RoundState.inputMethod` records the latest input method; the next search passes it to `generateChallenge` (FR-076). Digits and Enter are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
 
 Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
 

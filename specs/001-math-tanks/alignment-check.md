@@ -50,3 +50,16 @@ The product owner changed the hit rule after a demo shot at 30 landed on the tan
 - The open point on the read-the-ruler tolerance on ruler level 5 is closed, because the tolerance no longer exists.
 
 The spec (FR-066, FR-068, new FR-071 to FR-075), data model, contracts, quickstart and tasks (Phase 11a) were updated to match.
+
+## Amendment 05
+
+**Date**: 2026-11-05
+
+The product owner asked to remove shortcuts to the answer and to have settings available early. This is an intended change, not drift.
+
+- **[Amendment 05](./amendment-05-no-shortcuts-settings-early.md)** removes the arrow-key actions and the +1 and −1 buttons from amendment 01, shows no number while the child points on the ruler, and generates "Finde N" only when the child answers with mouse or touch (FR-076). The keyboard map is now digits, Minus, Backspace, Enter, Space, H and Escape. Keyboard-only play (FR-059) still works, because typing reaches every number.
+- The additions make the child's tank and the enemy tank differ by color, shape and flag, add a "Du" arrow at the start of every round, and move the health bars above the tanks (FR-077, FR-078). The pointer line of FR-073 stays as built in Phase 11a.
+- The parent gate and settings phases now run directly after Phase 11b, before guided mode; settings for features not built yet are shown disabled with "kommt bald" (FR-079). The progress page stays in Phase 22, because it needs the attempt records of guided mode; the amendment asks for it early, so the parent menu shows "Fortschritt" as "kommt bald" until then.
+- PRD section 8 (keyboard and accessibility) is not weakened: every child action still works with the keyboard alone.
+
+The spec (FR-017, FR-019, FR-020, FR-029, FR-053, FR-061, FR-062, new FR-076 to FR-079), data model, contracts, quickstart and tasks (Phase 11b and the moved settings phases) were updated to match.

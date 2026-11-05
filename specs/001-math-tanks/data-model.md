@@ -1,6 +1,6 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") and [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) and [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
@@ -197,6 +197,7 @@ interface RoundState {
   selection: number | null;        // previewed number; fired by the fire button or Enter
   entry: { typed: string; outOfRange: boolean };   // keyboard digits typed so far ('' when none, may start with '-'); outOfRange shows the range hint (FR-063)
   orderTaps: string[];             // order3: tank ids badged so far
+  inputMethod: 'pointer' | 'keyboard' | null;   // latest input method (amendment 05, FR-076); carried into the next round; null before any input
   rulerLevel: 1 | 2 | 3 | 4 | 5;   // for this round (FR-018)
   lastShot: LastShot | null;       // landed number shown large; distance in steps shown in free play
   lastPlayerPath: Point[] | null;  // FR-004 trail
@@ -221,13 +222,15 @@ interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: 
 
 Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain).
 
-**Keyboard entry** (`applyKey(entry, key, range)` in `src/core/battle/entry.ts`, pure): a digit appends to `typed` (ignored past the digit count of the longest number in the range); `-` is accepted only as the first character when `range.min < 0`; Backspace removes the last character. After each change, `selection` is the typed value when it is inside the range; otherwise `selection` is the nearest end and `outOfRange` is true. A pointer selection or a nudge clears `typed`.
+**Keyboard entry** (`applyKey(entry, key, range)` in `src/core/battle/entry.ts`, pure): a digit appends to `typed` (ignored past the digit count of the longest number in the range); `-` is accepted only as the first character when `range.min < 0`; Backspace removes the last character. After each change, `selection` is the typed value when it is inside the range; otherwise `selection` is the nearest end and `outOfRange` is true. A pointer selection clears `typed`. *(The nudge is removed by amendment 05.)*
+
+**Input method** (amendment 05, FR-076): `typeDigit`, `typeMinus`, `backspace` and `confirm()` from Enter set `inputMethod` to `'keyboard'`; `selectNumber` and `confirm('pointer')` from the fire button set it to `'pointer'`. Ignored calls (wrong phase) change nothing. `startRound` and `newScene` keep the value of the previous round. The next search passes `inputMethod ?? 'keyboard'` to `generateChallenge`, which then skips `findNumber` for `'keyboard'`.
 
 **State transitions**
 
 ```text
 start → challenge (guided search) | aiming (freePlay, readPosition, enemy visible)
-challenge | aiming --typeDigit / backspace / nudge / selectNumber--> same phase (selection and entry change)
+challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
 challenge --tapTank (single choice)--> playerShot at that tank's number

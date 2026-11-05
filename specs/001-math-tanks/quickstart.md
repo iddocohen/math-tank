@@ -20,12 +20,12 @@ pnpm lint && pnpm typecheck
 
 ## Validation scenarios
 
-Each scenario maps to a PRD acceptance criterion or to [amendment 01](./amendment-01-number-aiming.md), [amendment 02](./amendment-02-ruler-ranges-and-detail.md) and [amendment 04](./amendment-04-hit-rule.md). Automated coverage is named where it exists.
+Each scenario maps to a PRD acceptance criterion or to [amendment 01](./amendment-01-number-aiming.md), [amendment 02](./amendment-02-ruler-ranges-and-detail.md), [amendment 04](./amendment-04-hit-rule.md) and [amendment 05](./amendment-05-no-shortcuts-settings-early.md). Automated coverage is named where it exists.
 
 | # | Scenario | Steps | Expected | Automated |
 |---|----------|-------|----------|-----------|
 | 1 | AC-01 playable battle | Settings: free-play on. Start "Freies Spiel", read the ruler under the enemy, choose numbers and fire several times | Fixed cannon; every shell lands at the chosen number; a shell on the enemy tank's body damages it, the exact number is a Volltreffer with double damage; a shell off the body inside the blast radius makes it shake; craters; enemy fires back after every shot; round end; "Nochmal" starts a new landscape | `e2e/battle.spec.ts`, `src/core/physics/*.test.ts` |
-| 2 | AC-02 number line | Range 0 to 100, number line only. Drag to 37, or type 3 and 7 | Guide line and marker at battlefield position 37; Enter fires and the shell lands at 37 | `mapping.test.ts`, `arc.test.ts` |
+| 2 | AC-02 number line | Range 0 to 100, number line only. Drag to 37, or type 3 and 7 | Guide line and marker at battlefield position 37; while dragging no number is shown, typed digits are shown; Enter fires and the shell lands at 37 | `mapping.test.ts`, `arc.test.ts` |
 | 3 | AC-03 ticks | Look at the line between 30 and 40 at ruler level 1 | Major lines at 30 and 40, nine equal minor lines, 37 selectable | `ticks.test.ts` |
 | 4 | AC-04 range 0 to 20 | Set range 0 to 20, play 10 searches | No number above 20 anywhere | `generator.property.test.ts` (10,000 seeds per preset) |
 | 5 | AC-05 subtraction | Only subtraction on; seed producing 43 − 7 (see `fixtures.ts`); press H twice | Marker moves 43 → 40 → 36; firing at 36 hits | `subtraction.test.ts`, `stepPath.test.ts` |
@@ -42,5 +42,8 @@ Each scenario maps to a PRD acceptance criterion or to [amendment 01](./amendmen
 | 16 | Ruler levels | Settings: starting level 1 to 5 in turn, view the ruler preview and the game | Levels 1 to 5 show lines and labels as in FR-017; help step 2 shows all lines of the zoomed ten | `ticks.test.ts`, `SettingsPage.test.tsx` |
 | 17 | Tank-body hit and Volltreffer (amendment 04) | Range 0 to 100, free play; fire at the enemy's number, then at a number 1 or 2 away, then 5 away | Exact: "Volltreffer!", larger explosion, health drops by 80. One or two away: "Treffer!", health drops by 40, ruler shows "Du: … · Gegner: … · N Schritte". Five away: a miss, the enemy shakes. A thin dashed line runs from the enemy tank's center to a small triangle on the ruler, with no number next to it | `hitRule.test.ts`, `battleController.test.ts`, `e2e/battle.spec.ts`, `e2e/range.spec.ts` |
 | 18 | "Genau treffen" (amendment 04) | Store settings with `exactHit: true`, free play; fire 1 away from the enemy, then at its number | One away: "Ganz knapp!", step count, no damage, the tank shakes; exact: Volltreffer. The enemy shows a bullseye | `battleController.test.ts`, `e2e/range.spec.ts` |
+| 19 | No shortcuts (amendment 05) | Free play; press the arrow keys; drag on the ruler without releasing; look for −1 and +1 buttons | Arrow keys change nothing; while dragging, the marker and guide line move but no number appears near the marker or in the readout; there are no −1 and +1 buttons; after firing, the landing number is shown | `keyboard.test.ts`, `BattleOverlay.test.tsx`, `e2e/battle.spec.ts` |
+| 20 | Clear tanks (amendment 05) | Start a round, then press "Neue Landschaft" | The child's tank is blue with a yellow star flag; the enemy is red, angular, with a black flag; a bouncing "Du" arrow points at the child's tank for 3 seconds after each start; each health bar sits above its tank in the tank's color; no health bars in the corners | `tankStyle.test.ts`, `BattleOverlay.test.tsx`, `e2e/battle.spec.ts` |
+| 21 | "Finde N" only for pointer input (amendment 05) | Guided mode (after Phase 15); type answers for several searches, then answer with the mouse | While typing, no "Finde N" search appears; after a mouse answer it can appear again | `inputMethod.test.ts`, `battleController.test.ts` |
 
 A debug query parameter `?seed=<n>` fixes the round seed so manual scenarios 5, 6, 13 and 15 are reproducible.
