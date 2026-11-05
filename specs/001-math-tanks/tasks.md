@@ -40,7 +40,8 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **D13**: Settings become version 2 in one migration (Phase 10): drop `aimCorrection`, replace `labelLevel` with `rulerLevelStart` and `rulerLevelMax`. The storage keys keep their names.
 - **D14**: Free play uses only `readPosition` and records no attempts. *(The level 5 tolerance note is superseded by amendment 04: there is no read-the-ruler tolerance.)*
 - **D16**: Amendment 04 arrived after Phase 11. Phase 11a builds the hit rule, the Volltreffer, the pointer line, the `exactHit` setting (settings version 3) and the `'close'` outcome type, and finishes T181. Later unchecked tasks that assumed exact-only hits or the read-the-ruler tolerance were rewritten in place; new tasks start at T186.
-- **D15**: Comparison typing: a typed number that matches a tank's label acts like a tap on that tank. In single-choice comparisons any other typed number is fired like any number (a miss); in `order3` it places no badge and shows a hint.
+- **D15**: *Superseded by amendment 09 (Phase 22a).* There are no tank labels, no tank tapping and no `order3`: a typed number in a comparison is fired like in every other challenge.
+- **D20**: Amendment 09 arrived after Phase 22. Phase 22a removes the decoy tanks, number plates, `tapTank`, order badges, `notOnTank`, `orderAnswer`, the kinds `'equal'` and `'order3'` and `src/core/battle/topShell.ts`, and adds `'middle3'`. The banner names the options from `prompt.params` (`o1`, `o2`, `o3`). Options are at least `minOptionGap = max(2, ceil(0.02 * (max - min)))` apart. The comparison ladder's `maxNumberFraction` also limits the option spread around the answer (data-model.md "Comparison ladder"). Stored attempts with `'equal'` or `'order3'` still load (`StoredChallengeKind`). FR-070 keeps "no comparison right after Neue Landschaft", although a comparison turn now also shows one enemy, because amendment 09 does not change FR-070.
 - **D17**: Amendment 05 arrived after Phase 11a. Phase 11b removes `nudge`, the arrow keys and the −1 and +1 buttons, hides every number while pointing, tracks `RoundState.inputMethod` so that keyboard input skips `findNumber`, and builds the clear tank identity. The settings phases moved directly after Phase 11b and were renumbered 12 and 13 (they keep task IDs T103 to T116 and T182); the guided phases that followed became Phases 14 to 20. The progress page stays in Phase 22, because it needs the attempt records of guided mode; until then the parent menu shows "Fortschritt" disabled with "kommt bald". Phase 12 works on free play alone: `updateSettings` applies at the next `startRound` in either mode. New tasks start at T194.
 - **D18**: Amendment 06 arrived after Phase 13. Phase 13a builds it on free play: `shotKind` returns `'hit'` (exact number, the enemy is destroyed and replaced), `'near'` (on the body, the enemy shakes, a miss) or `'miss'`; `TankState.health`, `MAX_DAMAGE`, `damageAt`, `enemyDamage`, `enemyDamageFactor`, `exactHit` and the outcome `'close'` are removed from new code (a stored `'close'` still loads). `RoundState` gains `lives` (3), `enemiesDestroyed`, `shotsSinceEnemyFire`, `elapsedMs` and `lastEnemyHit`; `outcome` becomes `'goalReached' | 'heartsGone'`. The enemy fires after every 2 shots of the child, misses included, in both modes; this changes the amendment 01 rule that a miss never gives the enemy a turn (FR-013, SC-005). Settings become version 4 (`roundType`, `showClock`, `showRecords`; `roundLength` 1 to 20 counts enemies). Personal bests live in `src/core/records/records.ts` under the storage key `mathtanks.records.v1` and are part of the export file. Later unchecked tasks that assumed health, damage values, the Volltreffer, `'close'`, `exactHit` or rounds counted in turns were rewritten in place; new tasks start at T204.
 - **D19**: Amendment 07 arrived after Phase 18a. Phase 18b makes the enemy and its pointer line visible in every mode and challenge kind (removing `enemyFound`, `HiddenTank`, `publicState` and the reduced `getState()` built in Phase 14 and T215), shows the step count after every miss in every mode (replacing D12's guided rule and the T068 and T215 rule that hid it during a search), and makes the enemy fire after every shot that does not destroy it (removing `shotsSinceEnemyFire` and `ENEMY_FIRE_EVERY` from Phase 13a). The enemy's aim becomes a seeded hit draw (1/6, 1/4, 1/3; never the first shot of a round) and a deliberate near miss 40 to 100 world units beside the child's tank. In comparison turns the shell still falls from the top edge. `data-shots-since-enemy-fire` (D4) is removed. Later unchecked tasks that assumed a hidden enemy or the every-2-shots rhythm (T095, T098, the Phase 19 goal) were rewritten in place; new tasks start at T220.
@@ -558,6 +559,24 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
+## Phase 22a: Amendment 09 comparison with one enemy
+
+**Goal**: Comparison turns show exactly one enemy at the correct option, the banner names the options, and the child types the number or picks it on the ruler and fires ([amendment 09](./amendment-09-comparison-one-enemy.md)).
+
+**Independent Test**: With only comparison on and the AC-06 fixture seed, the banner reads "Der Gegner steht bei der größeren Zahl: 47 oder 74", one enemy tank stands at 74 with no number plate, and typing 74 and Enter destroys it.
+
+- [ ] T236 [P] [US4] Rewrite `src/core/math/comparison.test.ts` and update `src/core/math/validate.test.ts`, `src/core/math/generator.property.test.ts` and `src/core/math/gaps.test.ts` (create it if missing) before the code: the comparison kinds are `greater`, `smaller`, `largest3`, `smallest3`, `closestTo`, `between`, `middle3` (no `equal`, no `order3`); every generated comparison has 2 or 3 distinct options in range, every two at least `minOptionGap` apart (2 in 0 to 100, 20 in 0 to 1000), exactly one correct option, equal to `answer`, with `answer` at least `minEnemyGap` from the player and no `orderAnswer`; `prompt.params` carry `o1`, `o2` (and `o3`) in the order of `options`; `middle3` answers the middle number; with `maxNumberFraction` 0.2 every option is within the spread around the answer; validation rejects an option gap below `minOptionGap`, two correct options and `orderAnswer`; `COMPARISON_47_74` produces `greater` with options 47 and 74 and answer 74 (FR-026, FR-027, SC-003, AC-06)
+- [ ] T237 [US4] Implement until T236 passes: `minOptionGap` in `src/core/math/gaps.ts`; the builders, `correctOptions`, `comparisonErrors` and `comparisonFits` in `src/core/math/comparison.ts`; the kind list in `src/core/types.ts` (drop `orderAnswer`, add `StoredChallengeKind` for `Attempt.kind`), `src/core/math/skills.ts`, `src/core/math/generate.ts`, `src/core/math/validate.ts` (`checkAnswer` takes one number) and `src/core/storage/progressSchema.ts` (stored `equal` and `order3` still load); adapt the seed in `src/core/math/fixtures.ts` if needed, with adaptive off (FR-026, FR-027, FR-036)
+- [ ] T238 [P] [US4] Update tests before the code in `src/core/battle/battleController.test.ts`, `src/core/battle/help.test.ts` and `src/i18n/i18n.test.ts`: a comparison search has one enemy at the answer with no `label` and the state has no `decoys`, `orderTaps` or `notOnTank`; the controller has no `tapTank`; typing 74 and Enter in the AC-06 fixture destroys the enemy; firing at 47 is a miss, raises help to step 1 with `tensDigits`, and the enemy's shell path starts at the enemy's muzzle; help step 2 gives `optionMarkers` sorted ascending, step 3 the solution and no `order`; `promptText` gives "Der Gegner steht bei der größeren Zahl: 47 oder 74" and every comparison prompt has at most 10 words (FR-026, FR-031, FR-043a, FR-064, FR-081)
+- [ ] T239 [US4] Implement until T238 passes: remove `decoys`, `orderTaps`, `notOnTank`, `TankState.label`, the `'decoy'` kind and `HelpContent.order` in `src/core/types.ts`; update `src/core/battle/guided.ts`, `src/core/battle/round.ts`, `src/core/battle/help.ts` and `src/core/battle/controller.ts` (remove `tapTank`, the badges and the top-shell case); delete `src/core/battle/topShell.ts` and `src/core/battle/topShell.test.ts`; the comparison prompts in `src/i18n/de.ts` and `comparisonPrompt` in `src/i18n/index.ts` (FR-026, FR-031, FR-043a)
+- [ ] T240 [P] [US4] Update tests before the view code: `src/app/BattleOverlay.test.tsx` (the banner shows each option as `data-testid="banner-option"`, help step 1 marks each option's tens digit with `data-testid="tens-digit"`, no `reference-number`, no `not-on-tank`) and rewrite `tests/e2e/comparison.spec.ts` (AC-06: the banner text, one enemy tank (`data-enemy-tanks="1"`, `data-pointer-lines="74"`), firing at 47 is a miss with help step 1 and the enemy's return fire, typing 74 and Enter destroys the enemy) (FR-026, FR-031, AC-06)
+- [ ] T241 [US4] Implement until T240 passes: `src/app/BattleOverlay.tsx` and `src/app/styles.css` (options and tens-digit highlight in the banner, the `equal` reference number and the `notOnTank` hint removed); `src/game/TankView.ts` (no number plate, order badge or plate help), `src/game/BattleScene.ts` (no decoys, no tank taps, no `data-tank-taps`, `data-help-tens` and `data-help-tanks`; `data-enemy-tanks` counts the enemy tanks drawn) and `src/game/NumberLineView.ts` (option markers at help step 2 without extra labels) (FR-026, FR-031, FR-077)
+- [ ] T242 [US4] Run lint, typecheck, unit tests, build and every e2e spec in Chromium, WebKit and Firefox; take a muted headless screenshot of a comparison turn with its banner and of comparison help step 2 (AC-06, SC-003)
+
+**Checkpoint**: Comparison turns show one enemy and ask the question in the banner (AC-06 under amendment 09).
+
+---
+
 ## Phase 23: US8 offline play, pause, fullscreen, speech, touch and keyboard
 
 **Goal (US8, P3)**: The game works offline after one load, on tablets with touch, with the keyboard alone, with pause, fullscreen and spoken challenges.
@@ -567,7 +586,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - [ ] T134 [P] [US8] Write `tests/e2e/offline.spec.ts`: load `/` against the production build, wait until the service worker controls the page, set the context offline, reload, press Enter to start and play until `data-phase="roundOver"` (shorten with stored settings `roundType: 'enemyCount'` and `roundLength: 3`, reading the answer of each `findNumber` search from the banner). Must pass in Chromium; see D6 for WebKit and Firefox (FR-051, SC-008, AC-10, US8 scenario 1)
 - [ ] T135 [P] [US8] Write `tests/e2e/no-external-requests.spec.ts`: record every request during load and one full round; fail on any request whose origin differs from `baseURL` (FR-052)
 - [ ] T136 [P] [US8] Write `tests/e2e/touch.spec.ts` with `hasTouch: true` and viewports 1024 by 768, 768 by 1024 and 768 by 600: every visible button and the ruler have a bounding box of at least 48 by 48 CSS pixels and do not overlap; tap the ruler and the fire button by touch, and check that no −1 or +1 button exists (amendment 05); no on-screen keyboard field is focused; the ruler marker for a chosen number lines up with the battlefield x within half a unit (FR-053, FR-058, SC-004, US8 scenarios 2 and 5)
-- [ ] T183 [P] [US8] Write `tests/e2e/keyboard.spec.ts` using only `page.keyboard` (no click, tap or mouse call, checked by a helper that fails on any pointer event reaching the page): load `/?seed=<fixed>` and press Enter without clicking; in a `findNumber` search type a wrong number and Enter; press H and check `data-help-level`; fire two more wrong numbers; at the solution press Enter and confirm the hit; type 150 in range 0 to 100 and press Enter, nothing fires and the range hint shows; press Escape to pause and again to resume; in a comparison search (stored settings, fixture seed) type 74 and Enter; in an `order3` search type the three numbers with Enter after each; play to the round end and press Enter for a new round; hold Enter with the gear focused by script and confirm settings never open; the arrow keys change nothing, and with typed answers no search is "Finde N" (amendment 05). Run in Chromium, WebKit and Firefox (FR-059 to FR-064, FR-076, SC-011, US8 scenarios 6 to 10)
+- [ ] T183 [P] [US8] Write `tests/e2e/keyboard.spec.ts` using only `page.keyboard` (no click, tap or mouse call, checked by a helper that fails on any pointer event reaching the page): load `/?seed=<fixed>` and press Enter without clicking; in a `findNumber` search type a wrong number and Enter; press H and check `data-help-level`; fire two more wrong numbers; at the solution press Enter and confirm the hit; type 150 in range 0 to 100 and press Enter, nothing fires and the range hint shows; press Escape to pause and again to resume; in a comparison search (stored settings, fixture seed, "Der Gegner steht bei der größeren Zahl: 47 oder 74") type 74 and Enter (amendment 09: no `order3`, no tank typing); play to the round end and press Enter for a new round; hold Enter with the gear focused by script and confirm settings never open; the arrow keys change nothing, and with typed answers no search is "Finde N" (amendment 05). Run in Chromium, WebKit and Firefox (FR-059 to FR-064, FR-076, SC-011, US8 scenarios 6 to 10)
 - [ ] T137 [P] [US8] Write `src/audio/speaker.test.ts` with a mocked `speechSynthesis`: `available` is false when the API or a German voice is missing; `speak` uses `lang: 'de-DE'` and cancels earlier speech; `prime()` speaks a short greeting (FR-055, edge case "Speech not available")
 - [ ] T138 [US8] Implement `src/audio/speaker.ts` (`createSpeaker()` implementing the `Speaker` port), call `prime()` and resume Web Audio from the "Spielen" tap or the starting Enter key in `src/app/StartScreen.tsx`, speak each new challenge when `settings.sound.speech` is on, and show a speaker icon in `src/app/BattleOverlay.tsx` only when `available` (FR-055, US8 scenario 4)
 - [ ] T139 [US8] Implement the PWA registration in `src/app/swUpdate.ts` and `src/main.tsx` using `virtual:pwa-register` with `registerType: 'prompt'`: when a new version is waiting, apply it only while the start screen is shown, never during a round. Then make `tests/e2e/offline.spec.ts` pass (FR-051, FR-051a, research R12)
@@ -615,6 +634,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **Phase 18b (amendment 07)**: depends on Phases 14, 15, 17 and 18. Blocks Phases 19, 20 and 23, which assume a visible enemy and the enemy's return fire after every shot. T220 runs before T221, T222 before T223, T224 before T225; T226 and T227 run last.
 - **Phases 19 and 20 (US5)**: depend on Phase 15; Phase 20 needs Phase 11 (`showZoom`); comparison help needs Phase 18; step-path help needs Phase 17.
 - **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 13, 14 and 21.
+- **Phase 22a (amendment 09)**: depends on Phases 18, 18b, 20 and 22. Blocks Phase 23, whose keyboard spec T183 types the comparison answer. T236 runs before T237, T238 before T239, T240 before T241, and T242 last.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
@@ -700,17 +720,17 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-023 | T071, T073, T077 |
 | FR-024 | T074, T078, T080, T081, T082 |
 | FR-025 | T057, T059, T062, T072, T073, T076, T077 |
-| FR-026 | T084, T085, T087, T088, T089, T091 |
-| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090 |
+| FR-026 | T084, T085, T087, T088, T089, T091, T236, T237, T238, T239, T240, T241 |
+| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237 |
 | FR-028 | T002, T004, T008, T009, T053, T059, T164 |
 | FR-029 | T054, T055, T058, T059, T079, T086, T107, T148, T178, T196, T197 |
 | FR-030 | T080, T095, T096, T101 |
-| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143 |
+| FR-031 | T093, T094, T095, T096, T099, T100, T101, T143, T238, T239, T240, T241 |
 | FR-032 | T093, T094 |
 | FR-033 | T014, T015, T049, T097, T172 |
 | FR-034 | T095, T096, T101 |
 | FR-035 | T010, T063, T123, T129, T130, T131 |
-| FR-036 | T010, T056, T122, T123 |
+| FR-036 | T010, T056, T122, T123, T237 |
 | FR-037 | T118, T122, T123, T129, T130 |
 | FR-038 | T117, T121, T129, T130 |
 | FR-039 | T119, T124 |
@@ -718,7 +738,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-041 | T026, T027, T220, T221, T222, T223 |
 | FR-042 | T026, T027, T034, T220, T221, T222 |
 | FR-043 | T026, T027, T032, T208, T209, T220, T221, T222 |
-| FR-043a | T221, T222, T223, T225 |
+| FR-043a | T221, T222, T223, T225, T238, T239 |
 | FR-044 | T032, T208, T209, T213 |
 | FR-045 | T110, T111, T115, T166 |
 | FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213 |
@@ -741,7 +761,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-061 | T158, T163, T165, T166, T167, T183, T194, T195, T197, T202 |
 | FR-062 | T070, T098, T110, T111, T140, T165, T166, T167, T171, T183, T194, T197, T202 |
 | FR-063 | T157, T158, T161, T170, T183 |
-| FR-064 | T087, T088, T145, T146, T183 |
+| FR-064 | T087, T088, T145, T146, T183, T238 |
 | FR-065 | T156, T160, T163, T169 |
 | FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224 |
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
@@ -754,11 +774,11 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
 | FR-076 | T060, T062, T065, T183, T195, T196, T197, T199 |
-| FR-077 | T198, T200, T202 |
+| FR-077 | T198, T200, T202, T241 |
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
-| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226 |
+| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238 |
 | FR-082 | T061, T205, T207, T208, T209, T213, T214 |
 | FR-083 | T208, T209, T210, T211, T214 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
@@ -767,7 +787,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-087 | T127, T128, T132, T133 |
 | SC-001 | T043, T046, T150, T165 |
 | SC-002 | T150 |
-| SC-003 | T055, T059, T079, T086, T107, T148 |
+| SC-003 | T055, T059, T079, T086, T107, T148, T236, T242 |
 | SC-004 | T028, T136 |
 | SC-005 | T061, T095, T098, T208, T222 |
 | SC-006 | T014, T097, T098 |
@@ -783,7 +803,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-03 | T051, T070, T155, T173 |
 | AC-04 | T055, T079, T107, T155 |
 | AC-05 | T073, T077, T082, T083, T155 |
-| AC-06 | T084, T092, T155 |
+| AC-06 | T084, T092, T155, T236, T240, T242 |
 | AC-07 | T095, T098, T102, T155 |
 | AC-08 | T109, T116, T155, T214 |
 | AC-09 | T118, T129, T155 |

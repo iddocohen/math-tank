@@ -100,3 +100,17 @@ The product owner reported that "Neue Landschaft" put several numbered tanks on 
 - PRD section 7.3 is kept: a refresh cannot be used to reset a lost heart or the time, so the score and the personal best still count only exact hits within one round.
 
 The spec (FR-070), contracts and tasks (T232 in Phase 22) were updated to match.
+
+## Amendment 09
+
+**Date**: 2026-11-05
+
+The product owner saw three identical red tanks with number plates in a comparison turn and asked why there was more than one enemy. They also saw an "equal" challenge that gave its answer away ("Welche Zahl ist gleich 57?" next to a tank labelled 57). This is an intended change, not drift.
+
+- **[Amendment 09](./amendment-09-comparison-one-enemy.md)** shows exactly one enemy in comparison turns, at the correct option, like in every other turn. The banner names the options ("Der Gegner steht bei der größeren Zahl: 47 oder 74"), and the child types the number or picks it on the ruler and fires.
+- PRD section 6 asks the child to "select between two or more target objects" in comparison challenges and lists "equal to" and "ordering three numbers". The product owner's decision replaces these parts: the options are named in the banner instead of standing on separate tanks, "equal to" is removed because the question names its own answer, and "ordering three numbers" becomes "middle of three", which needs no tapping order.
+- Decoy tanks, number plates, tank tapping, order badges and the shell from the top edge in comparison turns are removed. `RoundState` loses `decoys`, `orderTaps` and `notOnTank`; `Challenge` loses `orderAnswer`.
+- Comparison options stay in range, distinct, at least 2 numbers apart (more at larger ranges) and with exactly one correct answer. Help step 1 highlights the tens digits in the banner, step 2 marks each option on the ruler, step 3 shows the solution.
+- The learning records, adaptive difficulty and the comparison skill stay. Attempts stored with the removed kinds still load.
+
+The spec (US4, Edge Cases, FR-026, FR-027, FR-031, FR-043a, FR-064, FR-066, FR-070, FR-077, FR-081, Key Entities, Assumptions), data model, contracts, quickstart and tasks (Phase 22a) were updated to match.

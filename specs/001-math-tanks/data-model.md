@@ -1,6 +1,6 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed) and [amendment 09](./amendment-09-comparison-one-enemy.md) (comparison with one enemy and the options in the banner; decoys, number plates, `orderTaps`, `notOnTank`, `orderAnswer` and the kinds `'equal'` and `'order3'` removed; `'middle3'` added).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
@@ -54,7 +54,10 @@ type ChallengeKind =
   | 'findNumber' | 'after' | 'before' | 'stepsRight' | 'stepsLeft' | 'missingBetween' | 'midpoint'   // number line
   | 'readPosition'                                                                                   // number line, amendment 02: enemy visible, child reads the ruler
   | 'addition' | 'subtraction'
-  | 'greater' | 'smaller' | 'equal' | 'order3' | 'largest3' | 'smallest3' | 'closestTo' | 'between'; // comparison
+  | 'greater' | 'smaller' | 'largest3' | 'smallest3' | 'closestTo' | 'between' | 'middle3';      // comparison (amendment 09: 'equal' and 'order3' removed, 'middle3' added)
+
+// Attempts stored before amendment 09 may carry 'equal' or 'order3'; they still load and count toward the comparison skill.
+type StoredChallengeKind = ChallengeKind | 'equal' | 'order3';
 
 interface Challenge {
   id: string;                 // `${roundSeed}-${turn}`
@@ -67,17 +70,18 @@ interface Challenge {
   operands: number[];         // all numbers in the question
   answer: number;             // the target position on the number line
   // comparison only:
-  options?: number[];         // numbers on the 2 or 3 tanks; options include answer
-  orderAnswer?: number[];     // for 'order3': the required tap sequence
+  options?: number[];         // the 2 or 3 numbers named in the question, in banner order; options include answer (amendment 09)
   steps?: number[];           // intermediate positions for the step animation, e.g. [43, 40, 36]
   // readPosition only:
   rulerLevel?: 1 | 2 | 3 | 4 | 5;   // level the challenge was built for
 }
 ```
 
-**Validation** (`validateChallenge(c, settings, playerPosition)`): every value in `options`, `steps` and `answer` and the starting operand is inside `[range.min, range.max]` (the added or subtracted numbers may lie outside it, for example 560 + 5 in 550 to 780); addition and subtraction respect operand, result, crossing and step rules; comparison has exactly one correct option and distinct options; `answer` is at least `minEnemyGap` from the player tank position; every comparison option is at least `minTankGap` from every other option and from the player tank.
+**Validation** (`validateChallenge(c, settings, playerPosition)`): every value in `options`, `steps` and `answer` and the starting operand is inside `[range.min, range.max]` (the added or subtracted numbers may lie outside it, for example 560 + 5 in 550 to 780); addition and subtraction respect operand, result, crossing and step rules; comparison has 2 options (`greater`, `smaller`, `closestTo`) or 3 (`largest3`, `smallest3`, `between`, `middle3`), distinct, every two at least `minOptionGap` apart, exactly one correct option, and that option is `answer` (amendment 09); `answer` is at least `minEnemyGap` from the player tank position. The other options may stand anywhere in the range, also near the player tank: they are not drawn on the battlefield.
 
-**Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`. When the range cannot fit 2 options at `minTankGap` on the side away from the player, comparison is skipped for that configuration.
+**Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`; `minOptionGap = max(2, ceil(0.02 * (max - min)))` (amendment 09: 2 in 0 to 100, 5 in 550 to 780, 20 in 0 to 1000). When the range cannot fit a kind's options at `minOptionGap`, that kind is skipped for the configuration.
+
+**Comparison ladder** (amendment 09 item 7): the comparison step's `maxNumberFraction` limits the answer as for every skill and also the option spread: every other option is at most `max(maxNumberFraction * (max - min), optionCount * minOptionGap)` from the answer, so easy steps ask about nearby numbers in the low part of the range.
 
 **Hit rule** (amendment 06, FR-066; `src/core/battle/hitRule.ts`): `bodyHalfWidth(min, max) = (TANK_WIDTH / 2) / (layout.right - layout.left) * (max - min)` in numbers (about 2.1 in 0 to 100, 4.8 in 550 to 780, 20.8 in 0 to 1000). `shotKind(fired, target, range)` is `'hit'` when `fired === target` (the enemy is destroyed), `'near'` when `|numberToX(fired) - numberToX(target)| <= TANK_WIDTH / 2` (a near miss on the body: the enemy shakes, nothing else), otherwise `'miss'`. `enemyHitsPlayer(impact, hitTargetId, player)` is true when the enemy shell entered the player's hit circle or landed with `|impact.x - player.x| <= TANK_WIDTH / 2`; it removes one heart unless `noDamage`. There is no damage and no `MAX_DAMAGE` (amendment 04's body damage and Volltreffer are removed).
 
@@ -91,7 +95,7 @@ interface Challenge {
 |-------|------|-------|
 | `challengeId` | `string` | |
 | `seed` | `number` | Reproduce the challenge |
-| `kind` | `ChallengeKind` | |
+| `kind` | `StoredChallengeKind` | `'equal'` and `'order3'` only in attempts stored before amendment 09 |
 | `skills` | `Skill[]` | |
 | `rangeKey` | `string` | e.g. `0-100` or `15-45` |
 | `difficultyStep` | `number` | |
@@ -99,7 +103,7 @@ interface Challenge {
 | `independent` | `boolean` | Exact number on the first shot without help (`solved`, `helpLevel` 0, `wrongAnswers` 0). A near miss on the body is a miss (FR-075) |
 | `exact` | `boolean` | The shot that ended the search was at the enemy's exact number. Since amendment 06 every hit is exact, so new attempts always store `true`; kept so stored attempts stay readable. Optional when loading; missing means `true` |
 | `helpLevel` | `0 \| 1 \| 2 \| 3` | Highest help step reached; 3 means the solution was shown |
-| `wrongAnswers` | `number` | Misses: every fired number that is not the enemy's number (near misses on the body included), decoys hit, wrong `order3` sequences |
+| `wrongAnswers` | `number` | Misses: every fired number that is not the enemy's number (near misses on the body included) |
 | `responseMs` | `number` | From challenge answerable to final answer |
 | `guess` | `boolean` | FR-038 |
 | `sessionId` | `string` | |
@@ -204,21 +208,18 @@ interface RoundState {
   terrain: Heightmap;              // Float32Array of surface heights per column
   player: TankState;
   enemy: TankState;
-  decoys: TankState[];             // comparison turns only
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
   challenge: Challenge | null;     // in free play always a readPosition challenge
   answerableAt: number | null;     // clock time when answers became possible (1 s after display)
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
   selection: number | null;        // previewed number; fired by the fire button or Enter
   entry: { typed: string; outOfRange: boolean };   // keyboard digits typed so far ('' when none, may start with '-'); outOfRange shows the range hint (FR-063)
-  orderTaps: string[];             // order3: tank ids badged so far
   inputMethod: 'pointer' | 'keyboard' | null;   // latest input method (amendment 05, FR-076); carried into the next round; null before any input
   rulerLevel: 1 | 2 | 3 | 4 | 5;   // for this round (FR-018)
   lastShot: LastShot | null;       // landed number shown large; distance in steps shown after every miss, in every mode (amendment 07)
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
   stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
-  notOnTank: boolean;              // order3: the confirmed number is on no tank, so no badge was placed; the overlay shows a hint (decision D15)
   shot: ShotInFlight | null;       // shell in flight for the renderer to replay
   outcome: 'goalReached' | 'heartsGone' | null;   // goalReached: roundLength enemies destroyed with roundType 'enemyCount'
 }
@@ -228,15 +229,15 @@ interface LastShot {
   landed: number;                  // the number under the impact point
   hit: boolean;                    // fired === enemyNumber: the enemy was destroyed (FR-066)
   nearMiss: boolean;               // on the enemy's body but not exact: the enemy shakes, "Ganz knapp! Triff die Linie." (FR-066, FR-072)
-  hitTankId: string | null;        // the destroyed enemy or the destroyed decoy, or null
+  hitTankId: string | null;        // the destroyed enemy, or null
   distance: number | null;         // steps from the landed number to the enemy's number
   enemyNumber: number;             // the enemy's number when the shell landed; feedback shows it after the enemy moved
 }
 
-interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: number /* number on the line */; x: number; y: number; label?: number; alive: boolean; }   // no health (amendment 06)
+interface TankState { id: string; kind: 'player' | 'enemy'; position: number /* number on the line */; x: number; y: number; alive: boolean; }   // no health (amendment 06); no decoys and no number plate `label` (amendment 09)
 ```
 
-Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain). Removed by amendment 07: `shotsSinceEnemyFire` (the enemy fires after every shot that does not destroy it) and `enemyFound` (the enemy is always visible), and with them the reduced enemy that `getState()` reported during a guided search.
+Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain). Removed by amendment 07: `shotsSinceEnemyFire` (the enemy fires after every shot that does not destroy it) and `enemyFound` (the enemy is always visible), and with them the reduced enemy that `getState()` reported during a guided search. Removed by amendment 09: `decoys`, `orderTaps`, `notOnTank`, `TankState.label`, the `'decoy'` tank kind and `Challenge.orderAnswer`.
 
 **Keyboard entry** (`applyKey(entry, key, range)` in `src/core/battle/entry.ts`, pure): a digit appends to `typed` (ignored past the digit count of the longest number in the range); `-` is accepted only as the first character when `range.min < 0`; Backspace removes the last character. After each change, `selection` is the typed value when it is inside the range; otherwise `selection` is the nearest end and `outOfRange` is true. A pointer selection clears `typed`. *(The nudge is removed by amendment 05.)*
 
@@ -249,10 +250,8 @@ start → challenge (guided search, enemy visible) | aiming (freePlay, readPosit
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
-challenge --tapTank (single choice)--> playerShot at that tank's number
-challenge --tapTank (order3)--> challenge (badge placed) ; third correct badge --> playerShot at the enemy ; wrong order --> challenge (badges reset, miss)
 playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded) --> roundOver (goalReached) | new search with a new visible enemy; the destroyed enemy does not fire
-playerShot (guided) --miss (near miss on the body, off it, or a decoy)--> enemyTurn (help.level + 1, lastShot with the step count shown)
+playerShot (guided) --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, lastShot with the step count shown)
 challenge --help (button or H) or time limit--> challenge (help.level + 1)
 challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
 playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1 --> roundOver (goalReached) | aiming with a new readPosition challenge and a new visible enemy at its answer
@@ -267,6 +266,6 @@ Round over (amendment 06, FR-008, FR-082) when `lives == 0` (`heartsGone`), or, 
 
 The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the next challenge's answer becomes the enemy's position and the new enemy fades in there; it is visible in every challenge kind (amendment 07). The answer is always at least `minEnemyGap` from the player tank.
 
-In comparison turns, each option is shown on a tank standing at the position of its own number, so the battlefield keeps the same number-to-position mapping as the number line. The real enemy is the tank whose number is the correct answer.
+In comparison turns (amendment 09), exactly one enemy tank stands on the battlefield, at the correct option, like in every other turn. The banner names the options; the other options are not drawn on the battlefield.
 
-**Enemy shot** (amendment 07, FR-041 to FR-043a, FR-081; `src/core/ai/enemy.ts`): after every player shot that does not destroy the enemy, the enemy fires once. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: the shot hits with probability `ENEMY_HIT_CHANCE` (`easy` 1/6, `normal` 1/4, `challenging` 1/3), never on `shotIndexInRound` 0. A hit aims at the child's tank center. Otherwise the shell aims at a point `NEAR_MISS_MIN` (40) to `NEAR_MISS_MAX` (100) world units left or right of the child's tank, outside the hit area (half the tank width, 30 units); the side comes from the draw, and when that side would leave the battlefield the other side is used. The path is the arc of `solveArcToX` from the enemy's muzzle, so the shell lands at the aimed x. In comparison turns the shell falls from the top edge instead (`topShellPath`). The draw reads only the round seed, the shot index and the difficulty, never answers, help or mistakes (FR-042).
+**Enemy shot** (amendment 07, FR-041 to FR-043a, FR-081; `src/core/ai/enemy.ts`): after every player shot that does not destroy the enemy, the enemy fires once. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: the shot hits with probability `ENEMY_HIT_CHANCE` (`easy` 1/6, `normal` 1/4, `challenging` 1/3), never on `shotIndexInRound` 0. A hit aims at the child's tank center. Otherwise the shell aims at a point `NEAR_MISS_MIN` (40) to `NEAR_MISS_MAX` (100) world units left or right of the child's tank, outside the hit area (half the tank width, 30 units); the side comes from the draw, and when that side would leave the battlefield the other side is used. The path is the arc of `solveArcToX` from the enemy's muzzle, so the shell lands at the aimed x. This holds in comparison turns too: amendment 09 removed the shell from the top edge (`topShellPath`). The draw reads only the round seed, the shot index and the difficulty, never answers, help or mistakes (FR-042).

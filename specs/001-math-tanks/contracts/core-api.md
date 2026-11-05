@@ -44,15 +44,18 @@ generateChallenge(input: {
 mainSkillOf(kind: ChallengeKind): Skill
 minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
+minOptionGap(min: number, max: number): number   // comparison options apart: max(2, ceil(0.02 * (max - min))) (amendment 09, FR-027)
 
 validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[]   // empty when valid
-checkAnswer(c: Challenge, answer: number | number[]): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance); whether a shot destroys the enemy is decided by core/battle/hitRule
+checkAnswer(c: Challenge, answer: number): boolean   // exact answer only, for every kind (amendment 04 removes hitTolerance; amendment 09 removes the order3 sequence); whether a shot destroys the enemy is decided by core/battle/hitRule
 stepPath(c: Challenge, beginnerAssist: boolean): number[]   // positions for the step animation, e.g. [43, 40, 36]
 crossesTen(a: number, b: number): boolean
 crossesHundred(a: number, b: number): boolean
 ```
 
 The `purpose: 'search' | 'bonus'` input is removed by amendment 01 (no bonus challenges).
+
+Comparison (amendment 09, FR-026, FR-027): the kinds are `greater`, `smaller`, `largest3`, `smallest3`, `closestTo`, `between` and `middle3`. A comparison challenge's `prompt.params` carry the options in banner order as `o1`, `o2` and `o3` (plus `n` for `closestTo`, `a` and `b` for `between`), and `options` holds the same numbers. `answer` is the one correct option and the enemy's position; the other options are not placed on the battlefield. `correctOptions(c)` works out the correct options from the options and the prompt alone.
 
 Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for every seed and every valid `Settings` (tested over 10,000 seeds per preset configuration and over 200 random valid settings, SC-003). Same seed and inputs give the same challenge.
 
@@ -101,11 +104,7 @@ enemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: 
 
 Changed by amendment 07: the enemy no longer aims with `solveAim` plus random error. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: `hits` is true with probability `ENEMY_HIT_CHANCE[difficulty]` and always false for `shotIndexInRound === 0` (FR-043). With `hits`, `targetX` is `playerX`; otherwise it is `playerX ± d` with `d` from 40 to 100 on a drawn side, and the other side when the drawn one is outside `[0, worldWidth]`. `enemyShot` adds the arc of `solveArcToX` from `origin` to `targetX`, so `|impact.x - targetX|` is at most 0.5 units. The input type has no field for attempts, help, mistakes or challenge data, so the draw cannot depend on them (FR-042). Over 3000 seeded shots the hit rate is within 0.03 of the chance for each difficulty. `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
 
-```ts
-// core/battle/topShell (renamed from hiddenShell by amendment 07; used only in comparison turns, FR-043a)
-topShellEntryX(roundSeed: number, shotIndex: number, playerX: number, worldWidth?: number): number   // within 160 of playerX, clamped to the world
-topShellPath(input: { impact: Point; entryX: number; terrain: Heightmap; worldHeight: number }): Point[]   // falls from the top edge onto the impact
-```
+`core/battle/topShell` (`topShellEntryX`, `topShellPath`) is removed by amendment 09: the enemy fires from its own tank in comparison turns too (FR-043a).
 
 ## `core/battle` (stateful)
 
@@ -117,7 +116,7 @@ class BattleController {
 
   startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
-                                           // position with a new challenge that is not a comparison (no decoys); hearts, enemiesDestroyed,
+                                           // position with a new challenge that is not a comparison; hearts, enemiesDestroyed,
                                            // turn, round time and enemy shot index stay; no enemy shot; an unfinished challenge is dropped
                                            // without an attempt; ignored in 'playerShot', 'enemyTurn', 'paused' and 'roundOver'
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
@@ -127,22 +126,21 @@ class BattleController {
   backspace(): void
   confirm(method?: 'pointer' | 'keyboard'): void   // Enter and Space pass nothing ('keyboard'), the fire button passes 'pointer'; fires at the selection;
                                            // a fired shot sets inputMethod to method (FR-076);
-                                           // out-of-range entry -> no shot, range hint (FR-063); in order3 places a badge for the typed tank number
+                                           // out-of-range entry -> no shot, range hint (FR-063)
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
-  tapTank(tankId: string): void            // comparison: fires at the tank's number; order3 places a badge without firing
   requestHelp(): void                      // help button or H key: next help step
   shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new visible enemy
                                            // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help and
                                            // enemy turn at once (FR-066, FR-081, amendment 07); sets lastShot
   enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage; 0 hearts -> roundOver 'heartsGone'
-                                           // the shell comes from the enemy's muzzle, in comparison turns from the top edge (FR-043a)
+                                           // the shell comes from the enemy's muzzle in every turn (FR-043a, amendment 09)
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
   resume(): void
 }
 ```
 
-Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Removed by amendment 05: `nudge` (no +1 and −1 buttons, no arrow keys). `RoundState.inputMethod` records the latest input method; the next search passes it to `generateChallenge` (FR-076). Digits and Enter are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
+Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Removed by amendment 05: `nudge` (no +1 and −1 buttons, no arrow keys). Removed by amendment 09: `tapTank` (no tank tapping, no order badges). `RoundState.inputMethod` records the latest input method; the next search passes it to `generateChallenge` (FR-076). Digits and Enter are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
 
 `getState()` returns the full state; there is no hidden enemy and no reduced view of it (amendment 07 removes `publicState`, `placedEnemy` and `HiddenTank`). `visibleEnemy(state)` in `round.ts` returns the enemy while it is alive. Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
 
