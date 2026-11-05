@@ -185,26 +185,33 @@ submitResult(r: Records, key: string, result: BestResult): { records: Records; n
 formatTime(ms: number): string                                         // m:ss, e.g. 372000 -> "6:12"
 ```
 
-## `core/rewards` (pure, amendment 11)
+## `core/rewards` (pure, amendment 11, star shop since amendment 19)
 
 ```ts
 // items.ts
-GARAGE_ITEMS: readonly GarageItem[]          // all 17 items in garage order (colors, flags, trails, hats; standard item first in each)
-UNLOCK_ORDER: readonly ItemId[]               // the 13 unlockable items in the fixed order of FR-090; item i needs 10 * (i + 1) stars
-STANDARD_LOOK: Look                           // { color: 'blue', flag: 'star', trail: 'plain', hat: 'none' }
+GARAGE_ITEMS: readonly GarageItem[]          // all 17 items in garage order: by kind (colors, flags, trails, hats), by price within each kind (data-model.md "Garage")
+STANDARD_LOOK: Look                           // { color: 'blue', flag: 'star', trail: 'plain', hat: 'none' }, the basic items
+interface GarageItem { id: ItemId; kind: GarageKind; price: 0 | 10 | 20 | 40 }
 itemById(id: string): GarageItem | undefined
+itemNumber(id: ItemId): number                // 1 to 17
+isBasic(id: ItemId): boolean                  // price 0
 // garage.ts
-emptyGarage(): Garage                         // { version: 1, stars: 0, look: STANDARD_LOOK }
+interface Garage { version: 2; balance: number; totalEarned: number; owned: ItemId[]; look: Look }
+emptyGarage(): Garage                         // { version: 2, balance: 0, totalEarned: 0, owned: [], look: STANDARD_LOOK }
 newlyDestroyed(seen: number, current: number): number   // current - seen when current > seen, else 0
-addStars(g: Garage, n: number): { garage: Garage; unlocked: GarageItem[] }
-unlockedBetween(from: number, to: number): GarageItem[] // items with from < item.stars <= to, in unlock order
-isUnlocked(stars: number, id: ItemId): boolean
-starsNeeded(stars: number, id: ItemId): number          // 0 when unlocked
-equip(g: Garage, id: ItemId): Garage                    // unchanged when id is locked or unknown
-resetStars(): Garage                                     // same as emptyGarage()
-sanitizeLook(look: Look, stars: number): Look           // locked or unknown parts become the standard item
+addStars(g: Garage, n: number): Garage                  // balance + n and totalEarned + n; unchanged unless n is a whole number above 0
+isOwned(g: Garage, id: ItemId): boolean                 // basic items are always owned
+starsNeeded(balance: number, id: ItemId): number        // max(0, price - balance), "noch N Sterne"
+canBuy(g: Garage, id: string): boolean                  // known, not owned, price <= balance
+buy(g: Garage, id: string): Garage                      // balance - price, owned + id, id equipped; unchanged when canBuy is false
+returnItem(g: Garage, id: string): Garage               // owned, not basic: balance + price, owned - id, basic of its kind equipped when id was; else unchanged
+equip(g: Garage, id: string): Garage                    // unchanged when id is not owned or unknown
+newlyAffordable(before: number, after: number, owned: readonly ItemId[]): GarageItem | null
+                                                         // not owned, before < price <= after: the most expensive, then garage order (FR-094)
+resetStars(g: Garage): Garage                            // balance 0, owned [], STANDARD_LOOK; totalEarned kept
 lookKey(look: Look): string                              // 'color:sky flag:rocket trail:plain hat:none'
-garageSchema; migrateGarage(raw: unknown): unknown       // version 0 (no version) -> 1
+garageSchema; migrateGarage(raw: unknown): unknown       // version 0 (no version) -> 1 -> 2 (FR-133)
+parseGarage(raw: unknown): Garage | null                 // migrate, schema check, clean owned and look
 // looks.ts
 tankColor(id: ColorId): number                           // 0xRRGGBB; hue 175 to 235 degrees
 colorStripes(id: ColorId): boolean                       // true for navyStripes
@@ -215,7 +222,16 @@ type Shape = { type: 'poly'; points: [number, number][]; fill: number; stroke?: 
            | { type: 'line'; from: [number, number]; to: [number, number]; width: number; color: number }
 ```
 
-Guarantees: stars never go down except through `resetStars`; `addStars(g, 0)` unlocks nothing; `unlockedBetween(9, 10)` is the rocket flag; `unlockedBetween(0, 130)` is all 13 items; `equip` never chooses a locked item.
+Guarantees: `balance` and `totalEarned` never go below 0; `totalEarned` never goes down; `balance` goes down only through `buy` and `resetStars`; `buy` followed by `returnItem` of the same item gives the same balance and owned items back; `equip` never equips an item that is not owned; the look always consists of owned or basic items; nothing uses chance (FR-087).
+
+## `core/battle/aimCross` (pure, amendment 19)
+
+```ts
+aimCrossShown(aimCross: Settings['aimCross'], rulerLevel: RulerLevel): boolean
+  // 'always' -> true; 'never' -> false; 'upToLevel' -> rulerLevel <= aimCross.level (FR-134)
+```
+
+The battle view calls it on every state update with the round's settings snapshot and `RoundState.rulerLevel`, so an adaptive level change shows or hides the cross at once. The canvas carries `data-aim-cross` (`on` or `off`) for the end-to-end tests only (D4).
 
 ## `core/battle/entry` (pure)
 
@@ -234,9 +250,9 @@ loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
 loadRecords(kv: KeyValue): { records: Records; resetReason: 'none' | 'invalid' | 'unavailable' }   // key mathtanks.records.v1 (amendment 06)
 saveRecords(kv: KeyValue, r: Records): { ok: boolean }
-loadGarage(kv: KeyValue): { garage: Garage; resetReason: 'none' | 'invalid' | 'unavailable' }   // key mathtanks.garage.v1 (amendment 11)
+loadGarage(kv: KeyValue): { garage: Garage; resetReason: 'none' | 'invalid' | 'unavailable' | 'newer' }   // key mathtanks.garage.v1 (amendment 11); value version 2 since amendment 19, older values migrated
 saveGarage(kv: KeyValue, g: Garage): { ok: boolean }
-migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 -> 4 -> 5 per data-model.md
+migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> ... -> 10 per data-model.md
 exportData(settings: Settings, progress: Progress, records: Records, garage: Garage, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
 importData(text: string): { ok: true; settings: Settings; progress: Progress; records: Records; garage: Garage | null } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' | 'invalidGarage' }
                                                                       // a file without records imports with empty records; without garage, garage is null and the caller keeps its own
@@ -256,7 +272,7 @@ encodeTransfer(data: SaveData, pageHref: string, opts?: { codec?: Codec | null; 
                                           // trims oldest sessions first, then the mastery windows, until the link fits
 decodeTransfer(code: string, opts?: { codec?: Codec | null }): Promise<{ ok: true; data: SaveData; summary: TransferSummary } | { ok: false }>
                                           // code is 'v2.<data>' (or an older 'v1.<data>'); the same schemas and migrations as storage (FR-120)
-interface TransferSummary { stars: number; record: number; min: number; max: number }
+interface TransferSummary { stars: number; record: number; min: number; max: number }   // stars: the garage balance (amendment 19)
 saveCodeFromHash(hash: string): string | null      // '#save=v1.abc' -> 'v1.abc'; null without a save fragment
 transferLink(pageHref: string, code: string): string   // the address without its fragment + '#save=' + code
 qrMatrix(text: string): { size: number; modules: boolean[][] }   // bundled uqr, error correction M, 4-module quiet zone

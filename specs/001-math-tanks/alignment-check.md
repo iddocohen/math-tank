@@ -260,3 +260,31 @@ The product owner asked for a parent setting that decides whether a hit after th
   - The frozen transfer base gains `pointAfterFullHelp: true`, so a code with the setting on leaves the field out, and a code made before amendment 18 reads as on.
 
 The spec (User Story 5 scenario 8, FR-046, FR-082, FR-083, FR-086, FR-089, new FR-129, Amendments), the data model (Settings version 9, `RoundState.enemiesHit`, `LastShot.uncounted`, the transfer base), the contracts (`renewTerrain`, `newScene`, the settings group "Hilfe"), quickstart (scenario 34) and tasks (Phase 24c) were updated to match.
+
+## Amendment 19
+
+**Date**: 2026-11-05
+
+The product owner asked that stars be spent: "Today stars are not getting spent and I would like that when he spends stars for something that he needs to earn new ones for it, or reset others to buy something new, would that work?" They also asked for an option to remove the yellow aiming cross: "it should be enabled, enabled only for given difficulty or disabled completely." Before this amendment, stars only unlocked items by total (amendment 11) and were never spent, and the cross always showed. This is an intended change, not drift.
+
+- **PRD section 7.3 (rewards)** allows "stars or achievement badges" and "unlockable cosmetic upgrades", and asks to "avoid aggressive reward schedules, gambling-like mechanics, and monetization". The star shop stays inside these rules:
+  - Stars are earned only by playing: 1 star per destroyed enemy that counts (FR-089, amendment 18).
+  - No real money exists in the game, and nothing can be bought with money.
+  - No chance: every item has a fixed price, and the child chooses what to buy. There are no random items, loot boxes or timers, and no offers that end.
+  - Items are looks only and never change how the game plays.
+  - Returning gives every star back, so a purchase is never lost.
+  - The end screen names at most one item the balance now reaches and says nothing about missing stars, so it does not push the child to play for stars.
+- **PRD section 7.3** also says rewards must not depend on perfect mathematical performance. That stays: every counted hit gives a star, also after help steps 1 and 2.
+- **Amendment 11 (FR-090, the fixed unlock order)** is replaced by prices. FR-087 is changed from "no shop" to a star shop without money and without chance, because the product owner asked for spending.
+- **PRD section 3 (number line learning)** is not weakened by the aiming cross setting: the ruler, the pointer lines and the help steps stay. The setting removes a visual aid that shows on the battlefield where the shell will land, which the parent can use to make the child read the ruler instead.
+- Decisions of this update that the amendment does not state:
+  - The price of every item (data-model.md "Garage"): simple 10 (sky blue, rocket flag, football flag, sparkle trail, helmet), better 20 (blue-green, turquoise, dragon flag, lightning flag, bubble trail), special 40 (crown, rainbow trail, dark blue with stripes). The amendment names only the special items.
+  - The stored garage keeps its key `mathtanks.garage.v1` with `version: 2`, as settings keep their key across versions.
+  - "Sterne zurücksetzen" keeps the total stars ever earned, because the amendment keeps it for the progress page and resets only the balance and the owned items.
+  - "Genug Sterne für: X" names the most expensive item the balance reached during the round, and of equal prices the first in garage order, and only when the round crossed its price, so the same item is not named after every round.
+  - Returning an item starts with a tap on "Zurückgeben"; there is no key for it. The question that follows works with Enter and Escape.
+  - The aiming cross covers the guide line, the target marker on the battlefield, the yellow point on the ruler and the label of a typed number on the ruler. Hidden, a number chosen by pointing still shows no number in "Deine Zahl", as amendment 05 asks; the amendment's "shows only in the Deine Zahl readout" is read as applying to typed numbers.
+  - The setting is `aimCross: { mode, level }` in settings version 10. The level is kept when another mode is chosen. The frozen transfer base gains the default, so codes made before amendment 19 read as "Immer".
+  - The transfer garage part gets its own payload number: payload 1 (the star total) is still read and migrated; payload 2 carries the balance, the total ever earned, the owned items and the equipped look.
+
+The spec (User Story 10, FR-046, FR-048a, FR-087, FR-089, FR-090 replaced, FR-091, FR-092, FR-094 to FR-097, FR-116, FR-119, new FR-130 to FR-135, Edge Cases, Key Entities, Amendments), the data model (Settings version 10, Garage version 2 with the price list and the migration, the transfer garage payload), the contracts (`core/rewards`, `core/battle/aimCross`, the garage dialogs and keys, the aiming cross, the settings page), quickstart (scenarios 23, 28 and 35) and tasks (Phase 24d) were updated to match.

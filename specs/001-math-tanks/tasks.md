@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [amendment-12-tablet-phone.md](./amendment-12-tablet-phone.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [amendment-08-refresh-keeps-round.md](./amendment-08-refresh-keeps-round.md), [amendment-09-comparison-one-enemy.md](./amendment-09-comparison-one-enemy.md), [amendment-10-decoys-without-plates.md](./amendment-10-decoys-without-plates.md), [amendment-11-tank-garage.md](./amendment-11-tank-garage.md), [amendment-12-tablet-phone.md](./amendment-12-tablet-phone.md), [amendment-19-star-shop-aim-cross.md](./amendment-19-star-shop-aim-cross.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -889,6 +889,27 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24d: Amendment 19 star shop and aiming cross
+
+**Purpose**: [Amendment 19](./amendment-19-star-shop-aim-cross.md). Stars go to a balance that the child spends in the garage: the basic look is owned, every other item costs 10, 20 or 40 stars (data-model.md "Garage" price list), buying asks once, owned items swap freely, "Zurückgeben" gives all stars back, the end screen shows the round's stars, the balance and at most one "Genug Sterne für: X" line, and stored garages of amendment 11 are migrated (FR-089, FR-091 to FR-097, FR-130 to FR-133). The parent setting "Zielkreuz" shows the yellow aiming cross always, up to a ruler level, or never (FR-134, FR-135). The reward logic stays engine-free in `src/core/rewards/`.
+
+**Independent test**: `tests/e2e/garage.spec.ts` earns stars, buys an item, returns it and buys another; `tests/e2e/aimCross.spec.ts` plays a round with "Zielkreuz" set to "Nie" and the canvas reports `data-aim-cross="off"` while a typed number still fires and destroys the enemy.
+
+- [ ] T358 [P] [US10] Rewrite `src/core/rewards/garage.test.ts` before the code: `GARAGE_ITEMS` has 17 items in the data-model.md price-list order with the listed prices (basic items 0; crown, rainbow and navyStripes 40), sorted by price within each kind; `emptyGarage` is version 2 with balance 0, totalEarned 0 and no owned items; `addStars` raises balance and totalEarned and ignores 0, negative and fractional values; `isOwned` is true for basic items; `buy` with enough balance deducts the price, adds the item in garage order and equips it; `buy` with too low a balance, of an owned item, of a basic item or of an unknown id changes nothing; `returnItem` refunds the full price, removes the item, equips the basic item of its kind when the item was equipped, keeps the look otherwise, leaves totalEarned unchanged, and ignores basic and not-owned items; `equip` equips only owned items; `starsNeeded`; `newlyAffordable` (none when nothing is crossed; the most expensive crossed item; equal prices in garage order; owned items skipped); `resetStars` keeps totalEarned and empties owned and look; `migrateGarage` and `parseGarage`: version 0 goes through version 1, version 1 with 45 stars owns rocket, sky, sparkles and crown with balance 0 and totalEarned 45, 9 stars own nothing with balance 9, 130 stars own all 13 with balance 0, an invalid version 1 star total is rejected; version 2 drops unknown, basic and duplicate owned ids and replaces look parts that are not owned; `lookKey` format (FR-089, FR-090, FR-094, FR-096, FR-097, FR-130 to FR-133)
+- [ ] T359 [US10] Implement until T358 and the existing `src/core/rewards/looks.test.ts` pass: `price`, the price-list order and `isBasic` in `src/core/rewards/items.ts` (no `UNLOCK_ORDER` any more; the old unlock order stays only inside the migration); `Garage` version 2, `addStars`, `isOwned`, `canBuy`, `buy`, `returnItem`, `equip`, `starsNeeded`, `newlyAffordable`, `resetStars`, `garageSchema`, `migrateGarage` and `parseGarage` in `src/core/rewards/garage.ts` (FR-089, FR-090, FR-094, FR-096, FR-097, FR-130 to FR-133)
+- [ ] T360 [P] Write settings version 10, aiming cross, storage and transfer tests before the code: `src/core/settings/settings.test.ts` (defaults have `version: 10` and `aimCross: { mode: 'always', level: 2 }`; the schema rejects an unknown mode and a level outside 1 to 5); new `src/core/battle/aimCross.test.ts` (`aimCrossShown` for each mode; `'upToLevel'` with level 2 is true at ruler levels 1 and 2 and false at 3 to 5; with adaptive difficulty, `rulerLevelFor` of a progress whose number-positions skill moved up to ruler level 3 hides the cross and moving back to level 2 shows it); `src/core/storage/storage.test.ts` (version 9 settings migrate to version 10 with the default `aimCross`, a stored `aimCross` stays, version 0 data go through every step; `loadGarage` migrates a stored version 1 garage to version 2 as in FR-133, reports `'newer'` for version 3, and a `saveGarage` round trip keeps balance, owned, look and totalEarned); `src/core/storage/exportImport.test.ts` (an export and import round trip keeps the garage version 2 and `aimCross`; a file with a version 1 garage imports it migrated); `src/core/transfer/transfer.test.ts` (a save with balance, owned items, equipped look and totalEarned makes a round trip; the garage part is payload 2; the frozen version 2 codes made before amendment 19 still decode, their garage migrated by FR-133 and `aimCross` read as "Immer"; a code with `aimCross` "Nie" makes a round trip and the default leaves the field out; the summary shows the balance) (FR-046, FR-048a, FR-097, FR-116, FR-119, FR-133 to FR-135)
+- [ ] T361 Implement until T360 passes: `aimCross` in `src/core/settings/schema.ts` and `src/core/settings/defaults.ts`; the version 9 to 10 step in `src/core/storage/migrate.ts`; new `src/core/battle/aimCross.ts`; the `'newer'` check against garage version 2 in `src/core/storage/storage.ts`; `src/core/storage/exportImport.ts`; garage payload 2, `aimCross` in `TRANSFER_V2_SETTINGS_BASE` and the balance in the summary in `src/core/transfer/transfer.ts`; every test fixture that names the settings version or a version 1 garage (FR-046, FR-048a, FR-097, FR-116, FR-133 to FR-135)
+- [ ] T362 [P] [US10] Update `src/app/persistence.test.ts` before the code: `addStars(n)` saves the balance and totalEarned at once; `buy(id)` saves and returns true only when the balance reaches the price; `returnItem(id)` saves the refund and the basic look; `equip(id)` ignores items not owned; `resetStars()` saves balance 0 and the basic look and keeps totalEarned; `exportText` and `importText` keep the whole garage; a file without garage keeps this browser's garage (FR-048a, FR-089, FR-096, FR-130, FR-131)
+- [ ] T363 [US10] Implement until T362 passes: `addStars`, `buy`, `returnItem`, `equip` and `resetStars` in `src/app/persistence.ts` (FR-089, FR-096, FR-130, FR-131)
+- [ ] T364 [P] [US10] Write and update component tests before the code: `src/app/Garage.test.tsx` (every item shows its number; items are sorted by price in each group; an item not owned shows its price; with balance 14 the 10-star rocket flag opens "Für 10 Sterne kaufen?" on click, "Ja" calls `onBuy`, "Nein" closes the dialog; an item the balance does not reach shows "noch N Sterne", is grey and opens nothing; typing its number and Enter opens the dialog, Enter answers "Ja", Escape answers "Nein" and a second Escape calls `onBack`; digits do nothing while the dialog shows; an owned item equips on click without a dialog; only owned items that are not basic have "Zurückgeben", which asks "Zurückgeben? Du bekommst N Sterne." and calls `onReturn` on "Ja"; the dialog buttons are at least 48 by 48 CSS pixels by their CSS class); `src/app/RoundEnd.test.tsx` ("+N Sterne", the balance, "Genug Sterne für: Krone" when given, no star lines without garage data); `src/app/ProgressPage.test.tsx` (the balance and the total ever earned show; "Sterne zurücksetzen" asks first); `src/app/SettingsPage.test.tsx` ("Zielkreuz" with "Immer", "Bis Zahlenstrahl-Stufe" and "Nie" and its explanation; the level field shows only with "Bis Zahlenstrahl-Stufe"; saving stores `aimCross`) (FR-091, FR-092, FR-094 to FR-096, FR-130 to FR-132, FR-134)
+- [ ] T365 [US10] Implement the screens until T364 passes: `src/app/Garage.tsx` (prices, buy and return dialogs, keyboard), `src/app/RoundEnd.tsx`, `src/app/ProgressPage.tsx`, `src/app/SettingsPage.tsx`, `src/app/App.tsx` (balance at round start, `newlyAffordable`, `buy` and `returnItem`), `src/app/styles.css`, texts in `src/i18n/de.ts`; and the aiming cross in `src/game/NumberLineView.ts` (no guide line, target marker, ruler point or typed label while `aimCrossShown` is false; `data-aim-cross` on the canvas) (FR-091, FR-092, FR-094 to FR-096, FR-130 to FR-132, FR-134, FR-135)
+- [ ] T366 [US10] Rewrite `tests/e2e/garage.spec.ts` (keyboard and mouse, every browser project): stored settings with "Gegner pro Runde" 1 and a stored version 2 garage with balance 9; destroy the enemy; the end screen shows "+1 Stern", the balance 10 and "Genug Sterne für: Raketen-Flagge"; in the garage type 7 and Enter, the dialog asks "Für 10 Sterne kaufen?", Enter buys it, the balance is 0 and `data-look` has `flag:rocket`; "Zurückgeben" under it and "Ja" give the balance 10 and the star flag back; tap the football flag (10) and "Ja"; Escape and Enter start a round whose canvas has `flag:football`; a stored version 1 garage with 45 stars loads with the crown owned and balance 0; the case with the garage off stays. Write new `tests/e2e/aimCross.spec.ts`: stored settings with "Zielkreuz" "Nie"; a typed number shows in the readout, the canvas has `data-aim-cross="off"`, and Enter destroys the enemy; with "Bis Zahlenstrahl-Stufe" 2 and a fixed ruler level 3 the canvas has `data-aim-cross="off"`, with level 2 `on`. Update every e2e spec that relied on unlocks by star total (FR-091 to FR-096, FR-130 to FR-135)
+- [ ] T367 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project); take muted headless screenshots of the garage with prices, the buy dialog, and a battle with "Zielkreuz" "Nie", stored in the session scratchpad
+
+**Checkpoint**: Stars are spent in the garage and earned again by playing, and the parent decides when the aiming cross shows.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies
@@ -928,6 +949,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 24a (amendment 17)**: depends on Phase 24. T327 runs before T328, T329 before T330, T331 before T332, T333 before T334, T335 before T336, T337 before T338; T330 and T332 run before T334; T334 before T336 to T339; T340 after T338 and T339; T341 last.
 - **Phase 24b (amendment 16)**: depends on Phases 22h (device projects and layouts), 23 (offline play) and 24a (play-mode buttons on the start screen). T342 runs before T344; T343 before T344 and T345; T346 only if T345 or the product owner's check fails; T347 last.
 - **Phase 24c (amendment 18)**: depends on Phases 24a (play modes, settings version 8) and 24b. T349 runs before T350, T351 before T352, T353 before T354; T350 before T352 (the controller reads the setting) and T354; T355 after T352 and T354; T356 last.
+- **Phase 24d (amendment 19)**: depends on Phases 22d, 22e (the garage), 22j (the transfer) and 24c (settings version 9). T358 runs before T359, T360 before T361, T362 before T363, T364 before T365; T359 before T361 (storage and transfer read the new garage) and T363; T361 and T363 before T365; T366 after T365; T367 last.
 
 ### User story dependencies
 
@@ -964,6 +986,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 22h**: T277 and T278 together; then T279; T280 last.
 - **Phase 22i**: T285, T286, T287, T288, T290 and T292 together; then T289; then T291 and T293; T294 last.
 - **Phase 22j**: T295, T296, T298 and T300 together; then T297; then T299; T301 last.
+- **Phase 24d**: T358, T360, T362 and T364 together; then T359; then T361 and T363; then T365; T366; T367 last.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
 - **Across phases**: Phase 10 alongside Phase 9; Phase 21 alongside anything after Phase 10.
 
@@ -1038,10 +1061,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330, T349, T350 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330, T349, T350, T360, T361, T364, T365 |
 | FR-047 | T011, T013, T112, T113, T175, T176, T329, T330 |
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
-| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295, T349 |
+| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295, T349, T360, T361, T362 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154, T278, T303, T304, T343 |
 | FR-051 | T003, T134, T139, T304 |
@@ -1081,17 +1104,17 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
 | FR-085 | T206, T210, T211, T214 |
 | FR-086 | T205, T206, T207, T210, T211, T213, T214, T335, T336, T351 |
-| FR-087 | T127, T128, T132, T133, T252 |
+| FR-087 | T127, T128, T132, T133, T252, T358 |
 | FR-088 | T234 |
-| FR-089 | T252, T254, T257, T258, T261, T262, T351, T355 |
-| FR-090 | T252, T253, T254 |
-| FR-091 | T260, T261, T262, T264 |
-| FR-092 | T259, T260, T261, T262 |
+| FR-089 | T252, T254, T257, T258, T261, T262, T351, T355, T358, T359, T362, T363 |
+| FR-090 | T252, T253, T254, T358, T359 |
+| FR-091 | T260, T261, T262, T264, T364, T365, T366 |
+| FR-092 | T259, T260, T261, T262, T364, T365, T366 |
 | FR-093 | T252, T253, T254, T261, T263, T264 |
-| FR-094 | T260, T261, T262 |
-| FR-095 | T260, T261, T262 |
-| FR-096 | T252, T255, T257, T258, T260, T261, T262 |
-| FR-097 | T252, T254, T255, T256, T257 |
+| FR-094 | T260, T261, T262, T358, T359, T364, T365, T366 |
+| FR-095 | T260, T261, T262, T364, T365, T366 |
+| FR-096 | T252, T255, T257, T258, T260, T261, T262, T358, T359, T362, T363, T364, T365, T366 |
+| FR-097 | T252, T254, T255, T256, T257, T358, T359, T360, T361 |
 | FR-098 | T265, T267, T268, T269 |
 | FR-099 | T265, T266, T267, T268, T269, T271 |
 | FR-100 | T265, T266, T269, T270 |
@@ -1110,10 +1133,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-113 | T287, T289, T292, T293, T294 |
 | FR-114 | T290, T291, T294 |
 | FR-115 | T297, T298, T299, T300, T301, T349 |
-| FR-116 | T295, T297, T300 |
+| FR-116 | T295, T297, T300, T360, T361 |
 | FR-117 | T295, T297, T300, T305 |
 | FR-118 | T295, T296, T297, T298, T299, T300, T301, T305 |
-| FR-119 | T298, T299, T300, T301 |
+| FR-119 | T298, T299, T300, T301, T360, T361 |
 | FR-120 | T295, T297, T299, T300, T301 |
 | FR-121 | T329, T330, T337, T338, T340 |
 | FR-122 | T331, T333, T334, T337, T338, T340 |
@@ -1124,6 +1147,12 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-127 | T345 |
 | FR-128 | T345, T346 |
 | FR-129 | T349, T350, T351, T352, T353, T354, T355, T356 |
+| FR-130 | T358, T359, T362, T363, T364, T365, T366 |
+| FR-131 | T358, T359, T362, T363, T364, T365, T366 |
+| FR-132 | T364, T365 |
+| FR-133 | T358, T359, T360, T361, T366 |
+| FR-134 | T360, T361, T364, T365, T366 |
+| FR-135 | T360, T361, T365, T366 |
 | SC-001 | T043, T046, T150, T165, T345 |
 | SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1147,10 +1176,11 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | AC-08 | T109, T116, T155, T214 |
 | AC-09 | T118, T129, T155 |
 | AC-10 | T134, T142, T155 |
-| US10 | T252 to T264 |
+| US10 | T252 to T264, T358 to T366 |
 | Amendment 12 | T272 to T280; T136 and T141 changed |
 | Amendment 14 | T285 to T294 |
 | Amendment 15 | T295 to T301 |
 | US11 | T327 to T341 |
 | Amendment 17 | T327 to T341 |
 | Amendment 18 | T349 to T356 |
+| Amendment 19 | T358 to T367 |

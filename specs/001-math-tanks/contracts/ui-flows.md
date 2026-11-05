@@ -58,7 +58,8 @@ Number pad rules:
 1. The child taps or drags on the ruler (snaps to the nearest whole number) or types digits. A guide line and a target marker follow at once. While pointing, no number is shown: no large readout and no label next to the marker. Typed digits appear in the readout as they are typed. Releasing or typing only previews. There is no way to step the preview by 1 or 10 (amendment 05).
 2. The fire button or Enter fires at the previewed number. The cannon stays at its fixed angle (65 degrees, raised up to 85 degrees when a hill blocks the arc), and the shell lands at the chosen number.
 3. After landing: crater; the landing number shown large; the previous path kept as a faint trail.
-4. Input method (amendment 05, FR-076): typing a digit or pressing Enter to fire sets the round's input method to keyboard; tapping or dragging on the ruler or tapping the fire button sets it to pointer. Keys of the on-screen number pad, its "Feuer!" key included, set it to keyboard (amendment 12, FR-103). With keyboard input, the next search is never "Finde N".
+4. Aiming cross (amendment 19, FR-134, FR-135): the guide line, the target marker on the battlefield, the yellow point on the ruler and the typed-number label on the ruler are drawn only while `aimCrossShown(settings.aimCross, state.rulerLevel)` is true. Hidden, choosing and firing work the same; a typed number shows only in the "Deine Zahl" readout, and a pointed number still shows no number. The landing marker, the step bracket, the pointer lines and the help steps do not change.
+5. Input method (amendment 05, FR-076): typing a digit or pressing Enter to fire sets the round's input method to keyboard; tapping or dragging on the ruler or tapping the fire button sets it to pointer. Keys of the on-screen number pad, its "Feuer!" key included, set it to keyboard (amendment 12, FR-103). With keyboard input, the next search is never "Finde N".
 
 ## Hit feedback (amendment 06, FR-066, FR-072)
 
@@ -115,12 +116,19 @@ Replaced by the play mode "Nur Zahlenstrahl" above, which records attempts. Befo
 3. The end screen shows an encouraging message ("Super! Alle Gegner getroffen." or "Gut gekämpft! Noch eine Runde?"), the result "9 Panzer getroffen in 6:12" ("1 Panzer" for one), and with "Rekord zeigen" on either "Neuer Rekord!" with a short pop and sparkle (no motion with reduced motion), or "Dein Rekord: 12" in small neutral text when a best exists. It never says "verloren" or "nicht geschafft" and never compares the two numbers.
 4. "Zum Start" during a round ends it without a result. "Neue Landschaft" does not end the round (amendment 08): new hills and one new enemy, while hearts, score and time continue. Free play has no other challenge and no bonus.
 
-## Garage and the chosen look (amendment 11, FR-089 to FR-097)
+## Garage, star shop and the equipped look (amendment 11, changed by amendment 19, FR-089 to FR-097, FR-130 to FR-133)
 
-1. Each enemy the child destroys adds 1 star at once (decoys add none), with "Garage und Sterne" on or off.
-2. The garage chooses the look: one tap on an unlocked item, or its number typed and Enter. The choice is stored at once.
-3. A battle draws the child's tank in the chosen color (dark blue with stripes adds light stripes on the body), with the chosen flag on the antenna and the chosen hat on the turret; the child's shells draw the chosen trail (sparkles: small white and yellow stars along the path; rainbow: several colored lines side by side; bubbles: light circles). With "Garage und Sterne" off, the standard look is used. The canvas carries `data-player-look` with `lookKey` of the look in use, for the end-to-end tests only (D4).
-4. The end screen compares the star total at the start of the round with the total now and names every item unlocked in between.
+1. Each enemy the child destroys and that counts adds 1 star to the balance and to the total ever earned at once (decoys add none), with "Garage und Sterne" on or off.
+2. The garage shows the balance, the preview tank and the 17 items in four groups, sorted by price within each group and numbered 1 to 17. Each item shows:
+   - owned: its name, "Gewählt" when equipped, and for an item that is not basic a "Zurückgeben" button below it;
+   - not owned, balance high enough: its name and price ("★ 10");
+   - not owned, balance too low: a grey silhouette, its price and "noch N Sterne".
+3. Equipping: one tap on an owned item, or its number typed and Enter. The choice is stored at once and costs nothing.
+4. Buying: one tap on an item not owned whose price the balance reaches, or its number typed and Enter, opens a dialog "Für N Sterne kaufen?" with large "Ja" and "Nein" buttons (at least 48 by 48 CSS pixels). "Ja" or Enter buys and equips it and stores the garage at once; "Nein" or Escape closes the dialog and changes nothing. An item the balance does not reach does nothing on tap or Enter.
+5. Returning: "Zurückgeben" opens a dialog "Zurückgeben? Du bekommst N Sterne." with "Ja" and "Nein" (Enter and Escape as above). "Ja" gives the full price back; when the item was equipped, the basic item of its kind is equipped.
+6. While a dialog shows, digits, Backspace and every other key do nothing, and taps outside the dialog do nothing. Only one dialog shows at a time.
+7. A battle draws the child's tank in the equipped color (dark blue with stripes adds light stripes on the body), with the equipped flag on the antenna and the equipped hat on the turret; the child's shells draw the equipped trail (sparkles: small white and yellow stars along the path; rainbow: several colored lines side by side; bubbles: light circles). With "Garage und Sterne" off, the standard look is used. The canvas carries `data-player-look` with `lookKey` of the look in use, for the end-to-end tests only (D4).
+8. The end screen shows "+N Sterne" (the stars of this round, "+1 Stern" for one, also "+0 Sterne"), the balance, and the line "Genug Sterne für: X" when `newlyAffordable(balance at round start, balance now, owned)` names an item. Nothing else is said about stars.
 
 ## Battlefield look and effects (amendment 14, FR-107 to FR-114)
 
@@ -146,7 +154,7 @@ Replaced by the play mode "Nur Zahlenstrahl" above, which records attempts. Befo
 | Escape | none | pause | pause | resume | none |
 | G | open the garage (only with "Garage und Sterne" on) | none | none | none | none |
 
-In the garage (amendment 11, FR-092): 0 to 9 type the number of an item (at most 2 digits; the item is selected and the preview shows it when it is unlocked), Backspace deletes the last digit, Enter chooses the selected item when it is unlocked, Escape goes back to the start screen. Space and every other key do nothing.
+In the garage (amendment 11, changed by amendment 19, FR-092): 0 to 9 type the number of an item (at most 2 digits; the item is selected and the preview shows it when it is owned or the balance reaches its price), Backspace deletes the last digit, Enter equips the selected item when it is owned and opens the buy dialog when it is not owned and the balance reaches its price, Escape goes back to the start screen. In the buy or return dialog, Enter answers "Ja" and Escape answers "Nein"; no other key does anything. Space and every other key do nothing. Returning an item has no key of its own: it starts with a tap on "Zurückgeben", and its dialog then works with Enter and Escape.
 
 - No other key does anything. The arrow keys were removed by amendment 05, because stepping toward the answer is a shortcut.
 - Keys are ignored while a shell is in flight (`playerShot`, `enemyTurn`), so a held Enter never fires twice.
@@ -168,6 +176,8 @@ In the garage (amendment 11, FR-092): 0 to 9 type the number of an item (at most
 - "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
 - "Daten sichern" also includes the personal bests, the stars and the chosen look (amendment 11).
 - "Garage und Sterne" switch in the group Runde (on), amendment 11.
+- "Zielkreuz" in the group with the ruler levels (amendment 19, FR-134): three choices "Immer" (default), "Bis Zahlenstrahl-Stufe" and "Nie", with a level field 1 to 5 (default 2) that shows only with "Bis Zahlenstrahl-Stufe", and a one-line explanation ("Das gelbe Kreuz mit der Linie zum Zahlenstrahl.").
+- The progress page shows the star balance and the total ever earned; "Sterne zurücksetzen" asks first and then sets the balance to 0 and keeps only the basic items (amendment 19, FR-096, FR-132).
 - The group Hilfe ends with "Zeitlimit" (switch, and the seconds field 10 to 120 while it is on; moved from the group Runde by amendment 18) and "Punkt nach voller Hilfe" (switch, on), each with a one-line explanation below it (amendment 18, FR-129).
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.

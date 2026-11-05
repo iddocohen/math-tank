@@ -6,7 +6,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `9` | `9` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; `migrate` upgrades version 0 to 8 data (see below) |
+| `version` | `10` | `10` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; `migrate` upgrades version 0 to 9 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -30,6 +30,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
 | `pointAfterFullHelp` | `boolean` | `true` | "Punkt nach voller Hilfe" (amendment 18, FR-129), in the "Hilfe" group next to "Zeitlimit". When `false`, an enemy destroyed after help step 3 does not raise `enemiesDestroyed`, so it gives no star and does not count toward "Gegner pro Runde" or the personal best; the attempt is recorded as with help either way |
 | `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
+| `aimCross` | `{ mode: 'always' \| 'upToLevel' \| 'never'; level: 1 \| 2 \| 3 \| 4 \| 5 }` | `{ mode: 'always', level: 2 }` | "Zielkreuz" (amendment 19, FR-134): the yellow target marker, its guide line, the point on the ruler and the typed-number label on the ruler. `'always'` shows it ("Immer"); `'upToLevel'` shows it while the round's `rulerLevel` is at most `level` ("Bis Zahlenstrahl-Stufe N"); `'never'` hides it ("Nie"). `level` is kept when the mode is not `'upToLevel'`, so switching back restores it. `aimCrossShown(aimCross, rulerLevel)` in `src/core/battle/aimCross.ts` decides |
 | `numberPad` | `'auto' \| 'always' \| 'never'` | `'auto'` | "Zahlenfeld" (amendment 12, FR-102): `'auto'` shows the on-screen number pad in battle when the main pointer is not fine or the screen is narrower than 1100 CSS pixels; `'always'` shows it on every screen; `'never'` hides it |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
@@ -47,6 +48,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 7** (amendment 17): `freePlay` is dropped and `playModes` is added: when `freePlay` was `true` and every challenge type was off (the parent offered only free play), `{ mixed: false, ruler: true, math: false }`; otherwise all three `true`. `version` becomes 8. Version 0 to 6 data and version 2 transfer codes (whose frozen base is version 6) go through every step.
 
 **Migration from version 8** (amendment 18): `pointAfterFullHelp` is added with `true` unless already set; `version` becomes 9. Version 0 to 7 data and version 2 transfer codes go through every step.
+
+**Migration from version 9** (amendment 19): `aimCross` is added with `{ mode: 'always', level: 2 }` unless already set; `version` becomes 10. Version 0 to 8 data and version 2 transfer codes go through every step.
 
 **Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
@@ -154,7 +157,7 @@ interface SessionSummary { id: string; startedAt: number; lastActiveAt: number; 
 
 A new session starts on game load, when `now - lastActiveAt > 30 minutes`, or when the calendar day of `now` differs from `startedAt`. Progress is saved after each attempt, between turns, never during a shot animation.
 
-**Export file**: `{ app: 'math-tanks', exportedAt, settings, progress, records, garage }` as JSON; import validates every part with the same schemas and migrations as loading. A file without `records` (exported before amendment 06) imports with empty records. A file without `garage` (exported before amendment 11) keeps the garage of this browser, because stars are never lost (FR-096).
+**Export file**: `{ app: 'math-tanks', exportedAt, settings, progress, records, garage }` as JSON; import validates every part with the same schemas and migrations as loading. A file without `records` (exported before amendment 06) imports with empty records. A file without `garage` (exported before amendment 11) keeps the garage of this browser, because stars are never lost (FR-096). A garage of version 0 or 1 (exported before amendment 19) is migrated like stored data (FR-133).
 
 ## Records (persisted: `mathtanks.records.v1`, amendment 06)
 
@@ -165,7 +168,7 @@ interface Records { version: 1; best: Record<string, BestResult> } // keyed by r
 
 `recordKey(s, mode) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` for `mode` `'mixed'`, and the same key with `|ruler` or `|math` appended for the other two play modes (FR-086, amendment 17), from the round's settings snapshot. Keys stored before amendment 17 have no mode part and so belong to "Gemischt"; no migration is needed. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
 
-## Garage (persisted: `mathtanks.garage.v1`, amendment 11)
+## Garage (persisted: `mathtanks.garage.v1`, amendment 11, star shop since amendment 19)
 
 ```ts
 type GarageKind = 'color' | 'flag' | 'trail' | 'hat';
@@ -173,22 +176,66 @@ type ColorId = 'blue' | 'sky' | 'teal' | 'turquoise' | 'navyStripes';
 type FlagId = 'star' | 'rocket' | 'dragon' | 'football' | 'lightning';
 type TrailId = 'plain' | 'sparkles' | 'rainbow' | 'bubbles';
 type HatId = 'none' | 'crown' | 'helmet';
+type ItemId = ColorId | FlagId | TrailId | HatId;
 interface Look { color: ColorId; flag: FlagId; trail: TrailId; hat: HatId }
-interface GarageItem { id: ColorId | FlagId | TrailId | HatId; kind: GarageKind; stars: number }  // stars needed; 0 for the standard items
-interface Garage { version: 1; stars: number; look: Look }   // stars: whole number >= 0
+interface GarageItem { id: ItemId; kind: GarageKind; price: 0 | 10 | 20 | 40 }   // 0 for the basic items
+interface Garage {
+  version: 2;
+  balance: number;       // stars the child can spend; whole number >= 0
+  totalEarned: number;   // every star ever earned; whole number >= 0; never goes down (FR-132)
+  owned: ItemId[];       // bought items, never a basic item, no duplicates, in garage order
+  look: Look;            // the equipped look; every part is owned or basic
+}
 ```
 
-`GARAGE_ITEMS` (src/core/rewards/items.ts) lists every item in the order the garage shows them, grouped by kind (colors, flags, trails, hats), with the standard item first in each group; the garage numbers them 1 to 17 in this order. `UNLOCK_ORDER` is the fixed unlock order of FR-090; item `i` (0-based) of it needs `10 * (i + 1)` stars: `rocket` 10, `sky` 20, `sparkles` 30, `crown` 40, `dragon` 50, `teal` 60, `rainbow` 70, `helmet` 80, `football` 90, `turquoise` 100, `bubbles` 110, `lightning` 120, `navyStripes` 130. `STANDARD_LOOK = { color: 'blue', flag: 'star', trail: 'plain', hat: 'none' }`.
+The storage key keeps its name `mathtanks.garage.v1`; the value carries `version: 2` (amendment 19), as the settings keep their key across versions (D13).
 
-- Unlocked items are not stored: `isUnlocked(stars, id)` is `stars >= item.stars` (FR-097).
-- `addStars(garage, n)` returns `{ garage, unlocked }` with `unlocked` the items whose threshold lies in `(stars, stars + n]`, in unlock order. `unlockedBetween(from, to)` gives the same list for any two totals; the end screen uses it with the star total at the start of the round.
+**Price list** (amendment 19, FR-130). The garage numbers the items 1 to 17 in this order: by kind (colors, flags, trails, hats), and by price within each kind; items of equal price keep their amendment 11 order.
+
+| No. | Item | `id` | Kind | Price | Class |
+|-----|------|------|------|-------|-------|
+| 1 | Blau (blue) | `blue` | color | 0 | basic |
+| 2 | Himmelblau (sky blue) | `sky` | color | 10 | simple |
+| 3 | Blaugrün (blue-green) | `teal` | color | 20 | better |
+| 4 | Türkis (turquoise) | `turquoise` | color | 20 | better |
+| 5 | Dunkelblau mit Streifen (dark blue with stripes) | `navyStripes` | color | 40 | special |
+| 6 | Stern-Flagge (star flag) | `star` | flag | 0 | basic |
+| 7 | Raketen-Flagge (rocket flag) | `rocket` | flag | 10 | simple |
+| 8 | Fußball-Flagge (football flag) | `football` | flag | 10 | simple |
+| 9 | Drachen-Flagge (dragon flag) | `dragon` | flag | 20 | better |
+| 10 | Blitz-Flagge (lightning flag) | `lightning` | flag | 20 | better |
+| 11 | Einfache Spur (plain trail) | `plain` | trail | 0 | basic |
+| 12 | Funkel-Spur (sparkle trail) | `sparkles` | trail | 10 | simple |
+| 13 | Blasen-Spur (bubble trail) | `bubbles` | trail | 20 | better |
+| 14 | Regenbogen-Spur (rainbow trail) | `rainbow` | trail | 40 | special |
+| 15 | Ohne Hut (no hat) | `none` | hat | 0 | basic |
+| 16 | Helm (helmet) | `helmet` | hat | 10 | simple |
+| 17 | Krone (crown) | `crown` | hat | 40 | special |
+
+The German names are the ones in `src/i18n/de.ts`. All 13 items that cost something together cost 270 stars.
+
+Functions (`src/core/rewards/garage.ts`, pure):
+
+- `emptyGarage()` is `{ version: 2, balance: 0, totalEarned: 0, owned: [], look: STANDARD_LOOK }`.
 - `newlyDestroyed(seen, current)` is `current - seen` when `current > seen`, else 0; the app calls it with each new `RoundState.enemiesDestroyed`, which counts enemies only, never decoys (FR-083), and with `pointAfterFullHelp` off not an enemy destroyed after help step 3 (amendment 18), and resets `seen` when a new round starts at 0.
-- `equip(garage, id)` returns the garage with `id` chosen for its kind when it is unlocked, else the garage unchanged. `resetStars()` returns `{ version: 1, stars: 0, look: STANDARD_LOOK }`.
-- `starsNeeded(stars, id)` is `max(0, item.stars - stars)`, shown as "noch N Sterne".
+- `addStars(garage, n)` adds `n` (a whole number above 0) to `balance` and to `totalEarned`; any other `n` returns the garage unchanged.
+- `isOwned(garage, id)` is true for a basic item and for an id in `owned`.
+- `starsNeeded(balance, id)` is `max(0, price - balance)`, shown as "noch N Sterne" for an item not owned.
+- `canBuy(garage, id)` is true when the item is known, not owned and `price <= balance`. `buy(garage, id)` then takes the price from `balance`, adds the id to `owned` (in garage order) and equips it; otherwise it returns the garage unchanged.
+- `returnItem(garage, id)` for an owned item that is not basic adds its price to `balance`, removes it from `owned`, and when it is equipped equips the basic item of its kind; otherwise it returns the garage unchanged. `totalEarned` does not change.
+- `equip(garage, id)` equips an owned item for its kind; an item not owned or unknown leaves the garage unchanged.
+- `newlyAffordable(before, after, owned)` is the item for the end screen line "Genug Sterne für: X" (FR-094): among the items not owned with `before < price <= after`, the most expensive one, and of equal prices the first in garage order; `null` when there is none. The app calls it with the balance at the start of the round and the balance at the end.
+- `resetStars(garage)` ("Sterne zurücksetzen", FR-096) returns `{ version: 2, balance: 0, totalEarned: garage.totalEarned, owned: [], look: STANDARD_LOOK }`.
 - `lookKey(look)` is `color:<id> flag:<id> trail:<id> hat:<id>`, the canvas attribute `data-player-look` in battle.
 - `looks.ts` gives each item's drawing as plain shapes in tank coordinates (polygons, circles and lines with colors), drawn by Phaser in battle and by SVG in the garage preview, and `tankColor(id)` the body color. Every tank color has a hue between 175 and 235 degrees (blue to blue-green), far from the red enemy (hue near 0).
 
-**Loading** (`loadGarage`): a missing key gives `resetStars()`. Data without `version` (version 0) gets `version: 1`, a whole-number `stars` of at least 0 (anything else gives 0) and a full `look` (missing parts from `STANDARD_LOOK`). After the schema check, every part of `look` that is unknown or not unlocked for `stars` becomes the standard item of its kind. Damaged JSON or a failed schema check loads `resetStars()` and reports `'invalid'` like settings. "Fortschritt zurücksetzen" never touches this key; "Sterne zurücksetzen" writes `resetStars()`.
+**Loading** (`loadGarage`, `parseGarage`): a missing key gives `emptyGarage()`. Older versions are migrated step by step (FR-097, FR-133):
+
+- Version 0 (no `version` field, amendment 11 before T254) becomes version 1: a whole-number `stars` of at least 0 (anything else gives 0) and a full `look` (missing parts from `STANDARD_LOOK`).
+- Version 1 (`{ version: 1, stars, look }`, amendment 11) becomes version 2 when `stars` is a whole number of at least 0 (anything else is left for the schema to reject): `owned` is every item that the old rule had unlocked, that is item `i` (0-based) of the old unlock order rocket, sky, sparkles, crown, dragon, teal, rainbow, helmet, football, turquoise, bubbles, lightning, navyStripes when `stars >= 10 * (i + 1)`; `balance = max(0, stars - sum of their prices)`; `totalEarned = stars`; `look` is kept. Example: 45 stars own rocket, sky, sparkles and crown (70 stars), so the balance is 0 and the total ever earned 45.
+- After the schema check, unknown ids, basic ids and duplicates are removed from `owned`, which is put in garage order, and every part of `look` that is unknown or not owned becomes the basic item of its kind.
+
+Damaged JSON or a failed schema check loads `emptyGarage()` and reports `'invalid'` like settings; a `version` above 2 reports `'newer'` and is not saved over (FR-048). "Fortschritt zurücksetzen" never touches this key; "Sterne zurücksetzen" writes `resetStars(garage)`.
 
 ## Transfer code (not persisted, amendment 15)
 
@@ -199,7 +246,8 @@ type Outcome = 'i' | 'c' | 'a' | 'u'   // independent, close, assisted, unsolved
 interface TransferV1 {
   v: 1;
   settings: Settings;                         // as stored; any settings version, migrated when received
-  garage: { stars: number; look: Look };      // unlocked items follow from stars (FR-097)
+  garage: { stars: number; look: Look }       // written before amendment 19: migrated like a stored version 1 garage (FR-133)
+        | Garage;                             // written since amendment 19: the stored garage, version 2
   records: Record<string, BestResult>;        // Records.best, keyed by recordKey
   skills: Record<string, [step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string]>;
                                               // keyed like Progress.skills; window = masteryWindow as Outcome letters, at most 10
@@ -212,14 +260,16 @@ interface TransferV1 {
 - **Encoding**: `JSON.stringify(transfer)`, UTF-8, compressed with `CompressionStream('deflate-raw')`, then base64url without padding. A browser without `CompressionStream` sends the UTF-8 bytes uncompressed. The code is `v1.<data>`; the link is the current page address without its fragment, plus `#save=v1.<data>`.
 - **Decoding**: the part after `v` up to the first `.` is the transfer version; only `1` is known, anything else is refused. The data is read as JSON directly when its bytes are a JSON object, else it is decompressed with `DecompressionStream('deflate-raw')` first.
 - **Size**: the whole link is at most `TRANSFER_MAX_LINK_BYTES` = 2300 bytes, below the 2331 bytes of a version 40 QR code with error correction M. Too long: the oldest session totals are dropped one by one; when no session is left, every mastery window is cut to its newest 9, 8, ... 0 entries; the result reports `sessionsDropped` and `windowLength` (10 when untouched). When the link is still too long with empty windows, `fits` is false and the settings page shows no QR code.
-- **Receiving**: the transfer is turned back into storage values and checked like loading (FR-048, FR-120): `settings` through `migrate` and `settingsSchema` and `validateSettings`; the garage through `parseGarage` (version 1); the records through `recordsSchema`; the progress `{ version: 1, attempts: [], skills, sessions }` through `progressSchema`, each skill with `recent: []`. Any failure refuses the whole code. A transfer version 1 made by an older game carries older settings, which `migrate` upgrades like stored ones.
-- **Summary** for the dialog: `stars` from the garage, `record` the most `enemies` among the records (0 when there is none), `min` and `max` from `settings.range`.
+- **Receiving**: the transfer is turned back into storage values and checked like loading (FR-048, FR-120): `settings` through `migrate` and `settingsSchema` and `validateSettings`; the garage through `parseGarage` (a garage without `version` is read as version 1 and migrated to version 2, FR-133); the records through `recordsSchema`; the progress `{ version: 1, attempts: [], skills, sessions }` through `progressSchema`, each skill with `recent: []`. Any failure refuses the whole code. A transfer version 1 made by an older game carries older settings, which `migrate` upgrades like stored ones.
+- **Summary** for the dialog: `stars` the garage's `balance` (amendment 19), `record` the most `enemies` among the records (0 when there is none), `min` and `max` from `settings.range`.
 - **Transfer version 2** (T305, written since Phase 24; version 1 codes are still read): the same content as a JSON array, so a typical save gives a link of about 400 bytes instead of about 930 (a QR code a phone camera reads from another screen; target at most 800 bytes):
 
 ```ts
 type TransferV2 = [
   settings: Partial<Settings> & { version: number },   // only the values that differ from TRANSFER_V2_SETTINGS_BASE (the frozen version 6 defaults), object by object; version always
-  garage: [stars: number, color: string, flag: string, trail: string, hat: string],
+  garage: [stars: number, color: string, flag: string, trail: string, hat: string]           // garage payload 1, written before amendment 19
+        | [2, balance: number, totalEarned: number, owned: string[], color: string, flag: string, trail: string, hat: string],
+                                              // garage payload 2 (amendment 19); the first element tells the two apart: a 5-element array is payload 1
   records: Array<[key: string, enemies: number, ms: number, at: number]>,
   skills: Array<[key: string, step: number, attempts: number, independentCorrect: number, assisted: number, guesses: number, window: string]>,
                                               // skills with no progress at all are left out; a missing skill reads as empty
@@ -229,7 +279,7 @@ type TransferV2 = [
 ];
 ```
 
-  The code is `v2.<data>`. Writing and decoding both use `TRANSFER_V2_SETTINGS_BASE`, a frozen copy of the version 6 defaults in `src/core/transfer/transfer.ts`, never the live `defaultSettings()`, so changing a default later never changes what an existing code means (review T1). Amendment 18 adds `pointAfterFullHelp: true` to that base: a code written before it holds no such field and reads as `true`, which is also what the version 8 to 9 step gives, so its meaning does not change; a code with the setting on leaves the field out, and one with it off carries `false`. Decoding lays the differences over that base, then migrates from the settings version in the code and checks everything exactly like version 1. `src/core/transfer/transfer.test.ts` keeps two codes written on 2026-11-05 and checks that they still decode to the same save.
+  The code is `v2.<data>`. Writing and decoding both use `TRANSFER_V2_SETTINGS_BASE`, a frozen copy of the version 6 defaults in `src/core/transfer/transfer.ts`, never the live `defaultSettings()`, so changing a default later never changes what an existing code means (review T1). Amendment 19 adds `aimCross: { mode: 'always', level: 2 }` to that base in the same way: a code written before it reads as "Immer", and a code with the default leaves the field out. The garage part carries its own payload number: a 5-element array (payload 1, the star total) is read as a version 1 garage and migrated (FR-133); `[2, ...]` (payload 2) is read as a version 2 garage. The game writes payload 2. Amendment 18 adds `pointAfterFullHelp: true` to that base: a code written before it holds no such field and reads as `true`, which is also what the version 8 to 9 step gives, so its meaning does not change; a code with the setting on leaves the field out, and one with it off carries `false`. Decoding lays the differences over that base, then migrates from the settings version in the code and checks everything exactly like version 1. `src/core/transfer/transfer.test.ts` keeps two codes written on 2026-11-05 and checks that they still decode to the same save.
 - **Size limits when reading** (review R3): a code longer than `TRANSFER_MAX_CODE_LENGTH` = 8192 characters is refused without reading it, and unpacking stops and refuses the code as soon as the JSON passes `TRANSFER_MAX_JSON_BYTES` = 65536 bytes.
 
 ## Screen layout (not persisted, amendment 12)
