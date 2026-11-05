@@ -24,11 +24,13 @@ import { enemyShot } from '../ai/enemy';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
-import { buildAttempt } from './attempt';
+import { buildAttempt, rangeKeyOf } from './attempt';
+import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
 import { topShellEntryX, topShellPath } from './topShell';
 import {
   applyImpact,
   createRound,
+  type Difficulty,
   freePlayChallenge,
   moveTank,
   muzzle,
@@ -45,8 +47,6 @@ export interface BattleDeps {
   /** Base seed; each round derives its own seed from it. Defaults to the clock. */
   seed?: number;
   speaker?: Speaker;
-  /** Session id stored with each attempt (FR-035). Defaults to one derived from the clock at construction. */
-  sessionId?: string;
 }
 
 type Listener = (s: RoundState) => void;
@@ -58,7 +58,6 @@ export class BattleController {
   /** Settings snapshot for the current round (FR-049). */
   private settings: Settings;
   private state: BattleState;
-  private readonly sessionId: string;
   /** Clock time of the player's shot in flight, for the attempt's response time. */
   private firedAt = 0;
   private readonly listeners = new Set<Listener>();
@@ -82,7 +81,6 @@ export class BattleController {
     this.nextSide = createRng(deriveSeed(this.baseSeed, 0)).next() < 0.5 ? 'left' : 'right';
     // A placeholder round until startRound; it is never shown.
     this.state = { ...createRound(this.settings, this.baseSeed, this.nextSide), phase: 'roundOver' };
-    this.sessionId = deps.sessionId ?? `session-${Math.floor(deps.clock())}`;
   }
 
   /** Time played this round in milliseconds: stopped while paused and once the round is over (FR-084). */
@@ -131,8 +129,9 @@ export class BattleController {
     this.firedNumber = null;
     this.runningSince = this.deps.clock();
     // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
-    const round: BattleState = { ...createRound(this.settings, seed, side, mode), inputMethod: this.state.inputMethod };
-    this.set(mode === 'guided' ? startSearch(round, this.settings, this.deps.clock(), null) : round);
+    const difficulty = this.difficulty();
+    const round: BattleState = { ...createRound(this.settings, seed, side, mode, difficulty), inputMethod: this.state.inputMethod };
+    this.set(mode === 'guided' ? startSearch(round, this.settings, this.deps.clock(), null, difficulty) : round);
   }
 
   /**
@@ -315,7 +314,8 @@ export class BattleController {
       }
       if (guided) {
         this.set(destroyed);
-        this.set(startSearch(destroyed, this.settings, this.deps.clock(), destroyed.enemy.position));
+        // The difficulty is read after the attempt was recorded, so a step change applies to this next search.
+        this.set(startSearch(destroyed, this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
         return;
       }
       this.set(this.nextReadPosition(destroyed));
@@ -354,10 +354,19 @@ export class BattleController {
       answerableAt: s.answerableAt,
       answeredAt: this.firedAt,
       range: this.settings.range,
-      sessionId: this.sessionId,
       at: this.deps.clock(),
     });
-    this.deps.progress.record(attempt);
+    this.deps.progress.record(attempt, this.settings);
+  }
+
+  /**
+   * Skill steps and ruler level from the stored progress for the round's range (US7, FR-018, FR-037): with adaptive
+   * difficulty the stored steps and the ruler level of the positions skill, otherwise the parent settings.
+   */
+  private difficulty(): Difficulty {
+    const progress = this.deps.progress.getProgress();
+    const rangeKey = rangeKeyOf(this.settings.range);
+    return { skillSteps: skillStepsFor(progress, rangeKey, this.settings), rulerLevel: rulerLevelFor(progress, rangeKey, this.settings) };
   }
 
   pause(): void {
@@ -401,7 +410,7 @@ export class BattleController {
    * visible position (decision D12, FR-066, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
    */
   private nextReadPosition(s: BattleState): BattleState {
-    const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position);
+    const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position, this.difficulty().skillSteps);
     const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, this.settings, s.terrain), alive: true };
     return { ...s, phase: 'aiming', challenge, enemy };
   }

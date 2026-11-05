@@ -12,10 +12,15 @@ import { buildReadPosition, readPositionAnswers } from './readPosition';
 import { mainSkillOf, skillsOf } from './skills';
 import { buildSubtraction, subtractionAnswers } from './subtraction';
 import { validateChallenge } from './validate';
+import { clampStep } from '../progress/ladders';
 
 export interface GenerateInput {
   settings: Settings;
-  /** Current difficulty step per skill. */
+  /**
+   * Current difficulty step per skill: an index into the skill's ladder (progress/ladders.ts). The main skill's step
+   * narrows the choices: the lowest part of the range for the answer, the largest operand and crossing tens. The
+   * parent settings stay ceilings (FR-037). `LAST_STEPS` uses the parent settings unchanged.
+   */
   skillSteps: Record<Skill, number>;
   /** The challenge seed is derived from the round seed and the turn. */
   roundSeed: number;
@@ -67,14 +72,27 @@ function enabledKinds(settings: Settings): ChallengeKind[] {
 }
 
 /**
- * The difficulty step a builder works with. Until the ladders exist (Phase 21), every skill uses the
- * whole range and the parent settings.
+ * The difficulty step a builder works with: the main skill's ladder step clamped by the settings, with the round's
+ * ruler level (the ruler follows the positions skill only, FR-018, and the controller passes it).
  */
-function stepFor(settings: Settings, rulerLevel: RulerLevel): DifficultyStep {
-  return { maxNumberFraction: 1, allowCrossTens: settings.crossTens, rulerLevel };
+function stepFor(kind: ChallengeKind, input: GenerateInput): DifficultyStep {
+  const skill = mainSkillOf(kind);
+  return { ...clampStep(skill, input.skillSteps[skill] ?? 0, input.settings), rulerLevel: input.rulerLevel };
 }
 
-/** Whole numbers in the range at least minEnemyGap from the player. */
+/**
+ * A step's "smaller numbers first": the answers from the smallest allowed answer up to `maxNumberFraction` of the
+ * range width above it. Starting at the smallest allowed answer, not at range.min, keeps the same choice of numbers
+ * when the player stands at range.min and the enemy must keep its distance (FR-010a). `answers` is ascending.
+ */
+function withinStep(answers: number[], settings: Settings, step: DifficultyStep): number[] {
+  const lowest = answers[0];
+  if (step.maxNumberFraction >= 1 || lowest === undefined) return answers;
+  const highest = lowest + step.maxNumberFraction * (settings.range.max - settings.range.min);
+  return answers.filter((n) => n <= highest);
+}
+
+/** Whole numbers in the range at least minEnemyGap from the player, ascending. */
 function allowedAnswers(settings: Settings, playerPosition: number): number[] {
   const { min, max } = settings.range;
   const gap = minEnemyGap(min, max);
@@ -92,10 +110,11 @@ function tryKind(
 ): Challenge | null {
   const build = BUILDERS[kind];
   if (!build) return null;
-  const step = stepFor(input.settings, input.rulerLevel);
+  const step = stepFor(kind, input);
   const candidates = CANDIDATES[kind];
-  const allowed = new Set(answers);
-  const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : answers;
+  const inStep = withinStep(answers, input.settings, step);
+  const allowed = new Set(inStep);
+  const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
   if (pool.length === 0) return null;
   for (let i = 0; i < ANSWER_TRIES; i++) {
     const draft = build(rng.pick(pool), input.settings, step, rng, input.playerPosition);
@@ -143,9 +162,12 @@ export function generateChallenge(input: GenerateInput): Challenge {
     if (challenge) return challenge;
   }
 
-  // Fallback: "find N" always works for an allowed answer (FR-029).
-  for (const answer of [rng.pick(answers), ...answers]) {
-    const challenge = finish(numberLineBuilders.findNumber(answer, settings, stepFor(settings, input.rulerLevel), rng)!);
+  // Fallback: "find N" always works for an allowed answer (FR-029). Answers within the positions step come first; a
+  // very small range can leave none there, and then any allowed answer is used.
+  const findStep = stepFor('findNumber', input);
+  const inStep = withinStep(answers, settings, findStep);
+  for (const answer of [...(inStep.length > 0 ? [rng.pick(inStep), ...inStep] : [rng.pick(answers)]), ...answers]) {
+    const challenge = finish(numberLineBuilders.findNumber(answer, settings, findStep, rng)!);
     if (challenge) return challenge;
   }
   throw new Error(`generateChallenge: no allowed answer in ${settings.range.min} to ${settings.range.max}`);

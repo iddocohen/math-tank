@@ -1,0 +1,206 @@
+/**
+ * Parent progress page (FR-040, FR-087, contracts/ui-flows.md "Progress", US7 scenarios 4, 5 and 8). Opened from the
+ * parent menu, so it sits behind the same gate as the settings. It shows per skill and range the attempts, the
+ * independent correct answers and the answers with help in separate columns, the current difficulty step and
+ * mastered or developing; the skills that needed the most help; the sessions; and the personal bests per range,
+ * ruler starting level and round type as a plain list without ranking. "Fortschritt zurücksetzen" asks first and
+ * then clears the progress; the personal bests stay.
+ */
+import { useState } from 'react';
+import { formatTime } from '../core/records/records';
+import { parseRangeKey, summarize } from '../core/progress/summarize';
+import { emptyProgress } from '../core/storage/storage';
+import { t } from '../i18n';
+import type { Persistence } from './persistence';
+
+interface Props {
+  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress'>;
+  onClose: () => void;
+}
+
+const DATE = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+export function ProgressPage({ persistence, onClose }: Props) {
+  const m = t();
+  const P = m.progressPage;
+  const [progress, setProgress] = useState(() => persistence.progress());
+  const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState(false);
+  const summary = summarize(progress, persistence.records());
+
+  const rangeText = (rangeKey: string) => {
+    const r = parseRangeKey(rangeKey);
+    return r ? P.range(r.min, r.max) : rangeKey;
+  };
+
+  const reset = () => {
+    const empty = emptyProgress();
+    persistence.saveProgress(empty);
+    setProgress(empty);
+    setConfirming(false);
+    setDone(true);
+  };
+
+  return (
+    <div className="settings-page progress-page" role="dialog" aria-modal="true" aria-label={P.title} data-testid="progress-page">
+      <header className="settings-header">
+        <h2>{P.title}</h2>
+        <div className="settings-actions">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            {m.parent.close}
+          </button>
+        </div>
+      </header>
+
+      <div className="settings-notices" role="status" aria-live="polite">
+        {done && <p className="notice ok">{P.resetDone}</p>}
+      </div>
+
+      <section className="settings-group">
+        <h3>{P.skillsTitle}</h3>
+        {summary.skills.length === 0 ? (
+          <p>{P.empty}</p>
+        ) : (
+          <div className="progress-table-wrap">
+            <table className="progress-table" aria-label={P.skillsTitle}>
+              <thead>
+                <tr>
+                  <th scope="col">{P.columns.skill}</th>
+                  <th scope="col">{P.columns.range}</th>
+                  <th scope="col">{P.columns.attempts}</th>
+                  <th scope="col">{P.columns.independent}</th>
+                  <th scope="col">{P.columns.withHelp}</th>
+                  <th scope="col">{P.columns.step}</th>
+                  <th scope="col">{P.columns.status}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.skills.map((r) => (
+                  <tr key={`${r.skill}|${r.rangeKey}`} data-status={r.status}>
+                    <th scope="row">{P.skills[r.skill]}</th>
+                    <td data-col="range">{rangeText(r.rangeKey)}</td>
+                    <td data-col="attempts">{r.attempts}</td>
+                    <td data-col="independent">{r.independentCorrect}</td>
+                    <td data-col="withHelp">{r.withHelp}</td>
+                    <td data-col="step">{P.step(r.step + 1, r.stepCount)}</td>
+                    <td data-col="status">{P.status[r.status]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {summary.skills.length > 0 && (
+        <section className="settings-group">
+          <h3>{P.mostHelpTitle}</h3>
+          {summary.mostHelp.length === 0 ? (
+            <p>{P.noHelp}</p>
+          ) : (
+            <ol aria-label={P.mostHelpTitle}>
+              {summary.mostHelp.map((r) => (
+                <li key={`${r.skill}|${r.rangeKey}`}>{P.mostHelpLine(P.skills[r.skill], rangeText(r.rangeKey), r.helpNeeded)}</li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
+
+      {summary.sessions.length > 0 && (
+        <section className="settings-group">
+          <h3>{P.sessionsTitle}</h3>
+          <div className="progress-table-wrap">
+            <table className="progress-table" aria-label={P.sessionsTitle}>
+              <thead>
+                <tr>
+                  <th scope="col">{P.sessionColumns.date}</th>
+                  <th scope="col">{P.sessionColumns.attempts}</th>
+                  <th scope="col">{P.sessionColumns.independent}</th>
+                  <th scope="col">{P.sessionColumns.withHelp}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.sessions.map((s) => (
+                  <tr key={s.id}>
+                    <td data-col="date">{DATE.format(s.startedAt)}</td>
+                    <td data-col="attempts">{s.attempts}</td>
+                    <td data-col="independent">{s.independentCorrect}</td>
+                    <td data-col="withHelp">{s.withHelp}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className="settings-group">
+        <h3>{P.bestsTitle}</h3>
+        {summary.bests.length === 0 ? (
+          <p>{P.noBests}</p>
+        ) : (
+          <div className="progress-table-wrap">
+            <table className="progress-table" aria-label={P.bestsTitle}>
+              <thead>
+                <tr>
+                  <th scope="col">{P.bestColumns.range}</th>
+                  <th scope="col">{P.bestColumns.roundType}</th>
+                  <th scope="col">{P.bestColumns.level}</th>
+                  <th scope="col">{P.bestColumns.enemies}</th>
+                  <th scope="col">{P.bestColumns.time}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.bests.map((b) => (
+                  <tr key={`${b.min}-${b.max}|${b.rulerLevelStart}|${b.roundType}`}>
+                    <td data-col="range">{P.range(b.min, b.max)}</td>
+                    <td data-col="roundType">
+                      {b.roundType === 'enemyCount' ? m.settings.labels.roundTypeEnemyCount : m.settings.labels.roundTypeUntilHearts}
+                    </td>
+                    <td data-col="level">{P.level(b.rulerLevelStart)}</td>
+                    <td data-col="enemies">{b.enemies}</td>
+                    <td data-col="time">{formatTime(b.ms)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="settings-group">
+        {confirming ? (
+          <div className="progress-reset" role="alertdialog" aria-label={P.reset}>
+            <p>{P.resetConfirm}</p>
+            <div className="data-buttons">
+              <button type="button" className="primary-button" onClick={reset}>
+                {P.resetYes}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setConfirming(false)}>
+                {P.resetNo}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="data-buttons">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setDone(false);
+                setConfirming(true);
+              }}
+            >
+              {P.reset}
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

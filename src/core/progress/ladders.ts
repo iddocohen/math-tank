@@ -141,3 +141,22 @@ export function effectiveStep(p: Progress, skill: Skill, rangeKey: string, setti
 export function rulerLevelFor(p: Progress, rangeKey: string, settings: Settings): RulerLevel {
   return effectiveStep(p, 'positions', rangeKey, settings).rulerLevel ?? settings.rulerLevelStart;
 }
+
+/** The last index of every ladder: with it the generator uses the parent settings unchanged. */
+export const LAST_STEPS: Record<Skill, number> = Object.fromEntries(
+  Object.entries(ladders).map(([skill, ladder]) => [skill, ladder.length - 1]),
+) as Record<Skill, number>;
+
+/**
+ * The ladder index per skill the generator uses in a range (FR-037): the stored step with adaptive difficulty on
+ * (the easiest step for a skill not played yet), the top step the settings allow with it off.
+ */
+export function skillStepsFor(p: Progress, rangeKey: string, settings: Settings): Record<Skill, number> {
+  const out = {} as Record<Skill, number>;
+  for (const skill of Object.keys(ladders) as Skill[]) {
+    out[skill] = settings.adaptive
+      ? Math.min(p.skills[skillKey(skill, rangeKey)]?.step ?? 0, ladders[skill].length - 1)
+      : topStep(skill, settings);
+  }
+  return out;
+}

@@ -1,21 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { LAST_STEPS } from '../progress/ladders';
 import { createRng } from '../rng';
 import { defaultSettings } from '../settings/defaults';
-import type { ChallengeKind, DifficultyStep, Settings, Skill } from '../types';
+import type { ChallengeKind, DifficultyStep, Settings } from '../types';
 import { generateChallenge, type GenerateInput } from './generate';
 import { NUMBER_LINE_KINDS, numberLineBuilders } from './numberLine';
 
 const FULL_STEP: DifficultyStep = { maxNumberFraction: 1, allowCrossTens: true };
-const ZERO_STEPS: Record<Skill, number> = {
-  positions: 0,
-  countForward: 0,
-  countBackward: 0,
-  tens: 0,
-  crossTens: 0,
-  addition: 0,
-  subtraction: 0,
-  comparison: 0,
-};
+/** The top ladder step per skill: the generator follows the parent settings unchanged. */
+const PARENT_STEPS = LAST_STEPS;
 
 function settingsFor(min: number, max: number, patch: Partial<Settings> = {}): Settings {
   const s = defaultSettings();
@@ -32,7 +25,7 @@ function settingsFor(min: number, max: number, patch: Partial<Settings> = {}): S
 function input(settings: Settings, kind: ChallengeKind, roundSeed: number, playerPosition = settings.range.min): GenerateInput {
   return {
     settings,
-    skillSteps: ZERO_STEPS,
+    skillSteps: PARENT_STEPS,
     roundSeed,
     turn: 1,
     playerPosition,
@@ -197,7 +190,8 @@ describe('generateChallenge for number-line kinds (FR-021, FR-028)', () => {
     expect(typeof c.seed).toBe('number');
     expect(c.mainSkill).toBe('countForward');
     expect(c.skills[0]).toBe('countForward');
-    expect(c.difficultyStep).toBe(0);
+    // The main skill's step from skillSteps.
+    expect(c.difficultyStep).toBe(LAST_STEPS.countForward);
   });
 
   it('skips midpoint when the range has no two major ticks with a whole midpoint (range 0 to 10)', () => {

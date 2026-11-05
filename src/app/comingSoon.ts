@@ -46,8 +46,6 @@ export const COMING_SOON: readonly SettingField[] = [
   // Phase 23: spoken instructions. Music has no task yet.
   'sound.speech',
   'sound.music',
-  // Phases 21 and 22: adaptive difficulty.
-  'adaptive',
 ];
 
 export function isComingSoon(field: SettingField): boolean {

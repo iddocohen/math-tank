@@ -5,12 +5,12 @@
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
 import { deriveSeed } from '../rng';
-import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, TankState } from '../types';
+import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, Skill, TankState } from '../types';
 import { generateChallenge } from '../math/generate';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
 import { nextHelp } from './help';
-import { FIRST_STEPS, makeTank, moveTank } from './round';
+import { makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
 export const ANSWER_DELAY_MS = 1000;
@@ -33,12 +33,13 @@ export function searchChallenge(
   rulerLevel: RulerLevel,
   inputMethod: InputMethod | null,
   avoid: number | null = null,
+  skillSteps: Record<Skill, number> = parentDifficulty(settings).skillSteps,
 ): Challenge {
   let challenge: Challenge | null = null;
   for (let i = 0; i < NEW_POSITION_TRIES; i++) {
     challenge = generateChallenge({
       settings,
-      skillSteps: FIRST_STEPS,
+      skillSteps,
       roundSeed: i === 0 ? roundSeed : deriveSeed(roundSeed, 4, i),
       turn,
       playerPosition,
@@ -57,9 +58,18 @@ export function searchChallenge(
  *
  * Comparison (US4, FR-026, FR-027): every option stands on a tank at its own number, each labeled with it. The enemy
  * stands at the answer; the other options are decoys, which look the same. All of them are visible.
+ *
+ * `difficulty` (US7, FR-018, FR-037): the skill steps the challenge is built with and the ruler level of the search.
  */
-export function startSearch(s: BattleState, settings: Settings, now: number, avoid: number | null): BattleState {
-  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.inputMethod, avoid);
+export function startSearch(
+  s: BattleState,
+  settings: Settings,
+  now: number,
+  avoid: number | null,
+  difficulty: Difficulty = { ...parentDifficulty(settings), rulerLevel: s.rulerLevel },
+): BattleState {
+  const rulerLevel = difficulty.rulerLevel;
+  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps);
   const moved: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
   // Only a comparison enemy carries a number plate.
   delete moved.label;
@@ -71,6 +81,7 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
   return {
     ...s,
     phase: 'challenge',
+    rulerLevel,
     challenge,
     enemy,
     decoys,

@@ -10,6 +10,7 @@ import { generateChallenge } from '../math/generate';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
 import { enemyHitsPlayer, LIVES, shotKind } from './hitRule';
 import { emptyEntry } from './entry';
+import { LAST_STEPS } from '../progress/ladders';
 
 /** Logical world size (research R5). */
 export const WORLD_WIDTH = 1600;
@@ -43,17 +44,19 @@ export function makeTank(id: string, kind: TankState['kind'], position: number, 
   return { id, kind, position, x, y: settleY(terrain, x), alive: true };
 }
 
-/** Until the difficulty ladders exist (Phase 21), every skill is on step 0. */
-export const FIRST_STEPS: Record<Skill, number> = {
-  positions: 0,
-  countForward: 0,
-  countBackward: 0,
-  tens: 0,
-  crossTens: 0,
-  addition: 0,
-  subtraction: 0,
-  comparison: 0,
-};
+/**
+ * What the generator gets from the progress (FR-018, FR-037): the ladder step per skill and the ruler level, which
+ * follows the positions skill only. The controller computes it before each search from the stored progress.
+ */
+export interface Difficulty {
+  skillSteps: Record<Skill, number>;
+  rulerLevel: RulerLevel;
+}
+
+/** The parent settings unchanged: every skill on its top step and the starting ruler level (adaptive off). */
+export function parentDifficulty(settings: Settings): Difficulty {
+  return { skillSteps: LAST_STEPS, rulerLevel: settings.rulerLevelStart };
+}
 
 /** Tries for a new enemy number after a hit before the same number is accepted again. */
 const MOVE_TRIES = 8;
@@ -69,12 +72,13 @@ export function freePlayChallenge(
   playerPosition: number,
   rulerLevel: RulerLevel,
   avoid: number | null = null,
+  skillSteps: Record<Skill, number> = LAST_STEPS,
 ): Challenge {
   let challenge: Challenge | null = null;
   for (let i = 0; i < MOVE_TRIES; i++) {
     challenge = generateChallenge({
       settings,
-      skillSteps: FIRST_STEPS,
+      skillSteps,
       roundSeed: i === 0 ? roundSeed : deriveSeed(roundSeed, 3, i),
       turn,
       playerPosition,
@@ -91,13 +95,19 @@ export function freePlayChallenge(
  * the enemy at a seeded position at least minEnemyGap away. Free play starts in 'aiming' with the enemy visible
  * and standing at the answer of a "read the ruler" challenge.
  */
-export function createRound(settings: Settings, seed: number, side: 'left' | 'right', mode: RoundState['mode'] = 'freePlay'): BattleState {
+export function createRound(
+  settings: Settings,
+  seed: number,
+  side: 'left' | 'right',
+  mode: RoundState['mode'] = 'freePlay',
+  difficulty: Difficulty = parentDifficulty(settings),
+): BattleState {
   const { min, max } = settings.range;
   const terrain = generateTerrain(deriveSeed(seed, 0), WORLD_WIDTH, WORLD_HEIGHT);
   const playerPosition = side === 'left' ? min : max;
-  // The parent's starting level (FR-018); following the positions skill comes with the difficulty ladders.
-  const rulerLevel = settings.rulerLevelStart;
-  const challenge = mode === 'freePlay' ? freePlayChallenge(settings, seed, 0, playerPosition, rulerLevel) : null;
+  // The parent's starting level, or with adaptive difficulty the level of the positions skill (FR-018).
+  const rulerLevel = difficulty.rulerLevel;
+  const challenge = mode === 'freePlay' ? freePlayChallenge(settings, seed, 0, playerPosition, rulerLevel, null, difficulty.skillSteps) : null;
   const enemyPosition = challenge ? challenge.answer : enemyPositionFor(settings, side, createRng(deriveSeed(seed, 1)), null);
 
   return {

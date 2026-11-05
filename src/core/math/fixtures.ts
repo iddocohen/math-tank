@@ -6,10 +6,20 @@ import { deriveSeed } from '../rng';
 import { defaultSettings } from '../settings/defaults';
 import type { Settings } from '../types';
 import type { GenerateInput } from './generate';
+import { skillStepsFor } from '../progress/ladders';
+import { emptyProgress } from '../storage/storage';
 
-/** Only subtraction on, range 0 to 100, the other settings at their defaults. */
+/**
+ * Only subtraction on, range 0 to 100, adaptive difficulty off (the challenge follows the parent settings, not the
+ * easiest ladder step of a new player), the other settings at their defaults.
+ */
 function onlySubtraction(): Settings {
-  return { ...defaultSettings(), challengeTypes: { numberLine: false, addition: false, subtraction: true, comparison: false } };
+  return { ...defaultSettings(), adaptive: false, challengeTypes: { numberLine: false, addition: false, subtraction: true, comparison: false } };
+}
+
+/** The skill steps BattleController passes with adaptive difficulty off: the top step per skill. */
+function parentSteps(settings: Settings): GenerateInput['skillSteps'] {
+  return skillStepsFor(emptyProgress(), `${settings.range.min}-${settings.range.max}`, settings);
 }
 
 const SEED_43_MINUS_7 = 1033;
@@ -24,7 +34,7 @@ export const SUBTRACTION_43_MINUS_7: {
   // As BattleController does for its first round: round seed from the base seed and round 1, turn 0, the ruler
   // level from rulerLevelStart, keyboard input before the first input (FR-076).
   input: {
-    skillSteps: { positions: 0, countForward: 0, countBackward: 0, tens: 0, crossTens: 0, addition: 0, subtraction: 0, comparison: 0 },
+    skillSteps: parentSteps(onlySubtraction()),
     roundSeed: deriveSeed(SEED_43_MINUS_7, 1),
     turn: 0,
     // The base seed 1033 puts the player on the right, at range.max.
@@ -34,9 +44,9 @@ export const SUBTRACTION_43_MINUS_7: {
   },
 };
 
-/** Only comparison on, range 0 to 100, the other settings at their defaults. */
+/** Only comparison on, range 0 to 100, adaptive difficulty off, the other settings at their defaults. */
 function onlyComparison(): Settings {
-  return { ...defaultSettings(), challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
+  return { ...defaultSettings(), adaptive: false, challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
 }
 
 const SEED_47_74 = 65327;
@@ -50,7 +60,7 @@ export const COMPARISON_47_74: {
   seed: SEED_47_74,
   settings: onlyComparison(),
   input: {
-    skillSteps: { positions: 0, countForward: 0, countBackward: 0, tens: 0, crossTens: 0, addition: 0, subtraction: 0, comparison: 0 },
+    skillSteps: parentSteps(onlyComparison()),
     roundSeed: deriveSeed(SEED_47_74, 1),
     turn: 0,
     // The base seed 65327 puts the player on the right, at range.max.

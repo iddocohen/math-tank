@@ -7,7 +7,7 @@
  * The first case writes stored settings directly and checks that a new context plays with them; it covers
  * src/app/persistence.ts. The second case changes the settings through the parent gate and the settings page
  * (Phase 13, T116), including the amendment 06 round type and number of enemies. The last cases check the gate itself: a short tap does nothing, and opening it in a battle
- * pauses the game until the parent closes it (FR-045).
+ * pauses the game until the parent closes it (FR-045); "Fortschritt" lists a finished search after a reload (T133).
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { expect, silenceAudio, test } from './fixtures';
@@ -138,13 +138,39 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   });
 
-  test('the parent menu shows "Fortschritt" disabled with "kommt bald"', async ({ page }) => {
-    await page.goto('/');
-    await pressGear(page, 2_300);
-    const progress = page.getByRole('button', { name: new RegExp(m.parent.progress) });
-    await expect(progress).toBeDisabled();
-    await expect(progress).toContainText(m.parent.comingSoon);
+  test('"Fortschritt" shows the saved attempt of a finished search, also after a reload (FR-040, FR-048, T133)', async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.goto('/?seed=1');
+    await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+    await page.keyboard.press('Enter');
+    const overlay = page.locator('[data-phase]');
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+    const enemy = (await overlay.getAttribute('data-enemy-number'))!;
+    // More than 1.5 s after answers became possible, so the hit is not a guess (FR-038).
+    await page.waitForTimeout(2_800);
+    for (const ch of enemy) await page.keyboard.press(ch);
+    await page.keyboard.press('Enter');
+    await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+
+    const P = m.progressPage;
+    const openProgress = async () => {
+      await pressGear(page, 2_300);
+      const button = page.getByRole('button', { name: m.parent.progress, exact: true });
+      await expect(button).toBeEnabled();
+      await button.click();
+      await expect(page.getByTestId('progress-page')).toBeVisible();
+    };
+    const sessionAttempts = page.getByRole('table', { name: P.sessionsTitle }).locator('tbody [data-col="attempts"]');
+    await openProgress();
+    await expect(page.getByRole('table', { name: P.skillsTitle }).locator('tbody tr').first()).toBeVisible();
+    await expect(sessionAttempts).toHaveText(['1']);
     await page.getByRole('button', { name: m.parent.close, exact: true }).click();
-    await expect(page.getByRole('dialog', { name: m.parent.menu })).toHaveCount(0);
+    await expect(page.getByTestId('progress-page')).toHaveCount(0);
+    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+
+    // Saved in the browser: after a reload the page still lists the attempt.
+    await page.reload();
+    await openProgress();
+    await expect(sessionAttempts).toHaveText(['1']);
   });
 });

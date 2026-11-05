@@ -3,10 +3,10 @@
  * with mouse or touch. A short tap or any key does nothing: the gear is out of the tab order, ignores keys and has
  * no click handler. While pressed, a ring around the gear fills up.
  *
- * The menu offers "Einstellungen" and "Fortschritt". "Fortschritt" stays disabled with "kommt bald" until Phase 22
- * builds the progress page (decision D17). `onOpen` runs when the menu opens (the app pauses the game), `onClose`
- * when it is closed with "Schließen" (the app resumes), and `onSettings` when the parent picks "Einstellungen"
- * (the menu closes and the app shows the settings page, which resumes the game when it closes).
+ * The menu offers "Einstellungen" and "Fortschritt" (FR-040). `onOpen` runs when the menu opens (the app pauses the
+ * game), `onClose` when it is closed with "Schließen" (the app resumes), `onSettings` when the parent picks
+ * "Einstellungen" and `onProgress` when the parent picks "Fortschritt" (the menu closes and the app shows that page,
+ * which resumes the game when it closes).
  */
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
@@ -20,9 +20,10 @@ interface Props {
   onOpen: () => void;
   onClose: () => void;
   onSettings: () => void;
+  onProgress: () => void;
 }
 
-export function ParentGate({ onOpen, onClose, onSettings }: Props) {
+export function ParentGate({ onOpen, onClose, onSettings, onProgress }: Props) {
   const m = t();
   const [progress, setProgress] = useState(0);
   const [open, setOpen] = useState(false);
@@ -65,6 +66,11 @@ export function ParentGate({ onOpen, onClose, onSettings }: Props) {
     onSettings();
   };
 
+  const progressPage = () => {
+    setOpen(false);
+    onProgress();
+  };
+
   return (
     <>
       <button
@@ -95,8 +101,8 @@ export function ParentGate({ onOpen, onClose, onSettings }: Props) {
             <button type="button" className="primary-button" onClick={settings}>
               {m.parent.settings}
             </button>
-            <button type="button" className="secondary-button" disabled>
-              {m.parent.progress} <span className="coming-soon">{m.parent.comingSoon}</span>
+            <button type="button" className="secondary-button" onClick={progressPage}>
+              {m.parent.progress}
             </button>
             <button type="button" className="secondary-button" onClick={close}>
               {m.parent.close}

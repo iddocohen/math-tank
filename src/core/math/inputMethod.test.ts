@@ -4,24 +4,17 @@
  */
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
-import type { ChallengeKind, Settings, Skill } from '../types';
+import type { ChallengeKind, Settings } from '../types';
 import { generateChallenge, type GenerateInput } from './generate';
 import { validateChallenge } from './validate';
+import { LAST_STEPS } from '../progress/ladders';
 
 const SEEDS = 2000;
-const ZERO_STEPS: Record<Skill, number> = {
-  positions: 0,
-  countForward: 0,
-  countBackward: 0,
-  tens: 0,
-  crossTens: 0,
-  addition: 0,
-  subtraction: 0,
-  comparison: 0,
-};
+/** The top ladder step per skill: the generator follows the parent settings unchanged. */
+const PARENT_STEPS = LAST_STEPS;
 
 function input(seed: number, patch: Partial<GenerateInput> = {}, settings: Settings = defaultSettings()): GenerateInput {
-  return { settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: seed % 7, playerPosition: settings.range.min, rulerLevel: 1, ...patch };
+  return { settings, skillSteps: PARENT_STEPS, roundSeed: seed, turn: seed % 7, playerPosition: settings.range.min, rulerLevel: 1, ...patch };
 }
 
 function kinds(patch: Partial<GenerateInput>, settings?: Settings): Map<ChallengeKind, number> {

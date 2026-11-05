@@ -742,3 +742,38 @@ input:focus-visible {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   font-weight: 700;
 }
+
+/* Progress page (FR-040): the settings page frame with tables that scroll sideways on a narrow screen. */
+.progress-page .settings-group {
+  margin-bottom: 16px;
+}
+
+.progress-page h3 {
+  margin: 0;
+}
+
+.progress-table-wrap {
+  overflow-x: auto;
+}
+
+.progress-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-table th,
+.progress-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgb(255 255 255 / 0.15);
+  white-space: nowrap;
+}
+
+.progress-table thead th {
+  font-weight: 700;
+}
+
+.progress-table tbody th {
+  font-weight: 600;
+}

@@ -7,7 +7,7 @@
  * receives focus on load and on every screen change, so typing works without a click; there is no text field.
  *
  * Parent gate (FR-045): the gear on the start screen and in the battle opens the parent menu after a 2-second press;
- * in a battle this pauses the game, and closing the menu or the settings page resumes it. While a parent screen is
+ * in a battle this pauses the game, and closing the menu, the settings page or the progress page resumes it. While a parent screen is
  * open, keys do nothing in the game. Saved settings go to `controller.updateSettings` and apply from the next round.
  *
  * Amendment 06 (FR-084, FR-086): when a round ends, its result (destroyed enemies and time) is compared once with
@@ -21,13 +21,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
 import { BattleController } from '../core/battle/controller';
-import { memoryProgressStore } from '../core/battle/ports';
+import { createProgressStore } from '../core/storage/progressStore';
 import { createGame } from '../game/createGame';
 import { BattleOverlay } from './BattleOverlay';
 import { ParentGate } from './ParentGate';
 import { RoundEnd, type RoundRecord } from './RoundEnd';
 import { recordKey } from '../core/records/records';
 import { SettingsPage } from './SettingsPage';
+import { ProgressPage } from './ProgressPage';
 import { keyStartMode, StartScreen, type StartMode } from './StartScreen';
 import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
@@ -36,8 +37,8 @@ import { applyBattleAction, useKeyboard } from './useKeyboard';
 
 type Screen = 'start' | 'battle';
 
-/** The parent screens over the game (FR-045): the parent menu and the settings page. */
-type ParentView = 'closed' | 'menu' | 'settings';
+/** The parent screens over the game (FR-045): the parent menu, the settings page and the progress page (FR-040). */
+type ParentView = 'closed' | 'menu' | 'settings' | 'progress';
 
 /** The `seed` query parameter as a non-negative integer, or undefined. */
 export function seedFromUrl(search: string): number | undefined {
@@ -53,8 +54,8 @@ function createApp() {
   const settings = persistence.settings();
   const controller = new BattleController({
     settings,
-    // Attempts go to an in-memory copy of the stored progress; saving them arrives with the progress phases.
-    progress: memoryProgressStore(persistence.progress()),
+    // Each attempt is recorded and saved at once, between turns (FR-035, FR-048).
+    progress: createProgressStore({ load: () => persistence.progress(), save: (p) => void persistence.saveProgress(p) }),
     clock: () => Date.now(),
     seed: seedFromUrl(window.location.search),
   });
@@ -133,7 +134,9 @@ export function App() {
     if (pausedByGate.current) controller.resume();
     pausedByGate.current = false;
   }, [controller]);
-  const gear = <ParentGate onOpen={openParent} onClose={closeParent} onSettings={() => setParent('settings')} />;
+  const gear = (
+    <ParentGate onOpen={openParent} onClose={closeParent} onSettings={() => setParent('settings')} onProgress={() => setParent('progress')} />
+  );
 
   // While a parent screen is open, keys do nothing in the game (FR-045, T115).
   const keyScreen = parent === 'closed' ? keyScreenFor(screen, state.phase) : null;
@@ -177,6 +180,7 @@ export function App() {
       {parent === 'settings' && (
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
       )}
+      {parent === 'progress' && <ProgressPage persistence={persistence} onClose={closeParent} />}
     </div>
   );
 }

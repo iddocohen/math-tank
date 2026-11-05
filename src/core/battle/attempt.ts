@@ -1,9 +1,11 @@
 /**
- * The record of one finished guided search (FR-035, FR-075, decision D5). Built when the search ends with a hit,
- * including a shot at the shown solution. Until Phase 22 brings classifyAttempt, `independent` is the exact number on
- * the first shot without help, and `guess` is always false.
+ * The record of one finished guided search (FR-035, FR-038, FR-075). Built when the search ends with a hit, including
+ * a shot at the shown solution. `independent` and `guess` come from classifyAttempt (replacing the interim rule of
+ * decision D5). The progress store adds the session.
  */
-import type { Attempt, Challenge, RoundState } from '../types';
+import type { Challenge, RoundState } from '../types';
+import { classifyAttempt } from '../progress/classify';
+import type { NewAttempt } from './ports';
 import { SOLUTION_HELP_LEVEL } from './guided';
 
 export interface AttemptInput {
@@ -14,7 +16,6 @@ export interface AttemptInput {
   /** Clock time of the shot that ended the search. */
   answeredAt: number;
   range: { min: number; max: number };
-  sessionId: string;
   /** Epoch milliseconds of the record. */
   at: number;
 }
@@ -23,10 +24,20 @@ export function rangeKeyOf(range: { min: number; max: number }): string {
   return `${range.min}-${range.max}`;
 }
 
-export function buildAttempt(input: AttemptInput): Attempt {
+export function buildAttempt(input: AttemptInput): NewAttempt {
   const { challenge, help } = input;
   // A shot at the shown solution ends the search, but the child did not find the answer.
   const solved = help.level < SOLUTION_HELP_LEVEL;
+  const responseMs = Math.max(0, input.answeredAt - input.answerableAt);
+  const { independent, guess } = classifyAttempt({
+    solved,
+    exact: true,
+    helpLevel: help.level,
+    wrongAnswers: help.wrongAnswers,
+    responseMs,
+    wrongAnswerTimes: help.wrongAnswerTimes,
+    submittedAt: input.answeredAt,
+  });
   return {
     challengeId: challenge.id,
     seed: challenge.seed,
@@ -35,13 +46,12 @@ export function buildAttempt(input: AttemptInput): Attempt {
     rangeKey: rangeKeyOf(input.range),
     difficultyStep: challenge.difficultyStep,
     solved,
-    independent: solved && help.level === 0 && help.wrongAnswers === 0,
+    independent,
     exact: true,
     helpLevel: help.level,
     wrongAnswers: help.wrongAnswers,
-    responseMs: Math.max(0, input.answeredAt - input.answerableAt),
-    guess: false,
-    sessionId: input.sessionId,
+    responseMs,
+    guess,
     at: input.at,
   };
 }

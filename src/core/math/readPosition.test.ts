@@ -1,22 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { LAST_STEPS } from '../progress/ladders';
 import { ticksFor, type RulerLevel } from '../numberline/ticks';
 import { defaultSettings } from '../settings/defaults';
 import { withRange } from '../settings/validate';
-import type { Settings, Skill } from '../types';
+import type { Settings } from '../types';
 import { minEnemyGap } from './gaps';
 import { generateChallenge } from './generate';
 import { checkAnswer, validateChallenge } from './validate';
 
-const ZERO_STEPS: Record<Skill, number> = {
-  positions: 0,
-  countForward: 0,
-  countBackward: 0,
-  tens: 0,
-  crossTens: 0,
-  addition: 0,
-  subtraction: 0,
-  comparison: 0,
-};
+/** The top ladder step per skill: the generator follows the parent settings unchanged. */
+const PARENT_STEPS = LAST_STEPS;
 const LEVELS: RulerLevel[] = [1, 2, 3, 4, 5];
 
 function rangeSettings(min: number, max: number): Settings {
@@ -32,7 +25,7 @@ function rangeSettings(min: number, max: number): Settings {
 function readPosition(settings: Settings, rulerLevel: RulerLevel, roundSeed: number, playerPosition: number) {
   return generateChallenge({
     settings,
-    skillSteps: ZERO_STEPS,
+    skillSteps: PARENT_STEPS,
     roundSeed,
     turn: 1,
     playerPosition,
@@ -132,7 +125,7 @@ describe('readPosition challenge (FR-067, FR-068, US9 scenario 5)', () => {
     const settings = rangeSettings(0, 100);
     const kinds = new Set<string>();
     for (let seed = 0; seed < 1_000; seed++) {
-      kinds.add(generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition: 0, rulerLevel: 1 }).kind);
+      kinds.add(generateChallenge({ settings, skillSteps: PARENT_STEPS, roundSeed: seed, turn: 1, playerPosition: 0, rulerLevel: 1 }).kind);
     }
     expect(kinds.has('readPosition')).toBe(true);
   });

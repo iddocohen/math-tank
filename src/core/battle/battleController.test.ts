@@ -7,7 +7,10 @@ import { applyImpact, createRound, muzzle, tankCenter, TANK_HIT_RADIUS, WORLD_HE
 import { TOP_SHELL_SPREAD } from './topShell';
 import { NEAR_MISS_MAX, NEAR_MISS_MIN, planEnemyShot } from '../ai/enemy';
 import { defaultSettings } from '../settings/defaults';
-import type { BattleState, RoundState, Settings, TankState } from '../types';
+import type { BattleState, Progress, RoundState, Settings, Skill, TankState } from '../types';
+import { emptyProgress } from '../storage/storage';
+import { skillKey } from '../progress/ladders';
+import { crossesMultiple } from '../math/skills';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { settleY } from '../physics/terrain';
@@ -18,8 +21,9 @@ import { stepPath } from '../math/stepPath';
 import { directionTo, nearestMajorTick, nextHelp } from './help';
 import { encouragements, messageText } from '../../i18n';
 
+/** Adaptive difficulty off, so challenges follow the parent settings; the adaptive tests turn it on (T129). */
 function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
-  return { ...defaultSettings(), freePlay: true, ...overrides };
+  return { ...defaultSettings(), adaptive: false, freePlay: true, ...overrides };
 }
 
 /** The enemy with its number; it is always visible (amendment 07). */
@@ -1038,7 +1042,7 @@ function guidedController(overrides: Partial<Settings> = {}, seed = 1234) {
   let now = 1_000;
   const clock = () => now;
   const progress = memoryProgressStore();
-  const controller = new BattleController({ settings: { ...defaultSettings(), ...overrides }, progress, clock, seed, sessionId: 'test-session' });
+  const controller = new BattleController({ settings: { ...defaultSettings(), adaptive: false, ...overrides }, progress, clock, seed });
   return { controller, progress, advance: (ms: number) => (now += ms), now: () => now };
 }
 
@@ -1331,7 +1335,7 @@ describe('BattleController guided misses, help and round end (US2, T061)', () =>
   });
 });
 
-describe('BattleController attempts (US2, T063, decision D5)', () => {
+describe('BattleController attempts (US2, T063; classifyAttempt since T130)', () => {
   it('records one attempt per finished search', () => {
     const g = guidedController({ noDamage: true });
     g.controller.startRound('guided');
@@ -1342,15 +1346,17 @@ describe('BattleController attempts (US2, T063, decision D5)', () => {
       answer(g, missNumber(s));
       answer(g, s.challenge!.answer);
     }
-    const attempts = g.progress.getProgress().attempts;
+    const { attempts, sessions } = g.progress.getProgress();
     expect(attempts.map((a) => a.challengeId)).toEqual(challenges);
-    expect(attempts.every((a) => a.sessionId === 'test-session' && a.rangeKey === '0-100' && a.exact && !a.guess)).toBe(true);
+    expect(sessions).toHaveLength(1);
+    expect(attempts.every((a) => a.sessionId === sessions[0]!.id && a.rangeKey === '0-100' && a.exact)).toBe(true);
   });
 
   it('records nothing while a shot is in flight; a hit on the first shot without help is independent', () => {
     const g = guidedRoundWhere(positionSearch);
     const s0 = g.controller.getState();
-    g.advance(1_500);
+    // 1.6 s after answers became possible: not a guess (FR-038).
+    g.advance(2_600);
     g.controller.fireAt(s0.challenge!.answer);
     expect(g.progress.getProgress().attempts).toHaveLength(0);
     g.controller.shotAnimationDone();
@@ -1366,7 +1372,7 @@ describe('BattleController attempts (US2, T063, decision D5)', () => {
         exact: true,
         helpLevel: 0,
         wrongAnswers: 0,
-        responseMs: 500,
+        responseMs: 1_600,
         guess: false,
       }),
     ]);
@@ -1967,3 +1973,147 @@ describe('BattleController help escalation (US5, T095)', () => {
 function s1RoundSettings(g: Guided): Settings {
   return g.controller.getRoundSettings() as Settings;
 }
+
+function adaptiveController(overrides: Partial<Settings> = {}, initial: Progress = emptyProgress(), seed = 1234) {
+  let now = 1_000;
+  const clock = () => now;
+  const progress = memoryProgressStore(initial);
+  const controller = new BattleController({ settings: { ...defaultSettings(), adaptive: true, noDamage: true, roundType: 'enemyCount', roundLength: 20, ...overrides }, progress, clock, seed });
+  return { controller, progress, advance: (ms: number) => (now += ms), now: () => now };
+}
+
+/** Progress with the given skill steps in the range 0 to 100. */
+function progressWithSteps(steps: Partial<Record<Skill, number>>): Progress {
+  const p = emptyProgress();
+  for (const [skill, step] of Object.entries(steps)) {
+    p.skills[skillKey(skill as Skill, '0-100')] = { step: step!, recent: [], masteryWindow: [], guesses: 0, attempts: 0, independentCorrect: 0, assisted: 0 };
+  }
+  return p;
+}
+
+/** Waits 2.5 s after answers become possible (not a guess) and fires at the answer. */
+function answerCalmly(g: { controller: BattleController; advance: (ms: number) => number }): void {
+  g.advance(1_000 + 2_500);
+  g.controller.fireAt(g.controller.getState().challenge!.answer);
+  g.controller.shotAnimationDone();
+}
+
+const onlyNumberLine = { challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } };
+const onlyAddition = { challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } };
+
+describe('BattleController adaptive difficulty (US7, T129)', () => {
+  it('with adaptive on and every skill at step 0, challenges use the step 0 limits (FR-037)', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = adaptiveController(onlyNumberLine, emptyProgress(), seed);
+      g.controller.startRound('guided');
+      const s = g.controller.getState();
+      const c = s.challenge!;
+      // Step 0 of the number-line ladders: a fifth of the range, from the smallest answer allowed at minEnemyGap.
+      const lowest = s.player.position === 0 ? 15 : 0;
+      expect(c.answer, `seed ${seed} ${c.kind}`).toBeLessThanOrEqual(lowest + 20);
+      expect(c.difficultyStep).toBe(0);
+    }
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = adaptiveController(onlyAddition, emptyProgress(), seed);
+      g.controller.startRound('guided');
+      const s = g.controller.getState();
+      const c = s.challenge!;
+      // Addition step 0: half the range, added numbers up to 5, no crossing of a ten.
+      expect(c.kind).toBe('addition');
+      expect(c.answer, `seed ${seed}`).toBeLessThanOrEqual((s.player.position === 0 ? 15 : 0) + 50);
+      expect(c.operands.slice(1).every((k) => k >= 1 && k <= 5), `seed ${seed} ${c.operands}`).toBe(true);
+      const path = c.steps ?? [c.operands[0]!, c.answer];
+      expect(path.some((n, i) => i > 0 && crossesMultiple(path[i - 1]!, n, 10)), `seed ${seed} ${path}`).toBe(false);
+    }
+  });
+
+  it('with adaptive off, challenges use the parent settings as before (FR-037, US7 scenario 6)', () => {
+    const answers = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = adaptiveController({ ...onlyNumberLine, adaptive: false }, emptyProgress(), seed);
+      g.controller.startRound('guided');
+      answers.add(g.controller.getState().challenge!.answer);
+    }
+    expect([...answers].some((n) => n > 50)).toBe(true);
+  });
+
+  it('after 5 independent attempts in a skill the next challenge in that skill uses step 1 (FR-037, US7 scenario 1)', () => {
+    const g = adaptiveController({ ...onlyAddition, roundLength: 20 });
+    g.controller.startRound('guided');
+    for (let i = 0; i < 4; i++) {
+      answerCalmly(g);
+      expect(g.controller.getState().challenge!.difficultyStep, `search ${i + 2}`).toBe(0);
+    }
+    answerCalmly(g);
+    expect(g.progress.getProgress().skills[skillKey('addition', '0-100')]!.step).toBe(1);
+    const c = g.controller.getState().challenge!;
+    expect(c.difficultyStep).toBe(1);
+    expect(g.progress.getProgress().attempts.every((a) => a.independent && !a.guess)).toBe(true);
+  });
+
+  it('classifies attempts with classifyAttempt: a hit 1 s after answerable is stored as a guess (FR-038)', () => {
+    const g = adaptiveController(onlyAddition);
+    g.controller.startRound('guided');
+    g.advance(1_000 + 1_000);
+    g.controller.fireAt(g.controller.getState().challenge!.answer);
+    g.controller.shotAnimationDone();
+    const [a] = g.progress.getProgress().attempts;
+    expect(a).toMatchObject({ solved: true, independent: true, guess: true, responseMs: 1_000 });
+    // A guess is counted, but does not enter the adaptive window.
+    expect(g.progress.getProgress().skills[skillKey('addition', '0-100')]).toMatchObject({ attempts: 1, guesses: 1, recent: [] });
+  });
+
+  it('a shot at the shown solution after 3 quick misses is stored as unsolved, not as a guess (FR-038)', () => {
+    const g = adaptiveController(onlyAddition);
+    g.controller.startRound('guided');
+    const s0 = g.controller.getState();
+    g.advance(1_000);
+    for (let i = 0; i < 3; i++) {
+      g.advance(1_000);
+      g.controller.fireAt(missNumber(s0));
+      g.controller.shotAnimationDone();
+      g.controller.enemyShotAnimationDone();
+    }
+    g.advance(1_000);
+    // After 3 misses the solution is shown: fire at it.
+    g.controller.fireAt(s0.challenge!.answer);
+    g.controller.shotAnimationDone();
+    const [a] = g.progress.getProgress().attempts;
+    expect(a).toMatchObject({ solved: false, independent: false, guess: false, wrongAnswers: 3 });
+  });
+
+  it('records attempts in the current session of the progress store (start or continue the session)', () => {
+    const g = adaptiveController(onlyAddition);
+    g.controller.startRound('guided');
+    answerCalmly(g);
+    answerCalmly(g);
+    const p = g.progress.getProgress();
+    expect(p.sessions).toHaveLength(1);
+    expect(p.sessions[0]).toMatchObject({ attempts: 2, independentCorrect: 2 });
+    expect(p.attempts.every((a) => a.sessionId === p.sessions[0]!.id)).toBe(true);
+  });
+
+  it('state.rulerLevel follows the positions skill only (FR-018, AC-09)', () => {
+    // Positions step 3 is ruler level 2; a high addition step changes nothing.
+    const g = adaptiveController({ rulerLevelStart: 1, rulerLevelMax: 5 }, progressWithSteps({ positions: 3, addition: 3, comparison: 2 }));
+    g.controller.startRound('guided');
+    expect(g.controller.getState().rulerLevel).toBe(2);
+    g.controller.startRound('freePlay');
+    expect(g.controller.getState().rulerLevel).toBe(2);
+    const h = adaptiveController({ rulerLevelStart: 1, rulerLevelMax: 5 }, progressWithSteps({ addition: 3, comparison: 2 }));
+    h.controller.startRound('guided');
+    expect(h.controller.getState().rulerLevel).toBe(1);
+  });
+
+  it('state.rulerLevel stays within the parent limits; with adaptive off it is the starting level (FR-018)', () => {
+    const top = adaptiveController({ rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 6 }));
+    top.controller.startRound('guided');
+    expect(top.controller.getState().rulerLevel).toBe(4);
+    const bottom = adaptiveController({ rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 0 }));
+    bottom.controller.startRound('guided');
+    expect(bottom.controller.getState().rulerLevel).toBe(2);
+    const off = adaptiveController({ adaptive: false, rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 6 }));
+    off.controller.startRound('guided');
+    expect(off.controller.getState().rulerLevel).toBe(2);
+  });
+});

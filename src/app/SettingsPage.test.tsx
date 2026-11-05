@@ -255,10 +255,11 @@ describe('SettingsPage', () => {
     }
     // Comparison works since Phase 18; the help switches and the time limit since Phase 20.
     expect(field(L.comparison).disabled).toBe(false);
-    for (const label of [L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.timeLimit, L.timeLimitSeconds]) {
+    // Adaptive difficulty works since Phase 22.
+    for (const label of [L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.timeLimit, L.timeLimitSeconds, L.adaptive]) {
       expect(field(label).disabled, label).toBe(false);
     }
-    for (const label of [L.music, L.speech, L.adaptive]) {
+    for (const label of [L.music, L.speech]) {
       const input = field(label);
       expect(input.disabled, label).toBe(true);
       const note = document.getElementById(input.getAttribute('aria-describedby') ?? '');

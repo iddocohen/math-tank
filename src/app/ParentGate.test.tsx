@@ -13,9 +13,10 @@ function setup() {
   const onOpen = vi.fn();
   const onClose = vi.fn();
   const onSettings = vi.fn();
-  render(<ParentGate onOpen={onOpen} onClose={onClose} onSettings={onSettings} />);
+  const onProgress = vi.fn();
+  render(<ParentGate onOpen={onOpen} onClose={onClose} onSettings={onSettings} onProgress={onProgress} />);
   const gear = screen.getByTestId('parent-gate');
-  return { onOpen, onClose, onSettings, gear };
+  return { onOpen, onClose, onSettings, onProgress, gear };
 }
 
 const menu = () => screen.queryByRole('dialog', { name: m.parent.menu });
@@ -120,12 +121,21 @@ describe('ParentGate', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it('the menu offers "Einstellungen" and shows "Fortschritt" disabled with "kommt bald" (decision D17)', () => {
+  it('the menu offers "Fortschritt", which closes the menu and calls onProgress (FR-040, T133)', () => {
+    const { gear, onProgress, onClose } = setup();
+    hold(gear, 2000);
+    const progress = screen.getByRole('button', { name: m.parent.progress }) as HTMLButtonElement;
+    expect(progress.disabled).toBe(false);
+    expect(progress.textContent).not.toContain(m.parent.comingSoon);
+    fireEvent.click(progress);
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(menu()).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('the menu offers "Einstellungen"', () => {
     const { gear, onSettings, onClose } = setup();
     hold(gear, 2000);
-    const progress = screen.getByRole('button', { name: new RegExp(m.parent.progress) }) as HTMLButtonElement;
-    expect(progress.disabled).toBe(true);
-    expect(progress.textContent).toContain(m.parent.comingSoon);
     fireEvent.click(screen.getByRole('button', { name: m.parent.settings }));
     expect(onSettings).toHaveBeenCalledTimes(1);
     expect(menu()).toBeNull();

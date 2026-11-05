@@ -12,6 +12,9 @@ import { validateSettings, withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
 import { generateChallenge } from './generate';
 import { validateChallenge } from './validate';
+import { minEnemyGap } from './gaps';
+import { clampStep, ladders } from '../progress/ladders';
+import { crossesMultiple, mainSkillOf } from './skills';
 
 const SEEDS = 10_000;
 const ZERO_STEPS: Record<Skill, number> = {
@@ -374,5 +377,52 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
       expect(problems).toEqual([]);
       expect(generated).toBe(group.length * SEEDS_PER_SETTINGS);
     });
+  }
+});
+
+describe('difficulty steps only narrow the choices (US7, T130, FR-037)', () => {
+  const allSkills = Object.keys(ladders) as Skill[];
+  const allTypes = { numberLine: true, addition: true, subtraction: true, comparison: true };
+  const moving = new Set(['addition', 'subtraction', 'stepsRight', 'stepsLeft']);
+
+  for (const preset of ['0-20', '0-100', '0-1000'] as const) {
+    for (const side of ['left', 'right'] as const) {
+      it(`range ${preset}, player ${side}: with random skill steps every challenge stays inside its main skill's step and the parent settings`, () => {
+        const settings = presetSettings(preset, { challengeTypes: allTypes, adaptive: true });
+        const { min, max } = settings.range;
+        const problems: string[] = [];
+        for (let seed = 1; seed <= 2000; seed++) {
+          const rng = createRng(seed * 31 + 7);
+          const skillSteps = Object.fromEntries(allSkills.map((sk) => [sk, rng.int(0, ladders[sk].length - 1)])) as Record<Skill, number>;
+          const c = generateChallenge({
+            settings,
+            skillSteps,
+            roundSeed: seed,
+            turn: seed % 5,
+            playerPosition: side === 'left' ? min : max,
+            rulerLevel: 1,
+            inputMethod: 'pointer',
+          });
+          const skill = mainSkillOf(c.kind);
+          const step = clampStep(skill, skillSteps[skill], settings);
+          const tag = `seed ${seed} ${c.kind} ${c.operands.join(',')} = ${c.answer}`;
+          // The parent settings stay the ceiling.
+          const errors = validateChallenge(c, settings, side === 'left' ? min : max);
+          if (errors.length > 0) problems.push(`${tag}: ${errors.join('; ')}`);
+          if (c.difficultyStep !== skillSteps[skill]) problems.push(`${tag}: difficultyStep ${c.difficultyStep}`);
+          // The step's part of the range starts at the smallest answer allowed at minEnemyGap from the player.
+          const lowest = side === 'left' ? Math.ceil(min + minEnemyGap(min, max)) : min;
+          if (c.answer > lowest + step.maxNumberFraction * (max - min)) problems.push(`${tag}: answer above the step's part of the range`);
+          if ((c.kind === 'addition' || c.kind === 'subtraction') && step.maxOperand !== undefined && c.operands.slice(1).some((k) => k > step.maxOperand!)) {
+            problems.push(`${tag}: operand above ${step.maxOperand}`);
+          }
+          if (moving.has(c.kind) && !step.allowCrossTens) {
+            const path = c.steps ?? [c.operands[0]!, c.answer];
+            if (path.some((n, i) => i > 0 && crossesMultiple(path[i - 1]!, n, 10))) problems.push(`${tag}: crosses a ten`);
+          }
+        }
+        expect(problems).toEqual([]);
+      });
+    }
   }
 });
