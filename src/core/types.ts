@@ -90,8 +90,6 @@ export interface Attempt {
   solved: boolean;
   /** solved at the exact number, with no help and no wrong answer (FR-075). */
   independent: boolean;
-  /** The shot that ended the search was at the enemy's exact number; always true since amendment 06. */
-  exact: boolean;
   /** Highest help step reached; 3 means the solution was shown. */
   helpLevel: 0 | 1 | 2 | 3;
   wrongAnswers: number;
@@ -146,7 +144,7 @@ export interface DifficultyStep {
   rulerLevel?: RulerLevel;
 }
 
-export type Phase = 'challenge' | 'aiming' | 'playerShot' | 'enemyTurn' | 'roundOver' | 'paused';
+export type Phase = 'challenge' | 'playerShot' | 'enemyTurn' | 'roundOver' | 'paused';
 
 export interface Point {
   x: number;
@@ -183,8 +181,6 @@ export interface RoundState {
   enemiesDestroyed: number;
   /** Time played up to the last pause, final once the round is over (FR-084); controller.elapsedMs() adds the running part. */
   elapsedMs: number;
-  /** The latest enemy shell removed a heart. */
-  lastEnemyHit: boolean;
   /**
    * The child's misses in a row (amendment 13, FR-098): + 1 per shot that does not destroy the enemy, + 2 for a fast
    * guess; 0 after a destroyed enemy and after an enemy hit; kept by "Neue Landschaft"; 0 at a new round.
@@ -296,10 +292,8 @@ export interface ShotInFlight {
   /** Precomputed flight path from the muzzle to the impact. */
   path: Point[];
   impact: Point;
-  hitTargetId: string | null;
-  /** True when the shell left the battlefield over a side edge. */
-  outOfBounds: boolean;
-  blastRadius: number;
+  /** An enemy shell decided as a hit on the child's tank (ai/enemy.ts, amendment 13); false for every other shell. */
+  hits: boolean;
   /**
    * Comparison turns (bug report B2, FR-043a): the shells every standing decoy fires together with the enemy, each
    * from its own barrel. They are harmless: they land beside the child's tank, farther away than the enemy's shell,
@@ -315,6 +309,3 @@ export interface DecoyShell {
   path: Point[];
   impact: Point;
 }
-
-/** The controller's round state; since amendment 07 getState() reports it unchanged, with the enemy always visible. */
-export type BattleState = RoundState;

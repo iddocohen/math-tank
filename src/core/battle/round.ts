@@ -3,11 +3,12 @@
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { BattleState, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
+import type { LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
 import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
-import { enemyHitsPlayer, LIVES, shotKind } from './hitRule';
+import { BLAST_RADIUS } from '../physics/damage';
+import { LIVES, shotKind } from './hitRule';
 import { emptyEntry } from './entry';
 import { LAST_STEPS } from '../progress/ladders';
 
@@ -31,12 +32,17 @@ export function visibleEnemy(s: RoundState): TankState | null {
   return s.enemy.alive ? s.enemy : null;
 }
 
+/** The child chooses and fires a number only during a search's 'challenge' phase (digits, Enter, pointer, tank taps). */
+export function acceptsInput(phase: RoundState['phase']): boolean {
+  return phase === 'challenge';
+}
+
 /** Where shells leave the cannon. */
 export function muzzle(tank: TankState): Point {
   return { x: tank.x, y: tank.y + MUZZLE_HEIGHT };
 }
 
-export function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
+export function makeTank(id: string, kind: TankState['kind'], position: number, settings: Settings, terrain: RoundState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
   return { id, kind, position, x, y: settleY(terrain, x), alive: true };
 }
@@ -56,9 +62,9 @@ export function parentDifficulty(settings: Settings): Difficulty {
 }
 
 /**
- * A new round: terrain from the seed, the player at range.min (left) or range.max (right),
- * the enemy at a seeded position at least minEnemyGap away, in 'aiming' with no challenge. The controller then starts
- * the first search, which moves the enemy to its answer (guided.ts startSearch; every play mode, amendment 17).
+ * A new round: terrain from the seed, the player at range.min (left) or range.max (right), the enemy at a seeded
+ * position at least minEnemyGap away, no challenge yet. The controller then starts the first search, which sets the
+ * challenge and moves the enemy to its answer (guided.ts startSearch; every play mode, amendment 17).
  */
 export function createRound(
   settings: Settings,
@@ -66,7 +72,7 @@ export function createRound(
   side: 'left' | 'right',
   mode: RoundState['mode'] = 'mixed',
   difficulty: Difficulty = parentDifficulty(settings),
-): BattleState {
+): RoundState {
   const { min, max } = settings.range;
   const terrainSeed = deriveSeed(seed, 0);
   const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
@@ -82,10 +88,9 @@ export function createRound(
     lives: LIVES,
     enemiesDestroyed: 0,
     elapsedMs: 0,
-    lastEnemyHit: false,
     missStreak: 0,
     stepAnimation: null,
-    phase: 'aiming',
+    phase: 'challenge',
     terrainSeed,
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
@@ -112,7 +117,7 @@ export function createRound(
  * destroyed enemies, new ground from it, and every tank moved to its number on the new ground. The round seed and every
  * other field stay, so the challenges are the same as without the new ground.
  */
-export function renewTerrain(s: BattleState, settings: Settings): BattleState {
+export function renewTerrain(s: RoundState, settings: Settings): RoundState {
   const terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed);
   const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
   const settle = (tank: TankState): TankState => moveTank(tank, tank.position, settings, terrain);
@@ -136,17 +141,20 @@ export function enemyPositionFor(settings: Settings, side: 'left' | 'right', rng
 }
 
 /** Moves a tank to a new number and settles it on the surface. */
-export function moveTank(tank: TankState, position: number, settings: Settings, terrain: BattleState['terrain']): TankState {
+export function moveTank(tank: TankState, position: number, settings: Settings, terrain: RoundState['terrain']): TankState {
   const x = numberToX(position, settings.range.min, settings.range.max);
   return { ...tank, position, x, y: settleY(terrain, x) };
 }
 
 export type Impact =
-  | { point: Point; hitTargetId: string | null; outOfBounds: boolean; shooter: 'enemy' }
   | {
       point: Point;
-      hitTargetId: string | null;
-      outOfBounds: boolean;
+      shooter: 'enemy';
+      /** The enemy's shot was decided as a hit on the child's tank (ai/enemy.ts, amendment 13). */
+      hits: boolean;
+    }
+  | {
+      point: Point;
       shooter: 'player';
       /** The number the player fired at. */
       fired: number;
@@ -163,18 +171,16 @@ export interface DamageRules {
 
 /**
  * Carves the crater, applies the hit rule and settles the tanks onto the new surface.
- * A shell that left the battlefield changes nothing.
  *
  * An enemy shell that hits the player's tank costs one heart unless noDamage (FR-006, FR-080); one next to it does
  * nothing. The player's shell follows the amendment 06 rule (FR-066): the exact number destroys the enemy (the
  * controller then brings a new one) and a shell on the body but not exact is a near miss (the enemy shakes). In
  * comparison turns (amendment 10) a decoy at the exact fired number bursts as a miss, and a near miss shakes whichever
- * standing tank's body the shell landed on. The player's own shell never harms the player. Sets lastShot for player shells
- * and lastEnemyHit for enemy shells.
+ * standing tank's body the shell landed on. The player's own shell never harms the player. Sets lastShot for player
+ * shells.
  */
-export function applyImpact(state: BattleState, impact: Impact, blastRadius: number, rules: DamageRules): BattleState {
-  if (impact.outOfBounds) return impact.shooter === 'enemy' ? { ...state, lastEnemyHit: false } : state;
-  const terrain = carveCrater(state.terrain, impact.point.x, impact.point.y, blastRadius, FLOOR);
+export function applyImpact(state: RoundState, impact: Impact, rules: DamageRules): RoundState {
+  const terrain = carveCrater(state.terrain, impact.point.x, impact.point.y, BLAST_RADIUS, FLOOR);
   const settle = (tank: TankState, destroyed = false): TankState => ({
     ...tank,
     y: settleY(terrain, tank.x),
@@ -182,7 +188,7 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
   });
 
   if (impact.shooter === 'enemy') {
-    const hit = state.player.alive && enemyHitsPlayer(impact.point, impact.hitTargetId, state.player);
+    const hit = state.player.alive && impact.hits;
     const lostHeart = hit && !rules.noDamage;
     return {
       ...state,
@@ -191,7 +197,6 @@ export function applyImpact(state: BattleState, impact: Impact, blastRadius: num
       enemy: settle(state.enemy),
       decoys: state.decoys.map((d) => settle(d)),
       lives: lostHeart ? Math.max(0, state.lives - 1) : state.lives,
-      lastEnemyHit: lostHeart,
     };
   }
 

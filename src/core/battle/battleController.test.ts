@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BattleController } from './controller';
 import { memoryProgressStore } from './ports';
 import type { Digit } from './entry';
-import { enemyHitsPlayer, LIVES } from './hitRule';
+import { landsOnBody, LIVES } from './hitRule';
 import { applyImpact, createRound, muzzle, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from './round';
 import { defaultSettings } from '../settings/defaults';
 import type { Progress, RoundState, Settings, Skill, TankState } from '../types';
@@ -12,7 +12,6 @@ import { crossesMultiple } from '../math/skills';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
 import { settleY } from '../physics/terrain';
-import { BLAST_RADIUS } from '../physics/damage';
 import { solveArcToX } from '../physics/arc';
 import { COMPARISON_47_74, SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
 import { stepPath } from '../math/stepPath';
@@ -105,7 +104,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
     expect(controller.getRoundSettings().range.max).toBe(50);
   });
 
-  it('starts a free-play round with terrain, both tanks and the aiming phase', () => {
+  it('starts a free-play round with terrain, both tanks and the challenge phase', () => {
     const { controller } = makeController();
     controller.startRound('ruler');
     const s = controller.getState();
@@ -121,7 +120,6 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
     expect(s.lives).toBe(LIVES);
     expect(s.enemiesDestroyed).toBe(0);
     expect(s.elapsedMs).toBe(0);
-    expect(s.lastEnemyHit).toBe(false);
     expect('health' in s.player).toBe(false);
     expect('health' in s.enemy).toBe(false);
     expect(s.enemy.alive).toBe(true);
@@ -137,7 +135,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
+        'lives', 'enemiesDestroyed', 'elapsedMs', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
       ].sort(),
     );
   });
@@ -197,13 +195,12 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
       expect(s.shot?.path).toEqual(expected.path);
       expect(s.shot?.impact).toEqual(expected.impact);
       expect(s.shot?.path[0]).toEqual(muzzle(s.player));
-      expect(s.shot?.blastRadius).toBe(BLAST_RADIUS);
-      expect(s.shot?.outOfBounds).toBe(false);
+      expect(s.shot?.hits).toBe(false);
       expect(xToNumber(s.shot!.impact.x, min, max)).toBe(n);
     }
   });
 
-  it('ignores fireAt outside the range, for non-integers, and outside the aiming phase', () => {
+  it('ignores fireAt outside the range, for non-integers, and outside the challenge phase', () => {
     const { controller } = makeController();
     controller.startRound('ruler');
     const s0 = controller.getState();
@@ -431,7 +428,6 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
         controller.startRound('ruler');
         playTurn(controller, fireBetween);
         expect(controller.getState().lives).toBe(LIVES);
-        expect(controller.getState().lastEnemyHit).toBe(false);
       }
     }
   });
@@ -501,10 +497,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
       playTurn(controller, fireAtOwnNumber);
       const s = controller.getState();
       expect(lives - s.lives).toBeLessThanOrEqual(1);
-      if (s.lives < lives) {
-        hits++;
-        expect(s.lastEnemyHit).toBe(true);
-      }
+      if (s.lives < lives) hits++;
       lives = s.lives;
     }
     const s = controller.getState();
@@ -527,30 +520,22 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
   it('applyImpact: an enemy shell on the player removes one heart unless noDamage; one next to the player does nothing', () => {
     const s = createRound(rulerSettings(), 99, 'left');
     const rules = { noDamage: false, range: { min: 0, max: 100 } };
-    const onPlayer = { point: tankCenter(s.player), hitTargetId: s.player.id, outOfBounds: false, shooter: 'enemy' as const };
-    expect(applyImpact(s, onPlayer, BLAST_RADIUS, rules)).toMatchObject({ lives: LIVES - 1, lastEnemyHit: true });
-    expect(applyImpact(s, onPlayer, BLAST_RADIUS, { ...rules, noDamage: true })).toMatchObject({ lives: LIVES, lastEnemyHit: false });
-    const beside = { point: { x: s.player.x + 31, y: s.player.y }, hitTargetId: null, outOfBounds: false, shooter: 'enemy' as const };
-    expect(applyImpact(s, beside, BLAST_RADIUS, rules)).toMatchObject({ lives: LIVES, lastEnemyHit: false });
-    expect(enemyHitsPlayer(beside.point, null, s.player)).toBe(false);
+    const onPlayer = { point: tankCenter(s.player), hits: true, shooter: 'enemy' as const };
+    expect(applyImpact(s, onPlayer, rules)).toMatchObject({ lives: LIVES - 1 });
+    expect(applyImpact(s, onPlayer, { ...rules, noDamage: true })).toMatchObject({ lives: LIVES });
+    const beside = { point: { x: s.player.x + 31, y: s.player.y }, hits: false, shooter: 'enemy' as const };
+    expect(applyImpact(s, beside, rules)).toMatchObject({ lives: LIVES });
+    expect(landsOnBody(beside.point, s.player)).toBe(false);
     // An enemy shell does not touch lastShot.
-    expect(applyImpact(s, onPlayer, BLAST_RADIUS, rules).lastShot).toBeNull();
+    expect(applyImpact(s, onPlayer, rules).lastShot).toBeNull();
 
     const n = enemyOf(s).position;
-    const atEnemy = { point: { x: enemyOf(s).x, y: enemyOf(s).y }, hitTargetId: null, outOfBounds: false, shooter: 'player' as const, fired: n, landed: n };
-    expect(applyImpact(s, atEnemy, BLAST_RADIUS, rules).enemy.alive).toBe(false);
-    expect(applyImpact(s, { ...atEnemy, fired: n + 1, landed: n + 1 }, BLAST_RADIUS, rules).enemy.alive).toBe(true);
+    const atEnemy = { point: { x: enemyOf(s).x, y: enemyOf(s).y }, shooter: 'player' as const, fired: n, landed: n };
+    expect(applyImpact(s, atEnemy, rules).enemy.alive).toBe(false);
+    expect(applyImpact(s, { ...atEnemy, fired: n + 1, landed: n + 1 }, rules).enemy.alive).toBe(true);
     // The player's shell at the player's own number never harms the player.
-    const atPlayer = { point: { x: s.player.x, y: s.player.y }, hitTargetId: null, outOfBounds: false, shooter: 'player' as const, fired: s.player.position, landed: s.player.position };
-    expect(applyImpact(s, atPlayer, BLAST_RADIUS, rules).lives).toBe(LIVES);
-  });
-
-  it('leaves the terrain and the hearts unchanged for an enemy shell that leaves the battlefield', () => {
-    const s = createRound(rulerSettings(), 5, 'left');
-    const impact = { point: { x: 0, y: 500 }, hitTargetId: null, outOfBounds: true, shooter: 'enemy' as const };
-    const next = applyImpact(s, impact, BLAST_RADIUS, { noDamage: false, range: { min: 0, max: 100 } });
-    expect(next.terrain).toBe(s.terrain);
-    expect(next.lives).toBe(LIVES);
+    const atPlayer = { point: { x: s.player.x, y: s.player.y }, shooter: 'player' as const, fired: s.player.position, landed: s.player.position };
+    expect(applyImpact(s, atPlayer, rules).lives).toBe(LIVES);
   });
 
   it('measures the time played: it stops while paused, continues after resume and is frozen once the round is over (FR-084)', () => {
@@ -591,7 +576,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
     expect(before.lives).toBeLessThan(LIVES);
     controller.startRound('ruler');
     const after = controller.getState();
-    expect(after).toMatchObject({ lives: LIVES, enemiesDestroyed: 0, elapsedMs: 0, lastEnemyHit: false });
+    expect(after).toMatchObject({ lives: LIVES, enemiesDestroyed: 0, elapsedMs: 0 });
     expect(controller.elapsedMs()).toBe(0);
   });
 
@@ -1404,7 +1389,7 @@ describe('BattleController attempts (US2, T063; classifyAttempt since T130)', ()
     const { attempts, sessions } = g.progress.getProgress();
     expect(attempts.map((a) => a.challengeId)).toEqual(challenges);
     expect(sessions).toHaveLength(1);
-    expect(attempts.every((a) => a.sessionId === sessions[0]!.id && a.rangeKey === '0-100' && a.exact)).toBe(true);
+    expect(attempts.every((a) => a.sessionId === sessions[0]!.id && a.rangeKey === '0-100')).toBe(true);
   });
 
   it('records nothing while a shot is in flight; a hit on the first shot without help is independent', () => {
@@ -1424,7 +1409,6 @@ describe('BattleController attempts (US2, T063; classifyAttempt since T130)', ()
         difficultyStep: s0.challenge!.difficultyStep,
         solved: true,
         independent: true,
-        exact: true,
         helpLevel: 0,
         wrongAnswers: 0,
         responseMs: 1_600,
@@ -1439,7 +1423,7 @@ describe('BattleController attempts (US2, T063; classifyAttempt since T130)', ()
     answer(g, nearNumber(s0));
     answer(g, s0.challenge!.answer);
     const [a] = g.progress.getProgress().attempts;
-    expect(a).toMatchObject({ solved: true, independent: false, wrongAnswers: 1, helpLevel: 1, exact: true });
+    expect(a).toMatchObject({ solved: true, independent: false, wrongAnswers: 1, helpLevel: 1 });
   });
 
   it('a shot at the shown solution is stored as not solved with help level 3', () => {
@@ -1533,7 +1517,7 @@ describe('BattleController visible enemy and return fire (amendment 07, T222)', 
         g.controller.shotAnimationDone();
         const s = g.controller.getState();
         if (s.phase !== 'enemyTurn') continue;
-        hits.push(enemyHitsPlayer(s.shot!.impact, s.shot!.hitTargetId, s.player));
+        hits.push(s.shot!.hits);
         g.controller.enemyShotAnimationDone();
       }
       return hits;
@@ -1884,7 +1868,7 @@ describe('BattleController help escalation (US5, T095)', () => {
       expect(firing.lives).toBe(livesBefore);
       expect(firing.phase).toBe('enemyTurn');
       enemyTurns++;
-      const hits = firing.shot!.hitTargetId !== null;
+      const hits = firing.shot!.hits;
       g.controller.enemyShotAnimationDone();
       if (g.controller.getState().phase === 'roundOver') return;
       expect(g.controller.getState().lives).toBe(hits ? livesBefore - 1 : livesBefore);
@@ -2158,14 +2142,14 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
           const shot = s.shot!;
           const d = Math.abs(shot.impact.x - s.player.x);
           if (streak < LIMITS[difficulty]) {
-            expect(shot.hitTargetId).toBeNull();
+            expect(shot.hits).toBe(false);
             expect(Math.abs(d - DISTANCES[Math.min(streak, 3) - 1]!)).toBeLessThanOrEqual(0.5);
-            expect(enemyHitsPlayer(shot.impact, shot.hitTargetId, s.player)).toBe(false);
+            expect(landsOnBody(shot.impact, s.player)).toBe(false);
             c.controller.enemyShotAnimationDone();
             expect(c.controller.getState().lives).toBe(LIVES);
             expect(c.controller.getState().missStreak).toBe(streak);
           } else {
-            expect(shot.hitTargetId).toBe(s.player.id);
+            expect(shot.hits).toBe(true);
             c.controller.enemyShotAnimationDone();
             expect(c.controller.getState().lives).toBe(LIVES - 1);
             expect(c.controller.getState().missStreak).toBe(0);
@@ -2186,7 +2170,8 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
       c.controller.enemyShotAnimationDone();
     }
     const s = slowMiss(c);
-    expect(enemyHitsPlayer(s.shot!.impact, s.shot!.hitTargetId, s.player)).toBe(true);
+    expect(s.shot!.hits).toBe(true);
+    expect(landsOnBody(s.shot!.impact, s.player)).toBe(true);
     c.controller.enemyShotAnimationDone();
     expect(c.controller.getState().lives).toBe(LIVES);
     expect(c.controller.getState().missStreak).toBe(0);
@@ -2238,14 +2223,14 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
     g.controller.fireAt(missNumber(g.controller.getState()));
     g.controller.shotAnimationDone();
     expect(g.controller.getState().missStreak).toBe(2);
-    expect(g.controller.getState().shot!.hitTargetId).toBeNull();
+    expect(g.controller.getState().shot!.hits).toBe(false);
     g.controller.enemyShotAnimationDone();
     expect(g.controller.getState().lives).toBe(LIVES);
     expect(g.controller.getState().missStreak).toBe(2);
     g.advance(3_000);
     g.controller.fireAt(missNumber(g.controller.getState()));
     g.controller.shotAnimationDone();
-    expect(g.controller.getState().shot!.hitTargetId).toBe(g.controller.getState().player.id);
+    expect(g.controller.getState().shot!.hits).toBe(true);
     g.controller.enemyShotAnimationDone();
     expect(g.controller.getState().lives).toBe(LIVES - 1);
     expect(g.controller.getState().missStreak).toBe(0);
@@ -2424,12 +2409,12 @@ describe('bug report B2: in comparison turns all option tanks fire a volley (FR-
             // Harmless: at least 60 units farther from the child's tank than the enemy's shell, outside the hit area.
             const distance = Math.abs(d.impact.x - s.player.x);
             expect(distance).toBeGreaterThanOrEqual(realDistance + 60 - 1);
-            expect(enemyHitsPlayer(d.impact, null, s.player)).toBe(false);
+            expect(landsOnBody(d.impact, s.player)).toBe(false);
             expect(d.impact.x).toBeGreaterThanOrEqual(0);
             expect(d.impact.x).toBeLessThanOrEqual(WORLD_WIDTH);
             checked++;
           }
-          if (shot.hitTargetId !== null) hits++;
+          if (shot.hits) hits++;
         }
       }
     }
@@ -2448,8 +2433,7 @@ describe('bug report B2: in comparison turns all option tanks fire a volley (FR-
     expect(firing.shot!.decoyShells).toHaveLength(1);
     const expected = applyImpact(
       firing,
-      { point: firing.shot!.impact, hitTargetId: firing.shot!.hitTargetId, outOfBounds: false, shooter: 'enemy' },
-      firing.shot!.blastRadius,
+      { point: firing.shot!.impact, hits: firing.shot!.hits, shooter: 'enemy' },
       { noDamage: false, range: COMPARISON_47_74.settings.range },
     );
     g.controller.enemyShotAnimationDone();

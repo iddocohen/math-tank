@@ -18,7 +18,7 @@
  * step 2 the ten around the answer as a zoomed piece of ruler (with `help.zoom`) and no count; addition and
  * subtraction keep their step path, comparison keeps its option markers and gets no zoom, which would show the answer.
  */
-import type { Challenge, HelpContent, PlayMode, Settings } from '../types';
+import type { Challenge, HelpContent, Settings } from '../types';
 import { stepsFor } from '../numberline/ticks';
 import { helpZoomView } from '../numberline/zoom';
 import { stepPath } from '../math/stepPath';
@@ -52,7 +52,7 @@ function empty(step: HelpContent['step']): HelpContent {
 }
 
 /** The content of one step, or null when every help type of that step is turned off. */
-function contentOf(c: Challenge, step: 1 | 2, landed: number | null, settings: Settings, mode: PlayMode): HelpContent | null {
+function contentOf(c: Challenge, step: 1 | 2, landed: number | null, settings: Settings, rulerShown: boolean): HelpContent | null {
   const { min, max } = settings.range;
   const help = settings.help;
   const out = empty(step);
@@ -63,10 +63,10 @@ function contentOf(c: Challenge, step: 1 | 2, landed: number | null, settings: S
   }
   if (step === 1) {
     out.direction = landed === null ? null : directionTo(landed, c.answer);
-    out.nearestMajor = help.nearestTen && mode !== 'math' ? nearestMajorTick(c.answer, min, max) : null;
+    out.nearestMajor = help.nearestTen && rulerShown ? nearestMajorTick(c.answer, min, max) : null;
     return out.direction !== null || out.nearestMajor !== null ? out : null;
   }
-  if (mode === 'math') {
+  if (!rulerShown) {
     out.zoom = help.zoom ? helpZoomView(c.answer, min, max) : null;
     out.stepPath = isArithmetic(c) && help.stepAnimation ? stepPath(c, settings.beginnerAssist) : null;
     return out.zoom || out.stepPath ? out : null;
@@ -83,11 +83,12 @@ function contentOf(c: Challenge, step: 1 | 2, landed: number | null, settings: S
 
 /**
  * The help shown at `level` (1 to 3; lower values count as 1). `landed` is the landing number of the search's latest
- * miss, or null before any miss. A step whose help types are all off gives the next step instead.
+ * miss, or null before any miss. A step whose help types are all off gives the next step instead. `rulerShown` is
+ * false in a play mode without a ruler (ModeTraits.showsRuler).
  */
-export function nextHelp(challenge: Challenge, level: number, landed: number | null, settings: Settings, mode: PlayMode = 'mixed'): HelpContent {
+export function nextHelp(challenge: Challenge, level: number, landed: number | null, settings: Settings, rulerShown = true): HelpContent {
   for (let step = Math.max(1, level); step < 3; step++) {
-    const content = contentOf(challenge, step as 1 | 2, landed, settings, mode);
+    const content = contentOf(challenge, step as 1 | 2, landed, settings, rulerShown);
     if (content) return content;
   }
   const solution = empty(3);

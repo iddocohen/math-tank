@@ -24,8 +24,12 @@ export function screenLayout(width: number, height: number): ScreenLayout {
   return height <= SIDE_HEIGHT_LIMIT ? 'side' : 'wide';
 }
 
-export function numberPadShown(setting: NumberPadSetting, device: { finePointer: boolean; width: number }): boolean {
+/**
+ * Whether the number pad shows. `forced` (ModeTraits.forcesPad on the battle screen) makes "Automatisch" show it on
+ * every device: "Nur Rechnen" has no ruler to tap (amendment 17).
+ */
+export function numberPadShown(setting: NumberPadSetting, device: { finePointer: boolean; width: number }, forced = false): boolean {
   if (setting === 'always') return true;
   if (setting === 'never') return false;
-  return !device.finePointer || device.width < PAD_WIDTH_LIMIT;
+  return forced || !device.finePointer || device.width < PAD_WIDTH_LIMIT;
 }

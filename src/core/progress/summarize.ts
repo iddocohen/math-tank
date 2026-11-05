@@ -3,7 +3,7 @@
  * bests and returns plain rows; the page only formats them.
  */
 import type { Records } from '../records/records';
-import type { PlayMode, RoundType, Settings } from '../settings/schema';
+import { PLAY_MODES, type PlayMode, type RoundType, type Settings } from '../settings/schema';
 import type { Progress, Skill } from '../types';
 import { rowToRaise } from './adaptive';
 import { ladders } from './ladders';
@@ -69,14 +69,16 @@ export function parseRangeKey(rangeKey: string): { min: number; max: number } | 
   return m ? { min: Number(m[1]), max: Number(m[2]) } : null;
 }
 
-const MODE_ORDER: readonly PlayMode[] = ['mixed', 'ruler', 'math'];
+function isPlayMode(mode: string): mode is PlayMode {
+  return (PLAY_MODES as readonly string[]).includes(mode);
+}
 
 /** A record key `${min}-${max}|${rulerLevelStart}|${roundType}` with an optional `|ruler` or `|math` (records.ts recordKey). */
 function parseRecordKey(key: string): Omit<BestRow, 'enemies' | 'ms'> | null {
   const [range, level, roundType, mode = 'mixed', ...rest] = key.split('|');
   const r = range === undefined ? null : parseRangeKey(range);
   if (!r || !/^[1-5]$/.test(level ?? '') || (roundType !== 'untilHearts' && roundType !== 'enemyCount')) return null;
-  if (rest.length > 0 || (mode !== 'ruler' && mode !== 'math' && mode !== 'mixed')) return null;
+  if (rest.length > 0 || !isPlayMode(mode)) return null;
   return { ...r, rulerLevelStart: Number(level), roundType, mode };
 }
 
@@ -126,6 +128,6 @@ export function summarize(p: Progress, records: Records, settings?: Settings): P
     const parsed = parseRecordKey(key);
     if (parsed) bests.push({ ...parsed, enemies: best.enemies, ms: best.ms });
   }
-  bests.sort((a, b) => a.min - b.min || a.max - b.max || a.rulerLevelStart - b.rulerLevelStart || a.roundType.localeCompare(b.roundType) || MODE_ORDER.indexOf(a.mode) - MODE_ORDER.indexOf(b.mode));
+  bests.sort((a, b) => a.min - b.min || a.max - b.max || a.rulerLevelStart - b.rulerLevelStart || a.roundType.localeCompare(b.roundType) || PLAY_MODES.indexOf(a.mode) - PLAY_MODES.indexOf(b.mode));
   return { skills, mostHelp, sessions, bests };
 }

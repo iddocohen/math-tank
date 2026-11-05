@@ -22,7 +22,7 @@ export interface KeyLike {
   repeat: boolean;
 }
 
-/** `battle` covers the phases in which the child chooses a number (`aiming`, `challenge`). */
+/** `battle` covers the phase in which the child chooses a number (`challenge`). */
 export type KeyScreen = 'start' | 'battle' | 'paused' | 'roundEnd' | 'garage';
 
 export type KeyAction =

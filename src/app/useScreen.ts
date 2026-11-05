@@ -30,7 +30,7 @@ function readViewport(): Viewport {
   return { width: window.innerWidth, height: window.innerHeight, finePointer: query('(pointer: fine)')?.matches ?? true };
 }
 
-export function useScreen(setting: NumberPadSetting): { layout: ScreenLayout; numberPad: boolean } {
+export function useScreen(setting: NumberPadSetting, forcePad = false): { layout: ScreenLayout; numberPad: boolean } {
   const [viewport, setViewport] = useState(readViewport);
 
   useEffect(() => {
@@ -82,6 +82,6 @@ export function useScreen(setting: NumberPadSetting): { layout: ScreenLayout; nu
 
   return {
     layout: screenLayout(viewport.width, viewport.height),
-    numberPad: numberPadShown(setting, { finePointer: viewport.finePointer, width: viewport.width }),
+    numberPad: numberPadShown(setting, { finePointer: viewport.finePointer, width: viewport.width }, forcePad),
   };
 }

@@ -69,4 +69,10 @@ describe('numberPadShown', () => {
     expect(numberPadShown('auto', { finePointer: true, width: 1100 })).toBe(false);
     expect(numberPadShown('auto', { finePointer: true, width: 1280 })).toBe(false);
   });
+
+  it('forced (a play mode without a ruler) makes auto show the pad on every device; always and never stay', () => {
+    expect(numberPadShown('auto', { finePointer: true, width: 1280 }, true)).toBe(true);
+    expect(numberPadShown('never', { finePointer: false, width: 390 }, true)).toBe(false);
+    expect(numberPadShown('always', { finePointer: true, width: 1280 }, true)).toBe(true);
+  });
 });

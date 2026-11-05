@@ -4,7 +4,7 @@ import { BLAST_RADIUS } from '../physics/damage';
 import { carveCrater, FLOOR, generateTerrain } from '../physics/terrain';
 import { createRng } from '../rng';
 import { defaultSettings } from '../settings/defaults';
-import type { Heightmap, BattleState } from '../types';
+import type { Heightmap, RoundState } from '../types';
 import { toScreenY } from './geometry';
 import { GROUND_ABOVE_RULER_MARGIN, RULER_BOTTOM, RULER_TOP } from './layout';
 
@@ -18,7 +18,7 @@ function expectAboveRuler(t: Heightmap, label: string): void {
   expect(toScreenY(lowest, WORLD_HEIGHT), `${label}: lowest surface screen y`).toBeLessThanOrEqual(LIMIT);
 }
 
-function expectTanksAboveRuler(s: BattleState, label: string): void {
+function expectTanksAboveRuler(s: RoundState, label: string): void {
   for (const tank of [s.player, s.enemy]) {
     expect(toScreenY(tank.y, WORLD_HEIGHT), `${label}: ${tank.id} bottom`).toBeLessThanOrEqual(LIMIT);
   }
@@ -58,7 +58,7 @@ describe('ruler band below the battlefield (T184, FR-015, FR-058)', () => {
       expectTanksAboveRuler(s, `seed ${seed} start`);
       for (let i = 0; i < 15; i++) {
         for (const tank of [s.player, s.enemy]) {
-          s = applyImpact(s, { point: { x: tank.x, y: tank.y }, hitTargetId: null, outOfBounds: false, shooter: 'enemy' }, BLAST_RADIUS, rules);
+          s = applyImpact(s, { point: { x: tank.x, y: tank.y }, hits: false, shooter: 'enemy' }, rules);
         }
       }
       expectAboveRuler(s.terrain, `seed ${seed} after hits`);

@@ -18,10 +18,10 @@
  * (renewTerrain, FR-101). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are
  * gone, or with roundType 'enemyCount' after roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
+import { clamp } from '../util';
 import { createRng, deriveSeed } from '../rng';
-import type { BattleState, InputMethod, PlayMode, RoundState, Settings, ShotInFlight } from '../types';
+import type { InputMethod, PlayMode, RoundState, Settings, ShotInFlight } from '../types';
 import { solveArcToX } from '../physics/arc';
-import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { decoyShot, enemyShot } from '../ai/enemy';
 import { isFastGuess } from '../progress/classify';
@@ -31,6 +31,7 @@ import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from '.
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
 import {
+  acceptsInput,
   applyImpact,
   createRound,
   type Difficulty,
@@ -59,7 +60,7 @@ export class BattleController {
   private nextSettings: Settings;
   /** Settings snapshot for the current round (FR-049). */
   private settings: Settings;
-  private state: BattleState;
+  private state: RoundState;
   /** Clock time of the player's shot in flight, for the attempt's response time. */
   private firedAt = 0;
   private readonly listeners = new Set<Listener>();
@@ -123,16 +124,12 @@ export class BattleController {
 
   startRound(mode: PlayMode): void {
     this.settings = structuredClone(this.nextSettings);
-    const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
-    const side = this.nextSide;
-    this.nextSide = side === 'left' ? 'right' : 'left';
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
-    this.firedNumber = null;
     this.runningSince = this.deps.clock();
+    const { fresh, difficulty } = this.nextScene(mode);
     // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
-    const difficulty = this.difficulty();
-    const round: BattleState = { ...createRound(this.settings, seed, side, mode, difficulty), inputMethod: this.state.inputMethod };
+    const round: RoundState = { ...fresh, inputMethod: this.state.inputMethod };
     this.set(startSearch(round, this.settings, this.deps.clock(), null, difficulty));
   }
 
@@ -146,14 +143,9 @@ export class BattleController {
    */
   newScene(): void {
     const prev = this.state;
-    if (prev.phase !== 'aiming' && prev.phase !== 'challenge') return;
-    const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
-    const side = this.nextSide;
-    this.nextSide = side === 'left' ? 'right' : 'left';
-    this.firedNumber = null;
-    const difficulty = this.difficulty();
-    const fresh = createRound(this.settings, seed, side, prev.mode, difficulty);
-    const scene: BattleState = {
+    if (!acceptsInput(prev.phase)) return;
+    const { fresh, difficulty } = this.nextScene(prev.mode);
+    const scene: RoundState = {
       ...fresh,
       turn: prev.turn,
       lives: prev.lives,
@@ -166,12 +158,22 @@ export class BattleController {
     this.set(startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true));
   }
 
+  /** New ground and tanks from the next seed, the child's tank on the other side; no shell in flight. */
+  private nextScene(mode: PlayMode): { fresh: RoundState; difficulty: Difficulty } {
+    const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
+    const side = this.nextSide;
+    this.nextSide = side === 'left' ? 'right' : 'left';
+    this.firedNumber = null;
+    const difficulty = this.difficulty();
+    return { fresh: createRound(this.settings, seed, side, mode, difficulty), difficulty };
+  }
+
   /**
    * Pointer preview: clears typed digits and never fires. There is no way to step the preview by 1 or 10
    * (amendment 05: no shortcut toward the answer).
    */
   selectNumber(n: number): void {
-    if (!this.acceptsInput()) return;
+    if (!acceptsInput(this.state.phase)) return;
     const { min, max } = this.settings.range;
     this.set({ ...this.state, selection: clamp(Math.round(n), min, max), entry: emptyEntry(), inputMethod: 'pointer' });
   }
@@ -193,7 +195,7 @@ export class BattleController {
    * nothing (FR-063). A fired shot records the method (FR-076).
    */
   confirm(method: InputMethod = 'keyboard'): void {
-    if (!this.acceptsInput()) return;
+    if (!acceptsInput(this.state.phase)) return;
     const { selection, entry } = this.state;
     if (selection === null || entry.outOfRange) return;
     this.shoot(selection, method);
@@ -216,7 +218,7 @@ export class BattleController {
   }
 
   private shoot(n: number, inputMethod: InputMethod | null): void {
-    if (!this.acceptsInput()) return;
+    if (!acceptsInput(this.state.phase)) return;
     const { min, max } = this.settings.range;
     if (!Number.isInteger(n) || n < min || n > max) return;
     const answerableAt = this.state.answerableAt;
@@ -233,7 +235,7 @@ export class BattleController {
       worldHeight: WORLD_HEIGHT,
       tolerance: 0.25 * ((DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / (max - min)),
     });
-    const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS, decoyShells: [] };
+    const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hits: false, decoyShells: [] };
     this.firedNumber = n;
     this.firedAt = this.deps.clock();
     this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
@@ -281,13 +283,13 @@ export class BattleController {
     const { min, max } = this.settings.range;
     const fired = this.firedNumber ?? xToNumber(shot.impact.x, min, max);
     this.firedNumber = null;
-    const s = this.impact({ point: shot.impact, hitTargetId: null, outOfBounds: false, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) }, shot.blastRadius);
-    const next: BattleState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
+    const s = this.impact({ point: shot.impact, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) });
+    const next: RoundState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
     if (next.lastShot?.hit) {
       // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
       // The remaining decoys fold away with it (amendment 10).
       // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
-      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, missStreak: 0, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
+      const destroyed: RoundState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, missStreak: 0, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
       this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
@@ -303,16 +305,16 @@ export class BattleController {
     // a row, 2 for a fast guess (amendment 13, FR-098). The guess rule reads the misses before this one.
     const step = this.isFastGuessMiss(next) ? 2 : 1;
     const missed = afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true);
-    const streaked: BattleState = { ...missed, missStreak: missed.missStreak + step };
+    const streaked: RoundState = { ...missed, missStreak: missed.missStreak + step };
     this.set({ ...streaked, phase: 'enemyTurn', shot: this.nextEnemyShot(streaked) });
   }
 
   enemyShotAnimationDone(): void {
     if (this.state.phase !== 'enemyTurn' || !this.state.shot) return;
     const shot = this.state.shot;
-    const landed = this.impact({ point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: 'enemy' }, shot.blastRadius);
+    const landed = this.impact({ point: shot.impact, shooter: 'enemy', hits: shot.hits });
     // After the enemy's hit the misses in a row start again, in no-damage mode too (amendment 13, FR-099).
-    const s = { ...landed, shot: null, missStreak: shot.hitTargetId === null ? landed.missStreak : 0 };
+    const s = { ...landed, shot: null, missStreak: shot.hits ? 0 : landed.missStreak };
     if (s.lives <= 0) {
       this.endRound(s, 'heartsGone');
       return;
@@ -324,7 +326,7 @@ export class BattleController {
    * The FR-038 guess rule for the miss that just landed (amendment 13, FR-098): fired less than 1.5 s after
    * answers became possible, or after 3 misses within the 5 seconds before it.
    */
-  private isFastGuessMiss(s: BattleState): boolean {
+  private isFastGuessMiss(s: RoundState): boolean {
     if (s.answerableAt === null) return false;
     return isFastGuess({ responseMs: Math.max(0, this.firedAt - s.answerableAt), wrongAnswerTimes: s.help.wrongAnswerTimes, submittedAt: this.firedAt });
   }
@@ -333,7 +335,7 @@ export class BattleController {
    * Stores the finished search through the ProgressStore (FR-035). Called after the shot animation, between turns,
    * never while a shell is in flight. Every play mode records its attempts (amendment 17, FR-124).
    */
-  private recordAttempt(s: BattleState): void {
+  private recordAttempt(s: RoundState): void {
     if (!s.challenge || s.answerableAt === null) return;
     const attempt = buildAttempt({
       challenge: s.challenge,
@@ -374,20 +376,14 @@ export class BattleController {
   }
 
   /** Stops the time for good and ends the round (FR-008, FR-084). */
-  private endRound(s: BattleState, outcome: NonNullable<RoundState['outcome']>): void {
+  private endRound(s: RoundState, outcome: NonNullable<RoundState['outcome']>): void {
     const elapsedMs = this.elapsedMs();
     this.runningSince = null;
     this.set({ ...s, elapsedMs, phase: 'roundOver', outcome });
   }
 
-  /** Digits, Enter and pointer selection work only while the player chooses a number. */
-  private acceptsInput(): boolean {
-    const phase = this.state.phase;
-    return phase === 'aiming' || phase === 'challenge';
-  }
-
   private applyEntryKey(key: EntryKey): void {
-    if (!this.acceptsInput()) return;
+    if (!acceptsInput(this.state.phase)) return;
     const r = applyKey(this.state.entry, key, this.settings.range);
     this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection, inputMethod: 'keyboard' });
   }
@@ -399,7 +395,7 @@ export class BattleController {
    * report B2), so the volley does not show which tank is the enemy; the decoys' shells land farther from the child's
    * tank than the enemy's and never hit.
    */
-  private nextEnemyShot(s: BattleState): ShotInFlight {
+  private nextEnemyShot(s: RoundState): ShotInFlight {
     const shotIndex = this.enemyShotIndex++;
     const shot = enemyShot({
       difficulty: this.settings.enemyDifficulty,
@@ -428,15 +424,15 @@ export class BattleController {
           worldHeight: WORLD_HEIGHT,
         }),
       }));
-    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS, decoyShells };
+    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hits: shot.hits, decoyShells };
   }
 
-  private impact(impact: Impact, blastRadius: number): BattleState {
+  private impact(impact: Impact): RoundState {
     const rules: DamageRules = { noDamage: this.settings.noDamage, range: this.settings.range };
-    return applyImpact(this.state, impact, blastRadius, rules);
+    return applyImpact(this.state, impact, rules);
   }
 
-  private set(next: BattleState): void {
+  private set(next: RoundState): void {
     const prev = this.state;
     // The time-limit wait starts again with every help change and every new search, and runs only in 'challenge'.
     if (next.help !== prev.help || next.challenge !== prev.challenge) this.helpWaitMs = 0;
@@ -447,6 +443,3 @@ export class BattleController {
   }
 }
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, v));
-}
