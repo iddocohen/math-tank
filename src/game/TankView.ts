@@ -26,18 +26,24 @@
  *
  * Amendment 13 (FR-100, FR-101): `warn` wobbles the child's tank and pulses its hearts once, with no text, one miss
  * before the enemy hits. `sync` can wait before the tank settles, so it settles after the new hills faded in.
+ *
+ * Amendment 14 (FR-109 to FR-111): body and turret are drawn from src/core/view/tankDrawing.ts, the shapes the garage
+ * preview draws too, with a highlight and a shadow from the tank's color. While the tank settles its wheels turn, and
+ * a dust puff rises when it lands. `fire` shows a short barrel recoil, a white muzzle flash and a grey smoke puff. The
+ * flag and the hat sit at the anchors of amendment 11 inside the same container, so they move with the body.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { tankStyle, type TankStyle } from '../core/view/tankStyle';
 import { t } from '../i18n';
-import { TANK_BODY_HEIGHT, TEX } from './textures';
+import { TANK_BODY_HEIGHT } from './textures';
 import { STANDARD_LOOK, type Look } from '../core/rewards/items';
-import { colorStripes, flagShapes, hatShapes, STRIPE_COLOR, tankColor, type Shape } from '../core/rewards/looks';
+import { colorStripes, flagShapes, hatShapes, tankColor, type Shape } from '../core/rewards/looks';
+import { antennaShapes, MUZZLE_LENGTH, TANK_ANCHORS, tankBodyShapes, turretShapes } from '../core/view/tankDrawing';
 
 /** Turret pivot above the tank base, matching the muzzle height in core/battle/round.ts. */
-const TURRET_PIVOT = 28;
+const TURRET_PIVOT = TANK_ANCHORS.turretPivot;
 /** The hearts sit above the antenna flag and the turret at its fixed angle. */
 const BAR_OFFSET = 86;
 const HEART_SIZE = 22;
@@ -67,11 +73,25 @@ const TAP_H = 90;
 /** The green ring of help step 3 around the correct tank in a comparison (amendment 10, FR-031). */
 const MARK_COLOR = 0x3fae5a;
 const MARK_R = 46;
+/** Wheel radius for the turning wheels while settling (amendment 14). */
+const WHEEL_R = 3.6;
+/** Firing (amendment 14, FR-111): recoil distance and time, flash and smoke. */
+const RECOIL_PX = 6;
+const RECOIL_MS = 70;
+const FLASH_MS = 220;
+const SMOKE_MS = 700;
+const DEAD_COLOR = 0x555555;
 
 export class TankView {
   readonly container: Phaser.GameObjects.Container;
-  private readonly body: Phaser.GameObjects.Image;
-  private readonly turret: Phaser.GameObjects.Image;
+  private readonly body: Phaser.GameObjects.Graphics;
+  private readonly turret: Phaser.GameObjects.Graphics;
+  private readonly bodyKind: 'rounded' | 'angular';
+  private readonly stripes: boolean;
+  private wheelAngle = 0;
+  private bodyColor: number;
+  private turretColor: number;
+  private recoil = { k: 0 };
   private readonly hearts: Phaser.GameObjects.Graphics;
   private readonly target: Phaser.GameObjects.Graphics;
   private readonly flag: Phaser.GameObjects.Graphics;
@@ -80,6 +100,7 @@ export class TankView {
   private readonly style: TankStyle;
   private readonly color: number;
   private tint: number;
+  private turretAngle = 0;
   private lastY: number | null = null;
   private lastLives: number | null = null;
   private hidden = false;
@@ -99,19 +120,21 @@ export class TankView {
     const player = kind === 'player';
     this.color = player ? tankColor(look.color) : this.style.color;
     this.tint = this.color;
-    this.turret = scene.add.image(0, -TURRET_PIVOT, TEX.turret).setOrigin(0, 0.5).setTint(this.color);
-    const bodyTexture = this.style.body === 'angular' ? TEX.tankBodyAngular : TEX.tankBody;
-    this.body = scene.add.image(0, 0, bodyTexture).setOrigin(0.5, 1).setTint(this.color);
+    this.bodyKind = this.style.body;
+    this.stripes = player && colorStripes(look.color);
+    this.bodyColor = -1;
+    this.turretColor = -1;
+    this.turret = scene.add.graphics().setPosition(0, -TURRET_PIVOT);
+    this.body = scene.add.graphics();
+    this.drawTank(this.color);
     this.flag = scene.add.graphics();
     if (player) {
-      drawAntenna(this.flag);
+      drawShapes(this.flag, antennaShapes());
       drawShapes(this.flag, flagShapes(look.flag));
     } else {
       drawFlag(this.flag, this.style.flag);
     }
     this.hat = scene.add.graphics();
-    // The hat graphics sit above the body, so they also hold the stripes on the hull.
-    if (player && colorStripes(look.color)) drawStripes(this.hat);
     if (player) drawShapes(this.hat, hatShapes(look.hat));
     // Drawn around their own center, so the warning pulse grows them in place.
     this.hearts = scene.add.graphics().setY(-BAR_OFFSET + HEART_SIZE / 2);
@@ -166,21 +189,108 @@ export class TankView {
       this.container.y = y;
       if (!this.hidden) this.container.alpha = 1;
     } else if (y !== this.lastY) {
-      this.scene.tweens.add({ targets: this.container, y, delay: settleDelayMs, duration: SETTLE_MS, ease: 'Quad.easeIn' });
+      // The wheels turn with the distance moved, and a dust puff rises on landing (amendment 14, FR-111).
+      let from = this.container.y;
+      this.scene.tweens.add({
+        targets: this.container,
+        y,
+        delay: settleDelayMs,
+        duration: SETTLE_MS,
+        ease: 'Quad.easeIn',
+        onUpdate: () => {
+          this.wheelAngle += (this.container.y - from) / WHEEL_R;
+          from = this.container.y;
+          this.drawTank(this.tint, true);
+        },
+        onComplete: () => this.dust(),
+      });
     }
     this.lastY = y;
-    this.tint = tank.alive ? this.color : 0x555555;
-    this.body.setTint(this.tint);
-    this.turret.setTint(this.tint);
+    this.tint = tank.alive ? this.color : DEAD_COLOR;
+    this.drawTank(this.tint);
+  }
+
+  /** Draws body and turret in `color`; the turret only when its color changed, the body also when the wheels turned. */
+  private drawTank(color: number, wheelsMoved = false): void {
+    if (color !== this.bodyColor || wheelsMoved) {
+      this.bodyColor = color;
+      this.body.clear();
+      drawShapes(this.body, tankBodyShapes(this.bodyKind, color, this.wheelAngle, this.stripes));
+    }
+    if (color !== this.turretColor) {
+      this.turretColor = color;
+      this.turret.clear();
+      drawShapes(this.turret, turretShapes(color));
+    }
+  }
+
+  /** A small dust puff at both tracks when the tank lands. */
+  private dust(): void {
+    const scene = this.scene;
+    for (const dx of [-26, -12, 12, 26]) {
+      const puff = scene.add.circle(this.container.x + dx, this.container.y - 3, 5, 0xc9b28f, 0.75).setDepth(5);
+      scene.tweens.add({
+        targets: puff,
+        x: puff.x + dx * 0.6,
+        y: puff.y - 10,
+        scale: 2.2,
+        alpha: 0,
+        duration: 450,
+        ease: 'Quad.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  /**
+   * Firing (amendment 14, FR-111): the barrel recoils briefly, a white flash shows at the muzzle and a grey smoke puff
+   * drifts up. Neutral colors, so the garage trails stay visible.
+   */
+  fire(): void {
+    const scene = this.scene;
+    const rad = Phaser.Math.DegToRad(this.turretAngle);
+    const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+    const mx = this.container.x + dir.x * (MUZZLE_LENGTH + 4);
+    const my = this.container.y - TURRET_PIVOT + dir.y * (MUZZLE_LENGTH + 4);
+    scene.tweens.killTweensOf(this.recoil);
+    this.recoil.k = 0;
+    scene.tweens.add({
+      targets: this.recoil,
+      k: 1,
+      duration: RECOIL_MS,
+      yoyo: true,
+      ease: 'Quad.easeOut',
+      onUpdate: () => this.turret.setPosition(-dir.x * RECOIL_PX * this.recoil.k, -TURRET_PIVOT - dir.y * RECOIL_PX * this.recoil.k),
+      onComplete: () => this.turret.setPosition(0, -TURRET_PIVOT),
+    });
+    const flash = scene.add.star(mx, my, 7, 7, 18, 0xffffff, 1).setAngle(this.turretAngle).setDepth(22);
+    const core = scene.add.circle(mx, my, 7, 0xfffbe8, 1).setDepth(22);
+    scene.tweens.add({ targets: [flash, core], scale: 1.5, alpha: 0, duration: FLASH_MS, ease: 'Quad.easeOut', onComplete: () => [flash, core].forEach((o) => o.destroy()) });
+    for (let i = 0; i < 3; i++) {
+      const smoke = scene.add.circle(mx + dir.x * i * 6, my + dir.y * i * 6, 7 + i * 2, i === 1 ? 0x9a9a9a : 0xb4b4b4, 0.7).setDepth(21);
+      scene.tweens.add({
+        targets: smoke,
+        x: smoke.x + dir.x * 14 + (i - 1) * 6,
+        y: smoke.y - 26 - i * 8,
+        scale: 2.4,
+        alpha: 0,
+        delay: i * 40,
+        duration: SMOKE_MS,
+        ease: 'Sine.easeOut',
+        onComplete: () => smoke.destroy(),
+      });
+    }
   }
 
   /** Physics angle (0 right, 90 up, 180 left); Phaser angles turn clockwise on screen. */
   setAim(angleDeg: number): void {
+    this.turretAngle = -angleDeg;
     this.turret.setAngle(-angleDeg);
   }
 
   /** Turns the turret over `ms` milliseconds, e.g. before the enemy fires. */
   turnTo(angleDeg: number, ms: number): void {
+    this.turretAngle = -angleDeg;
     this.scene.tweens.add({ targets: this.turret, angle: -angleDeg, duration: ms, ease: 'Sine.easeInOut' });
   }
 
@@ -265,9 +375,8 @@ export class TankView {
 
   /** Short white flash when the tank is hit and loses a heart (FR-009). */
   flash(): void {
-    const parts = [this.body, this.turret];
-    const on = () => parts.forEach((p) => p.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL));
-    const off = () => parts.forEach((p) => p.setTintMode(Phaser.TintModes.MULTIPLY).setTint(this.tint));
+    const on = () => this.drawTank(0xffffff);
+    const off = () => this.drawTank(this.tint);
     on();
     this.scene.time.delayedCall(90, off);
     this.scene.time.delayedCall(180, on);
@@ -276,7 +385,7 @@ export class TankView {
 
   destroy(): void {
     this.youTimer?.remove();
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you, this.hearts]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you, this.hearts, this.recoil]);
     this.tapZone.removeAllListeners();
     this.container.destroy();
   }
@@ -341,18 +450,13 @@ function drawFlag(g: Phaser.GameObjects.Graphics, flag: TankStyle['flag']): void
   }
 }
 
-function drawAntenna(g: Phaser.GameObjects.Graphics): void {
-  g.lineStyle(3, 0x2b2f36, 1);
-  g.lineBetween(ANTENNA_X, -TANK_BODY_HEIGHT + 8, ANTENNA_X, ANTENNA_TOP);
-}
-
-/** Garage shapes (amendment 11) are in tank coordinates with y up; the container has y down. */
+/** Garage and tank shapes (amendments 11 and 14) are in tank coordinates with y up; the container has y down. */
 function drawShapes(g: Phaser.GameObjects.Graphics, shapes: Shape[]): void {
   for (const s of shapes) {
     switch (s.type) {
       case 'poly': {
         const pts = s.points.map(([x, y]) => new Phaser.Math.Vector2(x, -y));
-        g.fillStyle(s.fill, 1);
+        g.fillStyle(s.fill, s.alpha ?? 1);
         g.fillPoints(pts, true);
         if (s.stroke !== undefined) {
           g.lineStyle(1.5, s.stroke, 1);
@@ -361,7 +465,7 @@ function drawShapes(g: Phaser.GameObjects.Graphics, shapes: Shape[]): void {
         break;
       }
       case 'circle':
-        g.fillStyle(s.fill, 1);
+        g.fillStyle(s.fill, s.alpha ?? 1);
         g.fillCircle(s.x, -s.y, s.r);
         if (s.stroke !== undefined) {
           g.lineStyle(1, s.stroke, 1);
@@ -374,12 +478,6 @@ function drawShapes(g: Phaser.GameObjects.Graphics, shapes: Shape[]): void {
         break;
     }
   }
-}
-
-/** Light diagonal stripes across the hull for "Dunkelblau mit Streifen" (amendment 11). */
-function drawStripes(g: Phaser.GameObjects.Graphics): void {
-  g.lineStyle(2, STRIPE_COLOR, 0.9);
-  for (const x of [-20, -8, 4, 16]) g.lineBetween(x, -9, x + 6, -17);
 }
 
 function starPoints(cx: number, cy: number, outer: number, inner: number): Phaser.Math.Vector2[] {

@@ -10,9 +10,10 @@ import type { ColorId, FlagId, HatId, TrailId } from './items';
 
 export type Point = [number, number];
 
+/** `alpha` (0 to 1, default 1) lets a highlight blend into the body (amendment 14). */
 export type Shape =
-  | { type: 'poly'; points: Point[]; fill: number; stroke?: number }
-  | { type: 'circle'; x: number; y: number; r: number; fill: number; stroke?: number }
+  | { type: 'poly'; points: Point[]; fill: number; stroke?: number; alpha?: number }
+  | { type: 'circle'; x: number; y: number; r: number; fill: number; stroke?: number; alpha?: number }
   | { type: 'line'; from: Point; to: Point; width: number; color: number };
 
 export interface TrailStyle {

@@ -1,9 +1,13 @@
 /**
- * Generated textures (FR-001, research R13): everything is drawn by code, there are no image files.
- * Graphics.generateTexture uses the Canvas API and ignores gradient fills, so the sky and the
- * particle glow are drawn on CanvasTextures with the 2D context instead.
+ * Generated textures (FR-001, research R13): drawn by code. Graphics.generateTexture uses the Canvas API and ignores
+ * gradient fills, so the sky and the particle glow are drawn on CanvasTextures with the 2D context instead.
+ * Amendment 14 (FR-107): the one image file is the CC0 dirt texture, loaded by BattleScene.preload as TEX.dirt; when it
+ * did not load, TEX.dirtGenerated, a dirt pattern made here, fills the ground. The sky has a sun. The tank textures stay
+ * for the small tank icon of the step animation (NumberLineView); the tanks in battle are drawn from
+ * src/core/view/tankDrawing.ts.
  */
 import Phaser from 'phaser';
+import { createRng } from '../core/rng';
 
 export const TEX = {
   tankBody: 'tank-body',
@@ -13,6 +17,10 @@ export const TEX = {
   sky: 'sky',
   shell: 'shell',
   spark: 'spark',
+  /** The bundled CC0 dirt texture (amendment 14). */
+  dirt: 'dirt',
+  /** The generated dirt pattern used when the dirt texture did not load. */
+  dirtGenerated: 'dirt-generated',
 } as const;
 
 /** Body size in world units; the texture's bottom edge is the tank base. */
@@ -20,6 +28,10 @@ export const TANK_BODY_WIDTH = 64;
 export const TANK_BODY_HEIGHT = 28;
 export const TURRET_LENGTH = 38;
 export const TURRET_THICKNESS = 8;
+/** The sun in the sky (amendment 14). */
+const SUN = { x: 1380, y: 120, r: 46 };
+/** Size of the generated dirt pattern. */
+const DIRT_TILE = 128;
 
 /** Creates any texture that does not exist yet; safe to call from every scene start. */
 export function ensureTextures(scene: Phaser.Scene, worldWidth: number, worldHeight: number): void {
@@ -91,6 +103,16 @@ export function ensureTextures(scene: Phaser.Scene, worldWidth: number, worldHei
       grad.addColorStop(1, '#e6f4ff');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, worldWidth, worldHeight);
+      // The sun with a soft glow (amendment 14, FR-107).
+      const glow = ctx.createRadialGradient(SUN.x, SUN.y, SUN.r * 0.6, SUN.x, SUN.y, SUN.r * 2.4);
+      glow.addColorStop(0, 'rgba(255, 244, 196, 0.85)');
+      glow.addColorStop(1, 'rgba(255, 244, 196, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(SUN.x - SUN.r * 2.5, SUN.y - SUN.r * 2.5, SUN.r * 5, SUN.r * 5);
+      ctx.fillStyle = '#fff1b8';
+      ctx.beginPath();
+      ctx.arc(SUN.x, SUN.y, SUN.r, 0, Math.PI * 2);
+      ctx.fill();
       // Two soft clouds
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       for (const [cx, cy, s] of [
@@ -106,6 +128,34 @@ export function ensureTextures(scene: Phaser.Scene, worldWidth: number, worldHei
           ctx.beginPath();
           ctx.arc(cx + dx * s, cy + dy * s, r * s, 0, Math.PI * 2);
           ctx.fill();
+        }
+      }
+      canvas.refresh();
+    }
+  }
+
+  if (!tex.exists(TEX.dirtGenerated)) {
+    // A dirt pattern made in code: a brown base with seeded light and dark blotches and a few cracks. It tiles,
+    // because every blotch is drawn again shifted by the tile size where it crosses an edge.
+    const size = DIRT_TILE;
+    const canvas = tex.createCanvas(TEX.dirtGenerated, size, size);
+    if (canvas) {
+      const ctx = canvas.context;
+      const rng = createRng(14);
+      ctx.fillStyle = '#ad7d44';
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 260; i++) {
+        const x = rng.next() * size;
+        const y = rng.next() * size;
+        const r = 2 + rng.next() * 9;
+        const light = rng.next() < 0.5;
+        ctx.fillStyle = light ? `rgba(214, 170, 110, ${0.15 + rng.next() * 0.2})` : `rgba(96, 62, 28, ${0.12 + rng.next() * 0.2})`;
+        for (const dx of [-size, 0, size]) {
+          for (const dy of [-size, 0, size]) {
+            ctx.beginPath();
+            ctx.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
       canvas.refresh();

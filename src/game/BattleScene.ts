@@ -37,6 +37,11 @@
  *   tank wobbles and its hearts pulse once. After a destroyed enemy the new hills fade in once the explosion is over,
  *   the child's tank settles onto them and the next enemy fades in after that. For the end-to-end tests only, the
  *   canvas carries `data-terrain-seed` and `data-enemy-warnings` (warnings shown this round).
+ * - Amendment 14 (FR-107 to FR-113): preload() loads the bundled CC0 dirt texture for the ground. Every tank that fires
+ *   shows recoil, a muzzle flash and smoke (the enemy and each decoy of a volley too). A hit on a tank (the enemy
+ *   destroyed, a heart lost, a decoy burst) shakes the screen a little, unless the operating system asks for reduced
+ *   motion, which also means fewer particles. For the end-to-end tests only (D4), the canvas carries
+ *   `data-muzzle-flashes`, `data-reduced-motion` and `data-fps` (frames in the last second).
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -57,6 +62,8 @@ import { ensureTextures, TEX } from './textures';
 import { landingSounds } from '../audio/sfx';
 import { lookKey } from '../core/rewards/garage';
 import { STANDARD_LOOK, type Look } from '../core/rewards/items';
+import { motionProfile } from '../core/view/motion';
+import dirtUrl from '../assets/textures/dirt.png';
 
 /** Sound hooks the scene calls; src/audio/sfx.ts provides them. */
 export interface BattleSounds {
@@ -107,6 +114,9 @@ export class BattleScene extends Phaser.Scene {
   /** The shot whose replay has been started, so a state update never starts it twice. */
   private startedShot: ShotInFlight | null = null;
   private pendingFire: Phaser.Time.TimerEvent | null = null;
+  private muzzleFlashes = 0;
+  private frames = 0;
+  private frameTime = 0;
 
   constructor(controller: BattleController, options: BattleSceneOptions = {}) {
     super('battle');
@@ -115,16 +125,25 @@ export class BattleScene extends Phaser.Scene {
     this.look = options.look ?? STANDARD_LOOK;
   }
 
+  /** The CC0 dirt texture (amendment 14, FR-107); when it fails to load, TerrainView uses the generated pattern. */
+  preload(): void {
+    if (!this.textures.exists(TEX.dirt)) this.load.image(TEX.dirt, dirtUrl);
+  }
+
   create(): void {
     ensureTextures(this, WORLD_WIDTH, WORLD_HEIGHT);
+    const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.game.canvas.dataset.reducedMotion = String(reducedMotion);
+    this.muzzleFlashes = 0;
+    this.game.canvas.dataset.muzzleFlashes = '0';
     this.add.image(0, 0, TEX.sky).setOrigin(0, 0);
-    this.terrain = new TerrainView(this, WORLD_HEIGHT);
+    this.terrain = new TerrainView(this, WORLD_HEIGHT, WORLD_WIDTH);
     this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT, this.look.trail);
     this.player = new TankView(this, 'player', WORLD_HEIGHT, undefined, this.look);
     this.game.canvas.dataset.playerLook = lookKey(this.look);
     this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT, () => this.controller.tapTank(this.controller.getState().enemy.id));
     this.numberLine = new NumberLineView(this, this.controller, WORLD_HEIGHT);
-    this.effects = new Effects(this);
+    this.effects = new Effects(this, motionProfile(reducedMotion));
     this.prev = null;
     this.startedShot = null;
 
@@ -136,6 +155,14 @@ export class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.projectile.advance(delta);
+    // The frame rate over the last second, for the end-to-end performance check (SC-002).
+    this.frames++;
+    this.frameTime += delta;
+    if (this.frameTime >= 1000) {
+      this.game.canvas.dataset.fps = String(Math.round((this.frames * 1000) / this.frameTime));
+      this.frames = 0;
+      this.frameTime = 0;
+    }
   }
 
   private teardown(): void {
@@ -166,7 +193,7 @@ export class BattleScene extends Phaser.Scene {
     // New hills after a destroyed enemy fade in instead of switching at once (amendment 13, FR-101).
     const newHills = !newRound && prev !== null && s.terrainSeed !== prev.terrainSeed;
     this.appearDelay = newHills ? AFTER_TERRAIN_FADE_MS : NEW_ENEMY_DELAY_MS;
-    this.terrain.update(s.terrain, newHills ? TERRAIN_FADE : undefined);
+    this.terrain.update(s.terrain, s.terrainSeed, newHills ? TERRAIN_FADE : undefined);
     this.game.canvas.dataset.terrainSeed = String(s.terrainSeed);
     this.player.sync(s.player, newRound, newHills ? TERRAIN_FADE.delayMs + TERRAIN_FADE.durationMs / 2 : 0);
     this.player.setLives(s.lives, LIVES);
@@ -176,7 +203,10 @@ export class BattleScene extends Phaser.Scene {
     this.enemy.sync(s.enemy, newRound || destroyed || searchAfterHit);
     // The new enemy is visible in every challenge kind and fades in at its number (amendment 07, FR-010).
     if (searchAfterHit) this.enemy.appear(this.appearDelay);
-    if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
+    if (!newRound && prev && s.lives < prev.lives) {
+      this.effects.hitFlash(this.player);
+      this.effects.shake();
+    }
     // One miss before the enemy hits, its shell lands beside the child's tank: wobble and heart pulse (FR-100).
     const enemyShellLanded = !newRound && prev?.phase === 'enemyTurn' && s.phase !== 'enemyTurn' && s.phase !== 'paused';
     if (enemyShellLanded && isWarningStreak(s.missStreak, this.controller.getRoundSettings().enemyDifficulty)) {
@@ -196,6 +226,7 @@ export class BattleScene extends Phaser.Scene {
     if (gone) {
       const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
+      this.effects.shake();
       if (s.mode !== 'guided') this.enemy.appear(this.appearDelay);
     }
     this.drawDecoys(s, prev, newRound, searchAfterHit);
@@ -249,6 +280,7 @@ export class BattleScene extends Phaser.Scene {
           // A decoy hit at its number bursts like a cardboard dummy and is gone (FR-066).
           const c = tankCenter(decoy);
           this.effects.cardboard(c.x, toScreenY(c.y, WORLD_HEIGHT));
+          this.effects.shake();
           view.setHidden(true, false);
           this.decoyBursts++;
         } else {
@@ -332,6 +364,11 @@ export class BattleScene extends Phaser.Scene {
 
   private fire(shot: ShotInFlight): void {
     this.sounds?.shot();
+    // Recoil, muzzle flash and smoke on every tank that fires (amendment 14, FR-111).
+    const shooters = [shot.shooter === 'player' ? this.player : this.enemy, ...shot.decoyShells.map((d) => this.decoyViews.get(d.shooterId))];
+    for (const view of shooters) view?.fire();
+    this.muzzleFlashes += shooters.filter(Boolean).length;
+    this.game.canvas.dataset.muzzleFlashes = String(this.muzzleFlashes);
     if (shot.decoyShells.length === 0) {
       this.projectile.play(shot, () => this.landed(shot));
       return;

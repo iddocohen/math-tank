@@ -16,6 +16,7 @@
  *
  * The data section (FR-048a): "Daten sichern" downloads the export file, "Daten laden" reads one, and a note
  * explains how to add the game to the Home Screen.
+ * Amendment 14 (FR-114): a line at the end credits the ground texture and links its OpenGameArt page.
  */
 import { useId, useState, type ReactNode } from 'react';
 import type { RulerLevel } from '../core/numberline/ticks';
@@ -71,6 +72,9 @@ function collectErrors(s: Settings): Map<string, string[]> {
 function today(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/** The OpenGameArt page of the bundled dirt texture (amendment 14, FR-114). */
+const TEXTURE_PAGE = 'https://opengameart.org/node/84103';
 
 export function SettingsPage({ persistence, onSaved, onClose, now = () => new Date() }: Props) {
   const m = t();
@@ -334,6 +338,12 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           <p className="hint">{m.settings.data.homeScreen}</p>
         </Group>
       </div>
+      <p className="hint credits" data-testid="credits">
+        {m.settings.credits.text}{' '}
+        <a href={TEXTURE_PAGE} target="_blank" rel="noopener noreferrer">
+          {m.settings.credits.link}
+        </a>
+      </p>
     </div>
   );
 }

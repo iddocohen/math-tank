@@ -356,4 +356,15 @@ describe('SettingsPage data section (FR-048a)', () => {
     setup();
     expect(screen.getByText(m.settings.data.homeScreen)).toBeTruthy();
   });
+
+  it('credits the ground texture: author, license and a link to its page (amendment 14, FR-114)', () => {
+    setup();
+    const credits = screen.getByTestId('credits');
+    expect(credits.textContent).toContain('Drummyfish');
+    expect(credits.textContent).toContain('CC0');
+    const link = within(credits).getByRole('link') as HTMLAnchorElement;
+    expect(link.href).toBe('https://opengameart.org/node/84103');
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toBe('noopener noreferrer');
+  });
 });

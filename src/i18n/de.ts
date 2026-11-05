@@ -255,6 +255,11 @@ export const de = {
       homeScreen:
         'Tipp: Auf dem Home-Bildschirm behält der Browser die Daten sicherer. iPad: in Safari auf „Teilen“ und dann „Zum Home-Bildschirm“ tippen. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“ wählen.',
     },
+    /** Amendment 14 (FR-114): credits for the ground texture, although CC0 does not require them. */
+    credits: {
+      text: 'Bodentextur „dirt“ von Drummyfish, Lizenz CC0.',
+      link: 'Seite auf OpenGameArt',
+    },
     groups: {
       challengeTypes: 'Aufgaben',
       range: 'Zahlenraum',

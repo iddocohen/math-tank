@@ -4,7 +4,8 @@
  * side edge (US1 scenario 6). Playback advances only in advance(), which the scene calls from
  * update(), so pausing the scene stops the replay.
  * Amendment 11 (FR-093): the child's shells draw the garage trail (`playerTrail`): sparkles, rainbow lines or
- * bubbles along the live path; the enemy's shells keep the plain trail.
+ * bubbles along the live path; the enemy's shells keep the plain trail. Amendment 14 (FR-112): the trail lines are 5
+ * world units thick.
  * Bug report B2 (FR-043a): in a comparison turn the decoys' shells fly together with the enemy's shell; `onDone` runs
  * once the last shell of the volley has landed, so the timing does not show which shell is the enemy's.
  */
@@ -19,6 +20,9 @@ import { trailStyle, type TrailStyle } from '../core/rewards/looks';
 export const REPLAY_SPEED = 1.6;
 const TRAIL_SPACING = 18;
 const MARKER_SIZE = 22;
+/** Shell trail thickness and the gap between rainbow lines (amendment 14, FR-112: at least 5, it was 3). */
+const TRAIL_WIDTH = 5;
+const TRAIL_GAP = 4;
 
 /** One shell of a replay: the enemy's or player's shell, or a decoy's shell in a comparison volley. */
 interface Track {
@@ -160,9 +164,9 @@ export class ProjectileView {
     const from = Math.max(0, index - 40);
     const lines = style.line.length;
     style.line.forEach((color, k) => {
-      // Several colors (rainbow) lie side by side, 3 units apart.
-      const dy = (k - (lines - 1) / 2) * 3;
-      g.lineStyle(3, color, lines > 1 ? 0.95 : 0.8);
+      // Several colors (rainbow) lie side by side, TRAIL_GAP units apart; every line is TRAIL_WIDTH thick (amendment 14).
+      const dy = (k - (lines - 1) / 2) * TRAIL_GAP;
+      g.lineStyle(TRAIL_WIDTH, color, lines > 1 ? 0.95 : 0.85);
       g.beginPath();
       const start = path[from] as Point;
       g.moveTo(start.x, this.sy(start.y) + dy);
