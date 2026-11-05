@@ -10,19 +10,42 @@ import type { Builder } from './numberLine';
 /** Ruler level used when a difficulty step does not name one. */
 export const DEFAULT_RULER_LEVEL: RulerLevel = 1;
 
+/** Computed answers by range and ruler level; a few ranges per session, so the cache stays small. */
+const cache = new Map<string, { list: readonly number[]; set: ReadonlySet<number> }>();
+const CACHE_LIMIT = 32;
+
+function answersFor(settings: Settings, level: RulerLevel): { list: readonly number[]; set: ReadonlySet<number> } {
+  const { min, max } = settings.range;
+  const key = `${min}:${max}:${level}`;
+  let entry = cache.get(key);
+  if (!entry) {
+    let list: number[];
+    if (level >= 4) {
+      list = [];
+      for (let n = min; n <= max; n++) list.push(n);
+    } else {
+      const { minorStep, ticks } = ticksFor(settings.range, level, 0);
+      list = ticks.filter((t) => t.visible && isMultiple(t.value, minorStep)).map((t) => t.value);
+    }
+    if (cache.size >= CACHE_LIMIT) cache.clear();
+    entry = { list, set: new Set(list) };
+    cache.set(key, entry);
+  }
+  return entry;
+}
+
 /**
  * Where the enemy may stand: on levels 1 to 3 a whole number with a visible line on the minor grid,
- * on levels 4 and 5 any whole number in the range.
+ * on levels 4 and 5 any whole number in the range. Computed once per range and level, then reused by the generator
+ * and by validateChallenge (code review).
  */
-export function readPositionAnswers(settings: Settings, level: RulerLevel): number[] {
-  const { min, max } = settings.range;
-  if (level >= 4) {
-    const out: number[] = [];
-    for (let n = min; n <= max; n++) out.push(n);
-    return out;
-  }
-  const { minorStep, ticks } = ticksFor(settings.range, level, 0);
-  return ticks.filter((t) => t.visible && isMultiple(t.value, minorStep)).map((t) => t.value);
+export function readPositionAnswers(settings: Settings, level: RulerLevel): readonly number[] {
+  return answersFor(settings, level).list;
+}
+
+/** Whether `n` is one of readPositionAnswers(settings, level). */
+export function isReadPositionAnswer(settings: Settings, level: RulerLevel, n: number): boolean {
+  return answersFor(settings, level).set.has(n);
 }
 
 /**

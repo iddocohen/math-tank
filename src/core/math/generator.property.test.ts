@@ -388,6 +388,37 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
       expect(generated).toBe(group.length * SEEDS_PER_SETTINGS);
     });
   }
+
+  // Code review: "Nur Rechnen" never falls back to a ruler kind, also on custom ranges at the lowest steps.
+  const mathSettings = all.filter((s) => Object.values(s.challengeTypes).some(Boolean));
+  for (let i = 0; i < mathSettings.length; i += 40) {
+    const group = mathSettings.slice(i, i + 40);
+    it(`"Nur Rechnen", settings ${i + 1} to ${i + group.length}: no findNumber or readPosition, and every challenge validates`, () => {
+      const problems: string[] = [];
+      for (const settings of group) {
+        const { min, max } = settings.range;
+        const levels = LEVELS.filter((l) => l >= settings.rulerLevelStart && l <= settings.rulerLevelMax);
+        for (let seed = 0; seed < 300 && problems.length < 5; seed++) {
+          const playerPosition = seed % 2 === 0 ? min : max;
+          const label = `${min}..${max} types ${JSON.stringify(settings.challengeTypes)} seed ${seed}`;
+          const c = generateChallenge({
+            settings,
+            skillSteps: seed % 3 === 0 ? Object.fromEntries(Object.keys(ZERO_STEPS).map((k) => [k, 9])) as Record<Skill, number> : ZERO_STEPS,
+            roundSeed: seed,
+            turn: 1 + (seed % 7),
+            playerPosition,
+            rulerLevel: levels[seed % levels.length]!,
+            inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
+            ...playModeKinds('math', settings),
+          });
+          if (c.kind === 'findNumber' || c.kind === 'readPosition') problems.push(`${label}: ${c.kind}`);
+          const errors = validateChallenge(c, settings, playerPosition);
+          if (errors.length > 0) problems.push(`${label} ${c.kind}: ${errors.join('; ')}`);
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+  }
 });
 
 describe('difficulty steps only narrow the choices (US7, T130, FR-037)', () => {
@@ -485,6 +516,32 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
       expect([...kinds]).toEqual(['readPosition']);
     });
   }
+
+  it('"Nur Rechnen" falls back to "after" or "before" over the whole range, not to "find N", when no kind fits (code review)', () => {
+    const settings = presetSettings('0-100');
+    const { min, max } = settings.range;
+    const answers = new Set<number>();
+    for (let seed = 0; seed < 300; seed++) {
+      const playerPosition = seed % 2 === 0 ? min : max;
+      // No kind and no mode fallback fits, so only the final fallback is left.
+      const c = generateChallenge({
+        settings,
+        skillSteps: ZERO_STEPS,
+        roundSeed: seed,
+        turn: 1,
+        playerPosition,
+        rulerLevel: 1,
+        ...playModeKinds('math', settings),
+        kindsAllowed: [],
+        fallbackKinds: [],
+      });
+      expect(['after', 'before']).toContain(c.kind);
+      expect(validateChallenge(c, settings, playerPosition)).toEqual([]);
+      answers.add(c.answer);
+    }
+    // The positions step 0 narrows to the lowest fifth of the range; the final fallback ignores it.
+    expect(Math.max(...answers)).toBeGreaterThan(min + 0.5 * (max - min));
+  });
 
   it('"Gemischt" uses the enabled kinds unchanged', () => {
     expect(playModeKinds('mixed', defaultSettings())).toEqual({});

@@ -43,6 +43,11 @@ export interface GenerateInput {
    * number needs no thinking, and the fallback is readPosition. Omitted: no restriction.
    */
   inputMethod?: InputMethod;
+  /**
+   * "Nur Rechnen" (amendment 17, FR-123): no ruler kind, also not as the final fallback. When no kind fits, "after" or
+   * "before" over the whole range comes instead of "find N".
+   */
+  withoutRuler?: boolean;
 }
 
 /** Answers tried per kind before the generator moves on to another kind (research R10). */
@@ -60,7 +65,7 @@ const BUILDERS: Partial<Record<ChallengeKind, Builder>> = {
   ...comparisonBuilders,
 };
 
-const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: DifficultyStep) => number[]>> = {
+const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: DifficultyStep) => readonly number[]>> = {
   ...answerCandidates,
   readPosition: (settings, step) => readPositionAnswers(settings, step.rulerLevel ?? 1),
   addition: additionAnswers,
@@ -86,11 +91,14 @@ export const RULER_KINDS: readonly ChallengeKind[] = ['readPosition', 'findNumbe
  * The generator input of a play mode (amendment 17, MODE_TRAITS): "Nur Zahlenstrahl" only reads the ruler (FR-122),
  * "Nur Rechnen" uses the enabled kinds without the ruler kinds and its own fallbacks (FR-123), "Gemischt" adds nothing.
  */
-export function playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds'> {
+export function playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler'> {
   const traits = MODE_TRAITS[mode];
-  const out: Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds'> = {};
+  const out: Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler'> = {};
   if (traits.kinds === 'readPosition') out.kindsAllowed = ['readPosition'];
-  if (traits.kinds === 'enabledWithoutRuler') out.kindsAllowed = enabledKinds(settings).filter((k) => !RULER_KINDS.includes(k));
+  if (traits.kinds === 'enabledWithoutRuler') {
+    out.kindsAllowed = enabledKinds(settings).filter((k) => !RULER_KINDS.includes(k));
+    out.withoutRuler = true;
+  }
   if (traits.fallbackKinds) out.fallbackKinds = traits.fallbackKinds;
   return out;
 }
@@ -125,18 +133,20 @@ function allowedAnswers(settings: Settings, playerPosition: number): number[] {
   return out;
 }
 
+/** `wholeRange` ignores the step's "smaller numbers first" and picks from every allowed answer. */
 function tryKind(
   kind: ChallengeKind,
   answers: number[],
   input: GenerateInput,
   rng: Rng,
   finish: (draft: ChallengeDraft) => Challenge | null,
+  wholeRange = false,
 ): Challenge | null {
   const build = BUILDERS[kind];
   if (!build) return null;
   const step = stepFor(kind, input);
   const candidates = CANDIDATES[kind];
-  const inStep = withinStep(answers, input.settings, step);
+  const inStep = wholeRange ? answers : withinStep(answers, input.settings, step);
   const allowed = new Set(inStep);
   const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
   if (pool.length === 0) return null;
@@ -186,6 +196,18 @@ export function generateChallenge(input: GenerateInput): Challenge {
   for (const kind of input.fallbackKinds ?? (keyboard ? ['readPosition'] : [])) {
     const challenge = tryKind(kind, answers, input, rng, finish);
     if (challenge) return challenge;
+  }
+
+  // "Nur Rechnen" never falls back to a ruler kind (FR-123): "after" or "before" over the whole range, still with the
+  // settings, the gaps and the FR-021 rules that validateChallenge checks.
+  if (input.withoutRuler) {
+    for (const kind of ['after', 'before'] as const) {
+      const challenge = tryKind(kind, answers, input, rng, finish, true);
+      if (challenge) return challenge;
+    }
+    // Validation note: the property tests over random valid settings never get here (generator.property.test.ts),
+    // because a range spans at least RANGE_SPAN_MIN numbers, so "after" or "before" has an answer that is no range
+    // end and keeps minEnemyGap from the player. Only if that ever fails does "find N" below keep the game going.
   }
 
   // Fallback: "find N" always works for an allowed answer (FR-029). Answers within the positions step come first; a

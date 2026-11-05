@@ -348,6 +348,13 @@ describe('SettingsPage', () => {
     expect(round.queryByLabelText(L.timeLimit)).toBeNull();
   });
 
+  it('each one-line explanation describes its switch (aria-describedby, code review)', () => {
+    setup();
+    const help = within(screen.getByRole('group', { name: m.settings.groups.help }));
+    expect(help.getByRole('checkbox', { name: L.timeLimit, description: m.settings.explanations.timeLimit })).toBeTruthy();
+    expect(help.getByRole('checkbox', { name: L.pointAfterFullHelp, description: m.settings.explanations.pointAfterFullHelp })).toBeTruthy();
+  });
+
   it('"Punkt nach voller Hilfe" is on by default, and turning it off saves pointAfterFullHelp false (amendment 18, FR-129)', () => {
     const { persistence } = setup();
     expect(field(L.pointAfterFullHelp).checked).toBe(true);

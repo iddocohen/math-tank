@@ -143,3 +143,21 @@ test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
   await expect(page.getByTestId('challenge-banner')).toHaveCount(0);
 });
+
+test('a tap on the ruler at the typed number clears the typed digits and counts as pointer input (code review, FR-019, FR-076)', async ({ page }) => {
+  await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } });
+  await page.goto('/?seed=11');
+  await startButton(page).click();
+  const overlay = page.getByTestId('battle-overlay');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true');
+  const enemy = await enemyNumber(overlay);
+  const n = enemy > 50 ? enemy - 30 : enemy + 30;
+  await page.keyboard.type(String(n));
+  await expect(page.getByTestId('readout')).toHaveText(String(n));
+  await expect(overlay).toHaveAttribute('data-selection', String(n));
+  // The tap lands on the number already selected by typing; it still clears the readout.
+  await tapRuler(page, n);
+  await expect(page.getByTestId('readout')).toHaveText('?');
+  await expect(overlay).toHaveAttribute('data-selection', String(n));
+});

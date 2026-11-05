@@ -54,6 +54,7 @@ export function searchChallenge(s: RoundState, settings: Settings, { avoid, diff
       inputMethod: s.inputMethod ?? 'keyboard',
       ...(kindsAllowed ? { kindsAllowed } : {}),
       ...(byMode.fallbackKinds ? { fallbackKinds: byMode.fallbackKinds } : {}),
+      ...(byMode.withoutRuler ? { withoutRuler: true } : {}),
     });
     if (challenge.answer !== avoid) break;
   }

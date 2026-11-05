@@ -26,7 +26,8 @@
  *   The canvas carries `data-steps-label`, the bracket's text ('' when
  *   none), for the end-to-end tests only.
  * - After a near miss on the tank body (amendment 06), a bracket from the child's number to the enemy's number,
- *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072).
+ *   with "Du: 30 · 1 Schritt" (FR-072); no number is drawn at the enemy end (changed by product owner: no enemy
+ *   number after a miss).
  * - Guided searches (T066, amendment 07): the landing marker of a miss stays with its number in large digits until
  *   the next fire; after a hit a short pulse on the ruler at the destroyed enemy's number. The canvas carries `data-hit-pulse` (the pulsed number, '' when
  *   none) for the end-to-end tests only.
@@ -731,7 +732,7 @@ export class NumberLineView {
       // The step count refers to the enemy, or in comparison turns to the nearest standing tank (amendment 10).
       const to = shot.targetNumber;
       if (shot.nearMiss) {
-        // A near miss on a tank body: both numbers and the distance (amendment 06, FR-072).
+        // A near miss on a tank body: the child's number and the distance, no enemy number (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.targetNumber, min, max), t().battle.compare(shot.fired, shot.targetNumber));
       } else if (to !== shot.landed) {
         // Every miss, in every mode: the steps from the landing number to the tank (amendments 07 and 10, FR-072).
@@ -865,11 +866,15 @@ export class NumberLineView {
     this.dragging = false;
   }
 
-  /** Selects the number under the pointer; the controller's state update redraws, so the same number does nothing. */
+  /**
+   * Selects the number under the pointer; the controller's state update redraws. The same number does nothing, unless
+   * it was typed: pointing at it still clears the typed digits and counts as pointer input (FR-019, FR-076).
+   */
   private select(p: Phaser.Input.Pointer): void {
     const { min, max } = this.controller.getRoundSettings().range;
     const n = xToNumber(p.worldX, min, max);
-    if (n !== this.controller.getState().selection) this.controller.selectNumber(n);
+    const s = this.controller.getState();
+    if (n !== s.selection || s.entry.typed !== '') this.controller.selectNumber(n);
   }
 }
 

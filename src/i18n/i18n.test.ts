@@ -109,8 +109,11 @@ describe('de table', () => {
     const b = t().battle as Record<string, unknown>;
     expect(t().battle.hit).toBe('Getroffen!');
     expect(t().battle.near).toBe('Ganz knapp! Triff die Linie.');
-    expect(t().battle.compare(30, 31)).toBe('Du: 30 · Gegner: 31 · 1 Schritt');
-    expect(t().battle.compare(630, 637)).toBe('Du: 630 · Gegner: 637 · 7 Schritte');
+    // Changed by product owner: no enemy number after a miss, only the child's number and the step count.
+    expect(t().battle.compare(30, 31)).toBe('Du: 30 · 1 Schritt');
+    expect(t().battle.compare(630, 637)).toBe('Du: 630 · 7 Schritte');
+    expect(t().battle.compare(630, 637)).not.toContain('637');
+    expect(t().battle.compare(630, 637)).not.toContain('Gegner');
     expect(t().battle.enemyStoodAt(637)).toBe('Der Gegner stand bei 637.');
     for (const removed of ['bullseye', 'bodyHit', 'close']) expect(b[removed]).toBeUndefined();
     expect((t().settings.labels as Record<string, unknown>).exactHit).toBeUndefined();

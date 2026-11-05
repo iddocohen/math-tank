@@ -42,6 +42,8 @@
  *   destroyed, a heart lost, a decoy burst) shakes the screen a little, unless the operating system asks for reduced
  *   motion, which also means fewer particles. For the end-to-end tests only (D4), the canvas carries
  *   `data-muzzle-flashes`, `data-reduced-motion` and `data-fps` (frames in the last second).
+ * - Amendment 18: a hit that does not count plays no chime. For the end-to-end tests only (D4), the canvas carries
+ *   `data-chimes` (chimes played since the scene started).
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -115,6 +117,7 @@ export class BattleScene extends Phaser.Scene {
   private startedShot: ShotInFlight | null = null;
   private pendingFire: Phaser.Time.TimerEvent | null = null;
   private muzzleFlashes = 0;
+  private chimes = 0;
   private frames = 0;
   private frameTime = 0;
 
@@ -136,6 +139,8 @@ export class BattleScene extends Phaser.Scene {
     this.game.canvas.dataset.reducedMotion = String(reducedMotion);
     this.muzzleFlashes = 0;
     this.game.canvas.dataset.muzzleFlashes = '0';
+    this.chimes = 0;
+    this.game.canvas.dataset.chimes = '0';
     this.add.image(0, 0, TEX.sky).setOrigin(0, 0);
     this.terrain = new TerrainView(this, WORLD_HEIGHT, WORLD_WIDTH);
     this.projectile = new ProjectileView(this, WORLD_HEIGHT, this.look.trail);
@@ -389,14 +394,20 @@ export class BattleScene extends Phaser.Scene {
     this.effects.explosion(shot.impact.x, y, BLAST_RADIUS);
     // The controller applies the crater and damage; its update redraws the terrain right away.
     // Every destroyed enemy, also one that does not count (amendment 18).
-    const before = this.controller.getState().enemiesHit;
+    const before = this.controller.getState();
     if (shot.shooter === 'player') this.controller.shotAnimationDone();
     else this.controller.enemyShotAnimationDone();
-    // The same soft boom for every explosion, a miss included, and the soft chime after a hit (FR-009, AC-07).
-    const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesHit > before;
+    // The same soft boom for every explosion, a miss included, and the soft chime after a hit (FR-009, AC-07); a hit
+    // that does not count raises enemiesHit but not enemiesDestroyed, and gets no chime (amendment 18).
+    const after = this.controller.getState();
+    const destroyedEnemy = shot.shooter === 'player' && after.enemiesHit > before.enemiesHit;
+    const uncounted = destroyedEnemy && after.enemiesDestroyed === before.enemiesDestroyed;
     // A burst decoy plays only the light plopp (amendment 10, FR-066).
-    const burstDecoy = shot.shooter === 'player' && this.controller.getState().lastShot?.decoyHit === true;
-    for (const sound of landingSounds({ destroyedEnemy, burstDecoy })) this.sounds?.[sound]();
+    const burstDecoy = shot.shooter === 'player' && after.lastShot?.decoyHit === true;
+    for (const sound of landingSounds({ destroyedEnemy, uncounted, burstDecoy })) {
+      this.sounds?.[sound]();
+      if (sound === 'chime') this.game.canvas.dataset.chimes = String(++this.chimes);
+    }
   }
 }
 

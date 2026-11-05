@@ -65,7 +65,7 @@ Number pad rules:
 | Where the shell lands | Enemy | Status line | Ruler |
 |-----------------------|-------|-------------|-------|
 | Exact number | destroyed with a large explosion; a new enemy appears at a new position; tank counter + 1 | "Getroffen!" and "Der Gegner stand bei 637." | landing marker |
-| On the tank body, not exact | shakes, not destroyed (a miss) | "Ganz knapp! Triff die Linie." | bracket from the child's number to the enemy's number with "Du: 30 · Gegner: 31 · 1 Schritt" |
+| On the tank body, not exact | shakes, not destroyed (a miss) | "Ganz knapp! Triff die Linie." | bracket from the child's number to the enemy, with "Du: 30 · 1 Schritt" and no number at the enemy end (changed by product owner: no enemy number after a miss) |
 | Off the tank body | nothing (a miss) | landing number | bracket from the landing number to the enemy with "N Schritte", in every mode (amendment 07) |
 
 - The overlay root carries, for the end-to-end tests only: `data-last-shot` (`hit`, `near` or `miss`), `data-lives` (0 to 3), `data-enemies-destroyed`, `data-last-distance` (the step count of the last shot, amendment 07) and `data-outcome` at the round end; `data-shots-since-enemy-fire` is removed by amendment 07. The canvas carries `data-steps-label`, the text of the step-count bracket on the ruler ('' when none). `data-enemy-health` and `data-player-health` are removed (amendment 06).

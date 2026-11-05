@@ -18,12 +18,12 @@
  * `data-outcome` replace the health attributes.
  *
  * Hit feedback (amendment 06, FR-066, FR-072, contracts/ui-flows.md): a hit shows "Getroffen!" and the number the
- * enemy stood at; a near miss on the body shows "Ganz knapp! Triff die Linie." with both numbers and the distance;
- * a miss shows the landing number.
+ * enemy stood at; a near miss on the body shows "Ganz knapp! Triff die Linie." with the child's number and the distance,
+ * never the enemy's number (changed by product owner); a miss shows the landing number.
  *
  * Guided searches (T068, FR-010, FR-019, FR-053): the challenge banner at the top center shows the prompt; after a
- * miss the status line shows the landing number and an encouraging phrase; a near miss shows both numbers and the
- * step count, in every play mode (amendments 07 and 17).
+ * miss the status line shows the landing number and an encouraging phrase; a near miss shows the child's number and
+ * the step count, in every play mode (amendments 07 and 17).
  * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
  * `data-help-level` is the help step. The fire button stays the only submit control.
  *
@@ -39,7 +39,7 @@
  * the time until then (`data-testid="help-timer"`), with no number and no warning colour.
  *
  * One message line (T230, FR-057): the status line shows at most one child message: the range hint; else the hit text
- * while it is shown; else, after a miss, the encouraging phrase (or the near-miss line with both numbers) until
+ * while it is shown; else, after a miss, the encouraging phrase (or the near-miss line) until
  * MISS_MESSAGE_MS after the child can choose again, then the help step's text; else the help step's text. There is no
  * "Gelandet bei N" message: the ruler shows the landing number.
  *
@@ -67,6 +67,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
+import { SOLUTION_HELP_LEVEL } from '../core/battle/guided';
 import { acceptsInput, visibleEnemy } from '../core/battle/round';
 import { MODE_TRAITS } from '../core/modes';
 import { followHit, HIT_FEEDBACK_MS, hitOutdated, type HitOwner } from '../core/view/hitFeedback';
@@ -129,7 +130,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
   const showMiss = missed && (hint === null || missMessageOn);
   const encouragement = showMiss && inSearch && !lastShot.nearMiss && state.message?.key === 'encouragement' ? messageText(state.message) : null;
   const placement = useCardPlacement(state);
-  const solution = state.help.level === 3 && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
+  const solution = state.help.level === SOLUTION_HELP_LEVEL && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
   useHelpTick(controller, state);
   const canFullscreen = document.fullscreenEnabled === true;
 
@@ -174,8 +175,9 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
             {lastShot.uncounted ? m.battle.hitWithHelp : m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
         ) : showMiss && lastShot.nearMiss ? (
-          // On a tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072). In a
-          // comparison turn the number is the nearest standing tank's, so it does not show which tank is the enemy.
+          // On a tank body but not exact: a miss with the child's number and the distance, never "falsch" and never the
+          // enemy's number (FR-072, changed by product owner). In a comparison turn the distance is to the nearest
+          // standing tank, so it does not show which tank is the enemy.
           <span className="landed near" data-testid="hit-feedback">
             {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.targetNumber)}</span>
           </span>
@@ -257,7 +259,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
           aria-label={m.battle.help}
           title={m.battle.help}
           tabIndex={-1}
-          disabled={state.phase !== 'challenge' || state.help.level >= 3}
+          disabled={state.phase !== 'challenge' || state.help.level >= SOLUTION_HELP_LEVEL}
           onMouseDown={(e) => e.preventDefault()}
           onKeyDown={(e) => e.preventDefault()}
           onClick={() => controller.requestHelp()}

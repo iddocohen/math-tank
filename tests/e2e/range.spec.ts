@@ -54,13 +54,16 @@ test('range 550 to 780: a shot 1 away is a near miss, the exact number destroys 
   expect(enemy).toBeLessThanOrEqual(780);
   await expect(canvas).toHaveAttribute('data-pointer-lines', String(enemy));
 
-  // 1 away: on the tank body, a near miss with both numbers and the distance; nothing is destroyed (FR-066, FR-072).
+  // 1 away: on the tank body, a near miss with the child's number and the distance, no enemy number (changed by
+  // product owner); nothing is destroyed (FR-066, FR-072).
   const near = nextTo(enemy);
   await typeAndFire(page, overlay, near);
   await expect(overlay).toHaveAttribute('data-last-shot', 'near');
   await expect(page.getByTestId('hit-feedback')).toContainText(m.battle.near);
   await expect(page.getByTestId('compare')).toHaveText(m.battle.compare(near, enemy));
-  await expect(page.getByTestId('compare')).toHaveText(`Du: ${near} · Gegner: ${enemy} · 1 Schritt`);
+  await expect(page.getByTestId('compare')).toHaveText(`Du: ${near} · 1 Schritt`);
+  await expect(page.getByTestId('hit-feedback')).not.toContainText(String(enemy));
+  await expect(canvas).toHaveAttribute('data-steps-label', `Du: ${near} · 1 Schritt`);
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   // The enemy fires back after the near miss, then the child aims again (amendment 07, FR-081).
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');

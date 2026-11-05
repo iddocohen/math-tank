@@ -121,6 +121,11 @@ describe('sfx', () => {
     expect(landingSounds({ destroyedEnemy: true })).toEqual(['boom', 'chime']);
   });
 
+  it('a hit that does not count (after the full help, amendment 18) plays the boom without the chime', () => {
+    expect(landingSounds({ destroyedEnemy: true, uncounted: true })).toEqual(['boom']);
+    expect(landingSounds({ destroyedEnemy: true, uncounted: false })).toEqual(['boom', 'chime']);
+  });
+
   it('a burst decoy plays only the light plopp, clearly different from the enemy explosion (amendment 10, FR-066)', () => {
     expect(landingSounds({ destroyedEnemy: false, burstDecoy: true })).toEqual(['plopp']);
     expect(landingSounds({ destroyedEnemy: false, burstDecoy: false })).toEqual(['boom']);

@@ -4,7 +4,7 @@ import { arithmeticErrors } from './arithmetic';
 import { comparisonErrors } from './comparison';
 import { minEnemyGap } from './gaps';
 import { isRangeEnd, MIN_STEP_COUNT, movementAllowed, rangeMajorStep } from './numberLine';
-import { readPositionAnswers } from './readPosition';
+import { isReadPositionAnswer } from './readPosition';
 
 /** Returns one message per broken rule; empty when the challenge is valid. */
 export function validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[] {
@@ -83,7 +83,7 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
         errors.push('readPosition: missing ruler level');
         break;
       }
-      expect(readPositionAnswers(settings, level).includes(c.answer), 'readPosition: answer not allowed at this ruler level');
+      expect(isReadPositionAnswer(settings, level, c.answer), 'readPosition: answer not allowed at this ruler level');
       break;
     }
     case 'addition':

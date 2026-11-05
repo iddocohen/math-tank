@@ -156,9 +156,15 @@ export function App() {
     const look = persistence.settings().garage ? persistence.garage().look : STANDARD_LOOK;
     let handle: GameHandle | null = null;
     let left = false;
-    void loadGame().then(({ createGame }) => {
-      if (!left) handle = createGame(parent, controller, { sounds: sfx, look });
-    });
+    loadGame().then(
+      ({ createGame }) => {
+        if (!left) handle = createGame(parent, controller, { sounds: sfx, look });
+      },
+      // Without the game chunk no shell can land, so the round could never go on: back to the start screen.
+      () => {
+        if (!left) setScreen('start');
+      },
+    );
     return () => {
       left = true;
       handle?.destroy();

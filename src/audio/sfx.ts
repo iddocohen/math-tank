@@ -55,12 +55,14 @@ export interface Sfx {
 
 /**
  * The sounds of a shell landing (FR-009, AC-07): every explosion plays the same soft boom, a miss included, and a
- * shot that destroyed the enemy adds the soft chime. A shot that burst a decoy plays only the light plopp, clearly
- * different from the enemy's explosion (amendment 10). There is no other sound for a miss.
+ * shot that destroyed the enemy adds the soft chime, unless the hit does not count (after the full help with "Punkt
+ * nach voller Hilfe" off, amendment 18: "Getroffen, mit Hilfe." comes instead of the celebration). A shot that burst a
+ * decoy plays only the light plopp, clearly different from the enemy's explosion (amendment 10). There is no other
+ * sound for a miss.
  */
-export function landingSounds(landing: { destroyedEnemy: boolean; burstDecoy?: boolean }): Array<'boom' | 'chime' | 'plopp'> {
+export function landingSounds(landing: { destroyedEnemy: boolean; uncounted?: boolean; burstDecoy?: boolean }): Array<'boom' | 'chime' | 'plopp'> {
   if (landing.burstDecoy) return ['plopp'];
-  return landing.destroyedEnemy ? ['boom', 'chime'] : ['boom'];
+  return landing.destroyedEnemy && !landing.uncounted ? ['boom', 'chime'] : ['boom'];
 }
 
 export function createSfx(options: SfxOptions): Sfx {

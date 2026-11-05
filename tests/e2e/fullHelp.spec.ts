@@ -1,8 +1,9 @@
 /**
  * Amendment 18 (T355, FR-129): with "Punkt nach voller Hilfe" off, a hit at the shown solution destroys the enemy and
  * brings a new one, but the tank counter, the stars and "Gegner pro Runde" do not move, and the line reads
- * "Getroffen, mit Hilfe.". A hit without help and a hit after one help step count. Keyboard only; game state comes
- * from the overlay's data-* attributes (D4).
+ * "Getroffen, mit Hilfe.". The hit that does not count plays no chime (code review; canvas `data-chimes`). A hit
+ * without help and a hit after one help step count, with the chime. Keyboard only; game state comes from the
+ * overlay's data-* attributes (D4).
  */
 import { enemyNumber, expect, seedStorage, test, typeAndFire } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
@@ -45,6 +46,7 @@ test('with "Punkt nach voller Hilfe" off, the hit at the shown solution does not
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
   await expect(page.getByTestId('score')).toHaveText('0');
+  await expect(canvas).toHaveAttribute('data-chimes', '0');
   // New hills after the destroyed enemy, also when it does not count (FR-101).
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrain);
 
@@ -52,6 +54,7 @@ test('with "Punkt nach voller Hilfe" off, the hit at the shown solution does not
   await typeAndFire(page, overlay, await enemyNumber(overlay));
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1');
   await expect(page.getByTestId('hit-feedback')).toContainText(m.battle.hit);
+  await expect(canvas).toHaveAttribute('data-chimes', '1');
 
   // A hit after one help step counts and reaches the round goal of 2.
   await expect(overlay).toHaveAttribute('data-help-level', '0');

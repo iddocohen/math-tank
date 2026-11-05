@@ -9,6 +9,7 @@
  * when that mode is offered; Enter and Space start without a mode, and the app starts the first offered one.
  */
 import type { Digit } from '../core/battle/entry';
+import { SOLUTION_HELP_LEVEL } from '../core/battle/guided';
 import { PLAY_MODES, type PlayMode } from '../core/settings/schema';
 
 /** The fields of a KeyboardEvent the map reads. */
@@ -53,7 +54,7 @@ export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyConte
   const isEnter = key === 'Enter';
   const isSpace = key === ' ' || key === 'Spacebar';
   if ((isEnter || isSpace) && event.repeat) return null;
-  const solutionStep = (context.helpLevel ?? 0) >= 3;
+  const solutionStep = (context.helpLevel ?? 0) >= SOLUTION_HELP_LEVEL;
 
   switch (screen) {
     case 'start':

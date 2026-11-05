@@ -116,7 +116,7 @@ describe('BattleOverlay (amendment 06)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-last-shot')).toBe('hit');
   });
 
-  it('after a near miss shows "Ganz knapp! Triff die Linie." with both numbers, and data-last-shot near', () => {
+  it('after a near miss shows "Ganz knapp! Triff die Linie." with the number fired and the steps, and data-last-shot near', () => {
     const { controller } = setup();
     const e = enemyOf(controller.getState()).position;
     const near = e + (e < 100 ? 1 : -1);
@@ -127,6 +127,10 @@ describe('BattleOverlay (amendment 06)', () => {
     expect(screen.getByTestId('hit-feedback').textContent).toContain('Ganz knapp! Triff die Linie.');
     expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, e));
     expect(screen.getByTestId('battle-overlay').getAttribute('data-last-shot')).toBe('near');
+    // Changed by product owner: the feedback never shows the enemy's number after a miss.
+    const feedback = screen.getByTestId('hit-feedback').textContent ?? '';
+    expect(feedback).not.toContain('Gegner');
+    expect(feedback).not.toMatch(new RegExp(`(^|\\D)${e}(\\D|$)`));
   });
 
   it('a plain miss sets data-last-shot miss and shows no "Gelandet bei N" message: the ruler shows the landing number (T230)', () => {
@@ -273,6 +277,10 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
     expect(root.getAttribute('data-enemy-number')).toBe(String(s.challenge!.answer));
     expect(root.getAttribute('data-last-distance')).toBe(String(Math.abs(miss - s.challenge!.answer)));
     expect(root.hasAttribute('data-shots-since-enemy-fire')).toBe(false);
+    // Changed by product owner: the status line never shows the enemy's number after a miss.
+    const status = screen.getByRole('status').textContent ?? '';
+    expect(status).not.toContain('Gegner:');
+    expect(status).not.toMatch(new RegExp(`(^|\\D)${s.challenge!.answer}(\\D|$)`));
   });
 
   it('sets data-enemy-number from the start of the search: the enemy is visible (amendment 07, FR-010)', () => {
@@ -280,7 +288,7 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number')).toBe(String(controller.getState().challenge!.answer));
   });
 
-  it('a near miss in a guided search shows "Ganz knapp! Triff die Linie." with both numbers and the step count (amendment 07, FR-072)', () => {
+  it('a near miss in a guided search shows "Ganz knapp! Triff die Linie." with the number fired and the step count, no enemy number (amendment 07, FR-072)', () => {
     const { controller, advance } = setupGuided();
     const s = controller.getState();
     const answer = s.challenge!.answer;
@@ -294,6 +302,8 @@ describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
     expect(root.getAttribute('data-last-shot')).toBe('near');
     expect(screen.getByTestId('hit-feedback').textContent).toContain(t().battle.near);
     expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, answer));
+    expect(screen.getByTestId('hit-feedback').textContent).toContain(`Du: ${near} · 1 Schritt`);
+    expect(screen.getByTestId('hit-feedback').textContent).not.toMatch(new RegExp(`(^|\\D)${answer}(\\D|$)`));
     expect(messages()).toHaveLength(1);
     expect(t().battle).not.toHaveProperty('nearHidden');
   });

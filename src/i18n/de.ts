@@ -91,11 +91,11 @@ export const de = {
     clock: 'Spielzeit',
     /** Amendment 06: label of the hearts, for screen readers only (FR-080). */
     lives: (n: number) => (n === 1 ? 'Noch 1 Herz' : `Noch ${n} Herzen`),
-    /** Amendment 04: both numbers and the distance after a near miss on the body (FR-072). */
-    compare: (you: number, enemy: number) => {
-      const d = Math.abs(you - enemy);
-      return `Du: ${you} · Gegner: ${enemy} · ${stepCount(d)}`;
-    },
+    /**
+     * Amendment 04: the child's number and the distance after a near miss on the body (FR-072). Changed by product
+     * owner: no enemy number after a miss; `enemy` only gives the distance.
+     */
+    compare: (you: number, enemy: number) => `Du: ${you} · ${stepCount(Math.abs(you - enemy))}`,
     enemyStoodAt: (n: number) => `Der Gegner stand bei ${n}.`,
     landedAt: (n: number) => `Gelandet bei ${n}`,
     steps: stepCount,

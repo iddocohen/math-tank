@@ -292,13 +292,16 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           <Check label={L.helpStepAnimation} {...bind('help.stepAnimation')} />
           <Check label={L.beginnerAssist} {...bind('beginnerAssist')} />
           {/* The time limit and the point after the full help stand together, each with one line (amendment 18, FR-129). */}
-          <Check label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
-          <p className="hint">{m.settings.explanations.timeLimit}</p>
+          <Check
+            label={L.timeLimit}
+            description={m.settings.explanations.timeLimit}
+            checked={draft.timeLimitSeconds !== null}
+            onChange={(v) => set('timeLimitSeconds', v ? 30 : null)}
+          />
           {draft.timeLimitSeconds !== null && (
             <NumberInput label={L.timeLimitSeconds} value={draft.timeLimitSeconds} min={10} max={120} errors={errorsAt('timeLimitSeconds')} onChange={(n) => set('timeLimitSeconds', n)} />
           )}
-          <Check label={L.pointAfterFullHelp} {...bind('pointAfterFullHelp')} />
-          <p className="hint">{m.settings.explanations.pointAfterFullHelp}</p>
+          <Check label={L.pointAfterFullHelp} description={m.settings.explanations.pointAfterFullHelp} {...bind('pointAfterFullHelp')} />
         </Group>
 
         <Group title={m.settings.groups.enemy}>
@@ -551,13 +554,28 @@ function Errors({ errors }: { errors: string[] }) {
   );
 }
 
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+/** A switch; `description` is a one-line explanation below it, linked with aria-describedby. */
+function Check({ label, checked, onChange, description }: { label: string; checked: boolean; onChange: (v: boolean) => void; description?: string }) {
   const id = useId();
+  const descriptionId = `${id}-description`;
   return (
-    <div className="field check-field">
-      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.currentTarget.checked)} />
-      <label htmlFor={id}>{label}</label>
-    </div>
+    <>
+      <div className="field check-field">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          aria-describedby={description === undefined ? undefined : descriptionId}
+          onChange={(e) => onChange(e.currentTarget.checked)}
+        />
+        <label htmlFor={id}>{label}</label>
+      </div>
+      {description !== undefined && (
+        <p className="hint" id={descriptionId}>
+          {description}
+        </p>
+      )}
+    </>
   );
 }
 
