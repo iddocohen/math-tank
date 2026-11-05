@@ -250,3 +250,42 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   await expect(overlay).toHaveAttribute('data-turn', '0');
   await expect(canvas).toHaveAttribute('data-you-marker', 'on');
 });
+
+test('on a crowded level 1 ruler only the typed number is labeled, once, under the marker (T203, FR-017)', async ({ page }) => {
+  test.setTimeout(60_000);
+  // 0 to 100 at level 1: the minor lines are too close for labels.
+  expect(settings.rulerLevelStart).toBe(1);
+  await page.addInitScript(
+    ([key, value]) => {
+      window.localStorage.setItem(key, value);
+    },
+    [SETTINGS_KEY, JSON.stringify(settings)] as const,
+  );
+  await page.goto('/?seed=4');
+  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.keyboard.press('Enter');
+  const overlay = page.locator('[data-phase]');
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  const canvas = page.locator('canvas');
+
+  // Typing 4: the label is "4" alone, not "3,4,5".
+  await page.keyboard.press('4');
+  await expect(overlay).toHaveAttribute('data-selection', '4');
+  await expect(canvas).toHaveAttribute('data-preview-text', '4');
+  await page.screenshot({ path: test.info().outputPath('typed-4.png') });
+
+  // Typing 45: only "45".
+  await page.keyboard.press('5');
+  await expect(overlay).toHaveAttribute('data-selection', '45');
+  await expect(canvas).toHaveAttribute('data-preview-text', '45');
+  await page.screenshot({ path: test.info().outputPath('typed-45.png') });
+
+  // 40 is a labeled major line, so it gets no second label.
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('4');
+  await page.keyboard.press('0');
+  await expect(overlay).toHaveAttribute('data-selection', '40');
+  await expect(canvas).toHaveAttribute('data-preview-text', '');
+  await expect(canvas).toHaveAttribute('data-ruler-labels', /(^|,)40(,|$)/);
+});

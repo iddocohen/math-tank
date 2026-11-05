@@ -161,7 +161,7 @@ interface Tick { value: number; major: boolean; visible: boolean; labeled: boole
 
 | Level | Lines drawn | Labels |
 |-------|-------------|--------|
-| 1 | major and minor | every line where the label spacing is at least 28 logical units; otherwise major lines, and minor labels next to the preview marker |
+| 1 | major and minor | every line where the label spacing is at least 28 logical units; otherwise major lines, and only a typed number labeled under the preview marker (T203) |
 | 2 | major and minor | major lines |
 | 3 | major and minor | some major lines, chosen by seed, always both end points |
 | 4 | major only | major lines |

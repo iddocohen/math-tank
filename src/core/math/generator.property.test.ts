@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { RANGE_PRESETS } from '../settings/defaults';
-import { defaultSettings } from '../settings/defaults';
+import { createRng, type Rng } from '../rng';
+import {
+  CUSTOM_MIN_LIMIT,
+  CUSTOM_MIN_UPPER_LIMIT,
+  defaultSettings,
+  RANGE_PRESETS,
+  RANGE_SPAN_MAX,
+  RANGE_SPAN_MIN,
+} from '../settings/defaults';
+import { validateSettings, withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
 import { generateChallenge } from './generate';
 import { validateChallenge } from './validate';
@@ -176,4 +184,115 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
       }
     }
   });
+});
+
+describe('generateChallenge with 200 random valid settings, 1000 seeds each (T107, FR-029, SC-003, SC-013, US6 scenario 3, AC-04)', () => {
+  const SETTINGS_COUNT = 200;
+  const SEEDS_PER_SETTINGS = 1_000;
+  const PRESETS = Object.keys(RANGE_PRESETS) as Array<keyof typeof RANGE_PRESETS>;
+  const LEVELS = [1, 2, 3, 4, 5] as const;
+
+  /** All 16 on/off combinations of the four challenge-type switches. */
+  const TYPE_COMBINATIONS = Array.from({ length: 16 }, (_, bits) => ({
+    numberLine: (bits & 1) !== 0,
+    addition: (bits & 2) !== 0,
+    subtraction: (bits & 4) !== 0,
+    comparison: (bits & 8) !== 0,
+  }));
+
+  /** One random settings object; it may break a rule, then the caller drops it. */
+  function randomSettings(rng: Rng, forced?: { range0to20: boolean; types: Settings['challengeTypes'] }): Settings {
+    const base = defaultSettings();
+    let range: Settings['range'];
+    if (forced?.range0to20) range = { preset: '0-20', ...RANGE_PRESETS['0-20'] };
+    else if (rng.next() < 0.5) {
+      const preset = rng.pick(PRESETS);
+      range = { preset, ...RANGE_PRESETS[preset] };
+    } else {
+      // Any start, including negative and four-digit starts, with spans from the smallest to the largest.
+      const min = rng.pick([rng.int(CUSTOM_MIN_LIMIT, CUSTOM_MIN_UPPER_LIMIT), rng.int(-50, 50), rng.int(0, 1000)]);
+      const span = rng.pick([rng.int(RANGE_SPAN_MIN, 30), rng.int(RANGE_SPAN_MIN, RANGE_SPAN_MAX)]);
+      range = { preset: 'custom', min, max: min + span };
+    }
+    const types = forced?.types ?? rng.pick(TYPE_COMBINATIONS);
+    const allOff = !Object.values(types).some(Boolean);
+    const startLevel = rng.pick(LEVELS);
+    const patched: Settings = {
+      ...base,
+      challengeTypes: { ...types },
+      addition: { maxOperand: rng.int(1, 100), maxResult: rng.int(-1000, 10_000), steps: rng.pick([1, 2] as const) },
+      subtraction: { maxOperand: rng.int(1, 100), steps: rng.pick([1, 2] as const) },
+      crossTens: rng.next() < 0.5,
+      crossHundreds: rng.next() < 0.5,
+      negativeResults: rng.next() < 0.5,
+      rulerLevelStart: startLevel,
+      rulerLevelMax: rng.pick(LEVELS.filter((l) => l >= startLevel)),
+      // Every switch off is valid only together with free play (FR-047).
+      freePlay: allOff || rng.next() < 0.3,
+    };
+    // withRange clamps the linked limits to the range, as the settings page does.
+    return withRange(patched, range);
+  }
+
+  function collectSettings(): Settings[] {
+    const rng = createRng(20_261_105);
+    const out: Settings[] = [];
+    // First every challenge-type combination on 0 to 20, then random settings until there are 200.
+    for (const types of TYPE_COMBINATIONS) {
+      const s = randomSettings(rng, { range0to20: true, types });
+      if (validateSettings(s).ok) out.push(s);
+    }
+    for (let tries = 0; out.length < SETTINGS_COUNT && tries < 100_000; tries++) {
+      const s = randomSettings(rng);
+      if (validateSettings(s).ok) out.push(s);
+    }
+    return out;
+  }
+
+  const all = collectSettings();
+
+  it('builds 200 valid settings covering custom starts, 0 to 20 with every type combination, and every ruler level', () => {
+    expect(all).toHaveLength(SETTINGS_COUNT);
+    const zeroToTwenty = all.filter((s) => s.range.preset === '0-20');
+    for (const types of TYPE_COMBINATIONS) {
+      expect(zeroToTwenty.some((s) => JSON.stringify(s.challengeTypes) === JSON.stringify(types))).toBe(true);
+    }
+    const customs = all.filter((s) => s.range.preset === 'custom');
+    expect(customs.some((s) => s.range.min < 0)).toBe(true);
+    expect(customs.some((s) => s.range.min > 1000)).toBe(true);
+    expect(customs.some((s) => s.range.min % 10 !== 0)).toBe(true);
+    for (const level of LEVELS) {
+      expect(all.some((s) => s.rulerLevelStart === level)).toBe(true);
+      expect(all.some((s) => s.rulerLevelMax === level)).toBe(true);
+    }
+  });
+
+  for (let i = 0; i < SETTINGS_COUNT; i += 20) {
+    const group = all.slice(i, i + 20);
+    it(`settings ${i + 1} to ${i + group.length}: every challenge validates and stays inside the range`, () => {
+      const problems: string[] = [];
+      let generated = 0;
+      for (const settings of group) {
+        const { min, max } = settings.range;
+        const levels = LEVELS.filter((l) => l >= settings.rulerLevelStart && l <= settings.rulerLevelMax);
+        for (let seed = 0; seed < SEEDS_PER_SETTINGS && problems.length < 5; seed++) {
+          const playerPosition = seed % 2 === 0 ? min : max;
+          const rulerLevel = levels[seed % levels.length]!;
+          const label = `${settings.range.preset} ${min}..${max} types ${JSON.stringify(settings.challengeTypes)} level ${rulerLevel} seed ${seed}`;
+          let c;
+          try {
+            c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1 + (seed % 7), playerPosition, rulerLevel });
+          } catch (e) {
+            problems.push(`${label}: threw ${String(e)}`);
+            continue;
+          }
+          generated++;
+          const errors = validateChallenge(c, settings, playerPosition);
+          if (errors.length > 0) problems.push(`${label} ${c.kind}: ${errors.join('; ')}`);
+        }
+      }
+      expect(problems).toEqual([]);
+      expect(generated).toBe(group.length * SEEDS_PER_SETTINGS);
+    });
+  }
 });

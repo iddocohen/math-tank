@@ -76,7 +76,7 @@ export function ticksFor(
   level: RulerLevel,
   seed: number,
   opts: { allLines?: boolean } = {},
-): { majorStep: number; minorStep: number; ticks: Tick[]; labelsNearPreview: boolean } {
+): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean } {
   const { min, max } = view;
   const { majorStep, minorStep } = stepsFor(view);
   const ticks: Tick[] = lineValues(min, max, majorStep, minorStep).map((value) => ({
@@ -93,15 +93,15 @@ export function ticksFor(
 
   if (opts.allLines) {
     for (const t of ticks) mark(t, true, true);
-    return { majorStep, minorStep, ticks, labelsNearPreview: false };
+    return { majorStep, minorStep, ticks, labelTypedNumber: false };
   }
 
-  let labelsNearPreview = false;
+  let labelTypedNumber = false;
   switch (level) {
     case 1: {
       const spacing = (minorStep / (max - min)) * (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left);
       const roomy = spacing >= MIN_LABEL_SPACING;
-      labelsNearPreview = !roomy;
+      labelTypedNumber = !roomy;
       for (const t of ticks) mark(t, true, roomy || t.major);
       break;
     }
@@ -123,5 +123,22 @@ export function ticksFor(
       break;
   }
 
-  return { majorStep, minorStep, ticks, labelsNearPreview };
+  return { majorStep, minorStep, ticks, labelTypedNumber };
+}
+
+/**
+ * The labels to draw under the preview marker (T203, FR-017, FR-019). Only on a level 1 ruler that is too
+ * crowded for minor labels (`labelTypedNumber`), and only for a typed number: the typed number itself, once, and
+ * never the neighbouring lines, whose labels would run together into one long number. A number whose line already
+ * has a label gets none, so it is never drawn twice. While pointing (`typed` false) nothing is labeled
+ * (amendment 05).
+ */
+export function typedNumberLabels(
+  r: { ticks: readonly Tick[]; labelTypedNumber: boolean },
+  selection: number | null,
+  typed: boolean,
+): number[] {
+  if (!r.labelTypedNumber || !typed || selection === null) return [];
+  const own = r.ticks.find((t) => t.value === selection);
+  return own?.labeled ? [] : [selection];
 }

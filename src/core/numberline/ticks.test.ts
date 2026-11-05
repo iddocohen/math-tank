@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT } from './mapping';
-import { smallestVisibleStep, ticksFor, type RulerLevel, type Tick } from './ticks';
+import { smallestVisibleStep, ticksFor, typedNumberLabels, type RulerLevel, type Tick } from './ticks';
 
 /** FR-016 width table (amended by amendment 02), written out independently of the implementation. */
 function expectedSteps(min: number, max: number): { majorStep: number; minorStep: number } {
@@ -108,17 +108,17 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
   for (const view of views) {
     const label = `${view.min} to ${view.max}`;
 
-    it(`level 1 draws all lines and labels them all when there is room, else sets labelsNearPreview (${label})`, () => {
+    it(`level 1 draws all lines and labels them all when there is room, else sets labelTypedNumber (${label})`, () => {
       const r = ticksFor(view, 1, 3);
       expect(r.ticks.every((t) => t.visible)).toBe(true);
       const roomy = spacing(view, r.minorStep) >= 28;
-      expect(r.labelsNearPreview).toBe(!roomy);
+      expect(r.labelTypedNumber).toBe(!roomy);
       for (const t of r.ticks) expect(t.labeled).toBe(roomy || t.major || isEnd(t, view));
     });
 
     it(`level 2 draws all lines and labels only major lines and end points (${label})`, () => {
       const r = ticksFor(view, 2, 3);
-      expect(r.labelsNearPreview).toBe(false);
+      expect(r.labelTypedNumber).toBe(false);
       for (const t of r.ticks) {
         expect(t.visible).toBe(true);
         expect(t.labeled).toBe(t.major || isEnd(t, view));
@@ -127,8 +127,8 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
 
     it(`level 3 draws all lines and labels the end points and a subset of major lines (${label})`, () => {
       for (let seed = 0; seed < 20; seed++) {
-        const { ticks, labelsNearPreview } = ticksFor(view, 3, seed);
-        expect(labelsNearPreview).toBe(false);
+        const { ticks, labelTypedNumber } = ticksFor(view, 3, seed);
+        expect(labelTypedNumber).toBe(false);
         const innerMajors = ticks.filter((t) => t.major && !isEnd(t, view));
         for (const t of ticks) {
           expect(t.visible).toBe(true);
@@ -158,18 +158,59 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
     it(`allLines makes every line visible and labeled at every level (${label})`, () => {
       for (const level of LEVELS) {
         const r = ticksFor(view, level, 3, { allLines: true });
-        expect(r.labelsNearPreview).toBe(false);
+        expect(r.labelTypedNumber).toBe(false);
         expect(r.ticks.every((t) => t.visible && t.labeled)).toBe(true);
         expect(values(r.ticks)).toEqual(values(ticksFor(view, 1, 3).ticks));
       }
     });
   }
 
-  it('level 1 labels every minor line of 0 to 20 and sets labelsNearPreview for 0 to 100', () => {
-    expect(ticksFor({ min: 0, max: 20 }, 1, 1)).toMatchObject({ labelsNearPreview: false });
+  describe('typedNumberLabels: a crowded level 1 ruler labels only the typed number, once (T203, FR-017, FR-019)', () => {
+    const wide = ticksFor({ min: 0, max: 100 }, 1, 1);
+
+    it('typing 4 on 0 to 100 gives the single label 4 and none for the neighbouring lines 3 and 5', () => {
+      expect(wide.labelTypedNumber).toBe(true);
+      expect(typedNumberLabels(wide, 4, true)).toEqual([4]);
+    });
+
+    it('typing 45 gives only 45', () => {
+      expect(typedNumberLabels(wide, 45, true)).toEqual([45]);
+    });
+
+    it('gives at most one label for every number of crowded rulers', () => {
+      for (const view of [{ min: 0, max: 100 }, { min: 550, max: 780 }, { min: 0, max: 1000 }, { min: 7, max: 893 }]) {
+        const r = ticksFor(view, 1, 2);
+        if (!r.labelTypedNumber) continue;
+        for (let n = view.min; n <= view.max; n++) {
+          const labels = typedNumberLabels(r, n, true);
+          expect(labels.length).toBeLessThanOrEqual(1);
+          if (labels.length === 1) expect(labels).toEqual([n]);
+        }
+      }
+    });
+
+    it('gives no label for a number whose line already carries a label, so it is never drawn twice', () => {
+      expect(typedNumberLabels(wide, 40, true)).toEqual([]);
+      expect(typedNumberLabels(wide, 0, true)).toEqual([]);
+      expect(typedNumberLabels(wide, 100, true)).toEqual([]);
+    });
+
+    it('gives no label while pointing, without a selection, or when the ruler has room for every label', () => {
+      expect(typedNumberLabels(wide, 4, false)).toEqual([]);
+      expect(typedNumberLabels(wide, null, true)).toEqual([]);
+      expect(typedNumberLabels(ticksFor({ min: 0, max: 20 }, 1, 1), 7, true)).toEqual([]);
+    });
+
+    it('gives no label on levels 2 to 5', () => {
+      for (const level of [2, 3, 4, 5] as const) expect(typedNumberLabels(ticksFor({ min: 0, max: 100 }, level, 1), 37, true)).toEqual([]);
+    });
+  });
+
+  it('level 1 labels every minor line of 0 to 20 and sets labelTypedNumber for 0 to 100', () => {
+    expect(ticksFor({ min: 0, max: 20 }, 1, 1)).toMatchObject({ labelTypedNumber: false });
     expect(ticksFor({ min: 0, max: 20 }, 1, 1).ticks.every((t) => t.labeled)).toBe(true);
     const wide = ticksFor({ min: 0, max: 100 }, 1, 1);
-    expect(wide.labelsNearPreview).toBe(true);
+    expect(wide.labelTypedNumber).toBe(true);
     expect(wide.ticks.find((t) => t.value === 37)?.labeled).toBe(false);
     expect(wide.ticks.find((t) => t.value === 40)?.labeled).toBe(true);
   });

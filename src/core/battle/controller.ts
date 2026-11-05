@@ -82,8 +82,11 @@ export class BattleController {
     };
   }
 
-  /** New settings apply from the next round (FR-049). */
-  setSettings(settings: Settings): void {
+  /**
+   * Stores new settings as pending; the current round keeps its snapshot (range, ruler level, enemy difficulty,
+   * challenge types) and the next startRound uses the latest pending settings (FR-049, US6 scenario 6).
+   */
+  updateSettings(settings: Settings): void {
     this.nextSettings = structuredClone(settings);
   }
 

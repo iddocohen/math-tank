@@ -19,7 +19,9 @@ xToNumber(x: number, min: number, max: number, layout?: Layout): number    // sn
 type RulerLevel = 1 | 2 | 3 | 4 | 5;
 interface Tick { value: number; major: boolean; visible: boolean; labeled: boolean; }
 ticksFor(view: { min: number; max: number }, level: RulerLevel, seed: number, opts?: { allLines?: boolean }):
-  { majorStep: number; minorStep: number; ticks: Tick[]; labelsNearPreview: boolean }
+  { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean }
+typedNumberLabels(r: { ticks: Tick[]; labelTypedNumber: boolean }, selection: number | null, typed: boolean): number[]
+  // [selection] on a crowded level 1 ruler for a typed number whose line has no label; [] otherwise (T203)
 smallestVisibleStep(view: { min: number; max: number }, level: RulerLevel): number   // minor step on levels 1-3, major step on 4 and 5 (FR-068)
 helpZoomView(answer: number, min: number, max: number): { min: number; max: number } // the ten-number interval containing answer, clamped to the range (help visual only)
 ```
@@ -156,8 +158,8 @@ saveSettings(kv: KeyValue, s: Settings): { ok: boolean }
 loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid' | 'unavailable' }
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
 migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation; settings 0 and 1 -> 2 -> 3 per data-model.md
-exportData(settings: Settings, progress: Progress): string        // JSON text for download
-importData(text: string): { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: string }
+exportData(settings: Settings, progress: Progress, now?: Date): string   // JSON text for download; exportedAt is now as ISO 8601
+importData(text: string): { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' }
 ```
 
 ## `i18n`

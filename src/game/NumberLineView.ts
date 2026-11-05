@@ -5,15 +5,16 @@
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
  * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
  *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap;
- *   ticksFor then sets labelsNearPreview, and the minor lines next to the preview marker get labels (FR-018), but only
- *   for a typed number: while the child points on the ruler no number is shown (amendment 05, FR-019).
+ *   ticksFor then sets labelTypedNumber, and only the typed number itself is labeled, once, under the marker on a
+ *   small dark chip, never its neighbouring lines (T203, FR-017). While the child points on the ruler no number is
+ *   shown (amendment 05, FR-019).
  * - showZoom(view) draws a zoomed ten above the ruler with all its lines and labels, and connector lines from
  *   its two ends to the matching part of the ruler, for the help steps (FR-020, FR-031). hideZoom removes it.
  * - The game canvas carries `data-ruler-labels`, the drawn ruler labels from left to right, for the end-to-end
  *   tests (tasks.md D4: the labels are canvas text, so the DOM has no other way to read them).
  * - Tapping or dragging anywhere on the ruler calls selectNumber; releasing only previews (FR-019).
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler, and no
- *   number (amendment 05). The canvas carries `data-preview-text`, the text drawn next to the preview marker ('' when
+ *   number (amendment 05). The canvas carries `data-preview-text`, the typed number's label under the preview marker ('' when
  *   none), for the end-to-end tests only.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
  *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
@@ -28,7 +29,7 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
-import { ticksFor, type RulerLevel, type Tick } from '../core/numberline/ticks';
+import { ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
 import { tankCenter } from '../core/battle/round';
 import type { RoundState, TankState } from '../core/types';
@@ -68,14 +69,13 @@ export class NumberLineView {
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly marks: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
-  /** Labels of the minor lines next to the preview marker, while labelsNearPreview is set. */
-  private previewLabels: Phaser.GameObjects.Text[] = [];
+  /** The typed number's label under the preview marker on a crowded level 1 ruler, and its dark chip. */
+  private readonly typedChip: Phaser.GameObjects.Graphics;
+  private readonly typedText: Phaser.GameObjects.Text;
   private readonly zoom: Phaser.GameObjects.Graphics;
   private zoomLabels: Phaser.GameObjects.Text[] = [];
-  /** The ruler's lines as drawn, and whether minor labels belong next to the preview marker. */
-  private ticks: Tick[] = [];
-  private minorStep = 1;
-  private labelsNearPreview = false;
+  /** The ruler's lines as drawn, and whether a typed number gets its own label under the marker. */
+  private ruled: { ticks: Tick[]; labelTypedNumber: boolean } = { ticks: [], labelTypedNumber: false };
   private readonly landedText: Phaser.GameObjects.Text;
   private readonly stepsText: Phaser.GameObjects.Text;
   private drawn: Drawn | null = null;
@@ -90,6 +90,12 @@ export class NumberLineView {
     this.ruler = scene.add.graphics().setDepth(10);
     this.marks = scene.add.graphics().setDepth(11);
     this.zoom = scene.add.graphics().setDepth(13);
+    this.typedChip = scene.add.graphics().setDepth(12).setVisible(false);
+    this.typedText = scene.add
+      .text(0, 0, '', { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: '#ffd54a' })
+      .setOrigin(0.5, 0)
+      .setDepth(12)
+      .setVisible(false);
     const big = { fontFamily: FONT, fontSize: '56px', fontStyle: 'bold', color: '#ffd54a', stroke: '#14203a', strokeThickness: 8 };
     this.landedText = scene.add.text(0, 0, '', { ...big, color: '#ff8a65' }).setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.stepsText = scene.add
@@ -183,10 +189,8 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const { ticks, minorStep, labelsNearPreview } = ticksFor({ min, max }, rulerLevel, seed);
-    this.ticks = ticks;
-    this.minorStep = minorStep;
-    this.labelsNearPreview = labelsNearPreview;
+    const { ticks, labelTypedNumber } = ticksFor({ min, max }, rulerLevel, seed);
+    this.ruled = { ticks, labelTypedNumber };
     for (const tick of ticks) {
       if (!tick.visible) continue;
       const x = numberToX(tick.value, min, max);
@@ -209,23 +213,23 @@ export class NumberLineView {
   }
 
   /**
-   * Level 1 on a crowded ruler: labels for the unlabeled lines within one minor step of a typed preview (FR-018).
-   * A pointer preview gets none, so pointing never shows a number (amendment 05).
+   * Level 1 on a crowded ruler: the typed number's own label, once, under the preview marker on a dark rounded chip,
+   * so it covers whatever lies below it and never runs together with other labels (T203, FR-017). A pointer preview
+   * gets no label, so pointing never shows a number (amendment 05).
    */
-  private drawPreviewLabels(selection: number | null, typed: boolean, min: number, max: number): void {
-    for (const label of this.previewLabels) label.destroy();
-    this.previewLabels = [];
-    this.scene.game.canvas.dataset.previewText = '';
-    if (!this.labelsNearPreview || selection === null || !typed) return;
-    for (const tick of this.ticks) {
-      if (!tick.visible || tick.labeled || Math.abs(tick.value - selection) > this.minorStep) continue;
-      const label = this.scene.add
-        .text(numberToX(tick.value, min, max), LABEL_Y, String(tick.value), { fontFamily: FONT, fontSize: '20px', fontStyle: 'bold', color: '#ffd54a' })
-        .setOrigin(0.5, 0)
-        .setDepth(12);
-      this.previewLabels.push(label);
-    }
-    this.scene.game.canvas.dataset.previewText = this.previewLabels.map((l) => l.text).join(',');
+  private drawTypedLabel(selection: number | null, typed: boolean, min: number, max: number): void {
+    const [n] = typedNumberLabels(this.ruled, selection, typed);
+    this.typedChip.clear().setVisible(false);
+    this.typedText.setVisible(false);
+    this.scene.game.canvas.dataset.previewText = n === undefined ? '' : String(n);
+    if (n === undefined) return;
+    const x = numberToX(n, min, max);
+    this.typedText.setText(String(n)).setPosition(x, LABEL_Y).setVisible(true);
+    const padX = 8;
+    const padY = 3;
+    const w = this.typedText.width + 2 * padX;
+    const h = this.typedText.height + 2 * padY;
+    this.typedChip.fillStyle(RULER_BG, 1).fillRoundedRect(x - w / 2, LABEL_Y - padY, w, h, 8).setVisible(true);
   }
 
   private drawMarks(s: RoundState, min: number, max: number): void {
@@ -259,7 +263,7 @@ export class NumberLineView {
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
     const choosing = s.phase === 'aiming' || s.phase === 'challenge' || s.phase === 'paused';
-    this.drawPreviewLabels(choosing ? s.selection : null, s.entry.typed !== '', min, max);
+    this.drawTypedLabel(choosing ? s.selection : null, s.entry.typed !== '', min, max);
     if (s.selection === null || !choosing) return;
     const x = numberToX(s.selection, min, max);
     const groundY = toScreenY(surfaceY(s.terrain, x), this.worldHeight);

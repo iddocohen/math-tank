@@ -64,7 +64,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
   it('getRoundSettings returns the settings snapshot of the current round (FR-049)', () => {
     const { controller } = makeController({ range: { preset: '0-20', min: 0, max: 20 } });
     controller.startRound('freePlay');
-    controller.setSettings(freePlaySettings({ range: { preset: '0-50', min: 0, max: 50 } }));
+    controller.updateSettings(freePlaySettings({ range: { preset: '0-50', min: 0, max: 50 } }));
     expect(controller.getRoundSettings().range).toEqual({ preset: '0-20', min: 0, max: 20 });
     controller.startRound('freePlay');
     expect(controller.getRoundSettings().range.max).toBe(50);
@@ -594,7 +594,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const controller = new BattleController({ settings, progress: memoryProgressStore(), clock: () => 0, seed: 3 });
     controller.startRound('freePlay');
     settings.roundLength = 30;
-    controller.setSettings(freePlaySettings({ noDamage: true, roundLength: 5 }));
+    controller.updateSettings(freePlaySettings({ noDamage: true, roundLength: 5 }));
     for (let i = 0; i < 3; i++) playTurn(controller, fireAtOwnNumber);
     expect(controller.getState().outcome).toBe('turnsUsed');
 
@@ -891,5 +891,58 @@ describe('BattleController input method (amendment 05, FR-076)', () => {
     controller.selectNumber(50);
     controller.startRound('freePlay');
     expect(controller.getState().inputMethod).toBe('pointer');
+  });
+});
+
+describe('BattleController updateSettings (US6, FR-049, T105)', () => {
+  it('keeps the current round unchanged and applies new settings at the next startRound', () => {
+    const { controller } = makeController({
+      range: { preset: '0-20', min: 0, max: 20 },
+      rulerLevelStart: 1,
+      enemyDifficulty: 'easy',
+      challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
+    });
+    controller.startRound('freePlay');
+    const before = controller.getState();
+    const roundSettingsBefore = structuredClone(controller.getRoundSettings());
+
+    const next = freePlaySettings({
+      range: { preset: '0-100', min: 0, max: 100 },
+      rulerLevelStart: 3,
+      enemyDifficulty: 'challenging',
+      challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false },
+    });
+    controller.updateSettings(next);
+    // A change to the caller's object after the call must not reach the controller.
+    next.enemyDifficulty = 'normal';
+
+    // Mid-round: state and the round snapshot are untouched.
+    expect(controller.getState()).toBe(before);
+    expect(controller.getRoundSettings()).toEqual(roundSettingsBefore);
+    playTurn(controller, fireAtEnemy);
+    const mid = controller.getState();
+    expect(mid.rulerLevel).toBe(1);
+    expect(mid.challenge?.answer).toBeLessThanOrEqual(20);
+    expect(mid.enemy.position).toBeLessThanOrEqual(20);
+    expect(controller.getRoundSettings().range).toEqual({ preset: '0-20', min: 0, max: 20 });
+    expect(controller.getRoundSettings().enemyDifficulty).toBe('easy');
+    expect(controller.getRoundSettings().challengeTypes.addition).toBe(true);
+
+    controller.startRound('freePlay');
+    const after = controller.getState();
+    expect(after.rulerLevel).toBe(3);
+    expect(controller.getRoundSettings().range).toEqual({ preset: '0-100', min: 0, max: 100 });
+    expect(controller.getRoundSettings().enemyDifficulty).toBe('challenging');
+    expect(controller.getRoundSettings().challengeTypes).toEqual({ numberLine: true, addition: false, subtraction: false, comparison: false });
+    expect(after.challenge?.rulerLevel).toBe(3);
+  });
+
+  it('applies the latest of several updates during one round', () => {
+    const { controller } = makeController();
+    controller.startRound('freePlay');
+    controller.updateSettings(freePlaySettings({ enemyDifficulty: 'normal' }));
+    controller.updateSettings(freePlaySettings({ enemyDifficulty: 'challenging' }));
+    controller.startRound('freePlay');
+    expect(controller.getRoundSettings().enemyDifficulty).toBe('challenging');
   });
 });

@@ -12,12 +12,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore } from '../core/battle/ports';
-import { localStorageKeyValue } from '../core/storage/keyValue';
-import { loadSettings } from '../core/storage/storage';
 import { createGame } from '../game/createGame';
 import { BattleOverlay } from './BattleOverlay';
 import { RoundEnd } from './RoundEnd';
 import { StartScreen } from './StartScreen';
+import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
@@ -32,16 +31,19 @@ export function seedFromUrl(search: string): number | undefined {
 }
 
 function createApp() {
-  const { settings } = loadSettings(localStorageKeyValue());
+  const persistence = createPersistence();
+  // Ask once per page load to keep stored data (FR-048); the result is shown on the settings page.
+  void persistence.requestPersistentStorage();
+  const settings = persistence.settings();
   const controller = new BattleController({
     settings,
-    // Free play records no attempts; storage-backed progress arrives with guided mode.
-    progress: memoryProgressStore(),
+    // Free play records no attempts; recording into stored progress arrives with guided mode.
+    progress: memoryProgressStore(persistence.progress()),
     clock: () => Date.now(),
     seed: seedFromUrl(window.location.search),
   });
-  const sfx = createSfx({ enabled: () => settings.sound.effects });
-  return { settings, controller, sfx };
+  const sfx = createSfx({ enabled: () => persistence.settings().sound.effects });
+  return { settings, controller, sfx, persistence };
 }
 
 export function App() {
