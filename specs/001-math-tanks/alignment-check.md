@@ -89,3 +89,14 @@ The product owner reported that the enemy tank was missing after a page refresh,
 - `RoundState` loses `shotsSinceEnemyFire` and `enemyFound`; `getState()` no longer reduces the enemy during a search. The enemy no longer aims with random error added to `solveAim`: research R18's error model is replaced by the hit draw and a deliberate near miss.
 
 The spec (Overview, US1, US2, US4 scenario 2, US5, Edge Cases, FR-002, FR-010, FR-010a, FR-013, FR-014, FR-041, FR-042, FR-043, FR-066, FR-072, FR-073, FR-081, SC-005, Key Entities, Assumptions, new FR-043a), data model, contracts, quickstart and tasks (Phase 18b) were updated to match.
+
+## Amendment 08
+
+**Date**: 2026-11-05
+
+The product owner reported that "Neue Landschaft" put several numbered tanks on the field and reset the round, which was not the idea of the button. This is an intended change, not drift.
+
+- **[Amendment 08](./amendment-08-refresh-keeps-round.md)** keeps the round going when the child presses "Neue Landschaft": new hills and exactly one enemy at a new position, with a new challenge that is not a comparison. Hearts, the destroyed-tank counter, the round time and the personal-best tracking continue, and the enemy does not fire because of the press. It replaces amendment 03 item 2 (the button started a new round). A new round starts only from the round-end screen or the start screen.
+- PRD section 7.3 is kept: a refresh cannot be used to reset a lost heart or the time, so the score and the personal best still count only exact hits within one round.
+
+The spec (FR-070), contracts and tasks (T232 in Phase 22) were updated to match.

@@ -60,7 +60,8 @@ const CANDIDATES: Partial<Record<ChallengeKind, (settings: Settings, step: Diffi
   subtraction: subtractionAnswers,
 };
 
-function enabledKinds(settings: Settings): ChallengeKind[] {
+/** The kinds the parent's challenge-type switches turn on. */
+export function enabledKinds(settings: Settings): ChallengeKind[] {
   const kinds: ChallengeKind[] = [];
   if (settings.challengeTypes.numberLine) kinds.push(...NUMBER_LINE_KINDS, 'readPosition');
   if (settings.challengeTypes.addition) kinds.push('addition');

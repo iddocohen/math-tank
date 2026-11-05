@@ -723,13 +723,15 @@ describe('BattleController free play (US1, amendment 01)', () => {
   });
 });
 
-describe('BattleController newScene (amendment 03, FR-070)', () => {
-  it('starts a fresh round in the same mode with new terrain, 3 hearts, score 0, turn 0 and the other side', () => {
-    const { controller, progress } = makeController();
+describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () => {
+  it('keeps the round going: new terrain and one new enemy; hearts, score, turn and time stay; the side may switch', () => {
+    const { controller, progress, advance } = makeController({ noDamage: false });
     controller.startRound('freePlay');
     playTurn(controller, fireBetween);
     playTurn(controller, fireAtEnemy);
+    advance(5_000);
     const before = controller.getState();
+    const elapsedBefore = controller.elapsedMs();
     expect(before.turn).toBeGreaterThan(0);
     expect(before.enemiesDestroyed).toBe(1);
     // An unfinished choice is pending when the scene is replaced.
@@ -741,17 +743,77 @@ describe('BattleController newScene (amendment 03, FR-070)', () => {
     expect(after.phase).toBe('aiming');
     expect(after.seed).not.toBe(before.seed);
     expect(Array.from(after.terrain)).not.toEqual(Array.from(before.terrain));
-    expect(after.turn).toBe(0);
-    expect(after).toMatchObject({ lives: LIVES, enemiesDestroyed: 0, elapsedMs: 0 });
+    expect(after).toMatchObject({ lives: before.lives, enemiesDestroyed: 1, turn: before.turn });
+    expect(controller.elapsedMs()).toBe(elapsedBefore);
+    advance(1_000);
+    expect(controller.elapsedMs()).toBe(elapsedBefore + 1_000);
     expect(after.playerSide).not.toBe(before.playerSide);
+    expect(after.enemy).toMatchObject({ alive: true, position: after.challenge!.answer });
+    expect(after.decoys).toEqual([]);
     expect(after.selection).toBeNull();
     expect(after.lastShot).toBeNull();
     expect(after.outcome).toBeNull();
     expect(progress.getProgress().attempts).toEqual([]);
   });
 
-  it('is ignored while a shell is in flight or the game is paused', () => {
+  it('keeps a lost heart', () => {
+    for (let seed = 1; seed < 200; seed++) {
+      const { controller } = makeController({ noDamage: false }, seed);
+      controller.startRound('freePlay');
+      for (let i = 0; i < 6 && controller.getState().lives === LIVES; i++) playTurn(controller, fireBetween);
+      const lives = controller.getState().lives;
+      if (lives === LIVES || controller.getState().phase !== 'aiming') continue;
+      controller.newScene();
+      expect(controller.getState().lives).toBe(lives);
+      return;
+    }
+    throw new Error('no seed with a lost heart');
+  });
+
+  it('in guided mode starts one new search whose kind is never a comparison, with no decoys and no attempt (amendment 08)', () => {
+    const allTypes = { numberLine: true, addition: true, subtraction: true, comparison: true };
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = guidedController({ noDamage: true, challengeTypes: allTypes }, seed);
+      g.controller.startRound('guided');
+      answer(g, g.controller.getState().challenge!.answer);
+      answer(g, missNumber(g.controller.getState()));
+      const before = g.controller.getState();
+      const attempts = g.progress.getProgress().attempts.length;
+      g.controller.newScene();
+      const after = g.controller.getState();
+      expect(after.phase).toBe('challenge');
+      expect(after.challenge!.id).not.toBe(before.challenge!.id);
+      expect(after.challenge!.options, `seed ${seed} ${after.challenge!.kind}`).toBeUndefined();
+      expect(after.decoys).toEqual([]);
+      expect(after.enemy.label).toBeUndefined();
+      expect(after.enemy).toMatchObject({ alive: true, position: after.challenge!.answer });
+      expect(after.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null });
+      expect(after).toMatchObject({ lives: before.lives, enemiesDestroyed: 1, turn: before.turn });
+      expect(g.progress.getProgress().attempts).toHaveLength(attempts);
+    }
+  });
+
+  it('with only comparison on, the search after a refresh is still not a comparison', () => {
+    const g = guidedController({ challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } });
+    g.controller.startRound('guided');
+    g.controller.newScene();
+    const after = g.controller.getState();
+    expect(after.challenge!.options).toBeUndefined();
+    expect(after.decoys).toEqual([]);
+  });
+
+  it('the refresh causes no enemy shot', () => {
     const { controller } = makeController();
+    controller.startRound('freePlay');
+    const phases: string[] = [];
+    controller.subscribe((s) => phases.push(s.phase));
+    controller.newScene();
+    expect(phases).not.toContain('enemyTurn');
+    expect(controller.getState().shot).toBeNull();
+  });
+
+  it('is ignored while a shell is in flight, while paused and after the round is over', () => {
+    const { controller } = makeController({ roundType: 'enemyCount', roundLength: 1 });
     controller.startRound('freePlay');
 
     fireBetween(controller);
@@ -775,17 +837,13 @@ describe('BattleController newScene (amendment 03, FR-070)', () => {
     controller.resume();
     controller.newScene();
     expect(controller.getState().seed).not.toBe(paused.seed);
-  });
 
-  it('also works after the round is over', () => {
-    const { controller } = makeController({ roundType: 'enemyCount', roundLength: 1 });
-    controller.startRound('freePlay');
+    // A new round starts only from the round-end screen (amendment 08 item 4).
     playTurn(controller, fireAtEnemy);
     expect(controller.getState().phase).toBe('roundOver');
     const over = controller.getState();
     controller.newScene();
-    expect(controller.getState().phase).toBe('aiming');
-    expect(controller.getState().seed).not.toBe(over.seed);
+    expect(controller.getState()).toBe(over);
   });
 });
 

@@ -4,7 +4,8 @@
  * (no stepping toward the answer) and the corner health bars: each tank's health bar is drawn above it in the
  * canvas (FR-078). While the child points on the ruler the readout shows no number (FR-019), and the fire button
  * counts as pointer input (FR-076).
- * At the right side, the "Neue Landschaft" button starts a new scene (amendment 03, FR-070). It is for mouse and
+ * At the right side, the "Neue Landschaft" button makes a new landscape with one new enemy in the same round
+ * (amendment 03, amendment 08, FR-070). It is for mouse and
  * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
@@ -59,7 +60,8 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const enemy = visibleEnemy(state);
   // Typed digits are shown exactly as typed (a lone "-" too). A number chosen by pointing is not shown (FR-019).
   const readout = state.entry.typed !== '' ? state.entry.typed : '?';
-  const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
+  // A new round starts only from the round-end screen (amendment 08).
+  const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused' || state.phase === 'roundOver';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
   const inSearch = state.mode === 'guided' && state.challenge !== null && state.phase !== 'roundOver';

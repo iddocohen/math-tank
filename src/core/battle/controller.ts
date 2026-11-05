@@ -135,13 +135,30 @@ export class BattleController {
   }
 
   /**
-   * "Neue Landschaft" button (amendment 03, FR-070): a new round in the same mode at once. Ignored while a shell
-   * is in flight or the game is paused. An unfinished challenge is dropped without recording an attempt.
+   * "Neue Landschaft" button (amendment 03, amendment 08, FR-070): a new landscape in the same round. New terrain from a
+   * new seed, the child's tank on the other side, exactly one enemy at a new position with a new challenge that is
+   * never a comparison. Hearts, destroyed enemies, turn, the round time and the enemy's shot count stay; the enemy
+   * does not fire. An unfinished challenge is dropped without recording an attempt. Ignored while a shell is in
+   * flight, while paused and once the round is over (a new round starts from the round-end screen).
    */
   newScene(): void {
-    const { phase, mode } = this.state;
-    if (phase === 'playerShot' || phase === 'enemyTurn' || phase === 'paused') return;
-    this.startRound(mode);
+    const prev = this.state;
+    if (prev.phase !== 'aiming' && prev.phase !== 'challenge') return;
+    const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
+    const side = this.nextSide;
+    this.nextSide = side === 'left' ? 'right' : 'left';
+    this.firedNumber = null;
+    const difficulty = this.difficulty();
+    const fresh = createRound(this.settings, seed, side, prev.mode, difficulty);
+    const scene: BattleState = {
+      ...fresh,
+      turn: prev.turn,
+      lives: prev.lives,
+      enemiesDestroyed: prev.enemiesDestroyed,
+      elapsedMs: prev.elapsedMs,
+      inputMethod: prev.inputMethod,
+    };
+    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true) : scene);
   }
 
   /**

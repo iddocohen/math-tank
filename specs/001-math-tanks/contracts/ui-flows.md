@@ -64,7 +64,7 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 1. The round ends when the child's hearts are gone, or with "Gegner pro Runde" right after the last enemy is destroyed.
 2. The time stops. The game stores the result against the personal best for the round's range, ruler starting level and round type.
 3. The end screen shows an encouraging message ("Super! Alle Gegner getroffen." or "Gut gekämpft! Noch eine Runde?"), the result "9 Panzer getroffen in 6:12" ("1 Panzer" for one), and with "Rekord zeigen" on either "Neuer Rekord!" with a short pop and sparkle (no motion with reduced motion), or "Dein Rekord: 12" in small neutral text when a best exists. It never says "verloren" or "nicht geschafft" and never compares the two numbers.
-4. "Neue Landschaft" and "Zum Start" during a round end it without a result. Free play has no other challenge and no bonus.
+4. "Zum Start" during a round ends it without a result. "Neue Landschaft" does not end the round (amendment 08): new hills and one new enemy, while hearts, score and time continue. Free play has no other challenge and no bonus.
 
 ## Keyboard map (FR-059 to FR-064)
 

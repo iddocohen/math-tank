@@ -552,6 +552,8 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - [X] T132 [P] [US7] Write `src/app/ProgressPage.test.tsx`: renders counts from a fixture `Progress`; "with help" is shown separately from accuracy; a skill with only assisted answers shows "noch am Üben" (developing); the personal bests are listed per range with "Bis alle Herzen weg" or "Gegner pro Runde", the starting level, the number of enemies and the time, with no ranking; reset asks for confirmation and only then clears progress (FR-040, FR-087, US7 scenarios 4, 5 and 8)
 - [X] T133 [US7] Implement `src/app/ProgressPage.tsx` (per-skill table, most-help skills, session list, personal bests per range from `persistence.records()`, reset with confirmation), link it from the parent menu in `src/app/ParentGate.tsx`, and add its strings to `src/i18n/de.ts`, until `ProgressPage.test.tsx` passes (FR-040, FR-087, FR-056)
 
+- [X] T232 [US1] Neue Landschaft keeps the round going ([amendment 08](./amendment-08-refresh-keeps-round.md)): tests first in `src/core/battle/battleController.test.ts` (lives, enemiesDestroyed, turn and elapsed time unchanged, one enemy, no decoys and no comparison after the press, no attempt, no enemy shot, ignored while a shell is in flight, paused or after the round end), then `BattleController.newScene()` builds a new landscape in the same round with a non-comparison search; the button is disabled at the round end; update the e2e case in `tests/e2e/battle.spec.ts`, FR-070 in spec.md, the amendments list, alignment-check.md and the `newScene` doc in contracts/core-api.md (FR-070)
+
 **Checkpoint**: US7 complete (AC-09).
 
 ---

@@ -146,7 +146,7 @@ test('play a free-play round with the keyboard only and start another', async ({
   await expect(page.getByTestId('new-record')).toHaveCount(0);
 });
 
-test('the new scene button starts a fresh round in the same mode, and no key presses it (amendment 03, FR-070)', async ({ page }) => {
+test('the new scene button makes a new landscape in the same round, and no key presses it (amendment 03, amendment 08, FR-070)', async ({ page }) => {
   test.setTimeout(60_000);
   await page.addInitScript(
     ([key, value]) => {
@@ -184,13 +184,19 @@ test('the new scene button starts a fresh round in the same mode, and no key pre
   await page.keyboard.press('Tab');
   await page.keyboard.press(' ');
   await expect(overlay).toHaveAttribute('data-round-seed', seed!);
+  // Space is the fire key, so it may have fired the selection again; wait until the child aims again.
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  const lives = (await overlay.getAttribute('data-lives'))!;
+  const destroyed = (await overlay.getAttribute('data-enemies-destroyed'))!;
+  const turn = (await overlay.getAttribute('data-turn'))!;
 
+  // A new landscape in the same round (amendment 08): hearts, score and turn stay; the side switches.
   await button.click();
   await expect(overlay).not.toHaveAttribute('data-round-seed', seed!);
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
-  await expect(overlay).toHaveAttribute('data-turn', '0');
-  await expect(overlay).toHaveAttribute('data-lives', '3');
-  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
+  await expect(overlay).toHaveAttribute('data-turn', turn);
+  await expect(overlay).toHaveAttribute('data-lives', lives);
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', destroyed);
   await expect(overlay).not.toHaveAttribute('data-player-side', side!);
   await expect(overlay).not.toHaveAttribute('data-last-landing', /.+/);
 
@@ -266,8 +272,9 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
 
   // A new scene shows the "Du" arrow again (FR-070, FR-077).
   await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 20_000 });
+  const sceneSeed = await overlay.getAttribute('data-round-seed');
   await page.getByRole('button', { name: m.battle.newScene, exact: true }).click();
-  await expect(overlay).toHaveAttribute('data-turn', '0');
+  await expect(overlay).not.toHaveAttribute('data-round-seed', sceneSeed!);
   await expect(canvas).toHaveAttribute('data-you-marker', 'on');
 });
 
