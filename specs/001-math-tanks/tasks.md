@@ -912,6 +912,23 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 **Checkpoint**: Stars are spent in the garage and earned again by playing, and the parent decides when the aiming cross shows.
 
+## Phase 24e: Amendment 20 the ruler always shows its lines
+
+**Purpose**: [Amendment 20](./amendment-20-ruler-always-lines.md). Every ruler level draws all major, medium and minor lines of the range; the levels only reduce the labels: level 1 every number (two rows where needed), level 2 the major lines, level 3 every second major line (multiples of twice the major step) and both ends, level 4 both ends and the middle major line, level 5 only both ends (FR-016, FR-017). Only the exact number hits, as before. The enemy of "read the ruler" and the tanks of a comparison always stand on a drawn line of the minor grid, which matters where the minor step is 10 or more (FR-027, FR-067). Help step 2 still labels every line of the zoomed ten. Settings keep their values; the previews follow the new levels (FR-069).
+
+**Independent test**: `tests/e2e/rulerPreview.spec.ts` sets the starting level to 4 and 5 and the preview still shows all 101 lines of 0 to 100 with the labels 0, 50, 100 and 0, 100; `tests/e2e/range.spec.ts` plays 0 to 1000 at a fixed level 5 and the canvas reports all 101 lines and an enemy on a multiple of 10.
+
+- [ ] T370 [P] [US9] Rewrite the level tests in `src/core/numberline/ticks.test.ts` before the code: for every range preset (0 to 10, 0 to 20, 0 to 50, 0 to 100, 0 to 1000) and the custom ranges 15 to 45, 0 to 150, 550 to 780, -20 to 30 and 7 to 893, every level returns the same lines as level 1, every tick `visible`, and the same line sizes, with medium lines on every level; labels: level 2 the major lines and both ends, level 3 the major lines at multiples of twice the major step and both ends (0 to 100: 0, 20, 40, 60, 80, 100; 550 to 780: 550, 600, 700, 780; 0 to 1000: 0, 200, 400, 600, 800, 1000), level 4 both ends and the middle major line (0 to 100: 0, 50, 100; 550 to 780: 550, 650, 780; 0 to 1000: 0, 500, 1000), level 5 only both ends; the level 3 labels do not depend on the seed; `smallestVisibleStep` is removed (FR-016, FR-017, US2 scenario 5)
+- [ ] T371 [US9] Implement until T370 passes: `ticksFor` in `src/core/numberline/ticks.ts` marks every line visible on every level, draws medium lines on every level, and labels levels 3 and 4 by the new rules; remove `smallestVisibleStep` (FR-016, FR-017)
+- [ ] T372 [P] [US9] Write the placement tests before the code: `src/core/math/readPosition.test.ts` and `src/core/math/readPositionCache.test.ts` (on every level and range, including 550 to 780, 0 to 1000 and 555 to 783, every answer is a value of a drawn line on the minor grid; levels 4 and 5 give the same answers as level 1); `src/core/math/comparison.test.ts` (at 0 to 1000, 550 to 780 and 7 to 893 every option of every comparison kind is a multiple of 10; at 0 to 100 options stay any whole number); `src/core/math/validate.test.ts` (a readPosition answer of 537 at 0 to 1000 and level 5, and a comparison option of 537, are rejected) (FR-027, FR-067, US9 scenario 5)
+- [ ] T373 [US9] Implement until T372 passes: `src/core/math/readPosition.ts` (the same answers on every level: the drawn lines on the minor grid), `src/core/math/comparison.ts` (options and `comparisonFits` only on the minor grid), `src/core/math/validate.ts` (comparison options on the minor grid) (FR-027, FR-067)
+- [ ] T374 [P] [US6] Update the preview tests before the code: `src/app/RulerPreview.test.tsx` (levels 1 to 5 at 0 to 100 each draw 101 lines with 10 medium lines; labels per level as in T370; 0 to 1000 at level 5 draws 101 lines and the labels 0 and 1000) and `src/app/SettingsPage.test.tsx` (the starting level 4 preview keeps 101 lines and shows 3 labels; the hardest level 5 preview shows 101 lines and 2 labels) (FR-069)
+- [ ] T375 [US6] Implement until T374 passes: `src/app/RulerPreview.tsx` and `src/game/NumberLineView.ts` draw every line; the canvas reports the number of drawn lines in `data-ruler-lines` (FR-017, FR-069)
+- [ ] T376 [US9] Update the end-to-end tests: `tests/e2e/rulerPreview.spec.ts` (level 4 keeps 101 lines and labels 0, 50, 100; level 5 keeps 101 lines and labels 0, 100; 550 to 780 at level 4 keeps 24 lines and labels 550, 650, 780) and `tests/e2e/range.spec.ts` (0 to 1000 at a fixed level 5 in "Nur Zahlenstrahl": `data-ruler-lines` is 101, `data-ruler-labels` is "0,1000", and the enemy stands on a multiple of 10) (FR-017, FR-067, FR-069)
+- [ ] T377 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project); take muted headless screenshots of the game ruler at 0 to 100 on levels 1 to 5 and at 0 to 1000 on level 5, stored in the session scratchpad
+
+**Checkpoint**: Every ruler level shows every line; a harder level shows fewer numbers, and the enemy always stands on a line.
+
 ---
 
 ## Dependencies and Execution Order
@@ -954,6 +971,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 24b (amendment 16)**: depends on Phases 22h (device projects and layouts), 23 (offline play) and 24a (play-mode buttons on the start screen). T342 runs before T344; T343 before T344 and T345; T346 only if T345 or the product owner's check fails; T347 last.
 - **Phase 24c (amendment 18)**: depends on Phases 24a (play modes, settings version 8) and 24b. T349 runs before T350, T351 before T352, T353 before T354; T350 before T352 (the controller reads the setting) and T354; T355 after T352 and T354; T356 last.
 - **Phase 24d (amendment 19)**: depends on Phases 22d, 22e (the garage), 22j (the transfer) and 24c (settings version 9). T358 runs before T359, T360 before T361, T362 before T363, T364 before T365; T359 before T361 (storage and transfer read the new garage) and T363; T361 and T363 before T365; T366 after T365; T367 last.
+- **Phase 24e (amendment 20)**: depends on Phases 22b (medium lines and label rows) and 24d (the aiming cross reads the ruler level). T370 runs before T371, T372 before T373, T374 before T375; T371 runs before T373 and T375 (both read `ticksFor`); T376 after T375; T377 last.
 
 ### User story dependencies
 
@@ -1034,8 +1052,8 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-013 | T060, T061, T062, T065, T066, T095, T096, T208, T222 |
 | FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181, T190, T193, T214, replaced by FR-121 and FR-122 (amendment 17) |
 | FR-015 | T028, T029, T168, T184 |
-| FR-016 | T051, T052, T147, T149, T173, T174, T235 |
-| FR-017 | T051, T052, T147, T173, T174, T182, T201, T228, T231, T235 |
+| FR-016 | T051, T052, T147, T149, T173, T174, T235, T370, T371 |
+| FR-017 | T051, T052, T147, T173, T174, T182, T201, T228, T231, T235, T370, T371, T374, T375, T376 |
 | FR-018 | T064, T082, T099, T118, T122, T129, T130, T143, T147, T173, T175 |
 | FR-019 | T060, T062, T065, T068, T168, T170, T195, T197, T199, T201, T202 |
 | FR-020 | T143, T144, T145, T146, T147 |
@@ -1045,7 +1063,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-024 | T074, T078, T080, T081, T082, T229 |
 | FR-025 | T057, T059, T062, T072, T073, T076, T077 |
 | FR-026 | T084, T085, T087, T088, T089, T091, T236, T237, T238, T239, T240, T241, T244, T245, T246, T247, T248, T249, T250, T251 |
-| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237, T244, T245, T246 |
+| FR-027 | T030, T031, T084, T085, T086, T087, T088, T090, T236, T237, T244, T245, T246, T372, T373 |
 | FR-028 | T002, T004, T008, T009, T053, T059, T164, T302 |
 | FR-029 | T054, T055, T058, T059, T079, T086, T107, T148, T178, T196, T197 |
 | FR-030 | T080, T095, T096, T101 |
@@ -1088,9 +1106,9 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-064 | T087, T088, T145, T146, T183, T238, T246, T247, T249, T250 |
 | FR-065 | T156, T160, T163, T169 |
 | FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224, T233, T246, T247, T248, T249, T250 |
-| FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
+| FR-067 | T061, T067, T148, T149, T177, T178, T180, T181, T372, T373, T376 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
-| FR-069 | T112, T113, T182, T235 |
+| FR-069 | T112, T113, T182, T235, T374, T375, T376 |
 | FR-070 | T185, T200, T208, T243, T246, T247, T249, T267 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
 | FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226, T230, T233, T246, T247, T248, T250 |
@@ -1188,3 +1206,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 17 | T327 to T341 |
 | Amendment 18 | T349 to T356 |
 | Amendment 19 | T358 to T367 |
+| Amendment 20 | T370 to T377 |

@@ -101,7 +101,7 @@ interface Challenge {
 
 **Hit rule** (amendment 06, FR-066; `src/core/battle/hitRule.ts`): `bodyHalfWidth(min, max) = (TANK_WIDTH / 2) / (layout.right - layout.left) * (max - min)` in numbers (about 2.1 in 0 to 100, 4.8 in 550 to 780, 20.8 in 0 to 1000). `shotKind(fired, target, range)` is `'hit'` when `fired === target` (the enemy is destroyed), `'near'` when `|numberToX(fired) - numberToX(target)| <= TANK_WIDTH / 2` (a near miss on the body: the enemy shakes, nothing else), otherwise `'miss'`. In comparison turns (amendment 10) the same rule is applied to every standing tank: a decoy at the exact fired number is destroyed (a miss), and a near miss shakes the tank whose body it landed on. `enemyHitsPlayer(impact, hitTargetId, player)` is true when the enemy shell entered the player's hit circle or landed with `|impact.x - player.x| <= TANK_WIDTH / 2`; it removes one heart unless `noDamage`. There is no damage and no `MAX_DAMAGE` (amendment 04's body damage and Volltreffer are removed).
 
-**readPosition placement**: on ruler levels 1 to 3 the answer is a multiple of the minor step (a number with a visible line); on levels 4 and 5 any whole number. The placement rule is unchanged by amendment 04, but `hitTolerance` is removed: whether a shot hits follows the tank-body rule below, the same for every challenge kind.
+**readPosition placement**: on every ruler level the answer is a multiple of the minor step (a number with a drawn line), not an end point off the minor grid. *(Changed by amendment 20: before, levels 4 and 5 allowed any whole number.)* The options of a comparison challenge follow the same rule (amendment 20, FR-027); with minor step 1 this allows every whole number. The placement rule is unchanged by amendment 04, but `hitTolerance` is removed: whether a shot hits follows the tank-body rule below, the same for every challenge kind.
 
 **Main skill per kind**: `findNumber`, `missingBetween`, `midpoint`, `readPosition` → `positions`; `after`, `stepsRight` → `countForward`; `before`, `stepsLeft` → `countBackward`; `addition` → `addition`; `subtraction` → `subtraction`; all comparison kinds → `comparison`. `tens` and `crossTens` are secondary skills added when a challenge involves a multiple of ten or crosses a ten boundary.
 
@@ -323,13 +323,13 @@ interface Tick { value: number; major: boolean; visible: boolean; labeled: boole
 
 | Level | Lines drawn | Labels |
 |-------|-------------|--------|
-| 1 | major and minor | every line where the label spacing is at least 28 logical units; otherwise major lines, and only a typed number labeled under the preview marker (T203) |
-| 2 | major and minor | major lines |
-| 3 | major and minor | some major lines, chosen by seed, always both end points |
-| 4 | major only | major lines |
-| 5 | end points only | end points |
+| 1 | all (major, medium, minor) | every line where the label spacing is at least 28 logical units; otherwise major lines, and only a typed number labeled under the preview marker (T203) |
+| 2 | all | major lines |
+| 3 | all | major lines at multiples of twice the major step (0 to 100: 20, 40, 60, 80) |
+| 4 | all | the middle major line: the one nearest to the middle of the view, the lower of two equally near (0 to 100: 50) |
+| 5 | all | none besides the end points |
 
-Steps follow spec FR-016 for the view's width. Both end points are always drawn and labeled.
+Steps follow spec FR-016 for the view's width. Both end points are always drawn and labeled. *(Changed by amendment 20: before, level 4 drew only major lines, level 5 only the end points, levels 4 and 5 had no medium lines, and level 3 chose its labels by seed.)*
 
 ## Round state (not persisted)
 

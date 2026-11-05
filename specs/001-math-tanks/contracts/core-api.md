@@ -22,11 +22,10 @@ ticksFor(view: { min: number; max: number }, level: RulerLevel, seed: number, op
   { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean }
 typedNumberLabels(r: { ticks: Tick[]; labelTypedNumber: boolean }, selection: number | null, typed: boolean): number[]
   // [selection] on a crowded level 1 ruler for a typed number whose line has no label; [] otherwise (T203)
-smallestVisibleStep(view: { min: number; max: number }, level: RulerLevel): number   // minor step on levels 1-3, major step on 4 and 5 (FR-068)
 helpZoomView(answer: number, min: number, max: number): { min: number; max: number } // the ten-number interval containing answer, clamped to the range (help visual only)
 ```
 
-Guarantees: `xToNumber(numberToX(n)) === n` for every integer `n` in range, for any range with width 5 to 1000 and any start; equal value steps give equal x steps; at most 101 ticks per view; steps follow spec FR-016 (width 230 gives major 50, minor 10); lines and labels follow the five levels of FR-017 (level 3 labels a seed-chosen subset of major lines; level 4 draws no minor lines; level 5 draws only the end points); end points are always drawn and labeled; `allLines: true` draws and labels every line of the view, for help steps (FR-018). `needsZoom` and `zoomIntervals` are removed by amendment 02 (no two-step selection).
+Guarantees: `xToNumber(numberToX(n)) === n` for every integer `n` in range, for any range with width 5 to 1000 and any start; equal value steps give equal x steps; at most 101 ticks per view; steps follow spec FR-016 (width 230 gives major 50, minor 10); every tick has `visible: true` on every level (amendment 20); labels follow the five levels of FR-017 (level 1 every line where space allows; level 2 the major lines; level 3 the major lines at multiples of twice the major step; level 4 the middle major line, the one nearest to the middle of the view, the lower of two equally near; level 5 none besides the end points); medium lines on every level; the `seed` argument no longer changes anything (level 3 was the only level that used it, until amendment 20); end points are always drawn and labeled; `allLines: true` draws and labels every line of the view, for help steps (FR-018). `needsZoom` and `zoomIntervals` are removed by amendment 02 (no two-step selection). `smallestVisibleStep` is removed by amendment 20: the smallest drawn step is always the minor step.
 
 ## `core/math`
 

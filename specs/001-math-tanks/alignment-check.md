@@ -288,3 +288,21 @@ The product owner asked that stars be spent: "Today stars are not getting spent 
   - The transfer garage part gets its own payload number: payload 1 (the star total) is still read and migrated; payload 2 carries the balance, the total ever earned, the owned items and the equipped look.
 
 The spec (User Story 10, FR-046, FR-048a, FR-087, FR-089, FR-090 replaced, FR-091, FR-092, FR-094 to FR-097, FR-116, FR-119, new FR-130 to FR-135, Edge Cases, Key Entities, Amendments), the data model (Settings version 10, Garage version 2 with the price list and the migration, the transfer garage payload), the contracts (`core/rewards`, `core/battle/aimCross`, the garage dialogs and keys, the aiming cross, the settings page), quickstart (scenarios 23, 28 and 35) and tasks (Phase 24d) were updated to match.
+
+## Amendment 20
+
+**Date**: 2026-11-05
+
+The product owner found ruler levels 4 and 5 unfair: "I think it is however unreasonable to ask to find the exact number when there are no lines whatsoever" and "no ruler has really no lines, maybe no numbers but no lines none. Hence I think we should remove the difficulty of having no lines at all but just less and less numbers." They also asked whether a difference of 1 should count as a hit.
+
+- **PRD section 3 (number line learning)** asks the child to learn to read a ruler. A real ruler always has its lines, so every level now draws all major, medium and minor lines, and the harder levels hide only numbers. Level 5 still asks the child to count from the two ends.
+- **Amendment 06 (only the exact number hits)** stays. No tolerance of 1 is added, because with every line drawn the exact number can always be found by counting lines from the nearest label, and the step count after a miss already shows "1 Schritt" when the child was close. The hit tolerance of amendment 02 for levels 4 and 5 was already removed by amendment 04 and has no code left: `src/core/battle/hitRule.ts` compares the exact number, and `src/core/math/readPosition.ts` has no tolerance. The open point at the end of the amendment 02 section above (the tolerance on level 5) is closed by this.
+- **Amendment 02 item 3 (enemy between lines on levels 4 and 5)** is replaced: on every level the enemy stands on a drawn line of the minor grid.
+- Decisions of this update that the amendment does not state:
+  - Level 3 labels the major lines at multiples of twice the major step (0 to 100: 20, 40, 60, 80; 550 to 780: 600 and 700; 0 to 1000: 200, 400, 600, 800), plus both ends. Before, a seed chose half of the major lines; the new rule gives the same labels every round, as the amendment's table reads "every second major line". On 0 to 10 and 0 to 20 level 3 therefore labels only the ends.
+  - Level 4 labels the major line nearest to the middle of the range, and of two equally near the lower one (0 to 50: 20), plus both ends. A range without a major line between its ends labels only the ends.
+  - Medium lines (Phase 22b) show on every level, because the amendment draws every line on every level.
+  - The amendment says that the enemy "and comparison tanks" stand on a drawn line. Comparison options therefore use only multiples of the minor step where it is 10 or more (0 to 1000: 530, not 537), on every level. Other challenge kinds name their number in the banner and still use every whole number (FR-022 asks for exercises such as 560 + 5 in 550 to 780).
+  - `ticksFor` keeps its `seed` argument, which no longer changes the result, so callers did not change. `smallestVisibleStep` is removed: the smallest drawn step is always the minor step.
+
+The spec (US2 scenario 5, US9 scenario 5, FR-016, FR-017, FR-027, FR-067, Amendments), the data model (ruler level table, readPosition placement), the contracts (core-api `ticksFor` guarantees, ui-flows ruler and previews), quickstart (scenario 16) and tasks (Phase 24e, T370 to T377) were updated to match.
