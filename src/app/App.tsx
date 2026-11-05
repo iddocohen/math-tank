@@ -54,7 +54,7 @@ import { promptText } from '../i18n';
 import { canApplyUpdate, swUpdate } from './swUpdate';
 import { BattleController } from '../core/battle/controller';
 import { createProgressStore } from '../core/storage/progressStore';
-import { createGame } from '../game/createGame';
+import type { GameHandle } from '../game/createGame';
 import { BattleOverlay } from './BattleOverlay';
 import { ParentGate } from './ParentGate';
 import { RoundEnd, type RoundRecord } from './RoundEnd';
@@ -75,6 +75,7 @@ import { useScreen } from './useScreen';
 import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
 import { TransferDialog, type TransferDialogState } from './TransferDialog';
 import { useAutoPause, useDocumentHidden } from './useAutoPause';
+import { MODE_TRAITS } from '../core/modes';
 
 /** A save link being read, or its dialog (amendment 15). */
 type Transfer = { kind: 'reading' } | (TransferDialogState & { data?: SaveData });
@@ -108,6 +109,22 @@ function createApp() {
   return { settings, controller, sfx, speaker, persistence };
 }
 
+/** The Phaser game and the battle scene, in their own chunk; the module is loaded once and then reused. */
+function loadGame(): Promise<typeof import('../game/createGame')> {
+  return import('../game/createGame');
+}
+
+/** Runs `load` once the browser is idle (or after a second where requestIdleCallback is missing); returns a cancel. */
+function prefetchWhenIdle(load: () => Promise<unknown>): () => void {
+  const run = () => void load().catch(() => {});
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: 3000 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, 1000);
+  return () => window.clearTimeout(id);
+}
+
 export function App() {
   const [{ controller, sfx, speaker, persistence }] = useState(createApp);
   const [screen, setScreen] = useState<Screen>('start');
@@ -123,19 +140,29 @@ export function App() {
   const gameParent = useRef<HTMLDivElement>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
   // "Nur Rechnen" has no ruler to tap, so "Automatisch" shows the number pad on every screen there (amendment 17).
-  const padSetting = persistence.settings().numberPad;
-  const { layout, numberPad } = useScreen(screen === 'battle' && state.mode === 'math' && padSetting === 'auto' ? 'always' : padSetting);
+  const { layout, numberPad } = useScreen(persistence.settings().numberPad, screen === 'battle' && MODE_TRAITS[state.mode].forcesPad);
   // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
   const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
 
   useEffect(() => sfx.installUnlock(document), [sfx]);
 
+  // Phaser loads in its own chunk: fetched when the browser is idle after the first screen, and at the latest when a
+  // battle starts. The service worker precaches the chunk with the rest of the game, so it also loads offline.
+  useEffect(() => prefetchWhenIdle(loadGame), []);
+
   useEffect(() => {
     const parent = gameParent.current;
     if (screen !== 'battle' || !parent) return;
     const look = persistence.settings().garage ? persistence.garage().look : STANDARD_LOOK;
-    const handle = createGame(parent, controller, { sounds: sfx, look });
-    return () => handle.destroy();
+    let handle: GameHandle | null = null;
+    let left = false;
+    void loadGame().then(({ createGame }) => {
+      if (!left) handle = createGame(parent, controller, { sounds: sfx, look });
+    });
+    return () => {
+      left = true;
+      handle?.destroy();
+    };
   }, [screen, controller, sfx, persistence]);
 
   // A running round pauses while a parent screen or the transfer dialog is open, the tab is hidden (the time stops,
@@ -222,7 +249,7 @@ export function App() {
 
   // Spoken challenges (FR-055): each new challenge is read aloud while "Vorlesen" is on and a German voice exists.
   // "Nur Zahlenstrahl" shows no question, so nothing is read aloud (amendment 17, FR-122).
-  const speech = persistence.settings().sound.speech && state.mode !== 'ruler';
+  const speech = persistence.settings().sound.speech && MODE_TRAITS[state.mode].showsQuestion;
   const challenge = state.challenge;
   const speakChallenge = useCallback(() => {
     const c = controller.getState().challenge;
@@ -372,7 +399,6 @@ export function keyScreenFor(screen: Screen, phase: string): KeyScreen | null {
       return 'roundEnd';
     case 'paused':
       return 'paused';
-    case 'aiming':
     case 'challenge':
       return 'battle';
     default:

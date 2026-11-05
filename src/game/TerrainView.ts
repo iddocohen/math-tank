@@ -17,8 +17,9 @@ import Phaser from 'phaser';
 import type { Heightmap } from '../core/types';
 import { FLOOR } from '../core/physics/terrain';
 import { terrainPolygon, toScreenY } from '../core/view/geometry';
-import { distantHills, pebbles, scorchMarks, tufts, type Pebble, type Tuft } from '../core/view/groundArt';
+import { distantHills, pebbles, scorchMarks, tufts, type HillLayer, type Pebble, type Tuft } from '../core/view/groundArt';
 import { cssColor, GROUND_COLORS } from '../core/view/shade';
+import { clamp } from '../core/util';
 import { TEX } from './textures';
 
 const BEDROCK_EDGE = '#2a1d13';
@@ -54,6 +55,7 @@ export class TerrainView {
   private marks: Uint8Array | null = null;
   private pebbles: Pebble[] = [];
   private tufts: Tuft[] = [];
+  private hills: HillLayer[] = [];
   private seedOfDetails: number | null = null;
   private draws = 0;
   private readonly pattern: CanvasPattern | null;
@@ -133,16 +135,17 @@ export class TerrainView {
       this.seedOfDetails = seed;
       this.pebbles = pebbles(seed, this.worldWidth);
       this.tufts = tufts(seed, this.worldWidth);
+      this.hills = distantHills(seed, this.worldWidth, this.worldHeight);
     }
     const ctx = slot.texture.context;
     const h = this.worldHeight;
     const w = this.worldWidth;
-    const sy = (x: number) => toScreenY(terrain[Math.max(0, Math.min(terrain.length - 1, Math.round(x)))] as number, h);
+    const sy = (x: number) => toScreenY(terrain[clamp(Math.round(x), 0, terrain.length - 1)] as number, h);
     const floorY = toScreenY(FLOOR, h);
     ctx.clearRect(0, 0, w, h);
 
     // Two layers of distant hills (FR-107).
-    for (const layer of distantHills(seed, w, h)) {
+    for (const layer of this.hills) {
       ctx.beginPath();
       ctx.moveTo(0, floorY);
       for (const [x, y] of layer.points) ctx.lineTo(x, y);

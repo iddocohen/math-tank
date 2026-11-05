@@ -25,9 +25,12 @@ export function readPositionAnswers(settings: Settings, level: RulerLevel): numb
   return ticks.filter((t) => t.visible && isMultiple(t.value, minorStep)).map((t) => t.value);
 }
 
-export const buildReadPosition: Builder = (answer, settings, step) => {
+/**
+ * The generator only passes answers from readPositionAnswers (its candidates), and validateChallenge checks the answer
+ * again, so the builder does not repeat the check.
+ */
+export const buildReadPosition: Builder = (answer, _settings, step) => {
   const level = step.rulerLevel ?? DEFAULT_RULER_LEVEL;
-  if (!readPositionAnswers(settings, level).includes(answer)) return null;
   return {
     kind: 'readPosition',
     prompt: { key: 'readPosition', params: {} },

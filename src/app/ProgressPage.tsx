@@ -10,7 +10,7 @@
  * Amendment 11 (FR-096): the star total of the tank garage and a separate "Sterne zurücksetzen" with its own
  * confirmation, which sets 0 stars, locks every item and chooses the standard look.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { formatTime } from '../core/records/records';
 import { parseRangeKey, summarize } from '../core/progress/summarize';
 import { emptyProgress } from '../core/storage/storage';
@@ -32,12 +32,12 @@ export function ProgressPage({ persistence, onClose }: Props) {
   const m = t();
   const P = m.progressPage;
   const [progress, setProgress] = useState(() => persistence.progress());
-  const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
   const [stars, setStars] = useState(() => persistence.garage().stars);
-  const [confirmingStars, setConfirmingStars] = useState(false);
   const [starsDone, setStarsDone] = useState(false);
-  const summary = summarize(progress, persistence.records(), persistence.settings());
+  const records = persistence.records();
+  const settings = persistence.settings();
+  const summary = useMemo(() => summarize(progress, records, settings), [progress, records, settings]);
 
   const rangeText = (rangeKey: string) => {
     const r = parseRangeKey(rangeKey);
@@ -48,14 +48,12 @@ export function ProgressPage({ persistence, onClose }: Props) {
     const empty = emptyProgress();
     persistence.saveProgress(empty);
     setProgress(empty);
-    setConfirming(false);
     setDone(true);
   };
 
   const resetStars = () => {
     persistence.resetStars();
     setStars(persistence.garage().stars);
-    setConfirmingStars(false);
     setStarsDone(true);
   };
 
@@ -103,7 +101,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
                     <td data-col="independent">{r.independentCorrect}</td>
                     <td data-col="withHelp">{r.withHelp}</td>
                     <td data-col="step">{P.step(r.step + 1, r.stepCount)}</td>
-                    <td data-col="toRaise">{r.toRaise !== null ? P.toRaise(r.toRaise) : persistence.settings().adaptive ? P.topStep : P.adaptiveOff}</td>
+                    <td data-col="toRaise">{r.toRaise !== null ? P.toRaise(r.toRaise) : settings.adaptive ? P.topStep : P.adaptiveOff}</td>
                     <td data-col="status">{P.status[r.status]}</td>
                   </tr>
                 ))}
@@ -193,63 +191,57 @@ export function ProgressPage({ persistence, onClose }: Props) {
       </section>
 
       <section className="settings-group">
-        {confirming ? (
-          <div className="progress-reset" role="alertdialog" aria-label={P.reset}>
-            <p>{P.resetConfirm}</p>
-            <div className="data-buttons">
-              <button type="button" className="primary-button" onClick={reset}>
-                {P.resetYes}
-              </button>
-              <button type="button" className="secondary-button" onClick={() => setConfirming(false)}>
-                {P.resetNo}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="data-buttons">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => {
-                setDone(false);
-                setConfirming(true);
-              }}
-            >
-              {P.reset}
-            </button>
-          </div>
-        )}
+        <ConfirmReset label={P.reset} question={P.resetConfirm} yes={P.resetYes} no={P.resetNo} onAsk={() => setDone(false)} onConfirm={reset} />
       </section>
 
       <section className="settings-group">
         <p data-testid="progress-stars">{P.stars(stars)}</p>
-        {confirmingStars ? (
-          <div className="progress-reset" role="alertdialog" aria-label={P.starsReset}>
-            <p>{P.starsResetConfirm}</p>
-            <div className="data-buttons">
-              <button type="button" className="primary-button" onClick={resetStars}>
-                {P.starsResetYes}
-              </button>
-              <button type="button" className="secondary-button" onClick={() => setConfirmingStars(false)}>
-                {P.resetNo}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="data-buttons">
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => {
-                setStarsDone(false);
-                setConfirmingStars(true);
-              }}
-            >
-              {P.starsReset}
-            </button>
-          </div>
-        )}
+        <ConfirmReset label={P.starsReset} question={P.starsResetConfirm} yes={P.starsResetYes} no={P.resetNo} onAsk={() => setStarsDone(false)} onConfirm={resetStars} />
       </section>
+    </div>
+  );
+}
+
+/**
+ * A reset button that asks first: the button opens the question with "yes" and "no", and "yes" calls onConfirm.
+ * onAsk runs when the question opens, so an earlier "done" note goes away.
+ */
+function ConfirmReset({ label, question, yes, no, onAsk, onConfirm }: { label: string; question: string; yes: string; no: string; onAsk: () => void; onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <div className="progress-reset" role="alertdialog" aria-label={label}>
+        <p>{question}</p>
+        <div className="data-buttons">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => {
+              onConfirm();
+              setConfirming(false);
+            }}
+          >
+            {yes}
+          </button>
+          <button type="button" className="secondary-button" onClick={() => setConfirming(false)}>
+            {no}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="data-buttons">
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => {
+          onAsk();
+          setConfirming(true);
+        }}
+      >
+        {label}
+      </button>
     </div>
   );
 }

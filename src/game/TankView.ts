@@ -90,6 +90,8 @@ export class TankView {
   private readonly stripes: boolean;
   private wheelAngle = 0;
   private bodyColor: number;
+  /** The drawn body's lines (spokes and stripes), the only shapes that change while the wheels turn. */
+  private bodyLines = '';
   private turretColor: number;
   private recoil = { k: 0 };
   private readonly hearts: Phaser.GameObjects.Graphics;
@@ -210,12 +212,20 @@ export class TankView {
     this.drawTank(this.tint);
   }
 
-  /** Draws body and turret in `color`; the turret only when its color changed, the body also when the wheels turned. */
+  /**
+   * Draws body and turret in `color`; the turret only when its color changed, the body also when the wheels turned so
+   * far that the drawn spokes change (they repeat after a quarter turn and are rounded, so most frames draw nothing).
+   */
   private drawTank(color: number, wheelsMoved = false): void {
     if (color !== this.bodyColor || wheelsMoved) {
-      this.bodyColor = color;
-      this.body.clear();
-      drawShapes(this.body, tankBodyShapes(this.bodyKind, color, this.wheelAngle, this.stripes));
+      const shapes = tankBodyShapes(this.bodyKind, color, this.wheelAngle, this.stripes);
+      const lines = lineKey(shapes);
+      if (color !== this.bodyColor || lines !== this.bodyLines) {
+        this.bodyColor = color;
+        this.bodyLines = lines;
+        this.body.clear();
+        drawShapes(this.body, shapes);
+      }
     }
     if (color !== this.turretColor) {
       this.turretColor = color;
@@ -344,18 +354,17 @@ export class TankView {
   }
 
   /**
-   * Hidden tanks draw nothing; `fade` blends in or out after `delayMs` instead of switching at once. Any running fade
-   * (also a pending `appear`) stops first, so a hidden tank never fades back in.
+   * Hides the tank for good: `fade` blends it out instead of hiding it at once. Any running fade (also a pending
+   * `appear`) stops first, so a hidden tank never fades back in.
    */
-  setHidden(hidden: boolean, fade: boolean, delayMs = 0): void {
-    if (hidden === this.hidden) return;
-    this.hidden = hidden;
-    const alpha = hidden ? 0 : 1;
+  hide(fade: boolean): void {
+    if (this.hidden) return;
+    this.hidden = true;
     this.scene.tweens.killTweensOf(this.container);
     if (fade) {
-      this.scene.tweens.add({ targets: this.container, alpha, delay: delayMs, duration: FADE_MS });
+      this.scene.tweens.add({ targets: this.container, alpha: 0, duration: FADE_MS });
     } else {
-      this.container.alpha = alpha;
+      this.container.alpha = 0;
     }
   }
 
@@ -478,6 +487,13 @@ function drawShapes(g: Phaser.GameObjects.Graphics, shapes: Shape[]): void {
         break;
     }
   }
+}
+
+/** The end points of every line shape, as text, to tell whether two drawings of the same body differ. */
+function lineKey(shapes: Shape[]): string {
+  let key = '';
+  for (const s of shapes) if (s.type === 'line') key += `${s.from[0]},${s.from[1]},${s.to[0]},${s.to[1]};`;
+  return key;
 }
 
 function starPoints(cx: number, cy: number, outer: number, inner: number): Phaser.Math.Vector2[] {

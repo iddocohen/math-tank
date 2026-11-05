@@ -70,9 +70,17 @@ export interface RulerLabelBox {
   box: Box;
 }
 
-/** The boxes of the ruler's own labels, as NumberLineView draws them. */
-export function rulerLabelBoxes(range: { min: number; max: number }, level: RulerLevel, seed: number): RulerLabelBox[] {
-  const { ticks, labelRows } = ticksFor(range, level, seed);
+/**
+ * The boxes of the ruler's own labels, as NumberLineView draws them. `ruled` is ticksFor(range, level, seed) when the
+ * caller has already computed it.
+ */
+export function rulerLabelBoxes(
+  range: { min: number; max: number },
+  level: RulerLevel,
+  seed: number,
+  ruled: Pick<ReturnType<typeof ticksFor>, 'ticks' | 'labelRows'> = ticksFor(range, level, seed),
+): RulerLabelBox[] {
+  const { ticks, labelRows } = ruled;
   return ticks
     .filter((t) => t.visible && t.labeled)
     .map((t) => ({
@@ -193,6 +201,8 @@ export interface HelpSceneInput {
   worldWidth: number;
   /** The typed number's own label on a crowded level 1 ruler (T203), or null. */
   typed?: number | null;
+  /** rulerLabelBoxes(range, level, seed) when the caller has already computed it. */
+  labels?: readonly RulerLabelBox[];
 }
 
 /** The chips of a help scene: the starting number, the help step's chips and the stops of the step animation. */
@@ -226,7 +236,7 @@ export function helpTextScene(input: HelpSceneInput): {
 } {
   const { range, help, stepPath, landed } = input;
   const at = (n: number) => numberToX(n, range.min, range.max);
-  const labels = rulerLabelBoxes(range, input.level, input.seed);
+  const labels = input.labels ?? rulerLabelBoxes(range, input.level, input.seed);
   const { shown, hiddenLabels } = layoutChips(labels, sceneChips(input));
   const texts: { key: string; box: Box }[] = [];
   for (const l of labels) if (!hiddenLabels.has(l.value)) texts.push({ key: `label:${l.value}`, box: l.box });

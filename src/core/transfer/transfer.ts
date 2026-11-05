@@ -22,6 +22,7 @@ import type { Look } from '../rewards/items';
 import type { Settings } from '../settings/schema';
 import { migrate, parseSettings } from '../storage/migrate';
 import { progressSchema } from '../storage/progressSchema';
+import { isRecord, mergeDeep } from '../util';
 import type { Progress, RecentOutcome } from '../types';
 
 /** The version this game writes; version 1 codes are still read. */
@@ -175,31 +176,16 @@ export function saveCodeFromHash(hash: string): string | null {
   return body.startsWith(FRAGMENT) ? body.slice(FRAGMENT.length) : null;
 }
 
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
 /** The parts of `value` that differ from `base`, object by object; `version` always stays. */
 function settingsDiff(value: Record<string, unknown>, base: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, v] of Object.entries(value)) {
     const b = base[key];
     if (key === 'version') out[key] = v;
-    else if (isPlainObject(v) && isPlainObject(b)) {
+    else if (isRecord(v) && isRecord(b)) {
       const inner = settingsDiff(v, b);
       if (Object.keys(inner).length > 0) out[key] = inner;
     } else if (JSON.stringify(v) !== JSON.stringify(b)) out[key] = v;
-  }
-  return out;
-}
-
-/** `base` with every part of `diff` laid over it; keys that would change an object's prototype are skipped. */
-function withDiff(base: Record<string, unknown>, diff: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...base };
-  for (const [key, v] of Object.entries(diff)) {
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-    const b = Object.hasOwn(base, key) ? base[key] : undefined;
-    out[key] = isPlainObject(v) && isPlainObject(b) ? withDiff(b, v) : v;
   }
   return out;
 }
@@ -237,7 +223,7 @@ export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
 });
 
 function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {
-  for (const v of Object.values(o)) if (isPlainObject(v)) deepFreeze(v);
+  for (const v of Object.values(o)) if (isRecord(v)) deepFreeze(v);
   return Object.freeze(o);
 }
 
@@ -282,7 +268,7 @@ function expand(raw: unknown): unknown {
   let startedAt = 0;
   return {
     v: 1,
-    settings: withDiff(TRANSFER_V2_SETTINGS_BASE, diff),
+    settings: mergeDeep(TRANSFER_V2_SETTINGS_BASE, diff),
     garage: { stars, look: { color, flag, trail, hat } },
     records: Object.fromEntries(records.map(([key, enemies, ms, at]) => [key, { enemies, ms, at }])),
     skills: Object.fromEntries(skills.map(([key, ...s]) => [key, s])),
@@ -318,10 +304,20 @@ export async function encodeTransfer(
   const codec = opts.codec === undefined ? browserCodec() : opts.codec;
   const maxBytes = opts.maxBytes ?? TRANSFER_MAX_LINK_BYTES;
   const full = toTransfer(data);
-  const attempt = async (dropped: number, windowLength: number) => {
-    const code = await codeOf(trimmed(full, dropped, windowLength), codec);
-    const link = transferLink(pageHref, code);
-    return { link, code, fits: new TextEncoder().encode(link).length <= maxBytes, sessionsDropped: dropped, windowLength };
+  // The searches below ask for some sizes twice (the check after the binary search, the last session count), so each
+  // result is compressed once.
+  const tried = new Map<string, Promise<EncodedTransfer>>();
+  const attempt = (dropped: number, windowLength: number): Promise<EncodedTransfer> => {
+    const key = `${dropped}|${windowLength}`;
+    let r = tried.get(key);
+    if (!r) {
+      r = codeOf(trimmed(full, dropped, windowLength), codec).then((code) => {
+        const link = transferLink(pageHref, code);
+        return { link, code, fits: new TextEncoder().encode(link).length <= maxBytes, sessionsDropped: dropped, windowLength };
+      });
+      tried.set(key, r);
+    }
+    return r;
   };
 
   const first = await attempt(0, WINDOW_MAX);

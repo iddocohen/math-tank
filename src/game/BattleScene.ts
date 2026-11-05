@@ -138,7 +138,7 @@ export class BattleScene extends Phaser.Scene {
     this.game.canvas.dataset.muzzleFlashes = '0';
     this.add.image(0, 0, TEX.sky).setOrigin(0, 0);
     this.terrain = new TerrainView(this, WORLD_HEIGHT, WORLD_WIDTH);
-    this.projectile = new ProjectileView(this, WORLD_WIDTH, WORLD_HEIGHT, this.look.trail);
+    this.projectile = new ProjectileView(this, WORLD_HEIGHT, this.look.trail);
     this.player = new TankView(this, 'player', WORLD_HEIGHT, undefined, this.look);
     this.game.canvas.dataset.playerLook = lookKey(this.look);
     this.enemy = new TankView(this, 'enemy', WORLD_HEIGHT, () => this.controller.tapTank(this.controller.getState().enemy.id));
@@ -257,7 +257,7 @@ export class BattleScene extends Phaser.Scene {
       if (newRound) view.destroy();
       else {
         view.setTappable(false);
-        view.setHidden(true, true);
+        view.hide(true);
         this.time.delayedCall(FOLD_REMOVE_MS, () => view.destroy());
       }
     }
@@ -280,14 +280,14 @@ export class BattleScene extends Phaser.Scene {
           const c = tankCenter(decoy);
           this.effects.cardboard(c.x, toScreenY(c.y, WORLD_HEIGHT));
           this.effects.shake();
-          view.setHidden(true, false);
+          view.hide(false);
           this.decoyBursts++;
         } else {
           // The enemy was destroyed: the remaining decoys fold away (fade out).
-          view.setHidden(true, true);
+          view.hide(true);
         }
       } else if (!decoy.alive) {
-        view.setHidden(true, false);
+        view.hide(false);
       }
     }
 
@@ -378,7 +378,7 @@ export class BattleScene extends Phaser.Scene {
       shot,
       () => this.controller.enemyShotAnimationDone(),
       (_, impact) => {
-        this.effects.explosion(impact.x, toScreenY(impact.y, WORLD_HEIGHT), shot.blastRadius);
+        this.effects.explosion(impact.x, toScreenY(impact.y, WORLD_HEIGHT), BLAST_RADIUS);
         this.sounds?.boom();
       },
     );
@@ -386,8 +386,7 @@ export class BattleScene extends Phaser.Scene {
 
   private landed(shot: ShotInFlight): void {
     const y = toScreenY(shot.impact.y, WORLD_HEIGHT);
-    if (shot.outOfBounds) this.effects.puff(shot.impact.x, y);
-    else this.effects.explosion(shot.impact.x, y, shot.blastRadius);
+    this.effects.explosion(shot.impact.x, y, BLAST_RADIUS);
     // The controller applies the crater and damage; its update redraws the terrain right away.
     const before = this.controller.getState().enemiesDestroyed;
     if (shot.shooter === 'player') this.controller.shotAnimationDone();
@@ -396,7 +395,7 @@ export class BattleScene extends Phaser.Scene {
     const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesDestroyed > before;
     // A burst decoy plays only the light plopp (amendment 10, FR-066).
     const burstDecoy = shot.shooter === 'player' && this.controller.getState().lastShot?.decoyHit === true;
-    for (const sound of landingSounds({ outOfBounds: shot.outOfBounds, destroyedEnemy, burstDecoy })) this.sounds?.[sound]();
+    for (const sound of landingSounds({ destroyedEnemy, burstDecoy })) this.sounds?.[sound]();
   }
 }
 

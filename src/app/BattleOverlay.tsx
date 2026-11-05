@@ -64,16 +64,19 @@
  * These buttons are for mouse and touch only, like "Neue Landschaft": they never take focus. While the round is
  * paused the pause screen covers the battle with "Weiterspielen"; Escape, Enter and Space resume it too (useKeyboard).
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
-import { visibleEnemy } from '../core/battle/round';
+import { acceptsInput, visibleEnemy } from '../core/battle/round';
+import { MODE_TRAITS } from '../core/modes';
+import { followHit, HIT_FEEDBACK_MS, hitOutdated, type HitOwner } from '../core/view/hitFeedback';
 import type { LastShot, PromptSpec, RoundState } from '../core/types';
 import { comparisonPrompt, helpText, messageText, promptText, t } from '../i18n';
+import { clamp } from '../core/util';
 import { NumberPad } from './NumberPad';
 
 /** The hit text is shown this long after the hit (T233). */
-export const HIT_FEEDBACK_MS = 2000;
+export { HIT_FEEDBACK_MS };
 /** After a miss the phrase stays this long after the child can choose again, then the help text follows (T230). */
 export const MISS_MESSAGE_MS = 2000;
 /** A new challenge stays in the middle of the sky this long unless the child starts earlier (T234). */
@@ -107,7 +110,7 @@ function enterFullscreen(from: HTMLElement): void {
 export function BattleOverlay({ controller, state, gear, numberPad = false, onSpeak }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
-  const choosing = state.phase === 'aiming' || state.phase === 'challenge';
+  const choosing = acceptsInput(state.phase);
   const answerable = useAnswerable(controller, state);
   const enemy = visibleEnemy(state);
   // Typed digits are shown exactly as typed (a lone "-" too). A number chosen by pointing is not shown (FR-019).
@@ -154,7 +157,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
       data-skill-step={state.challenge?.difficultyStep}
     >
       {/* "Nur Zahlenstrahl" has no question banner: the child reads the ruler (amendment 17, FR-122). */}
-      {state.challenge && state.mode !== 'ruler' && (
+      {state.challenge && MODE_TRAITS[state.mode].showsQuestion && (
         <div className={`challenge-banner placement-${placement}`} data-testid="challenge-banner" data-placement={placement}>
           <BannerText prompt={state.challenge.prompt} tens={state.help.content?.tensDigits === true} />
         </div>
@@ -203,7 +206,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
           <TankIcon />
           <span aria-hidden="true">{state.enemiesDestroyed}</span>
         </div>
-        {showClock && <Clock controller={controller} />}
+        {showClock && <Clock controller={controller} running={state.phase !== 'paused'} />}
       </div>
 
       {(gear || canFullscreen || onSpeak) && (
@@ -306,38 +309,53 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
 }
 
 /**
+ * True once `ms` have passed while `running` since `key` became the current key; false for a null key. A new key
+ * starts the wait again, and a pause (`running` false) starts it again when it ends.
+ */
+function useExpired<K>(key: K | null, ms: number, running = true): boolean {
+  const [expired, setExpired] = useState<K | null>(null);
+  useEffect(() => {
+    if (key === null || !running) return;
+    const id = setTimeout(() => setExpired(() => key), ms);
+    return () => clearTimeout(id);
+  }, [key, ms, running]);
+  return key !== null && expired === key;
+}
+
+/**
+ * Once a second while `running`: calls `each` when given, else re-renders the caller (decision D1, FR-034, FR-084).
+ * `each` must keep its identity between renders, or the second starts again.
+ */
+function useEverySecond(running: boolean, each?: () => void): void {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => (each ? each() : setTick((n) => n + 1)), 1000);
+    return () => clearInterval(id);
+  }, [running, each]);
+}
+
+/**
  * True while the latest hit's text is shown (T233): for HIT_FEEDBACK_MS after the hit, and only as long as the
  * challenge that came with the hit is still the current one.
  */
 function useFreshHit(state: RoundState): boolean {
-  const shot = state.lastShot?.hit ? state.lastShot : null;
-  // The hit belongs to the challenge shown after it; the controller passes the shot phase first.
-  const seen = useRef<{ shot: LastShot; challenge: RoundState['challenge'] | undefined } | null>(null);
-  if (shot && seen.current?.shot !== shot) seen.current = { shot, challenge: undefined };
-  if (shot && seen.current && seen.current.challenge === undefined && state.phase !== 'playerShot') seen.current.challenge = state.challenge;
-  const [expired, setExpired] = useState<LastShot | null>(null);
-  useEffect(() => {
-    if (!shot) return;
-    const id = setTimeout(() => setExpired(shot), HIT_FEEDBACK_MS);
-    return () => clearTimeout(id);
-  }, [shot]);
-  return shot !== null && expired !== shot && seen.current?.challenge === state.challenge;
+  // The hit belongs to the challenge shown after it (followHit).
+  const seen = useRef<HitOwner | null>(null);
+  seen.current = followHit(seen.current, state);
+  const owner = seen.current;
+  const expired = useExpired(owner?.shot ?? null, HIT_FEEDBACK_MS);
+  return owner !== null && !expired && owner.challenge !== undefined && !hitOutdated(owner, state);
 }
 
 /**
  * True while the message of the latest miss is shown (T230): from the miss until MISS_MESSAGE_MS after the child can
- * choose again (phase 'challenge' or 'aiming').
+ * choose again (phase 'challenge').
  */
 function useMissMessage(state: RoundState): boolean {
   const shot = state.lastShot && !state.lastShot.hit ? state.lastShot : null;
-  const choosing = state.phase === 'challenge' || state.phase === 'aiming';
-  const [expired, setExpired] = useState<LastShot | null>(null);
-  useEffect(() => {
-    if (!shot || !choosing) return;
-    const id = setTimeout(() => setExpired(shot), MISS_MESSAGE_MS);
-    return () => clearTimeout(id);
-  }, [shot, choosing]);
-  return shot !== null && expired !== shot;
+  const expired = useExpired(shot, MISS_MESSAGE_MS, acceptsInput(state.phase));
+  return shot !== null && !expired;
 }
 
 /**
@@ -350,13 +368,8 @@ function useCardPlacement(state: RoundState): 'center' | 'top' {
   const moved = useRef<{ challenge: RoundState['challenge']; top: boolean }>({ challenge: null, top: false });
   if (moved.current.challenge !== challenge) moved.current = { challenge, top: false };
   if (input) moved.current.top = true;
-  const [timedOut, setTimedOut] = useState<RoundState['challenge']>(null);
-  useEffect(() => {
-    if (!challenge) return;
-    const id = setTimeout(() => setTimedOut(challenge), CARD_CENTER_MS);
-    return () => clearTimeout(id);
-  }, [challenge]);
-  return moved.current.top || timedOut === challenge ? 'top' : 'center';
+  const timedOut = useExpired(challenge, CARD_CENTER_MS);
+  return moved.current.top || challenge === null || timedOut ? 'top' : 'center';
 }
 
 /** True once the current challenge accepts answers; re-renders when the 1-second wait ends (edge case "Rapid tapping"). */
@@ -373,12 +386,8 @@ function useAnswerable(controller: BattleController, state: RoundState): boolean
 
 /** Calls controller.tick() once a second while a challenge is shown (decision D1, FR-034). */
 function useHelpTick(controller: BattleController, state: RoundState): void {
-  const ticking = state.phase === 'challenge' && state.challenge !== null;
-  useEffect(() => {
-    if (!ticking) return;
-    const id = setInterval(() => controller.tick(), 1000);
-    return () => clearInterval(id);
-  }, [controller, ticking]);
+  const tick = useCallback(() => controller.tick(), [controller]);
+  useEverySecond(state.phase === 'challenge' && state.challenge !== null, tick);
 }
 
 /**
@@ -386,17 +395,11 @@ function useHelpTick(controller: BattleController, state: RoundState): void {
  * Shown only when the controller reports a limit; re-read once a second.
  */
 function HelpTimer({ controller, state }: { controller: BattleController; state: RoundState }) {
-  const [, setTick] = useState(0);
   const left = controller.helpTimeLeftMs();
   const limit = controller.getRoundSettings().timeLimitSeconds;
-  const running = left !== null && state.phase === 'challenge';
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [running]);
+  useEverySecond(left !== null && state.phase === 'challenge');
   if (left === null || limit === null) return null;
-  const share = Math.max(0, Math.min(1, left / (limit * 1000)));
+  const share = clamp(left / (limit * 1000), 0, 1);
   return (
     <div className="help-timer" data-testid="help-timer" role="img" aria-label={t().battle.helpSoon}>
       <div className="help-timer-fill" style={{ width: `${Math.round(share * 100)}%` }} />
@@ -409,13 +412,12 @@ function lastShotKind(shot: LastShot): 'hit' | 'near' | 'miss' {
   return shot.nearMiss ? 'near' : 'miss';
 }
 
-/** The up-counting clock m:ss (FR-084); it re-reads the controller's time once a second. */
-function Clock({ controller }: { controller: BattleController }) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
+/**
+ * The up-counting clock m:ss (FR-084); it re-reads the controller's time once a second. While the game is paused the
+ * time stands still, so it does not re-read then.
+ */
+function Clock({ controller, running }: { controller: BattleController; running: boolean }) {
+  useEverySecond(running);
   return (
     <div className="clock" data-testid="clock" aria-label={t().battle.clock}>
       {formatTime(controller.elapsedMs())}

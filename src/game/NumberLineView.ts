@@ -59,11 +59,15 @@
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { numberToX, xToNumber } from '../core/numberline/mapping';
+import { landedOf } from '../core/battle/guided';
+import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../core/numberline/mapping';
 import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick, type TickSize } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
-import { tankCenter, visibleEnemy, WORLD_WIDTH } from '../core/battle/round';
+import { acceptsInput, tankCenter, visibleEnemy, WORLD_WIDTH } from '../core/battle/round';
+import { MODE_TRAITS } from '../core/modes';
+import { followHit, HIT_FEEDBACK_MS, hitOutdated, type HitOwner } from '../core/view/hitFeedback';
 import type { HelpContent, RoundState, TankState } from '../core/types';
+import { clamp } from '../core/util';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
 import {
@@ -104,9 +108,9 @@ const LANDED = 0xff8a65;
 const POINTER = 0xf4f6fb;
 const PULSE = 0x9be89f;
 const PULSE_MS = 700;
-/** A hit's landing marker starts to fade after this long and is gone HIT_FADE_MS later (T233, about 2 seconds). */
-const HIT_FADE_DELAY_MS = 1500;
+/** A hit's landing marker fades out over the last HIT_FADE_MS of HIT_FEEDBACK_MS (T233). */
 const HIT_FADE_MS = 500;
+const HIT_FADE_DELAY_MS = HIT_FEEDBACK_MS - HIT_FADE_MS;
 /** The starting number of an addition or subtraction, and the step animation's marker (US3). */
 const START = 0x7ec8ff;
 /** The step animation pauses this long at each stop (a crossed ten, the intermediate result). */
@@ -116,6 +120,8 @@ const ZOOM_WIDTH = 640;
 const ZOOM_HEIGHT = 110;
 const ZOOM_TOP = 180;
 const ZOOM_PAD = 40;
+/** The zoomed ten keeps this far from both edges of the world: half the ruler's own margin (40). */
+const ZOOM_EDGE = DEFAULT_LAYOUT.left / 2;
 const ZOOM_BG = 0x14203a;
 /** Help steps (US5): the highlight colour, the pulse and the time the solution marker takes to reach the answer. */
 const HELP = 0x9be89f;
@@ -157,7 +163,7 @@ export class NumberLineView {
    */
   private readonly chipSources: Record<ChipSource, { chip: Chip; style: ChipStyle }[]> = { help: [], start: [], steps: [], typed: [] };
   private readonly chipPlates: Phaser.GameObjects.Graphics;
-  private chipTexts: Phaser.GameObjects.Text[] = [];
+  private readonly chipTexts: Phaser.GameObjects.Text[] = [];
   private readonly zoom: Phaser.GameObjects.Graphics;
   private zoomLabels: Phaser.GameObjects.Text[] = [];
   /** The ruler's lines as drawn, and whether a typed number gets its own label under the marker. */
@@ -165,7 +171,7 @@ export class NumberLineView {
   private readonly landedText: Phaser.GameObjects.Text;
   /** A hit's landing marker, which fades out (T233), and the hit it belongs to. */
   private readonly hitMarkGraphics: Phaser.GameObjects.Graphics;
-  private hitMark: { shot: NonNullable<RoundState['lastShot']>; challenge: RoundState['challenge'] | undefined; done: boolean } | null = null;
+  private hitMark: { owner: HitOwner; done: boolean } | null = null;
   private readonly stepsText: Phaser.GameObjects.Text;
   private drawn: Drawn | null = null;
   private dragging = false;
@@ -242,7 +248,7 @@ export class NumberLineView {
     const { min, max } = settings.range;
     const rulerLevel = s.rulerLevel;
     const d = this.drawn;
-    const hidden = s.mode === 'math';
+    const hidden = !MODE_TRAITS[s.mode].showsRuler;
     if (!d || d.min !== min || d.max !== max || d.seed !== s.seed || d.rulerLevel !== rulerLevel || d.hidden !== hidden) {
       this.drawn = { min, max, seed: s.seed, rulerLevel, hidden };
       this.dragging = false;
@@ -264,7 +270,7 @@ export class NumberLineView {
     if (!h) return;
     const data = this.scene.game.canvas.dataset;
     data.helpStep = String(h.step);
-    const landed = s.help.wrongAnswers > 0 && s.lastShot && !s.lastShot.hit ? s.lastShot.landed : null;
+    const landed = landedOf(s);
     if (h.direction && landed !== null) this.helpDirection(numberToX(landed, min, max), h.direction);
     if (h.nearestMajor !== null) this.helpHighlight(h.nearestMajor, min, max);
     if (h.zoom) {
@@ -322,19 +328,25 @@ export class NumberLineView {
       this.labelBoxes,
       all.map((c) => c.chip),
     );
-    for (const text of this.chipTexts) text.destroy();
-    this.chipTexts = [];
     const g = this.chipPlates.clear();
-    for (const chip of shown) {
+    shown.forEach((chip, i) => {
       const style = all.find((c) => c.chip === chip)!.style;
       const b = chipBox(chip.x, chip.text, chip.fontSize);
       g.fillStyle(style.bg, 1).fillRoundedRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, 8);
-      const text = this.scene.add
-        .text(chip.x, LABEL_Y, chip.text, { fontFamily: FONT, fontSize: `${chip.fontSize ?? CHIP_FONT}px`, fontStyle: 'bold', color: style.fg })
-        .setOrigin(0.5, 0)
-        .setDepth(13);
-      this.chipTexts.push(text);
-    }
+      const fontSize = `${chip.fontSize ?? CHIP_FONT}px`;
+      // Chip texts are kept and reused, so a change does not create new text objects (each one is a canvas texture).
+      const pooled = this.chipTexts[i];
+      if (pooled) {
+        pooled.setFontSize(fontSize).setColor(style.fg).setText(chip.text).setPosition(chip.x, LABEL_Y).setVisible(true);
+      } else {
+        const text = this.scene.add
+          .text(chip.x, LABEL_Y, chip.text, { fontFamily: FONT, fontSize, fontStyle: 'bold', color: style.fg })
+          .setOrigin(0.5, 0)
+          .setDepth(13);
+        this.chipTexts.push(text);
+      }
+    });
+    for (const text of this.chipTexts.slice(shown.length)) text.setVisible(false);
     for (const [value, label] of this.labelByValue) label.setVisible(!hiddenLabels.has(value));
     this.scene.game.canvas.dataset.hiddenLabels = [...hiddenLabels].sort((a, b) => a - b).join(',');
     this.scene.game.canvas.dataset.chips = shown.map((c) => c.text).join(',');
@@ -433,7 +445,8 @@ export class NumberLineView {
       challenge: s.challenge,
       help: s.help.content,
       stepPath: s.stepAnimation,
-      landed: s.help.wrongAnswers > 0 && s.lastShot && !s.lastShot.hit ? s.lastShot.landed : null,
+      landed: landedOf(s),
+      labels: this.drawn && !this.drawn.hidden ? this.labelBoxes : undefined,
       enemy: enemy ? ground(enemy) : null,
       player: ground(s.player),
       worldWidth: WORLD_WIDTH,
@@ -555,7 +568,7 @@ export class NumberLineView {
   /** A short pulse on the ruler where the destroyed enemy stood, once per hit (T066). */
   private pulseHit(s: RoundState, min: number, max: number): void {
     const shot = s.lastShot;
-    if (!shot?.hit || shot === this.pulsedShot || shot.enemyNumber === null) return;
+    if (!shot?.hit || shot === this.pulsedShot) return;
     this.pulsedShot = shot;
     const x = numberToX(shot.enemyNumber, min, max);
     this.scene.game.canvas.dataset.hitPulse = String(shot.enemyNumber);
@@ -585,7 +598,7 @@ export class NumberLineView {
     const { ticks } = ticksFor(view, level, this.last?.seed ?? 0, { allLines: true });
     const fromX = numberToX(view.min, min, max);
     const toX = numberToX(view.max, min, max);
-    const center = Math.min(1560 - ZOOM_WIDTH / 2, Math.max(40 + ZOOM_WIDTH / 2, (fromX + toX) / 2));
+    const center = clamp((fromX + toX) / 2, ZOOM_EDGE + ZOOM_WIDTH / 2, WORLD_WIDTH - ZOOM_EDGE - ZOOM_WIDTH / 2);
     const left = center - ZOOM_WIDTH / 2;
     const axisY = ZOOM_TOP + 46;
     const zx = (v: number) => left + ZOOM_PAD + ((v - view.min) / (view.max - view.min)) * (ZOOM_WIDTH - 2 * ZOOM_PAD);
@@ -660,7 +673,8 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const { ticks, labelTypedNumber, labelRows } = ticksFor({ min, max }, rulerLevel, seed);
+    const ruled = ticksFor({ min, max }, rulerLevel, seed);
+    const { ticks, labelTypedNumber, labelRows } = ruled;
     this.ruled = { ticks, labelTypedNumber };
     for (const tick of ticks) {
       if (!tick.visible) continue;
@@ -678,7 +692,7 @@ export class NumberLineView {
       this.labels.push(label);
       this.labelByValue.set(tick.value, label);
     }
-    this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, seed);
+    this.labelBoxes = rulerLabelBoxes({ min, max }, rulerLevel, seed, ruled);
     this.renderChips();
     this.scene.game.canvas.dataset.rulerLabels = ticks
       .filter((tick) => tick.visible && tick.labeled)
@@ -712,18 +726,14 @@ export class NumberLineView {
     const shot = s.lastShot;
     const hitShown = shot?.hit ? this.hitMarkShown(shot, s, min, max) : (this.clearHitMark(), false);
     if (shot && !inFlight && !shot.hit) {
-      const lx = numberToX(shot.landed, min, max);
-      g.fillStyle(LANDED, 1);
-      g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
-      this.landedText.setAlpha(1).setText(String(shot.landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
-      this.scene.game.canvas.dataset.landing = String(shot.landed);
+      const lx = this.drawLandingMark(g, shot.landed, min, max);
 
       // The step count refers to the enemy, or in comparison turns to the nearest standing tank (amendment 10).
-      const to = shot.hit ? null : shot.targetNumber;
+      const to = shot.targetNumber;
       if (shot.nearMiss) {
         // A near miss on a tank body: both numbers and the distance (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.targetNumber, min, max), t().battle.compare(shot.fired, shot.targetNumber));
-      } else if (to !== null && to !== shot.landed) {
+      } else if (to !== shot.landed) {
         // Every miss, in every mode: the steps from the landing number to the tank (amendments 07 and 10, FR-072).
         this.drawBracket(lx, numberToX(to, min, max), t().battle.steps(Math.abs(shot.landed - to)));
       } else {
@@ -740,7 +750,7 @@ export class NumberLineView {
     this.drawPointerLines(s);
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
-    const choosing = s.phase === 'aiming' || s.phase === 'challenge' || s.phase === 'paused';
+    const choosing = acceptsInput(s.phase) || s.phase === 'paused';
     this.drawTypedLabel(choosing ? s.selection : null, s.entry.typed !== '', min, max);
     if (s.selection === null || !choosing) return;
     const x = numberToX(s.selection, min, max);
@@ -760,16 +770,12 @@ export class NumberLineView {
    * HIT_FADE_MS, and removed at once when a later challenge starts. Returns whether it is still shown.
    */
   private hitMarkShown(shot: NonNullable<RoundState['lastShot']>, s: RoundState, min: number, max: number): boolean {
-    if (this.hitMark?.shot !== shot) {
+    const owner = followHit(this.hitMark?.owner ?? null, s)!;
+    if (this.hitMark?.owner.shot !== shot) {
       this.clearHitMark();
-      const lx = numberToX(shot.landed, min, max);
       const g = this.hitMarkGraphics.clear().setAlpha(1).setVisible(true);
-      g.fillStyle(LANDED, 1);
-      g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
-      this.landedText.setAlpha(1).setText(String(shot.landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
-      // The hit belongs to the challenge shown after it (the controller passes the shot phase first).
-      this.hitMark = { shot, challenge: s.phase === 'playerShot' ? undefined : s.challenge, done: false };
-      this.scene.game.canvas.dataset.landing = String(shot.landed);
+      this.drawLandingMark(g, shot.landed, min, max);
+      this.hitMark = { owner, done: false };
       this.scene.tweens.add({
         targets: [g, this.landedText],
         alpha: 0,
@@ -778,9 +784,19 @@ export class NumberLineView {
         onComplete: () => this.clearHitMark(true),
       });
     }
-    if (this.hitMark.challenge === undefined && s.phase !== 'playerShot') this.hitMark.challenge = s.challenge;
-    if (!this.hitMark.done && this.hitMark.challenge !== undefined && this.hitMark.challenge !== s.challenge) this.clearHitMark(true);
+    this.hitMark.owner = owner;
+    if (!this.hitMark.done && hitOutdated(owner, s)) this.clearHitMark(true);
     return !this.hitMark.done;
+  }
+
+  /** The landing marker at `landed`: a triangle on the ruler and the number in large digits. Returns its x. */
+  private drawLandingMark(g: Phaser.GameObjects.Graphics, landed: number, min: number, max: number): number {
+    const lx = numberToX(landed, min, max);
+    g.fillStyle(LANDED, 1);
+    g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
+    this.landedText.setAlpha(1).setText(String(landed)).setPosition(lx, LANDED_BOTTOM).setVisible(true);
+    this.scene.game.canvas.dataset.landing = String(landed);
+    return lx;
   }
 
   /** Removes a hit's landing marker; `keep` remembers the hit, so it is not shown again. */
@@ -819,7 +835,7 @@ export class NumberLineView {
     const g = this.marks;
     const enemy = visibleEnemy(s);
     // "Nur Rechnen" has no ruler for the lines to point at (amendment 17).
-    const visible: TankState[] = s.mode === 'math' ? [] : [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
+    const visible: TankState[] = !MODE_TRAITS[s.mode].showsRuler ? [] : [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
     g.lineStyle(2, POINTER, 0.8);
     g.fillStyle(POINTER, 0.9);
     for (const tank of visible) {
@@ -835,7 +851,7 @@ export class NumberLineView {
   private onDown(p: Phaser.Input.Pointer): void {
     if (p.worldY < RULER_TOP - GRAB_MARGIN || p.worldY > RULER_BOTTOM + GRAB_MARGIN) return;
     const s = this.controller.getState();
-    if ((s.phase !== 'aiming' && s.phase !== 'challenge') || s.mode === 'math') return;
+    if (!acceptsInput(s.phase) || !MODE_TRAITS[s.mode].showsRuler) return;
     this.dragging = true;
     this.select(p);
   }
@@ -844,17 +860,16 @@ export class NumberLineView {
     if (this.dragging) this.select(p);
   }
 
+  /** The drawing does not depend on the drag, so releasing changes nothing on screen. */
   private onUp(): void {
-    if (!this.dragging) return;
     this.dragging = false;
-    if (this.last) this.update(this.last);
   }
 
+  /** Selects the number under the pointer; the controller's state update redraws, so the same number does nothing. */
   private select(p: Phaser.Input.Pointer): void {
     const { min, max } = this.controller.getRoundSettings().range;
     const n = xToNumber(p.worldX, min, max);
     if (n !== this.controller.getState().selection) this.controller.selectNumber(n);
-    else if (this.last) this.update(this.last);
   }
 }
 

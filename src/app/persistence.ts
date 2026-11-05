@@ -173,11 +173,13 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       return { ok: false };
     };
     if (kinds.some((kind) => kept.has(kind))) return fail();
+    // Only a save of several kinds can need a rollback, so only then are the old texts read (E1).
+    const rollback = kinds.length > 1;
     const written: Array<{ key: string; old: string | null }> = [];
     try {
       for (const kind of kinds) {
         const key = KEYS[kind];
-        const old = kv.get(key);
+        const old = rollback ? kv.get(key) : null;
         kv.set(key, JSON.stringify(next[kind]));
         written.push({ key, old });
       }
@@ -230,7 +232,8 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
       persistent,
     }),
     saveSettings: (s) => saveOne('settings', structuredClone(s)),
-    saveProgress: (p) => saveOne('progress', structuredClone(p)),
+    // The progress store hands over a new object on every attempt and never changes it afterwards (E1).
+    saveProgress: (p) => saveOne('progress', p),
     submitResult(key, result) {
       const r = submitResult(values.records, key, result);
       if (r.newRecord) saveOne('records', r.records);

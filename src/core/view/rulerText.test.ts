@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { nextHelp } from '../battle/help';
 import { stepPath } from '../math/stepPath';
 import { numberToX } from '../numberline/mapping';
+import { ticksFor } from '../numberline/ticks';
 import { defaultSettings } from '../settings/defaults';
 import type { Challenge, HelpContent } from '../types';
 import { GROUND_ABOVE_RULER_MARGIN, RULER_TOP } from './layout';
@@ -84,6 +85,12 @@ describe('help texts on the ruler never overlap (T228, P1)', () => {
       }
     }
   }
+
+  it('gives the same label boxes from precomputed lines as from the range, level and seed', () => {
+    for (const level of [1, 2, 3, 4, 5] as const) {
+      expect(rulerLabelBoxes(range, level, 3, ticksFor(range, level, 3))).toEqual(rulerLabelBoxes(range, level, 3));
+    }
+  });
 
   it('hides the ruler labels under a chip and keeps the others', () => {
     const labels = rulerLabelBoxes(range, 1, 3);
