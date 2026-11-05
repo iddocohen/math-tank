@@ -196,7 +196,10 @@ export interface RoundState {
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;
-  help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
+  /** The help ladder of the search (FR-031): content is what the current step shows, null at level 0. */
+  help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[]; content: HelpContent | null };
+  /** Feedback line after a miss (FR-033): an encouraging phrase, or "Ganz knapp! Triff die Linie." after a near miss. */
+  message: FeedbackMessage | null;
   /** Previewed number; fired by the fire button or Enter. */
   selection: number | null;
   /** Keyboard digits typed so far (FR-060); outOfRange shows the range hint (FR-063). */
@@ -223,6 +226,35 @@ export interface RoundState {
   /** goalReached: roundLength enemies destroyed with roundType 'enemyCount'; heartsGone: no lives left (FR-082). */
   outcome: 'goalReached' | 'heartsGone' | null;
 }
+
+/**
+ * What one help step shows (US5, FR-031, core/battle/help.ts). Fields that do not belong to the step, or whose help
+ * type the parent turned off (FR-032), are null or false.
+ */
+export interface HelpContent {
+  step: 1 | 2 | 3;
+  /** Step 1, number line: from the landing number toward the answer; null before any miss. */
+  direction: 'right' | 'left' | null;
+  /** Step 1, number line (help.nearestTen): the major line nearest to the answer, highlighted. */
+  nearestMajor: number | null;
+  /** Step 2, number line (help.zoom): the ten that contains the answer, drawn with all lines. */
+  zoom: { min: number; max: number } | null;
+  /** Step 2, number line (help.countSteps): numbers pop up one by one from `from` to `to`. */
+  count: { from: number; to: number; steps: number } | null;
+  /** Step 2, addition and subtraction (help.stepAnimation): the marker's stops (stepPath, FR-024). */
+  stepPath: number[] | null;
+  /** Step 1, comparison (help.nearestTen): the tens digits on every plate are highlighted. */
+  tensDigits: boolean;
+  /** Step 2, comparison (help.zoom): every option marked on the ruler, smallest first. */
+  optionMarkers: number[] | null;
+  /** Step 3: the answer, shown and selected. */
+  solution: number | null;
+  /** Step 3, order3: the correct order. */
+  order: number[] | null;
+}
+
+/** A feedback line; the overlay turns it into text with i18n `messageText`. `index` picks an encouraging phrase. */
+export type FeedbackMessage = { key: 'encouragement'; index: number } | { key: 'near' };
 
 export interface LastShot {
   /** The number the player fired at. */

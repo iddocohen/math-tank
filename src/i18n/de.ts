@@ -76,10 +76,22 @@ export const de = {
     between: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
   },
 
+  /** Help steps (US5, FR-031, FR-033): one line per step, from i18n helpText. */
   helpSteps: {
+    /** Step 1: the direction from the landing number to the answer. */
+    direction: { right: 'Weiter nach rechts', left: 'Weiter nach links' },
     nearestTen: (n: number) => `Schau zuerst zur ${n}.`,
     countSteps: (n: number) => `Zähle ${n} Schritte.`,
+    /** Step 2: the count from the landing number (or the nearest major line) to the answer. */
+    countFrom: (from: number, n: number) => `Zähle von ${from} aus ${n === 1 ? '1 Schritt' : `${n} Schritte`}.`,
+    zoom: 'Schau genau auf diesen Zehner.',
+    /** Step 2 of addition and subtraction: the marker moves along the step path. */
+    stepAnimation: 'Zähl mit, Schritt für Schritt.',
+    /** Comparison step 1 and step 2. */
+    tensDigits: 'Vergleiche zuerst die Zehner.',
+    optionMarkers: 'Weiter rechts steht die größere Zahl.',
     solution: (n: number) => `Hier ist die ${n}.`,
+    order: (a: number, b: number, c: number) => `Die Reihenfolge ist ${a}, ${b}, ${c}.`,
   },
 
   /** Amendment 06 (FR-085, FR-086): result, time and the personal best, never a comparison. */

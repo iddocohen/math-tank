@@ -70,6 +70,9 @@ export class BattleController {
   private firedNumber: number | null = null;
   /** Clock time since which the round's time is running, or null while it is stopped (FR-084). */
   private runningSince: number | null = null;
+  /** Time-limit wait (FR-034, D1): time spent in 'challenge' since the latest help change, and since when it runs. */
+  private helpWaitMs = 0;
+  private helpWaitSince: number | null = null;
 
   constructor(deps: BattleDeps) {
     this.deps = deps;
@@ -221,7 +224,7 @@ export class BattleController {
     const base: BattleState = { ...s, entry: emptyEntry(), notOnTank: false, inputMethod: method };
     if (!inOrder) {
       // A wrong order is a wrong answer for the help steps, but not a shot (FR-081).
-      this.set(afterMiss({ ...base, orderTaps: [] }, this.deps.clock()));
+      this.set(afterMiss({ ...base, orderTaps: [] }, this.deps.clock(), this.settings));
       return;
     }
     this.set({ ...base, orderTaps: taps });
@@ -258,14 +261,39 @@ export class BattleController {
   }
 
   /**
-   * Help button or H (FR-030): the next help step during a guided search. It is not a shot and costs no heart, so
-   * lives and turn stay and the enemy does not fire (FR-081). Addition and subtraction get the step animation (FR-024);
-   * the help steps of the other kinds come with US5 (Phase 19).
+   * Help button or H (FR-030): the next help step during a guided search, for every challenge kind (help.ts). It is
+   * not a shot and costs no heart, so lives and turn stay and the enemy does not fire (FR-081).
    */
   requestHelp(): void {
     if (this.state.mode !== 'guided' || this.state.phase !== 'challenge') return;
     const next = afterHelpRequest(this.state, this.settings);
     if (next !== this.state) this.set(next);
+  }
+
+  /**
+   * Called by the renderer about once a second (decision D1, FR-034). With a parent-set time limit, a search that
+   * waited that long in 'challenge' since its latest help change gets the next help step, with no penalty. Without a
+   * limit there is no timer and nothing changes.
+   */
+  tick(): void {
+    const left = this.helpTimeLeftMs();
+    if (left === null || left > 0 || this.state.phase !== 'challenge') return;
+    this.requestHelp();
+  }
+
+  /**
+   * Milliseconds until the time limit shows the next help step, or null when there is no limit, no guided search or
+   * the solution is already shown. The wait stops while paused and while a shell is in flight.
+   */
+  helpTimeLeftMs(): number | null {
+    const limit = this.settings.timeLimitSeconds;
+    const s = this.state;
+    if (limit === null || s.mode !== 'guided' || !s.challenge || s.help.level >= SOLUTION_HELP_LEVEL) return null;
+    return Math.max(0, limit * 1000 - this.helpWaitElapsed());
+  }
+
+  private helpWaitElapsed(): number {
+    return this.helpWaitMs + (this.helpWaitSince === null ? 0 : this.deps.clock() - this.helpWaitSince);
   }
 
   shotAnimationDone(): void {
@@ -294,7 +322,7 @@ export class BattleController {
       return;
     }
     // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081).
-    const missed = guided ? afterMiss(next, this.deps.clock()) : next;
+    const missed = guided ? afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true) : next;
     this.set({ ...missed, phase: 'enemyTurn', shot: this.nextEnemyShot(missed) });
   }
 
@@ -407,6 +435,11 @@ export class BattleController {
   }
 
   private set(next: BattleState): void {
+    const prev = this.state;
+    // The time-limit wait starts again with every help change and every new search, and runs only in 'challenge'.
+    if (next.help !== prev.help || next.challenge !== prev.challenge) this.helpWaitMs = 0;
+    else this.helpWaitMs = this.helpWaitElapsed();
+    this.helpWaitSince = next.phase === 'challenge' ? this.deps.clock() : null;
     this.state = next;
     for (const listener of [...this.listeners]) listener(next);
   }

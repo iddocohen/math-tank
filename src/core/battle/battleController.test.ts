@@ -15,6 +15,8 @@ import { BLAST_RADIUS } from '../physics/damage';
 import { solveArcToX } from '../physics/arc';
 import { COMPARISON_47_74, SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
 import { stepPath } from '../math/stepPath';
+import { directionTo, nearestMajorTick, nextHelp } from './help';
+import { encouragements, messageText } from '../../i18n';
 
 function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
   return { ...defaultSettings(), freePlay: true, ...overrides };
@@ -112,7 +114,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'orderTaps', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'notOnTank',
+        'lives', 'enemiesDestroyed', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'notOnTank', 'message',
       ].sort(),
     );
   });
@@ -1086,7 +1088,7 @@ describe('BattleController guided turn flow (US2, T060)', () => {
     expect(s.enemy).toMatchObject({ position: s.challenge!.answer, x: numberToX(s.challenge!.answer, 0, 100), alive: true });
     expect(s.lives).toBe(LIVES);
     expect(s.enemiesDestroyed).toBe(0);
-    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [] });
+    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null });
     expect(Math.abs(s.challenge!.answer - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(0, 100));
   });
 
@@ -1251,7 +1253,7 @@ describe('BattleController guided turn flow (US2, T060)', () => {
     const s = g.controller.getState();
     expect(s.phase).toBe('challenge');
     expect(s.enemiesDestroyed).toBe(1);
-    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [] });
+    expect(s.help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null });
     expect(s.challenge!.id).not.toBe(s0.challenge!.id);
     expect(Math.abs(s.challenge!.answer - s.player.position)).toBeGreaterThanOrEqual(minEnemyGap(0, 100));
     expect(s.answerableAt).toBe(g.now() + 1_000);
@@ -1785,3 +1787,183 @@ describe('BattleController comparison with decoy tanks (US4, T087, decision D15)
     expect(g.controller.getState().phase).toBe('playerShot');
   });
 });
+
+describe('BattleController help escalation (US5, T095)', () => {
+  it('each miss raises help.level by one and sets an encouraging message; the content follows nextHelp (FR-030, FR-031)', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const s0 = g.controller.getState();
+    const target = s0.challenge!.answer;
+    const n = missNumber(s0);
+    answer(g, n);
+    const s1 = g.controller.getState();
+    expect(s1.help.level).toBe(1);
+    expect(s1.message).toMatchObject({ key: 'encouragement' });
+    expect(encouragements).toContain(messageText(s1.message!));
+    expect(s1.help.content).toEqual(nextHelp(s1.challenge!, 1, n, s1RoundSettings(g)));
+    expect(s1.help.content).toMatchObject({ step: 1, direction: directionTo(n, target) });
+    answer(g, n);
+    const s2 = g.controller.getState();
+    expect(s2.help.level).toBe(2);
+    expect(s2.help.content).toMatchObject({ step: 2, count: { from: n, to: target } });
+    expect(encouragements).toContain(messageText(s2.message!));
+  });
+
+  it('requestHelp before firing shows the next step at once; it is not a shot and the enemy does not fire (FR-030, FR-081)', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const phases: string[] = [];
+    g.controller.subscribe((s) => phases.push(s.phase));
+    const before = g.controller.getState();
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(1);
+    expect(s.help.content).toMatchObject({ step: 1, direction: null, nearestMajor: nearestMajorTick(s.challenge!.answer, 0, 100) });
+    expect(s.help.wrongAnswers).toBe(0);
+    expect(s.turn).toBe(before.turn);
+    expect(s.lives).toBe(before.lives);
+    expect(s.shot).toBeNull();
+    expect(s.phase).toBe('challenge');
+    g.controller.requestHelp();
+    expect(g.controller.getState().help.content).toMatchObject({ step: 2, count: { from: nearestMajorTick(s.challenge!.answer, 0, 100) } });
+    expect(phases).not.toContain('enemyTurn');
+  });
+
+  it('requestHelp works for every kind: a comparison gets the tens digits, then the markers, then the correct tank', () => {
+    const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
+    g.controller.startRound('guided');
+    g.controller.requestHelp();
+    expect(g.controller.getState().help.content).toMatchObject({ step: 1, tensDigits: true });
+    g.controller.requestHelp();
+    expect(g.controller.getState().help.content).toMatchObject({ step: 2, optionMarkers: [47, 74] });
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(3);
+    expect(s.help.content).toMatchObject({ step: 3, solution: 74 });
+    expect(s.selection).toBe(74);
+    g.controller.requestHelp();
+    expect(g.controller.getState()).toBe(s);
+  });
+
+  it('a help request at level 2 shows the solution and sets the selection to the answer', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const s0 = g.controller.getState();
+    answer(g, missNumber(s0));
+    g.controller.requestHelp();
+    expect(g.controller.getState().help.level).toBe(2);
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(3);
+    expect(s.selection).toBe(s0.challenge!.answer);
+    expect(s.help.content).toMatchObject({ step: 3, solution: s0.challenge!.answer });
+  });
+
+  it('three misses: the enemy fires after each, a miss never changes lives, the solution is selected and confirm destroys the enemy (SC-005)', () => {
+    const g = guidedRoundWhere(positionSearch, { enemyDifficulty: 'challenging' });
+    const s0 = g.controller.getState();
+    let enemyTurns = 0;
+    for (let i = 0; i < 3; i++) {
+      g.advance(1_000);
+      g.controller.fireAt(missNumber(s0));
+      const livesBefore = g.controller.getState().lives;
+      g.controller.shotAnimationDone();
+      const firing = g.controller.getState();
+      // The miss itself leaves the hearts as they were.
+      expect(firing.lives).toBe(livesBefore);
+      expect(firing.phase).toBe('enemyTurn');
+      enemyTurns++;
+      const hits = firing.shot!.hitTargetId !== null;
+      g.controller.enemyShotAnimationDone();
+      if (g.controller.getState().phase === 'roundOver') return;
+      expect(g.controller.getState().lives).toBe(hits ? livesBefore - 1 : livesBefore);
+    }
+    const s = g.controller.getState();
+    expect(enemyTurns).toBe(3);
+    expect(s.help).toMatchObject({ level: 3, wrongAnswers: 3, content: { step: 3, solution: s0.challenge!.answer } });
+    expect(s.selection).toBe(s0.challenge!.answer);
+    g.advance(1_000);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().enemiesDestroyed).toBe(1);
+    expect(g.progress.getProgress().attempts[0]).toMatchObject({ helpLevel: 3, solved: false, independent: false, wrongAnswers: 3 });
+    // The new search starts without help and without a message.
+    expect(g.controller.getState().help).toEqual({ level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null });
+    expect(g.controller.getState().message).toBeNull();
+  });
+
+  it('a near miss on the body raises help.level like a miss and sets "Ganz knapp! Triff die Linie." (FR-066)', () => {
+    const g = guidedRoundWhere(positionSearch);
+    answer(g, nearNumber(g.controller.getState()));
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(1);
+    expect(s.message).toEqual({ key: 'near' });
+    expect(messageText(s.message!)).toBe('Ganz knapp! Triff die Linie.');
+  });
+
+  it('a miss after a help request goes on from the requested step', () => {
+    const g = guidedRoundWhere(positionSearch);
+    g.controller.requestHelp();
+    answer(g, missNumber(g.controller.getState()));
+    expect(g.controller.getState().help.level).toBe(2);
+  });
+
+  it('with every help type off, a help request shows the solution at once (FR-032)', () => {
+    const g = guidedRoundWhere(positionSearch, { help: { nearestTen: false, countSteps: false, zoom: false, stepAnimation: false } });
+    g.controller.requestHelp();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(3);
+    expect(s.selection).toBe(s.challenge!.answer);
+  });
+
+  it('with timeLimitSeconds 10, tick() after 10 s shows the next help step with no penalty (FR-034, decision D1)', () => {
+    const g = guidedRoundWhere(positionSearch, { timeLimitSeconds: 10 });
+    const before = g.controller.getState();
+    g.advance(9_999);
+    g.controller.tick();
+    expect(g.controller.getState()).toBe(before);
+    g.advance(1);
+    g.controller.tick();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(1);
+    expect(s.help.wrongAnswers).toBe(0);
+    expect(s.lives).toBe(before.lives);
+    expect(s.turn).toBe(before.turn);
+    expect(s.phase).toBe('challenge');
+    // The next period starts with the step just shown.
+    g.advance(9_000);
+    g.controller.tick();
+    expect(g.controller.getState().help.level).toBe(1);
+    g.advance(1_000);
+    g.controller.tick();
+    expect(g.controller.getState().help.level).toBe(2);
+    expect(g.controller.helpTimeLeftMs()).toBe(10_000);
+  });
+
+  it('without a time limit no timer exists: tick() never changes the state', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const before = g.controller.getState();
+    g.advance(600_000);
+    g.controller.tick();
+    expect(g.controller.getState()).toBe(before);
+    expect(g.controller.helpTimeLeftMs()).toBeNull();
+  });
+
+  it('the time limit stops while paused and while a shell is in flight', () => {
+    const g = guidedRoundWhere(positionSearch, { timeLimitSeconds: 10 });
+    g.advance(5_000);
+    g.controller.pause();
+    g.advance(60_000);
+    g.controller.tick();
+    g.controller.resume();
+    g.controller.tick();
+    expect(g.controller.getState().help.level).toBe(0);
+    expect(g.controller.helpTimeLeftMs()).toBe(5_000);
+    g.controller.fireAt(missNumber(g.controller.getState()));
+    g.advance(60_000);
+    g.controller.tick();
+    expect(g.controller.getState().phase).toBe('playerShot');
+    expect(g.controller.getState().help.level).toBe(0);
+  });
+});
+
+function s1RoundSettings(g: Guided): Settings {
+  return g.controller.getRoundSettings() as Settings;
+}

@@ -1,4 +1,4 @@
-import type { PromptSpec } from '../core/types';
+import type { FeedbackMessage, HelpContent, PromptSpec } from '../core/types';
 import { de } from './de';
 
 /** The shape every translation table must have; de.ts is the source of truth for keys. */
@@ -28,4 +28,25 @@ export function promptText(prompt: PromptSpec): string {
   const p = prompt.params;
   const args = 'a' in p ? [p.a, p.b, p.c] : [p.n, p.k];
   return (entry as (...args: Array<number | undefined>) => string)(...args);
+}
+
+/** The feedback line after a miss (FR-033): an encouraging phrase, or "Ganz knapp! Triff die Linie." after a near miss. */
+export function messageText(m: FeedbackMessage): string {
+  if (m.key === 'near') return active.battle.near;
+  return active.encouragements[m.index % active.encouragements.length]!;
+}
+
+/** The text line of a help step (FR-031), or null when the step has nothing to say. */
+export function helpText(h: HelpContent): string | null {
+  const s = active.helpSteps;
+  if (h.order && h.order.length === 3) return s.order(h.order[0]!, h.order[1]!, h.order[2]!);
+  if (h.solution !== null) return s.solution(h.solution);
+  if (h.direction) return s.direction[h.direction];
+  if (h.nearestMajor !== null) return s.nearestTen(h.nearestMajor);
+  if (h.tensDigits) return s.tensDigits;
+  if (h.count) return s.countFrom(h.count.from, h.count.steps);
+  if (h.stepPath) return s.stepAnimation;
+  if (h.zoom) return s.zoom;
+  if (h.optionMarkers) return s.optionMarkers;
+  return null;
 }

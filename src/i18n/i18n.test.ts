@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_ERROR_KEYS } from '../core/settings/validate';
 import { de } from './de';
-import { encouragements, forbiddenWords, promptText, t } from './index';
+import { encouragements, forbiddenWords, helpText, messageText, promptText, t } from './index';
+import { BattleController } from '../core/battle/controller';
+import { memoryProgressStore, type Speaker } from '../core/battle/ports';
+import { nextHelp } from '../core/battle/help';
+import { generateChallenge } from '../core/math/generate';
+import { defaultSettings } from '../core/settings/defaults';
+import type { RoundState } from '../core/types';
 
 const SAMPLE_ARGS = [7, 13, 42, 100, 5];
 
@@ -124,5 +130,70 @@ describe('de table', () => {
   it('t() returns the German table', () => {
     expect(t()).toBe(de);
     expect(t().encouragements).toBe(encouragements);
+  });
+});
+
+function hasForbiddenWord(text: string): boolean {
+  return forbiddenWords.some((w) => text.toLocaleLowerCase('de').includes(w.toLocaleLowerCase('de')));
+}
+
+describe('help and feedback texts (US5, T097, FR-033, SC-006)', () => {
+  it('has the help phrases of US5 scenario 1', () => {
+    expect(encouragements).toContain('Versuch eine andere Stelle.');
+    expect(t().helpSteps.direction.right).toBe('Weiter nach rechts');
+    expect(t().helpSteps.direction.left).toBe('Weiter nach links');
+    expect(t().helpSteps.countFrom(31, 6)).toBe('Zähle von 31 aus 6 Schritte.');
+    expect(t().helpSteps.countFrom(36, 1)).toBe('Zähle von 36 aus 1 Schritt.');
+  });
+
+  it('messageText gives the near-miss line or an encouraging phrase for any index', () => {
+    expect(messageText({ key: 'near' })).toBe('Ganz knapp! Triff die Linie.');
+    for (const index of [0, 1, 8, 9, 4_294_967_295]) expect(encouragements).toContain(messageText({ key: 'encouragement', index }));
+  });
+
+  it('every help line for generated challenges of every kind comes from the table, has no forbidden word and at most 8 words', () => {
+    const settings = defaultSettings();
+    const steps = { positions: 0, countForward: 0, countBackward: 0, tens: 0, crossTens: 0, addition: 0, subtraction: 0, comparison: 0 };
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 300; seed++) {
+      const c = generateChallenge({ settings, skillSteps: steps, roundSeed: seed, turn: 0, playerPosition: 0, rulerLevel: 1 });
+      kinds.add(c.kind);
+      for (const level of [1, 2, 3]) {
+        for (const landed of [null, c.answer === 0 ? 1 : c.answer - 1]) {
+          const text = helpText(nextHelp(c, level, landed, settings));
+          expect(text, `${c.kind} step ${level}`).not.toBeNull();
+          expect(hasForbiddenWord(text!), text!).toBe(false);
+          expect(wordCount(text!), text!).toBeLessThanOrEqual(8);
+        }
+      }
+    }
+    expect(kinds.size).toBeGreaterThan(8);
+  });
+
+  it('every text passed to Speaker.speak during a guided round is a table text with no forbidden word', () => {
+    const spoken: string[] = [];
+    const speaker: Speaker = { available: true, speak: (text) => spoken.push(text) };
+    let now = 1_000;
+    const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 20 }, progress: memoryProgressStore(), clock: () => now, seed: 9, speaker });
+    const allowed = new Set<string>();
+    const remember = (s: RoundState) => {
+      if (s.challenge) allowed.add(promptText(s.challenge.prompt));
+      if (s.message) allowed.add(messageText(s.message));
+      if (s.help.content) allowed.add(helpText(s.help.content) ?? '');
+    };
+    controller.subscribe(remember);
+    controller.startRound('guided');
+    for (let i = 0; i < 30 && controller.getState().phase !== 'roundOver'; i++) {
+      const s = controller.getState();
+      now += 1_000;
+      if (i % 3 === 0) controller.requestHelp();
+      controller.fireAt(i % 2 === 0 ? s.player.position : s.challenge!.answer);
+      controller.shotAnimationDone();
+      if (controller.getState().phase === 'enemyTurn') controller.enemyShotAnimationDone();
+    }
+    for (const text of spoken) {
+      expect(allowed.has(text), text).toBe(true);
+      expect(hasForbiddenWord(text), text).toBe(false);
+    }
   });
 });

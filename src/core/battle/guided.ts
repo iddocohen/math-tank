@@ -5,10 +5,11 @@
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
 import { deriveSeed } from '../rng';
-import type { BattleState, Challenge, InputMethod, RulerLevel, Settings, TankState } from '../types';
+import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, TankState } from '../types';
 import { generateChallenge } from '../math/generate';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
+import { nextHelp } from './help';
 import { FIRST_STEPS, makeTank, moveTank } from './round';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
@@ -75,7 +76,8 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
     decoys,
     notOnTank: false,
     answerableAt: now + ANSWER_DELAY_MS,
-    help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [] },
+    help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null },
+    message: null,
     selection: null,
     entry: emptyEntry(),
     orderTaps: [],
@@ -83,26 +85,46 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
   };
 }
 
-/**
- * A miss in a search (near miss on the body or off it): one more wrong answer and the next help step. At the
- * solution step the selection is the answer, so one tap on fire or Enter fires at it (FR-013). The full help
- * escalation (time limit, help button, visuals) comes with US5.
- */
-/**
- * The help button or H during a search (FR-030): the next help step, not a shot, no heart. For addition and
- * subtraction the marker steps along stepPath (FR-024, US3). The help steps of the other kinds come with US5.
- */
-export function afterHelpRequest(s: BattleState, settings: Settings): BattleState {
-  const c = s.challenge;
-  if (!c || (c.kind !== 'addition' && c.kind !== 'subtraction')) return s;
-  const level = Math.min(SOLUTION_HELP_LEVEL, s.help.level + 1) as BattleState['help']['level'];
-  const selection = level === SOLUTION_HELP_LEVEL ? c.answer : s.selection;
-  return { ...s, help: { ...s.help, level }, selection, stepAnimation: stepPath(c, settings.beginnerAssist) };
+/** The landing number of the search's latest miss, or null before any miss (the help steps count from it). */
+function landedOf(s: BattleState): number | null {
+  return s.help.wrongAnswers > 0 && s.lastShot && !s.lastShot.hit ? s.lastShot.landed : null;
 }
 
-export function afterMiss(s: BattleState, now: number): BattleState {
+/**
+ * The next help step (US5, FR-031): help.level + 1, or further when the parent turned that step's help types off
+ * (FR-032, nextHelp). At the solution step the selection is the answer, so one tap on fire or Enter fires at it
+ * (FR-013). A step path already running is kept, so the animation does not start again.
+ */
+export function raiseHelp(s: BattleState, settings: Settings): BattleState {
+  const c = s.challenge;
+  if (!c || s.help.level >= SOLUTION_HELP_LEVEL) return s;
+  const content = nextHelp(c, s.help.level + 1, landedOf(s), settings);
+  const selection = content.step === SOLUTION_HELP_LEVEL ? c.answer : s.selection;
+  const stepAnimation = s.stepAnimation ?? content.stepPath;
+  return { ...s, help: { ...s.help, level: content.step, content }, selection, stepAnimation };
+}
+
+/**
+ * The help button, H or a parent-set time limit (FR-030, FR-034): the next help step, not a shot, no heart. A help
+ * request on an addition or subtraction also starts the step path at once (US3 scenario 1); after misses it comes at
+ * step 2.
+ */
+export function afterHelpRequest(s: BattleState, settings: Settings): BattleState {
+  const next = raiseHelp(s, settings);
+  const c = next.challenge;
+  if (next === s || !c || next.stepAnimation || !settings.help.stepAnimation) return next;
+  if (c.kind !== 'addition' && c.kind !== 'subtraction') return next;
+  return { ...next, stepAnimation: stepPath(c, settings.beginnerAssist) };
+}
+
+/**
+ * A miss in a search (a near miss on the body, a plain miss, a destroyed decoy or a wrong order): one more wrong
+ * answer, the next help step and a feedback line, "Ganz knapp! Triff die Linie." after a near miss, otherwise an
+ * encouraging phrase chosen by the round seed (FR-033).
+ */
+export function afterMiss(s: BattleState, now: number, settings: Settings, near = false): BattleState {
   const wrongAnswers = s.help.wrongAnswers + 1;
-  const level = Math.min(SOLUTION_HELP_LEVEL, Math.max(s.help.level, wrongAnswers)) as BattleState['help']['level'];
-  const selection = level === SOLUTION_HELP_LEVEL && s.challenge ? s.challenge.answer : s.selection;
-  return { ...s, help: { level, wrongAnswers, wrongAnswerTimes: [...s.help.wrongAnswerTimes, now] }, selection };
+  const counted: BattleState = { ...s, help: { ...s.help, wrongAnswers, wrongAnswerTimes: [...s.help.wrongAnswerTimes, now] } };
+  const message: FeedbackMessage = near ? { key: 'near' } : { key: 'encouragement', index: deriveSeed(s.seed, 7, s.turn, wrongAnswers) };
+  return { ...raiseHelp(counted, settings), message };
 }

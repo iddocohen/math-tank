@@ -43,7 +43,8 @@ export const SETTING_FIELDS = [
 export type SettingField = (typeof SETTING_FIELDS)[number];
 
 export const COMING_SOON: readonly SettingField[] = [
-  // Phases 19 and 20: help steps.
+  // Phase 20: help visuals. Phase 19 built the help logic (nextHelp honors these switches), but the child sees no
+  // help step until Phase 20 draws them, so the switches stay disabled until then.
   'help.nearestTen',
   'help.countSteps',
   'help.zoom',
@@ -53,7 +54,7 @@ export const COMING_SOON: readonly SettingField[] = [
   'sound.music',
   // Phases 21 and 22: adaptive difficulty.
   'adaptive',
-  // Phase 19: time limit (decision D1).
+  // Phase 20: time limit. Phase 19 built tick() (decision D1); the overlay calls it and shows the limit in T101.
   'timeLimitSeconds',
 ];
 
