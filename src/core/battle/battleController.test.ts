@@ -295,7 +295,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(after.player.health).toBe(100);
     expect(after.player.y).toBeCloseTo(settleY(after.terrain, after.player.x), 6);
     expect(after.enemy.y).toBeCloseTo(settleY(after.terrain, after.enemy.x), 6);
-    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: true, nearMiss: false, hitTankId: after.enemy.id, distance: 0 });
+    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: true, nearMiss: false, hitTankId: after.enemy.id, distance: 0, enemyNumber: n });
     expect(after.lastPlayerPath).toEqual(before.shot!.path);
     expect(after.turn).toBe(1);
   });
@@ -309,7 +309,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     controller.shotAnimationDone();
     const after = controller.getState();
     expect(after.enemy.health).toBe(100);
-    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: true, hitTankId: null, distance: 1 });
+    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: true, hitTankId: null, distance: 1, enemyNumber: after.enemy.position });
   });
 
   it('a far miss sets neither hit nor nearMiss, and the own shell never changes the player health', () => {
@@ -322,7 +322,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const after = controller.getState();
     expect(after.player.health).toBe(100);
     expect(after.enemy.health).toBe(100);
-    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: false, hitTankId: null, distance: Math.abs(n - s.enemy.position) });
+    expect(after.lastShot).toEqual({ fired: n, landed: n, hit: false, nearMiss: false, hitTankId: null, distance: Math.abs(n - s.enemy.position), enemyNumber: s.enemy.position });
   });
 
   it('follows every free-play shot with an enemy turn, then returns to aiming', () => {
@@ -646,5 +646,128 @@ describe('BattleController newScene (amendment 03, FR-070)', () => {
     controller.newScene();
     expect(controller.getState().phase).toBe('aiming');
     expect(controller.getState().seed).not.toBe(over.seed);
+  });
+});
+
+describe('BattleController free play reads the ruler (US9, amendment 02, T180)', () => {
+  it('each free-play turn has a readPosition challenge with the visible enemy standing at its answer (FR-014, FR-067)', () => {
+    const { controller } = makeController({ noDamage: true, roundLength: 12 }, 4242);
+    controller.startRound('freePlay');
+    // Hits on turns 0, 3 and 6; the third hit ends the round after the last check.
+    for (let i = 0; i < 7; i++) {
+      const s = controller.getState();
+      expect(s.phase).toBe('aiming');
+      expect(s.challenge?.kind).toBe('readPosition');
+      expect(s.challenge?.answer).toBe(s.enemy.position);
+      expect(s.challenge?.rulerLevel).toBe(s.rulerLevel);
+      expect(s.enemyFound).toBe(true);
+      // After a miss the challenge stays; after a hit a new one follows.
+      playTurn(controller, i % 3 === 0 ? fireAtEnemy : fireAtOwnNumber);
+    }
+  });
+
+  it('a shot within hitTolerance hits and lastShot carries the exact enemy number (FR-068)', () => {
+    const { controller } = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2, noDamage: true, roundLength: 10 }, 99);
+    controller.startRound('freePlay');
+    const s = controller.getState();
+    const answer = s.challenge!.answer;
+    // On level 2 the enemy stands on a visible line, so only the exact number hits.
+    expect(s.challenge!.hitTolerance).toBe(0);
+    controller.fireAt(answer + 1);
+    controller.shotAnimationDone();
+    expect(controller.getState().lastShot).toMatchObject({ hit: false, enemyNumber: answer });
+    controller.enemyShotAnimationDone();
+    controller.fireAt(answer);
+    controller.shotAnimationDone();
+    const after = controller.getState();
+    expect(after.lastShot).toMatchObject({ fired: answer, hit: true, enemyNumber: answer });
+    expect(after.enemy.health).toBe(100 - MAX_DAMAGE);
+    controller.enemyShotAnimationDone();
+    // The enemy moved, but the feedback keeps the number it stood at.
+    expect(controller.getState().enemy.position).not.toBe(answer);
+    expect(controller.getState().lastShot?.enemyNumber).toBe(answer);
+  });
+
+  it('records no attempt in read-the-ruler free play', () => {
+    const { controller, progress } = makeController({ noDamage: true, roundLength: 6 }, 5);
+    controller.startRound('freePlay');
+    for (let i = 0; i < 6; i++) playTurn(controller, i % 2 === 0 ? fireAtEnemy : fireBetween);
+    expect(progress.getProgress().attempts).toHaveLength(0);
+  });
+
+  it('uses rulerLevelStart as the round ruler level', () => {
+    for (const level of [1, 2, 3, 4, 5] as const) {
+      const { controller } = makeController({ rulerLevelStart: level, rulerLevelMax: 5 }, 10 + level);
+      controller.startRound('freePlay');
+      expect(controller.getState().rulerLevel).toBe(level);
+      expect(controller.getState().challenge?.rulerLevel).toBe(level);
+    }
+  });
+
+  it('range 550 to 780 on level 2: the player stands at 550 or 780 and the enemy on a multiple of 10 (US9 scenarios 4 and 5, D14)', () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const { controller } = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2, noDamage: true, roundLength: 10 }, seed);
+      controller.startRound('freePlay');
+      for (let turn = 0; turn < 3; turn++) {
+        const s = controller.getState();
+        expect([550, 780]).toContain(s.player.position);
+        expect(s.player.position).toBe(s.playerSide === 'left' ? 550 : 780);
+        expect(s.enemy.position % 10).toBe(0);
+        expect(s.enemy.position).toBeGreaterThanOrEqual(550);
+        expect(s.enemy.position).toBeLessThanOrEqual(780);
+        playTurn(controller, fireAtEnemy);
+      }
+    }
+  });
+});
+
+describe('BattleController any number range (US9, T145)', () => {
+  it('range 0 to 1000: typing 4, 3, 7 and confirm fires at 437 and the shell lands at 437 (FR-020, FR-064)', () => {
+    const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } }, 31);
+    controller.startRound('freePlay');
+    for (const d of [4, 3, 7] as const) controller.typeDigit(d);
+    expect(controller.getState().selection).toBe(437);
+    controller.confirm();
+    const s = controller.getState();
+    expect(s.phase).toBe('playerShot');
+    expect(xToNumber(s.shot!.impact.x, 0, 1000)).toBe(437);
+    controller.shotAnimationDone();
+    expect(controller.getState().lastShot).toMatchObject({ fired: 437, landed: 437 });
+  });
+
+  it('range 0 to 1000: nudge(1) from 436 reaches 437', () => {
+    const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } });
+    controller.startRound('freePlay');
+    controller.selectNumber(436);
+    controller.nudge(1);
+    expect(controller.getState().selection).toBe(437);
+  });
+
+  it('range 0 to 1000: selectNumber from a pointer x snaps to the nearest whole number', () => {
+    const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } });
+    controller.startRound('freePlay');
+    const unit = (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / 1000;
+    controller.selectNumber(xToNumber(numberToX(437, 0, 1000) + 0.4 * unit, 0, 1000));
+    expect(controller.getState().selection).toBe(437);
+    controller.selectNumber(xToNumber(numberToX(437, 0, 1000) - 0.6 * unit, 0, 1000));
+    expect(controller.getState().selection).toBe(436);
+    controller.selectNumber(436.6);
+    expect(controller.getState().selection).toBe(437);
+  });
+
+  it('range -20 to 30: typeMinus then 5 gives -5; range 0 to 100 ignores typeMinus (FR-060)', () => {
+    const neg = makeController({ range: { preset: 'custom', min: -20, max: 30 } }).controller;
+    neg.startRound('freePlay');
+    neg.typeMinus();
+    neg.typeDigit(5);
+    expect(neg.getState().selection).toBe(-5);
+    expect(neg.getState().entry.typed).toBe('-5');
+
+    const pos = makeController({ range: { preset: '0-100', min: 0, max: 100 } }).controller;
+    pos.startRound('freePlay');
+    pos.typeMinus();
+    expect(pos.getState().entry.typed).toBe('');
+    pos.typeDigit(5);
+    expect(pos.getState().selection).toBe(5);
   });
 });

@@ -178,7 +178,7 @@ export interface RoundState {
   playerSide: 'left' | 'right';
   /** False during a position search: enemy hidden; true after a hit, for readPosition and in free play. */
   enemyFound: boolean;
-  /** In free play a readPosition challenge (amendment 02, wired in by the free-play phase); null until then. */
+  /** In free play a readPosition challenge whose answer is the enemy's number (amendment 02, FR-067). */
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;
@@ -213,6 +213,8 @@ export interface LastShot {
   hitTankId: string | null;
   /** Steps from the landed number to the enemy's number. */
   distance: number | null;
+  /** The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068). */
+  enemyNumber: number;
 }
 
 export interface ShotInFlight {

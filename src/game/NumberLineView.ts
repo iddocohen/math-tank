@@ -4,7 +4,12 @@
  * - Drawn in the ruler band (core/view/layout.ts, screen y 720 to 820) on the bedrock strip below the ground,
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
  * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
- *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap.
+ *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap;
+ *   ticksFor then sets labelsNearPreview, and the minor lines next to the preview marker get labels (FR-018).
+ * - showZoom(view) draws a zoomed ten above the ruler with all its lines and labels, and connector lines from
+ *   its two ends to the matching part of the ruler, for the help steps (FR-020, FR-031). hideZoom removes it.
+ * - The game canvas carries `data-ruler-labels`, the drawn ruler labels from left to right, for the end-to-end
+ *   tests (tasks.md D4: the labels are canvas text, so the DOM has no other way to read them).
  * - Tapping or dragging anywhere on the ruler calls selectNumber; releasing only previews (FR-019).
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
@@ -13,7 +18,7 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
-import { ticksFor, type RulerLevel } from '../core/numberline/ticks';
+import { ticksFor, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
 import type { RoundState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
@@ -31,6 +36,12 @@ const RULER_BG = 0x14203a;
 const LINE = 0xf4f6fb;
 const SELECT = 0xffd54a;
 const LANDED = 0xff8a65;
+/** The zoomed ten: a box this wide and tall, its top this far below the top of the world. */
+const ZOOM_WIDTH = 640;
+const ZOOM_HEIGHT = 110;
+const ZOOM_TOP = 150;
+const ZOOM_PAD = 40;
+const ZOOM_BG = 0x14203a;
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 interface Drawn {
@@ -44,6 +55,14 @@ export class NumberLineView {
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly marks: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
+  /** Labels of the minor lines next to the preview marker, while labelsNearPreview is set. */
+  private previewLabels: Phaser.GameObjects.Text[] = [];
+  private readonly zoom: Phaser.GameObjects.Graphics;
+  private zoomLabels: Phaser.GameObjects.Text[] = [];
+  /** The ruler's lines as drawn, and whether minor labels belong next to the preview marker. */
+  private ticks: Tick[] = [];
+  private minorStep = 1;
+  private labelsNearPreview = false;
   private readonly selectionText: Phaser.GameObjects.Text;
   private readonly landedText: Phaser.GameObjects.Text;
   private readonly stepsText: Phaser.GameObjects.Text;
@@ -58,6 +77,7 @@ export class NumberLineView {
   ) {
     this.ruler = scene.add.graphics().setDepth(10);
     this.marks = scene.add.graphics().setDepth(11);
+    this.zoom = scene.add.graphics().setDepth(13);
     const big = { fontFamily: FONT, fontSize: '56px', fontStyle: 'bold', color: '#ffd54a', stroke: '#14203a', strokeThickness: 8 };
     this.selectionText = scene.add.text(0, 0, '', big).setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.landedText = scene.add.text(0, 0, '', { ...big, color: '#ff8a65' }).setOrigin(0.5, 1).setDepth(12).setVisible(false);
@@ -87,11 +107,57 @@ export class NumberLineView {
     this.drawMarks(s, min, max);
   }
 
+  /** Draws the zoomed ten `view` above the ruler, every line labeled, with connectors to the ruler (FR-020). */
+  showZoom(view: { min: number; max: number }): void {
+    this.hideZoom();
+    const { min, max } = this.controller.getRoundSettings().range;
+    const level = this.last?.rulerLevel ?? 1;
+    const { ticks } = ticksFor(view, level, this.last?.seed ?? 0, { allLines: true });
+    const fromX = numberToX(view.min, min, max);
+    const toX = numberToX(view.max, min, max);
+    const center = Math.min(1560 - ZOOM_WIDTH / 2, Math.max(40 + ZOOM_WIDTH / 2, (fromX + toX) / 2));
+    const left = center - ZOOM_WIDTH / 2;
+    const axisY = ZOOM_TOP + 46;
+    const zx = (v: number) => left + ZOOM_PAD + ((v - view.min) / (view.max - view.min)) * (ZOOM_WIDTH - 2 * ZOOM_PAD);
+
+    const g = this.zoom;
+    // Connector lines from both ends of the zoomed ten down to the matching part of the ruler.
+    g.lineStyle(3, SELECT, 0.9);
+    g.lineBetween(zx(view.min), ZOOM_TOP + ZOOM_HEIGHT, fromX, AXIS_Y);
+    g.lineBetween(zx(view.max), ZOOM_TOP + ZOOM_HEIGHT, toX, AXIS_Y);
+    g.lineStyle(6, SELECT, 1);
+    g.lineBetween(fromX, AXIS_Y, toX, AXIS_Y);
+    g.fillStyle(ZOOM_BG, 0.92);
+    g.fillRoundedRect(left, ZOOM_TOP, ZOOM_WIDTH, ZOOM_HEIGHT, 14);
+    g.lineStyle(3, SELECT, 1);
+    g.strokeRoundedRect(left, ZOOM_TOP, ZOOM_WIDTH, ZOOM_HEIGHT, 14);
+    g.lineStyle(4, LINE, 1);
+    g.lineBetween(zx(view.min), axisY, zx(view.max), axisY);
+    for (const tick of ticks) {
+      const x = zx(tick.value);
+      const len = tick.major ? MAJOR_TICK : MINOR_TICK;
+      g.lineStyle(tick.major ? 4 : 2, LINE, 1);
+      g.lineBetween(x, axisY - len / 2, x, axisY + len / 2);
+      const label = this.scene.add
+        .text(x, axisY + 22, String(tick.value), { fontFamily: FONT, fontSize: tick.major ? '26px' : '22px', fontStyle: 'bold', color: '#f4f6fb' })
+        .setOrigin(0.5, 0)
+        .setDepth(13);
+      this.zoomLabels.push(label);
+    }
+  }
+
+  hideZoom(): void {
+    this.zoom.clear();
+    for (const label of this.zoomLabels) label.destroy();
+    this.zoomLabels = [];
+  }
+
   destroy(): void {
     this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.onDown, this);
     this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.onUp, this);
+    this.hideZoom();
   }
 
   private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
@@ -106,7 +172,10 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const { ticks } = ticksFor({ min, max }, rulerLevel, seed);
+    const { ticks, minorStep, labelsNearPreview } = ticksFor({ min, max }, rulerLevel, seed);
+    this.ticks = ticks;
+    this.minorStep = minorStep;
+    this.labelsNearPreview = labelsNearPreview;
     for (const tick of ticks) {
       if (!tick.visible) continue;
       const x = numberToX(tick.value, min, max);
@@ -121,6 +190,25 @@ export class NumberLineView {
         .setOrigin(0.5, 0)
         .setDepth(10);
       this.labels.push(label);
+    }
+    this.scene.game.canvas.dataset.rulerLabels = ticks
+      .filter((tick) => tick.visible && tick.labeled)
+      .map((tick) => tick.value)
+      .join(',');
+  }
+
+  /** Level 1 on a crowded ruler: labels for the unlabeled lines within one minor step of the preview (FR-018). */
+  private drawPreviewLabels(selection: number | null, min: number, max: number): void {
+    for (const label of this.previewLabels) label.destroy();
+    this.previewLabels = [];
+    if (!this.labelsNearPreview || selection === null) return;
+    for (const tick of this.ticks) {
+      if (!tick.visible || tick.labeled || Math.abs(tick.value - selection) > this.minorStep) continue;
+      const label = this.scene.add
+        .text(numberToX(tick.value, min, max), LABEL_Y, String(tick.value), { fontFamily: FONT, fontSize: '20px', fontStyle: 'bold', color: '#ffd54a' })
+        .setOrigin(0.5, 0)
+        .setDepth(12);
+      this.previewLabels.push(label);
     }
   }
 
@@ -157,6 +245,7 @@ export class NumberLineView {
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
     const choosing = s.phase === 'aiming' || s.phase === 'challenge' || s.phase === 'paused';
+    this.drawPreviewLabels(choosing ? s.selection : null, min, max);
     if (s.selection === null || !choosing) {
       this.selectionText.setVisible(false);
       return;

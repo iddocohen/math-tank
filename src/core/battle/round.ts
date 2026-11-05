@@ -3,9 +3,10 @@
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { LastShot, Point, RoundState, Settings, TankState } from '../types';
+import type { Challenge, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
 import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
+import { generateChallenge } from '../math/generate';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
 import { damageAt, MAX_DAMAGE } from '../physics/damage';
 import { emptyEntry } from './entry';
@@ -37,15 +38,62 @@ function makeTank(id: string, kind: TankState['kind'], position: number, setting
   return { id, kind, position, x, y: settleY(terrain, x), health: 100, alive: true };
 }
 
+/** Until the difficulty ladders exist (Phase 17), every skill is on step 0. */
+const FIRST_STEPS: Record<Skill, number> = {
+  positions: 0,
+  countForward: 0,
+  countBackward: 0,
+  tens: 0,
+  crossTens: 0,
+  addition: 0,
+  subtraction: 0,
+  comparison: 0,
+};
+
+/** Tries for a new enemy number after a hit before the same number is accepted again. */
+const MOVE_TRIES = 8;
+
+/**
+ * Free play (amendment 02, FR-014, FR-067, decision D14): a "read the ruler" challenge for the round's ruler
+ * level; the enemy stands at its answer. With `avoid`, another answer is chosen whenever the generator finds one.
+ */
+export function freePlayChallenge(
+  settings: Settings,
+  roundSeed: number,
+  turn: number,
+  playerPosition: number,
+  rulerLevel: RulerLevel,
+  avoid: number | null = null,
+): Challenge {
+  let challenge: Challenge | null = null;
+  for (let i = 0; i < MOVE_TRIES; i++) {
+    challenge = generateChallenge({
+      settings,
+      skillSteps: FIRST_STEPS,
+      roundSeed: i === 0 ? roundSeed : deriveSeed(roundSeed, 3, i),
+      turn,
+      playerPosition,
+      rulerLevel,
+      kindsAllowed: ['readPosition'],
+    });
+    if (challenge.answer !== avoid) break;
+  }
+  return challenge!;
+}
+
 /**
  * A new round: terrain from the seed, the player at range.min (left) or range.max (right),
- * the enemy at a seeded position at least minEnemyGap away. Free play starts in 'aiming' with the enemy visible.
+ * the enemy at a seeded position at least minEnemyGap away. Free play starts in 'aiming' with the enemy visible
+ * and standing at the answer of a "read the ruler" challenge.
  */
 export function createRound(settings: Settings, seed: number, side: 'left' | 'right', mode: RoundState['mode'] = 'freePlay'): RoundState {
   const { min, max } = settings.range;
   const terrain = generateTerrain(deriveSeed(seed, 0), WORLD_WIDTH, WORLD_HEIGHT);
   const playerPosition = side === 'left' ? min : max;
-  const enemyPosition = enemyPositionFor(settings, side, createRng(deriveSeed(seed, 1)), null);
+  // The parent's starting level (FR-018); following the positions skill comes with the difficulty ladders.
+  const rulerLevel = settings.rulerLevelStart;
+  const challenge = mode === 'freePlay' ? freePlayChallenge(settings, seed, 0, playerPosition, rulerLevel) : null;
+  const enemyPosition = challenge ? challenge.answer : enemyPositionFor(settings, side, createRng(deriveSeed(seed, 1)), null);
 
   return {
     seed,
@@ -58,14 +106,13 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     decoys: [],
     playerSide: side,
     enemyFound: true,
-    challenge: null,
+    challenge,
     answerableAt: null,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [] },
     selection: null,
     entry: emptyEntry(),
     orderTaps: [],
-    // The parent's starting level (FR-018); following the positions skill comes with the difficulty ladders.
-    rulerLevel: settings.rulerLevelStart,
+    rulerLevel,
     lastShot: null,
     lastPlayerPath: null,
     shot: null,
@@ -152,6 +199,7 @@ export function applyImpact(state: RoundState, impact: Impact, blastRadius: numb
     nearMiss,
     hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
     distance: Math.abs(landed - enemy.position),
+    enemyNumber: enemy.position,
   };
   return {
     ...state,

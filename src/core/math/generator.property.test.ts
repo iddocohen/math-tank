@@ -126,4 +126,54 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
       }
     }
   });
+
+  describe('US9 ranges, 10,000 seeds each (T148, FR-029, FR-067, SC-003, SC-013)', () => {
+    function customSettings(min: number, max: number, patch: Partial<Settings> = {}): Settings {
+      const base = defaultSettings();
+      return {
+        ...base,
+        range: { preset: 'custom', min, max },
+        addition: { ...base.addition, maxResult: max },
+        subtraction: { ...base.subtraction, maxOperand: Math.min(base.subtraction.maxOperand, max - min) },
+        ...patch,
+      };
+    }
+
+    /** Generates SEEDS challenges, alternating the player side, and returns the first few problems. */
+    function problemsFor(settings: Settings, rulerLevel: 1 | 2 | 3 | 4 | 5, kindsAllowed?: ['readPosition']): string[] {
+      const problems: string[] = [];
+      for (let seed = 0; seed < SEEDS; seed++) {
+        const playerPosition = seed % 2 === 0 ? settings.range.min : settings.range.max;
+        const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition, rulerLevel, kindsAllowed });
+        const errors = validateChallenge(c, settings, playerPosition);
+        if (kindsAllowed && c.kind !== 'readPosition') errors.push(`kind ${c.kind}`);
+        if (errors.length > 0 && problems.length < 5) problems.push(`${seed} ${c.kind}: ${errors.join('; ')}`);
+      }
+      return problems;
+    }
+
+    const cases: Array<[string, Settings]> = [
+      ['0 to 50', presetSettings('0-50')],
+      ['0 to 1000, crossing hundreds on', presetSettings('0-1000', { crossHundreds: true })],
+      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { crossHundreds: false })],
+      ['custom 15 to 45', customSettings(15, 45)],
+      ['custom 550 to 780', customSettings(550, 780)],
+      ['custom -20 to 30, negative results on', customSettings(-20, 30, { negativeResults: true })],
+      ['custom -20 to 30, negative results off', customSettings(-20, 30, { negativeResults: false })],
+    ];
+
+    for (const [name, settings] of cases) {
+      it(`${name}: every challenge validates`, () => {
+        expect(problemsFor(settings, 1)).toEqual([]);
+      });
+    }
+
+    for (const [name, settings] of [cases[0]!, cases[2]!, cases[3]!, cases[4]!, cases[5]!]) {
+      for (const level of [1, 2, 3, 4, 5] as const) {
+        it(`${name}: readPosition on ruler level ${level} always validates and stays readPosition`, () => {
+          expect(problemsFor(settings, level, ['readPosition'])).toEqual([]);
+        });
+      }
+    }
+  });
 });

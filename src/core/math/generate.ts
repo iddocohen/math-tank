@@ -81,7 +81,8 @@ function tryKind(
   if (!build) return null;
   const step = stepFor(input.settings, input.rulerLevel);
   const candidates = CANDIDATES[kind];
-  const pool = candidates ? candidates(input.settings, step).filter((n) => answers.includes(n)) : answers;
+  const allowed = new Set(answers);
+  const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : answers;
   if (pool.length === 0) return null;
   for (let i = 0; i < ANSWER_TRIES; i++) {
     const draft = build(rng.pick(pool), input.settings, step, rng);

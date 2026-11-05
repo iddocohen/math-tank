@@ -18,7 +18,7 @@ import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import {
   applyImpact,
   createRound,
-  enemyPositionFor,
+  freePlayChallenge,
   moveTank,
   muzzle,
   tankCenter,
@@ -194,7 +194,7 @@ export class BattleController {
       this.set({ ...s, phase: 'roundOver', outcome });
       return;
     }
-    this.set({ ...s, phase: 'aiming', enemy: s.lastShot?.hit ? this.movedEnemy(s) : s.enemy });
+    this.set(s.lastShot?.hit ? this.nextReadPosition(s) : { ...s, phase: 'aiming' });
   }
 
   pause(): void {
@@ -223,10 +223,14 @@ export class BattleController {
     this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection });
   }
 
-  /** Free play: after a hit the enemy moves to a new visible position (decision D12). */
-  private movedEnemy(s: RoundState): TankState {
-    const rng = createRng(deriveSeed(s.seed, 3, s.turn));
-    return moveTank(s.enemy, enemyPositionFor(this.settings, s.playerSide, rng, s.enemy.position), this.settings, s.terrain);
+  /**
+   * Free play: after a hit a new "read the ruler" challenge follows and the enemy moves to its answer, a new
+   * visible position (decision D12, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
+   */
+  private nextReadPosition(s: RoundState): RoundState {
+    const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position);
+    const enemy: TankState = moveTank(s.enemy, challenge.answer, this.settings, s.terrain);
+    return { ...s, phase: 'aiming', challenge, enemy };
   }
 
   /** The enemy's shell on the state after the player's impact (enemy aiming, research R18). */

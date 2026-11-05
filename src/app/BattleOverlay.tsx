@@ -25,7 +25,7 @@ export function BattleOverlay({ controller, state }: Props) {
   // Typed digits are shown exactly as typed (a lone "-" too); otherwise the previewed number.
   const readout = state.entry.typed !== '' ? state.entry.typed : state.selection !== null ? String(state.selection) : '?';
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
-  const landed = state.lastShot && state.phase !== 'playerShot' ? state.lastShot.landed : null;
+  const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
 
   const playerBar = <HealthBar label={m.battle.playerHealth} health={state.player.health} kind="player" />;
   const enemyBar = <HealthBar label={m.battle.enemyHealth} health={state.enemy.health} kind="enemy" />;
@@ -53,8 +53,13 @@ export function BattleOverlay({ controller, state }: Props) {
       <div className="status-line" role="status" aria-live="polite">
         {state.entry.outOfRange ? (
           <span className="range-hint">{m.battle.rangeHint(min, max)}</span>
-        ) : landed !== null ? (
-          <span className="landed">{m.battle.landedAt(landed)}</span>
+        ) : lastShot?.hit ? (
+          // A hit names the exact number the enemy stood at, also after it has moved (FR-068).
+          <span className="landed hit" data-testid="hit-feedback">
+            {m.battle.hitAt(lastShot.enemyNumber)}
+          </span>
+        ) : lastShot ? (
+          <span className="landed">{m.battle.landedAt(lastShot.landed)}</span>
         ) : null}
       </div>
 
