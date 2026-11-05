@@ -30,7 +30,8 @@ Guarantees: `xToNumber(numberToX(n)) === n` for every integer `n` in range; equa
 generateChallenge(input: {
   settings: Settings;
   skillSteps: Record<Skill, number>;     // current difficulty step per skill
-  rng: Rng;
+  roundSeed: number;                      // challenge seed = deriveSeed(roundSeed, turn, purpose); id = `${roundSeed}-${turn}`
+  turn: number;
   playerPosition: number;                 // range.min or range.max, fixed for the round
   purpose: 'search' | 'bonus';            // bonus excludes comparison kinds (FR-014)
   kindsAllowed?: ChallengeKind[];
