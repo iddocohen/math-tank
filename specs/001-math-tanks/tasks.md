@@ -451,6 +451,20 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
+## Phase 18a: Ruler preview and level 1 labels (product owner report)
+
+**Goal**: The product owner's words: "For the zahlenstrahl setting, I would like to see a live change of it if I change the different settings in it, today it just stays fixed with no change." On the settings page the parent views two rulers that change with every change of the range and of either level. Level 1 labels every number on a 0 to 100 ruler, so it no longer looks the same as level 2.
+
+**Independent Test**: Open the settings page through the gear. Change "Startstufe" from 1 to 4, "Schwerste Stufe" from 5 to 3 and the range from 0 to 100 to 550 to 780. The lines and labels of both previews change at each step. At 0 to 100 level 1, the game ruler and the "Am Anfang" preview label every number from 0 to 100 in two rows.
+
+- [X] T217 Level 1 labels every number (FR-017, amendment 02): when minor labels do not fit in one row, `ticksFor` places them in two staggered rows with a smaller font; major lines and end points keep the large font in the first row. Only when two rows still do not fit (for example widths above about 100 with minor step 1, or 0 to 1000) does level 1 fall back to labeling only the typed number. Tests first in `src/core/numberline/ticks.test.ts` (0 to 100 level 1: all 101 values labeled, no two labels in the same row closer than `MIN_LABEL_SPACING`, `labelTypedNumber` false; level 2: only major lines and end points labeled; every tested view either labels every line within the spacing rule or falls back); then `src/core/numberline/ticks.ts` (each `Tick` gets `row`, the result gets `labelRows`) and `src/game/NumberLineView.ts` (draws the second row with a smaller font); update FR-017 in spec.md and the Stufe 1 wording in amendment-02-ruler-ranges-and-detail.md
+- [X] T218 Two live ruler previews on the settings page (FR-069, FR-046): "Am Anfang" for `rulerLevelStart` and "Schwerste Stufe" for `rulerLevelMax`, each the full width of the settings page, drawn with the game's tick rules and layout (including the two label rows of T217), and redrawn on every change of the range preset, the custom minimum and maximum, and either level. Tests first in `src/app/RulerPreview.test.tsx` (0 to 100 level 1 shows 101 labels in two rows) and `src/app/SettingsPage.test.tsx` (changing each of range, minimum, maximum, starting level and hardest level changes the lines or labels of the matching preview); then `src/app/RulerPreview.tsx`, `src/app/SettingsPage.tsx`, `src/app/styles.css`, `src/i18n/de.ts`; update FR-069 in spec.md
+- [X] T219 Write `tests/e2e/rulerPreview.spec.ts`: open the settings page through the gear press, change the starting level from 1 to 4, the hardest level from 5 to 3 and the range from 0 to 100 to 550 to 780, and check after each change that the line and label counts of the matching preview change; check that both previews are as wide as the settings page. Make it pass in all three browsers, muted (FR-069)
+
+**Checkpoint**: The parent views both ruler levels change while editing the settings, and level 1 labels every number at 0 to 100.
+
+---
+
 ## Phase 19: US5 help escalation logic
 
 **Goal (US5, P2)**: Help that appears after each miss and becomes more explicit, always ending with a solution the child fires at, with no penalty; the enemy's fire still follows the every-2-shots rhythm (amendment 06).
@@ -575,6 +589,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **Phases 14 and 15 (US2)**: Phase 14 depends on Phases 8, 10 and 11b; Phase 15 depends on Phases 9, 11 and 14.
 - **Phases 16 and 17 (US3)**: Phase 16 depends on Phase 10. Phase 17 depends on Phases 15 and 16.
 - **Phase 18 (US4)**: depends on Phases 10 and 15.
+- **Phase 18a (product owner report)**: depends on Phases 11 (ruler levels) and 12 (settings page). Blocks nothing; T217 runs before T218, which draws its label rows, and T219 runs last.
 - **Phases 19 and 20 (US5)**: depend on Phase 15; Phase 20 needs Phase 11 (`showZoom`); comparison help needs Phase 18; step-path help needs Phase 17.
 - **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 13, 14 and 21.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.

@@ -218,10 +218,23 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           <Check field="crossHundreds" label={L.crossHundreds} checked={draft.crossHundreds} onChange={(v) => set('crossHundreds', v)} />
         </Group>
 
-        <Group title={m.settings.groups.numberLine} errors={errorsAt('rulerLevelStart')}>
+        <Group title={m.settings.groups.numberLine} errors={errorsAt('rulerLevelStart')} wide>
           <Select field="rulerLevelStart" label={L.rulerLevelStart} value={String(draft.rulerLevelStart)} options={levelOptions()} onChange={(v) => set('rulerLevelStart', Number(v) as RulerLevel)} />
           <Select field="rulerLevelMax" label={L.rulerLevelMax} value={String(draft.rulerLevelMax)} options={levelOptions()} onChange={(v) => set('rulerLevelMax', Number(v) as RulerLevel)} />
-          {rangeOk ? <RulerPreview range={draft.range} level={draft.rulerLevelStart} /> : <p className="hint">{m.settings.previewUnavailable}</p>}
+          {rangeOk ? (
+            <>
+              <figure className="ruler-preview-figure" data-testid="ruler-preview-start">
+                <figcaption>{m.settings.previewStart}</figcaption>
+                <RulerPreview range={draft.range} level={draft.rulerLevelStart} />
+              </figure>
+              <figure className="ruler-preview-figure" data-testid="ruler-preview-max">
+                <figcaption>{m.settings.previewMax}</figcaption>
+                <RulerPreview range={draft.range} level={draft.rulerLevelMax} />
+              </figure>
+            </>
+          ) : (
+            <p className="hint">{m.settings.previewUnavailable}</p>
+          )}
         </Group>
 
         <Group title={m.settings.groups.help}>
@@ -321,9 +334,10 @@ function levelOptions() {
   return LEVELS.map((n) => ({ value: String(n), label: t().settings.levelOption(n) }));
 }
 
-function Group({ title, errors = [], children }: { title: string; errors?: string[]; children: ReactNode }) {
+/** A settings group; `wide` spans the full width of the page, for the ruler previews (T218). */
+function Group({ title, errors = [], wide = false, children }: { title: string; errors?: string[]; wide?: boolean; children: ReactNode }) {
   return (
-    <fieldset className="settings-group">
+    <fieldset className={wide ? 'settings-group settings-group-wide' : 'settings-group'}>
       <legend>{title}</legend>
       {children}
       <Errors errors={errors} />

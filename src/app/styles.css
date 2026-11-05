@@ -651,17 +651,37 @@ input:focus-visible {
   opacity: 0;
 }
 
-.ruler-preview {
-  max-width: 100%;
-  height: auto;
+/* The ruler group spans every column, so both previews are as wide as the settings page (T218). */
+.settings-group-wide {
+  grid-column: 1 / -1;
 }
 
+.ruler-preview-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.ruler-preview-figure figcaption {
+  font-weight: 700;
+}
+
+.ruler-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #14203a;
+}
+
+/* Stroke widths and font sizes come from the SVG attributes, scaled like the game ruler. */
 .ruler-preview line {
   stroke: #f4f6fb;
-  stroke-width: 2;
 }
 
 .ruler-preview text {
   fill: #f4f6fb;
-  font-size: 11px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
 }

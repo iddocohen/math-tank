@@ -4,10 +4,12 @@
  * - Drawn in the ruler band (core/view/layout.ts, screen y 720 to 820) on the bedrock strip below the ground,
  *   and at x 80 to 1520 with numberToX, so each number sits below its battlefield position.
  * - Lines and labels come from ticksFor with the round's ruler level (FR-017); only visible lines are drawn.
- *   On level 1, minor labels closer than MIN_LABEL_SPACING are left out by ticksFor so digits never overlap;
- *   ticksFor then sets labelTypedNumber, and only the typed number itself is labeled, once, under the marker on a
- *   small dark chip, never its neighbouring lines (T203, FR-017). While the child points on the ruler no number is
- *   shown (amendment 05, FR-019).
+ *   On level 1 every line is labeled: when the minor labels do not fit in one row, ticksFor puts them in two staggered
+ *   rows (tick.row) and they are drawn with a smaller font; major lines and end points keep the large font in the
+ *   first row, and an end point's label may sit slightly outward (tick.shift) (T217, FR-017). Only when two rows do
+ *   not fit either (for example 0 to 1000) does ticksFor set labelTypedNumber, and then only the typed number itself
+ *   is labeled, once, under the marker on a small dark chip, never its neighbouring lines (T203). While the child
+ *   points on the ruler no number is shown (amendment 05, FR-019).
  * - showZoom(view) draws a zoomed ten above the ruler with all its lines and labels, and connector lines from
  *   its two ends to the matching part of the ruler, for the help steps (FR-020, FR-031). hideZoom removes it.
  * - The game canvas carries `data-ruler-labels`, the drawn ruler labels from left to right, for the end-to-end
@@ -42,7 +44,7 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { numberToX, xToNumber } from '../core/numberline/mapping';
-import { ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
+import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
 import { tankCenter, visibleEnemy } from '../core/battle/round';
 import type { RoundState, TankState } from '../core/types';
@@ -57,6 +59,8 @@ const AXIS_Y = 742;
 const MAJOR_TICK = 26;
 const MINOR_TICK = 14;
 const LABEL_Y = 772;
+/** The second row of level 1 labels (T217), below the first row's large labels. */
+const LABEL_ROW_2_Y = 798;
 /** Presses this far above or below the ruler still count as on the line. */
 const GRAB_MARGIN = 24;
 
@@ -351,7 +355,7 @@ export class NumberLineView {
     g.lineStyle(4, LINE, 1);
     g.lineBetween(x0, AXIS_Y, x1, AXIS_Y);
 
-    const { ticks, labelTypedNumber } = ticksFor({ min, max }, rulerLevel, seed);
+    const { ticks, labelTypedNumber, labelRows } = ticksFor({ min, max }, rulerLevel, seed);
     this.ruled = { ticks, labelTypedNumber };
     for (const tick of ticks) {
       if (!tick.visible) continue;
@@ -361,9 +365,9 @@ export class NumberLineView {
       g.lineStyle(tick.major || end ? 4 : 2, LINE, 1);
       g.lineBetween(x, AXIS_Y - len / 2, x, AXIS_Y + len / 2);
       if (!tick.labeled) continue;
-      const size = tick.major || end ? 26 : 20;
+      const size = labelFontSize(tick, labelRows, { min, max });
       const label = this.scene.add
-        .text(x, LABEL_Y, String(tick.value), { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: '#f4f6fb' })
+        .text(x + tick.shift, tick.row === 1 ? LABEL_ROW_2_Y : LABEL_Y, String(tick.value), { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: '#f4f6fb' })
         .setOrigin(0.5, 0)
         .setDepth(10);
       this.labels.push(label);

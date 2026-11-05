@@ -17,7 +17,7 @@
    - **Hit tolerance**: when the enemy stands exactly on a visible tick line, only the exact number hits. At ruler detail levels where the enemy may stand between visible lines (levels 4 and 5 below), a shot within half of the smallest visible step counts as a hit. Feedback still shows the exact number, for example "Treffer! Der Gegner stand bei 637."
    - Where the enemy may stand depends on the ruler detail level: on levels 1 to 3, only on whole numbers that have a tick line; on levels 4 and 5, on any whole number.
 4. **Ruler detail levels replace the four labeling levels.** A level now controls both the tick lines and their labels:
-   - **Stufe 1**: major and minor lines; every line labeled where space allows (otherwise only the typed number is labeled, under the marker; changed by T203, because neighbouring labels ran together).
+   - **Stufe 1**: major and minor lines; every line labeled. When the minor labels do not fit in one row, they are drawn in two staggered rows with a smaller font; major lines and end points keep the large font in the first row. Only when two rows do not fit either (for example 0 to 1000) is only the typed number labeled, under the marker (T203, because neighbouring labels ran together; T217, because at 0 to 100 level 1 looked the same as level 2).
    - **Stufe 2**: major and minor lines; only major lines labeled.
    - **Stufe 3**: major and minor lines; only some major lines labeled (always the two end points).
    - **Stufe 4**: major lines only, no minor lines; major lines labeled.

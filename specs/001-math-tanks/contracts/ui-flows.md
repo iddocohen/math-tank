@@ -10,7 +10,7 @@ Changed by [amendment 01](../amendment-01-number-aiming.md) (number aiming, keyb
 | Battle | Phaser canvas + React overlay | "Spielen", "Freies Spiel", "Nochmal" | Battlefield with the child's tank (3 hearts above it) and the enemy tank (no health bar, a target ring where the pointer line meets it), ruler (number line), tank counter at the top left (and the clock beside it when "Uhr beim Spielen zeigen" is on), challenge banner, large readout of typed digits, fire button, help button, speaker icon, pause, fullscreen, gear icon |
 | Round end | React overlay | Round over | Encouraging message, the result "9 Panzer getroffen in 6:12", then "Neuer Rekord!" with a short celebration, or the record in small neutral text "Dein Rekord: 12" (neither when "Rekord zeigen" is off), "Nochmal" button (Enter or Space), back to start |
 | Parent gate | React | Gear held for 2 s with mouse or touch | Opens a parent menu with "Einstellungen" and "Fortschritt". No key opens it |
-| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with a ruler preview for the chosen range and level), Hilfe, Gegner, Ton, Runde ("Rundenende" with "Bis alle Herzen weg" or "Gegner pro Runde" and the number of enemies, "Uhr beim Spielen zeigen", "Rekord zeigen"). Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
+| Settings | React | Parent menu | All fields from data-model Settings, grouped: Aufgaben, Zahlenraum, Plus und Minus, Zahlenstrahl (ruler starting and hardest level, with two ruler previews, "Am Anfang" and "Schwerste Stufe", for the chosen range), Hilfe, Gegner, Ton, Runde ("Rundenende" with "Bis alle Herzen weg" or "Gegner pro Runde" and the number of enemies, "Uhr beim Spielen zeigen", "Rekord zeigen"). Save button disabled while invalid; errors shown next to fields. A field for a feature that is not built yet is shown disabled with the note "kommt bald" (amendment 05, FR-079) |
 | Progress | React | Parent menu | Per-skill table, sessions list, personal bests per range, starting level and round type (amendment 06), reset button with confirmation |
 
 There are no angle or power controls, and the cannon cannot be dragged (amendment 01).
@@ -93,7 +93,7 @@ Started from the "Freies Spiel" button, shown only when the parent has made free
 
 ## Settings page extras
 
-- Ruler preview: a small ruler drawn with `ticksFor` for the chosen range and starting level, updated as the parent changes them.
+- Ruler previews (T218, FR-069): two rulers as wide as the settings page, "Am Anfang" at the starting level and "Schwerste Stufe" at the hardest level, drawn with `ticksFor` and the game's layout and label rows (T217) for the chosen range, and redrawn on every change of the range preset, the custom minimum or maximum, or either level.
 - "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
 - "Daten sichern" also includes the personal bests.
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LAYOUT } from './mapping';
-import { smallestVisibleStep, ticksFor, typedNumberLabels, type RulerLevel, type Tick } from './ticks';
+import { numberToX } from './mapping';
+import {
+  LABEL_GAP,
+  MIN_LABEL_SPACING,
+  labelFontSize,
+  labelWidth,
+  smallestVisibleStep,
+  ticksFor,
+  typedNumberLabels,
+  type RulerLevel,
+  type Tick,
+} from './ticks';
 
 /** FR-016 width table (amended by amendment 02), written out independently of the implementation. */
 function expectedSteps(min: number, max: number): { majorStep: number; minorStep: number } {
@@ -18,9 +28,25 @@ const LEVELS: RulerLevel[] = [1, 2, 3, 4, 5];
 const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
 const values = (ticks: Tick[]) => ticks.map((t) => t.value);
 const isEnd = (t: Tick, v: { min: number; max: number }) => t.value === v.min || t.value === v.max;
-/** Distance in logical units between two neighboring minor lines on the full-width ruler. */
-const spacing = (view: { min: number; max: number }, step: number) =>
-  (step / (view.max - view.min)) * (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left);
+
+/**
+ * No two labels in the same row are closer than MIN_LABEL_SPACING (center to center), and their estimated text
+ * widths keep at least LABEL_GAP between them (T217).
+ */
+function expectRowsApart(view: { min: number; max: number }, r: ReturnType<typeof ticksFor>): void {
+  for (const row of [0, 1]) {
+    const inRow = r.ticks
+      .filter((t) => t.visible && t.labeled && t.row === row)
+      .map((t) => ({ t, x: numberToX(t.value, view.min, view.max) + t.shift, w: labelWidth(t.value, labelFontSize(t, r.labelRows, view)) }))
+      .sort((a, b) => a.x - b.x);
+    for (let i = 1; i < inRow.length; i++) {
+      const a = inRow[i - 1]!;
+      const b = inRow[i]!;
+      expect(b.x - a.x, `${a.t.value} and ${b.t.value} in row ${row}`).toBeGreaterThanOrEqual(MIN_LABEL_SPACING - 1e-9);
+      expect(b.x - a.x - (a.w + b.w) / 2, `${a.t.value} and ${b.t.value} in row ${row}`).toBeGreaterThanOrEqual(LABEL_GAP - 1e-9);
+    }
+  }
+}
 
 describe('ticksFor step table (FR-016, SC-013)', () => {
   for (const offset of [0, 7, -13, 550, -1000, 9000]) {
@@ -108,12 +134,15 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
   for (const view of views) {
     const label = `${view.min} to ${view.max}`;
 
-    it(`level 1 draws all lines and labels them all when there is room, else sets labelTypedNumber (${label})`, () => {
+    it(`level 1 draws all lines and labels every line in one or two rows, else falls back to the typed number (${label})`, () => {
       const r = ticksFor(view, 1, 3);
       expect(r.ticks.every((t) => t.visible)).toBe(true);
-      const roomy = spacing(view, r.minorStep) >= 28;
-      expect(r.labelTypedNumber).toBe(!roomy);
-      for (const t of r.ticks) expect(t.labeled).toBe(roomy || t.major || isEnd(t, view));
+      if (r.labelTypedNumber) {
+        for (const t of r.ticks) expect(t.labeled).toBe(t.major || isEnd(t, view));
+      } else {
+        expect(r.ticks.every((t) => t.labeled)).toBe(true);
+        expectRowsApart(view, r);
+      }
     });
 
     it(`level 2 draws all lines and labels only major lines and end points (${label})`, () => {
@@ -166,15 +195,15 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
   }
 
   describe('typedNumberLabels: a crowded level 1 ruler labels only the typed number, once (T203, FR-017, FR-019)', () => {
-    const wide = ticksFor({ min: 0, max: 100 }, 1, 1);
+    const wide = ticksFor({ min: 0, max: 1000 }, 1, 1);
 
-    it('typing 4 on 0 to 100 gives the single label 4 and none for the neighbouring lines 3 and 5', () => {
+    it('typing 430 on 0 to 1000 gives the single label 430 and none for the neighbouring lines 420 and 440', () => {
       expect(wide.labelTypedNumber).toBe(true);
-      expect(typedNumberLabels(wide, 4, true)).toEqual([4]);
+      expect(typedNumberLabels(wide, 430, true)).toEqual([430]);
     });
 
-    it('typing 45 gives only 45', () => {
-      expect(typedNumberLabels(wide, 45, true)).toEqual([45]);
+    it('typing 437 gives only 437', () => {
+      expect(typedNumberLabels(wide, 437, true)).toEqual([437]);
     });
 
     it('gives at most one label for every number of crowded rulers', () => {
@@ -190,15 +219,16 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
     });
 
     it('gives no label for a number whose line already carries a label, so it is never drawn twice', () => {
-      expect(typedNumberLabels(wide, 40, true)).toEqual([]);
+      expect(typedNumberLabels(wide, 400, true)).toEqual([]);
       expect(typedNumberLabels(wide, 0, true)).toEqual([]);
-      expect(typedNumberLabels(wide, 100, true)).toEqual([]);
+      expect(typedNumberLabels(wide, 1000, true)).toEqual([]);
     });
 
     it('gives no label while pointing, without a selection, or when the ruler has room for every label', () => {
-      expect(typedNumberLabels(wide, 4, false)).toEqual([]);
+      expect(typedNumberLabels(wide, 430, false)).toEqual([]);
       expect(typedNumberLabels(wide, null, true)).toEqual([]);
       expect(typedNumberLabels(ticksFor({ min: 0, max: 20 }, 1, 1), 7, true)).toEqual([]);
+      expect(typedNumberLabels(ticksFor({ min: 0, max: 100 }, 1, 1), 37, true)).toEqual([]);
     });
 
     it('gives no label on levels 2 to 5', () => {
@@ -206,13 +236,53 @@ describe('ticksFor ruler levels (FR-017, AC-03, US9 scenario 4)', () => {
     });
   });
 
-  it('level 1 labels every minor line of 0 to 20 and sets labelTypedNumber for 0 to 100', () => {
-    expect(ticksFor({ min: 0, max: 20 }, 1, 1)).toMatchObject({ labelTypedNumber: false });
-    expect(ticksFor({ min: 0, max: 20 }, 1, 1).ticks.every((t) => t.labeled)).toBe(true);
-    const wide = ticksFor({ min: 0, max: 100 }, 1, 1);
-    expect(wide.labelTypedNumber).toBe(true);
-    expect(wide.ticks.find((t) => t.value === 37)?.labeled).toBe(false);
-    expect(wide.ticks.find((t) => t.value === 40)?.labeled).toBe(true);
+  it('level 1 labels every minor line of 0 to 20 in one row with the normal minor font', () => {
+    const r = ticksFor({ min: 0, max: 20 }, 1, 1);
+    expect(r).toMatchObject({ labelTypedNumber: false, labelRows: 1 });
+    expect(r.ticks.every((t) => t.labeled && t.row === 0)).toBe(true);
+  });
+
+  it('level 1 on 0 to 100 labels all 101 numbers in two staggered rows (T217, FR-017)', () => {
+    const view = { min: 0, max: 100 };
+    const r = ticksFor(view, 1, 1);
+    expect(r.labelTypedNumber).toBe(false);
+    expect(r.labelRows).toBe(2);
+    const labeled = r.ticks.filter((t) => t.visible && t.labeled).map((t) => t.value);
+    expect(labeled).toEqual(Array.from({ length: 101 }, (_, i) => i));
+    // Major lines and end points keep the large font in the first row; minor labels are smaller.
+    for (const t of r.ticks) {
+      if (t.major) {
+        expect(t.row).toBe(0);
+        expect(labelFontSize(t, r.labelRows, view)).toBe(26);
+      } else expect(labelFontSize(t, r.labelRows, view)).toBeLessThan(20);
+    }
+    // Neighbouring numbers are never in the same row.
+    for (let i = 1; i < r.ticks.length; i++) expect(r.ticks[i]!.row).not.toBe(r.ticks[i - 1]!.row);
+    expectRowsApart(view, r);
+  });
+
+  it('level 2 on 0 to 100 labels only the major lines, in one row', () => {
+    const r = ticksFor({ min: 0, max: 100 }, 2, 1);
+    expect(r.labelRows).toBe(1);
+    expect(r.ticks.filter((t) => t.labeled).map((t) => t.value)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  });
+
+  it('level 1 falls back to the typed number only when two rows do not fit (0 to 1000)', () => {
+    const r = ticksFor({ min: 0, max: 1000 }, 1, 1);
+    expect(r.labelTypedNumber).toBe(true);
+    expect(r.ticks.filter((t) => t.labeled).every((t) => t.major || t.value === 0 || t.value === 1000)).toBe(true);
+  });
+
+  it('level 1 labels every line or falls back, never overlapping, for every width from 5 to 1000', () => {
+    for (let width = 5; width <= 1000; width += 1) {
+      for (const min of [0, -7, 550]) {
+        const view = { min, max: min + width };
+        const r = ticksFor(view, 1, 1);
+        if (r.labelTypedNumber) continue;
+        expect(r.ticks.every((t) => t.labeled)).toBe(true);
+        expectRowsApart(view, r);
+      }
+    }
   });
 
   it('level 3 chooses the major labels by seed, and the same seed gives the same labels', () => {

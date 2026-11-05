@@ -12,6 +12,10 @@ export interface Tick {
   /** Drawn at this ruler level. */
   visible: boolean;
   labeled: boolean;
+  /** Label row (T217): 0 directly under the line, 1 below it. Only level 1 uses row 1. */
+  row: 0 | 1;
+  /** Horizontal offset of the label in logical units: an end point's label may move outward to clear its neighbour. */
+  shift: number;
 }
 
 /** Ruler detail level (FR-017): 1 shows the most, 5 only the end points. */
@@ -19,8 +23,28 @@ export type RulerLevel = 1 | 2 | 3 | 4 | 5;
 
 export const MAX_TICKS = 101;
 
-/** Level 1 labels minor lines only when they are at least this far apart (logical units, research R23). */
+/** Two labels in the same row are at least this far apart, center to center (logical units, research R23). */
 export const MIN_LABEL_SPACING = 28;
+
+/** Label font sizes in logical units (T217): major lines and end points, minor lines in one row, in two rows. */
+export const LABEL_FONT = { large: 26, minor: 20, small: 16 } as const;
+
+/** Space kept between the estimated text widths of two labels in the same row (logical units). */
+export const LABEL_GAP = 4;
+
+/** Estimated width of a bold digit (or minus sign) as a share of the font size: Arial and Helvetica bold digits are 0.556 em. */
+const DIGIT_WIDTH = 0.56;
+
+/** Estimated width of a number's label in logical units. */
+export function labelWidth(value: number, fontSize: number): number {
+  return String(value).length * DIGIT_WIDTH * fontSize;
+}
+
+/** Font size of a tick's label: large for major lines and end points, smaller for minor lines in two rows. */
+export function labelFontSize(t: Tick, labelRows: 1 | 2, view: { min: number; max: number }): number {
+  if (t.major || t.value === view.min || t.value === view.max) return LABEL_FONT.large;
+  return labelRows === 2 ? LABEL_FONT.small : LABEL_FONT.minor;
+}
 
 const isMultiple = (v: number, step: number) => ((v % step) + step) % step === 0;
 
@@ -76,7 +100,7 @@ export function ticksFor(
   level: RulerLevel,
   seed: number,
   opts: { allLines?: boolean } = {},
-): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean } {
+): { majorStep: number; minorStep: number; ticks: Tick[]; labelTypedNumber: boolean; labelRows: 1 | 2 } {
   const { min, max } = view;
   const { majorStep, minorStep } = stepsFor(view);
   const ticks: Tick[] = lineValues(min, max, majorStep, minorStep).map((value) => ({
@@ -84,6 +108,8 @@ export function ticksFor(
     major: isMultiple(value, majorStep),
     visible: false,
     labeled: false,
+    row: 0,
+    shift: 0,
   }));
   const isEnd = (t: Tick) => t.value === min || t.value === max;
   const mark = (t: Tick, visible: boolean, labeled: boolean) => {
@@ -93,16 +119,24 @@ export function ticksFor(
 
   if (opts.allLines) {
     for (const t of ticks) mark(t, true, true);
-    return { majorStep, minorStep, ticks, labelTypedNumber: false };
+    return { majorStep, minorStep, ticks, labelTypedNumber: false, labelRows: 1 };
   }
 
   let labelTypedNumber = false;
+  let labelRows: 1 | 2 = 1;
   switch (level) {
     case 1: {
-      const spacing = (minorStep / (max - min)) * (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left);
-      const roomy = spacing >= MIN_LABEL_SPACING;
-      labelTypedNumber = !roomy;
-      for (const t of ticks) mark(t, true, roomy || t.major);
+      // Every line labeled in one row; else in two staggered rows; else only the typed number (T203, T217).
+      if (placeLabels(ticks, view, 1)) labelRows = 1;
+      else if (placeLabels(ticks, view, 2)) labelRows = 2;
+      else {
+        labelTypedNumber = true;
+        for (const t of ticks) {
+          t.row = 0;
+          t.shift = 0;
+        }
+      }
+      for (const t of ticks) mark(t, true, !labelTypedNumber || t.major);
       break;
     }
     case 2:
@@ -123,7 +157,62 @@ export function ticksFor(
       break;
   }
 
-  return { majorStep, minorStep, ticks, labelTypedNumber };
+  return { majorStep, minorStep, ticks, labelTypedNumber, labelRows };
+}
+
+/**
+ * Places a label for every tick in `rows` rows (T217) and returns whether they fit. Major lines and end points stay
+ * in row 0. With two rows, each minor label goes to the row its parity on the minor grid prefers, so neighbouring
+ * numbers alternate rows, or to the other row if that one has no room. Two labels in a row fit when they are at least
+ * MIN_LABEL_SPACING apart and their estimated widths keep LABEL_GAP between them; an end point's label may move
+ * outward by up to half its width to make room. Sets `row` and `shift` on every tick.
+ */
+function placeLabels(ticks: Tick[], view: { min: number; max: number }, rows: 1 | 2): boolean {
+  const scale = (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / (view.max - view.min);
+  const { minorStep } = stepsFor(view);
+  const isEnd = (t: Tick) => t.value === view.min || t.value === view.max;
+  const xOf = (t: Tick) => (t.value - view.min) * scale;
+  const widthOf = (t: Tick) => labelWidth(t.value, labelFontSize(t, rows, view));
+  const placed: Tick[][] = [[], []];
+  for (const t of ticks) {
+    t.row = 0;
+    t.shift = 0;
+  }
+
+  /** The end point's outward shift that lets `t` share a row with `other`, or null when they do not fit. */
+  const fits = (t: Tick, other: Tick): { end: Tick; shift: number } | null | true => {
+    const dist = Math.abs(xOf(t) - xOf(other));
+    const need = Math.max(MIN_LABEL_SPACING, (widthOf(t) + widthOf(other)) / 2 + LABEL_GAP);
+    if (dist >= need) return true;
+    const end = isEnd(t) ? t : isEnd(other) ? other : null;
+    if (!end || need - dist > widthOf(end) / 2) return null;
+    return { end, shift: need - dist };
+  };
+  const tryRow = (t: Tick, row: 0 | 1): boolean => {
+    const shifts: { end: Tick; shift: number }[] = [];
+    for (const other of placed[row]!) {
+      const f = fits(t, other);
+      if (f === null) return false;
+      if (f !== true) shifts.push(f);
+    }
+    for (const { end, shift } of shifts) {
+      const outward = end.value === view.min ? -shift : shift;
+      if (Math.abs(outward) > Math.abs(end.shift)) end.shift = outward;
+    }
+    t.row = row;
+    placed[row]!.push(t);
+    return true;
+  };
+
+  const first = ticks.filter((t) => t.major || isEnd(t));
+  for (const t of first) if (!tryRow(t, 0)) return false;
+  for (const t of ticks) {
+    if (t.major || isEnd(t)) continue;
+    const preferred: 0 | 1 = rows === 2 && Math.abs(Math.round(t.value / minorStep)) % 2 === 1 ? 1 : 0;
+    const order: (0 | 1)[] = rows === 2 ? [preferred, preferred === 0 ? 1 : 0] : [0];
+    if (!order.some((row) => tryRow(t, row))) return false;
+  }
+  return true;
 }
 
 /**

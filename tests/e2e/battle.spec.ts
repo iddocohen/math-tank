@@ -12,6 +12,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
+import { withRange } from '../../src/core/settings/validate';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { forbiddenWords, t } from '../../src/i18n';
 
@@ -267,15 +268,16 @@ test('no shortcuts to the answer and a "Du" arrow at every round start (amendmen
   await expect(canvas).toHaveAttribute('data-you-marker', 'on');
 });
 
-test('on a crowded level 1 ruler only the typed number is labeled, once, under the marker (T203, FR-017)', async ({ page }) => {
+test('on a crowded level 1 ruler only the typed number is labeled, once, under the marker (T203, T217, FR-017)', async ({ page }) => {
   test.setTimeout(60_000);
-  // 0 to 100 at level 1: the minor lines are too close for labels.
-  expect(settings.rulerLevelStart).toBe(1);
+  // 0 to 1000 at level 1: the minor labels do not fit even in two rows (T217); 0 to 100 now labels every number.
+  const wide = withRange(settings, { preset: '0-1000', min: 0, max: 1000 });
+  expect(wide.rulerLevelStart).toBe(1);
   await page.addInitScript(
     ([key, value]) => {
       window.localStorage.setItem(key, value);
     },
-    [SETTINGS_KEY, JSON.stringify(settings)] as const,
+    [SETTINGS_KEY, JSON.stringify(wide)] as const,
   );
   await page.goto('/?seed=4&mode=free');
   await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
@@ -284,24 +286,20 @@ test('on a crowded level 1 ruler only the typed number is labeled, once, under t
   await expect(overlay).toHaveAttribute('data-phase', 'aiming');
   const canvas = page.locator('canvas');
 
-  // Typing 4: the label is "4" alone, not "3,4,5".
+  // Typing 43: the label is "43" alone. Typing 430: only "430", not "420,430,440".
   await page.keyboard.press('4');
-  await expect(overlay).toHaveAttribute('data-selection', '4');
-  await expect(canvas).toHaveAttribute('data-preview-text', '4');
-  await page.screenshot({ path: test.info().outputPath('typed-4.png') });
-
-  // Typing 45: only "45".
-  await page.keyboard.press('5');
-  await expect(overlay).toHaveAttribute('data-selection', '45');
-  await expect(canvas).toHaveAttribute('data-preview-text', '45');
-  await page.screenshot({ path: test.info().outputPath('typed-45.png') });
-
-  // 40 is a labeled major line, so it gets no second label.
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('4');
+  await page.keyboard.press('3');
+  await expect(overlay).toHaveAttribute('data-selection', '43');
+  await expect(canvas).toHaveAttribute('data-preview-text', '43');
   await page.keyboard.press('0');
-  await expect(overlay).toHaveAttribute('data-selection', '40');
+  await expect(overlay).toHaveAttribute('data-selection', '430');
+  await expect(canvas).toHaveAttribute('data-preview-text', '430');
+  await page.screenshot({ path: test.info().outputPath('typed-430.png') });
+
+  // 400 is a labeled major line, so it gets no second label.
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Backspace');
+  for (const key of ['4', '0', '0']) await page.keyboard.press(key);
+  await expect(overlay).toHaveAttribute('data-selection', '400');
   await expect(canvas).toHaveAttribute('data-preview-text', '');
-  await expect(canvas).toHaveAttribute('data-ruler-labels', /(^|,)40(,|$)/);
+  await expect(canvas).toHaveAttribute('data-ruler-labels', /(^|,)400(,|$)/);
 });

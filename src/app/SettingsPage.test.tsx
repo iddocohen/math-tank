@@ -103,18 +103,48 @@ describe('SettingsPage', () => {
     expect(saveButton().disabled).toBe(true);
   });
 
-  it('the ruler preview shows the chosen range and starting level', () => {
+  it('two ruler previews show the starting level and the hardest level for the chosen range (FR-069, T218)', () => {
     setup();
+    const start = () => screen.getByTestId('ruler-preview-start').querySelector('svg')!;
+    const hardest = () => screen.getByTestId('ruler-preview-max').querySelector('svg')!;
+    const labelsOf = (svg: SVGSVGElement) => within(svg as unknown as HTMLElement).queryAllByTestId('preview-label').map((el) => Number(el.textContent));
+    const linesOf = (svg: SVGSVGElement) => within(svg as unknown as HTMLElement).queryAllByTestId('preview-line').length;
+    expect(screen.getByText(m.settings.previewStart)).toBeTruthy();
+    expect(screen.getByText(m.settings.previewMax)).toBeTruthy();
+
+    // Defaults: 0 to 100, starting level 1 (every number labeled), hardest level 5 (only the end points).
+    expect(start().getAttribute('aria-label')).toBe(m.settings.preview(0, 100, 1));
+    expect(labelsOf(start())).toHaveLength(101);
+    expect(labelsOf(hardest())).toEqual([0, 100]);
+    expect(linesOf(hardest())).toBe(2);
+
+    // Starting level 1 -> 4: only the starting preview changes.
+    setValue(L.rulerLevelStart, '4');
+    expect(labelsOf(start())).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+    expect(linesOf(start())).toBe(11);
+    expect(labelsOf(hardest())).toEqual([0, 100]);
+
+    // Hardest level 5 -> 4: only the hardest preview changes.
+    setValue(L.rulerLevelMax, '4');
+    expect(linesOf(hardest())).toBe(11);
+    expect(hardest().getAttribute('aria-label')).toBe(m.settings.preview(0, 100, 4));
+
+    // Range preset 0 to 100 -> 0 to 20: both previews change.
+    setValue(L.rangePreset, '0-20');
+    expect(labelsOf(start())).toEqual([0, 10, 20]);
+    expect(labelsOf(hardest())).toEqual([0, 10, 20]);
+
+    // Custom minimum and maximum: both previews change with each.
     setValue(L.rangePreset, 'custom');
     setValue(L.rangeMin, '550');
     setValue(L.rangeMax, '780');
-    setValue(L.rulerLevelStart, '2');
-    const preview = screen.getByTestId('ruler-preview');
-    expect(preview.getAttribute('aria-label')).toBe(m.settings.preview(550, 780, 2));
-    const labels = within(preview as unknown as HTMLElement).getAllByTestId('preview-label').map((el) => Number(el.textContent));
-    expect(labels).toEqual([550, 600, 650, 700, 750, 780]);
-    setValue(L.rulerLevelStart, '5');
-    expect(within(preview as unknown as HTMLElement).getAllByTestId('preview-label').map((el) => Number(el.textContent))).toEqual([550, 780]);
+    expect(labelsOf(start())).toEqual([550, 600, 650, 700, 750, 780]);
+    expect(start().getAttribute('aria-label')).toBe(m.settings.preview(550, 780, 4));
+    setValue(L.rangeMin, '600');
+    expect(labelsOf(start())).toEqual([600, 650, 700, 750, 780]);
+    expect(labelsOf(hardest())).toEqual([600, 650, 700, 750, 780]);
+    setValue(L.rangeMax, '700');
+    expect(labelsOf(hardest())).toEqual([600, 610, 620, 630, 640, 650, 660, 670, 680, 690, 700]);
   });
 
   it('does not show "Genau treffen" (amendment 06), an aim-correction or a label-level field', () => {

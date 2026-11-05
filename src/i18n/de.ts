@@ -120,6 +120,9 @@ export const de = {
     levelOption: (n: number) => `Stufe ${n}`,
     stepsOption: (n: number) => (n === 1 ? '1 Schritt' : `${n} Schritte`),
     preview: (min: number, max: number, level: number) => `Vorschau: Zahlenstrahl von ${min} bis ${max}, Stufe ${level}`,
+    /** Captions of the two ruler previews (FR-069, T218). */
+    previewStart: 'Am Anfang',
+    previewMax: 'Schwerste Stufe',
     previewUnavailable: 'Die Vorschau erscheint, sobald der Zahlenraum gültig ist.',
     /** Shown when every challenge type is off (FR-047, US6 scenario 4). */
     guidedNeedsType: 'Geführtes Spielen braucht mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur freies Spiel.',
