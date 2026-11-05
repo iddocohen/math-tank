@@ -41,6 +41,16 @@
  *   moves, whatever the ruler level (FR-018). The canvas carries `data-start-highlight` (the highlighted number, ''
  *   when none), `data-step-animation` (the path, '' when none) and `data-step-count` (steps shown so far) for the
  *   end-to-end tests only.
+ * - Help steps (US5, T099, T100, FR-018, FR-031), drawn from state.help.content and redrawn when it changes:
+ *   step 1, an arrow beside the landing marker pointing toward the answer and a pulsing highlight on the nearest
+ *   major line with its number; step 2, the zoomed ten (showZoom, every line and label whatever the ruler level) and
+ *   a count from the landing number to the answer: the passed stretch of the ruler lights up one unit at a time with
+ *   the running count above it, and inside the zoomed ten each passed line gets its count popping up; step 3, a
+ *   marker that moves to the solution and the solution in large digits. Comparison step 2 puts a marker with the
+ *   number on the ruler under each option. Addition and subtraction show the step animation at step 2 (above).
+ *   The canvas carries `data-help-step`, `data-help-highlight` (the highlighted major line), `data-help-zoom`
+ *   ("30,40"), `data-help-count` (steps counted so far), `data-help-options` and `data-help-solution` ('' when
+ *   none) for the end-to-end tests only.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -48,7 +58,7 @@ import { numberToX, xToNumber } from '../core/numberline/mapping';
 import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
 import { tankCenter, visibleEnemy } from '../core/battle/round';
-import type { RoundState, TankState } from '../core/types';
+import type { HelpContent, RoundState, TankState } from '../core/types';
 import { toScreenY } from '../core/view/geometry';
 import { RULER_BOTTOM, RULER_TOP } from '../core/view/layout';
 import { pointerLine } from '../core/view/pointerLine';
@@ -79,9 +89,15 @@ const STOP_PAUSE_MS = 700;
 /** The zoomed ten: a box this wide and tall, its top this far below the top of the world. */
 const ZOOM_WIDTH = 640;
 const ZOOM_HEIGHT = 110;
-const ZOOM_TOP = 150;
+const ZOOM_TOP = 180;
 const ZOOM_PAD = 40;
 const ZOOM_BG = 0x14203a;
+/** Help steps (US5): the highlight colour, the pulse and the time the solution marker takes to reach the answer. */
+const HELP = 0x9be89f;
+const HELP_PULSE_MS = 600;
+const SOLUTION_MOVE_MS = 900;
+const ARROW_FROM = 44;
+const ARROW_TO = 140;
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
 
 interface Drawn {
@@ -121,6 +137,16 @@ export class NumberLineView {
   private stepTimer: Phaser.Time.TimerEvent | null = null;
   /** The stepAnimation array being shown, so a state update never starts it twice. */
   private animated: number[] | null = null;
+  /** Help steps (T099, T100): the content being shown, its drawings, texts and timer. */
+  private helpShown: HelpContent | null = null;
+  private readonly helpLines: Phaser.GameObjects.Graphics;
+  private readonly helpPulse: Phaser.GameObjects.Graphics;
+  private readonly helpArrow: Phaser.GameObjects.Graphics;
+  private readonly helpMarker: Phaser.GameObjects.Graphics;
+  private helpTexts: Phaser.GameObjects.Text[] = [];
+  private helpTimer: Phaser.Time.TimerEvent | null = null;
+  /** Where showZoom drew the zoomed ten, so the count can pop up over its lines. */
+  private zoomed: { view: { min: number; max: number }; zx: (v: number) => number; axisY: number } | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -159,6 +185,12 @@ export class NumberLineView {
       .setDepth(14)
       .setVisible(false);
 
+    this.helpLines = scene.add.graphics().setDepth(12);
+    this.helpPulse = scene.add.graphics().setDepth(12).setVisible(false);
+    this.helpArrow = scene.add.graphics().setDepth(12).setVisible(false);
+    this.helpMarker = scene.add.graphics().setDepth(14).setVisible(false);
+    this.resetHelpData();
+
     scene.game.canvas.dataset.stepAnimation = '';
     scene.game.canvas.dataset.stepCount = '0';
 
@@ -183,6 +215,169 @@ export class NumberLineView {
     this.pulseHit(s, min, max);
     this.drawStart(s, min, max);
     if (s.stepAnimation !== this.animated) this.startSteps(s.stepAnimation, min, max);
+    const help = s.phase === 'roundOver' ? null : s.help.content;
+    if (help !== this.helpShown) this.showHelp(help, s, min, max);
+  }
+
+  /** Draws one help step (US5, FR-031), after clearing the previous one; null clears only. */
+  private showHelp(h: HelpContent | null, s: RoundState, min: number, max: number): void {
+    this.clearHelp();
+    this.helpShown = h;
+    if (!h) return;
+    const data = this.scene.game.canvas.dataset;
+    data.helpStep = String(h.step);
+    const landed = s.help.wrongAnswers > 0 && s.lastShot && !s.lastShot.hit ? s.lastShot.landed : null;
+    if (h.direction && landed !== null) this.helpDirection(numberToX(landed, min, max), h.direction);
+    if (h.nearestMajor !== null) this.helpHighlight(h.nearestMajor, min, max);
+    if (h.zoom) {
+      this.showZoom(h.zoom);
+      data.helpZoom = `${h.zoom.min},${h.zoom.max}`;
+    }
+    if (h.count) this.helpCount(h.count.from, h.count.to, min, max);
+    if (h.optionMarkers) this.helpOptions(h.optionMarkers, min, max);
+    if (h.solution !== null) this.helpSolution(h.solution, landed ?? h.nearestMajor, min, max);
+  }
+
+  /** Step 1: an arrow beside the landing marker toward the answer, nudging back and forth. */
+  private helpDirection(lx: number, direction: 'right' | 'left'): void {
+    const sign = direction === 'right' ? 1 : -1;
+    const y = RULER_TOP - 36;
+    const g = this.helpArrow.setPosition(0, 0).setVisible(true);
+    g.lineStyle(8, HELP, 1);
+    g.lineBetween(lx + sign * ARROW_FROM, y, lx + sign * (ARROW_TO - 18), y);
+    g.fillStyle(HELP, 1);
+    g.fillTriangle(lx + sign * ARROW_TO, y, lx + sign * (ARROW_TO - 26), y - 18, lx + sign * (ARROW_TO - 26), y + 18);
+    this.scene.tweens.add({ targets: g, x: sign * 14, duration: HELP_PULSE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Step 1: the nearest major line to the answer, drawn tall and pulsing, with its number on a chip. */
+  private helpHighlight(n: number, min: number, max: number): void {
+    const x = numberToX(n, min, max);
+    const g = this.helpPulse.setPosition(x, AXIS_Y).setAlpha(1).setVisible(true);
+    g.lineStyle(7, HELP, 1);
+    g.lineBetween(0, -MAJOR_TICK, 0, MAJOR_TICK * 0.6);
+    g.strokeCircle(0, 0, 20);
+    this.helpChip(x, n, HELP);
+    this.scene.tweens.add({ targets: g, alpha: 0.3, duration: HELP_PULSE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.game.canvas.dataset.helpHighlight = String(n);
+  }
+
+  /** A number on a dark chip under the ruler line, over the ruler's own label (help labels, whatever the level). */
+  private helpChip(x: number, n: number, color: number): void {
+    const text = this.scene.add
+      .text(x, LABEL_Y, String(n), { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: hex(color) })
+      .setOrigin(0.5, 0)
+      .setDepth(13);
+    const w = text.width + 16;
+    this.helpLines.fillStyle(RULER_BG, 1).fillRoundedRect(x - w / 2, LABEL_Y - 3, w, text.height + 6, 8);
+    this.helpTexts.push(text);
+  }
+
+  /**
+   * Step 2: counts from `from` to `to` one unit at a time. The passed stretch of the ruler lights up with the running
+   * count above it; inside the zoomed ten every passed line gets its count popping up.
+   */
+  private helpCount(from: number, to: number, min: number, max: number): void {
+    const steps = Math.abs(to - from);
+    const dir = Math.sign(to - from);
+    const ms = stepMs(steps);
+    const x0 = numberToX(from, min, max);
+    const running = this.helpText(x0, RULER_TOP - 70, '0', 34, 0xffffff).setOrigin(0.5, 1);
+    const data = this.scene.game.canvas.dataset;
+    data.helpCount = '0';
+    let count = 0;
+    const next = (): void => {
+      count++;
+      const value = from + dir * count;
+      const x = numberToX(value, min, max);
+      const g = this.helpLines;
+      g.lineStyle(6, HELP, 1);
+      g.lineBetween(numberToX(value - dir, min, max), AXIS_Y, x, AXIS_Y);
+      g.lineStyle(3, HELP, 1);
+      g.lineBetween(x, AXIS_Y - MINOR_TICK / 2, x, AXIS_Y + MINOR_TICK / 2);
+      running.setText(String(count)).setX(x);
+      const z = this.zoomed;
+      if (z && value >= z.view.min && value <= z.view.max) {
+        const pop = this.helpText(z.zx(value), z.axisY - 14, String(count), 24, HELP).setOrigin(0.5, 1).setScale(0.2);
+        this.scene.tweens.add({ targets: pop, scale: 1, duration: Math.min(220, ms), ease: 'Back.easeOut' });
+      }
+      data.helpCount = String(count);
+      this.helpTimer = count < steps ? this.scene.time.delayedCall(ms, next) : null;
+    };
+    if (steps > 0) this.helpTimer = this.scene.time.delayedCall(STOP_PAUSE_MS, next);
+  }
+
+  /** Comparison step 2: a marker on the ruler under each option's number, with the number on a chip. */
+  private helpOptions(options: number[], min: number, max: number): void {
+    const g = this.helpLines;
+    for (const n of options) {
+      const x = numberToX(n, min, max);
+      g.fillStyle(HELP, 1);
+      g.fillTriangle(x - 14, RULER_TOP - 14, x + 14, RULER_TOP - 14, x, AXIS_Y - 6);
+      g.lineStyle(5, HELP, 1);
+      g.lineBetween(x, AXIS_Y - MAJOR_TICK / 2, x, AXIS_Y + MAJOR_TICK / 2);
+      this.helpChip(x, n, HELP);
+    }
+    this.scene.game.canvas.dataset.helpOptions = options.join(',');
+  }
+
+  /** Step 3: a marker moves along the ruler to the solution, which is then shown in large digits. */
+  private helpSolution(n: number, from: number | null, min: number, max: number): void {
+    const x = numberToX(n, min, max);
+    const start = numberToX(from ?? (min + max) / 2, min, max);
+    const g = this.helpMarker.setPosition(start, 0).setVisible(true);
+    g.fillStyle(HELP, 1);
+    g.fillTriangle(-18, RULER_TOP - 20, 18, RULER_TOP - 20, 0, AXIS_Y - 4);
+    g.lineStyle(6, HELP, 1);
+    g.strokeCircle(0, AXIS_Y, 16);
+    const big = this.helpText(x, RULER_TOP - 80, String(n), 72, HELP).setOrigin(0.5, 1).setAlpha(0);
+    this.scene.tweens.add({
+      targets: g,
+      x,
+      duration: SOLUTION_MOVE_MS,
+      ease: 'Quad.easeInOut',
+      onComplete: () => {
+        big.setAlpha(1);
+        this.helpChip(x, n, HELP);
+      },
+    });
+    this.scene.game.canvas.dataset.helpSolution = String(n);
+  }
+
+  private helpText(x: number, y: number, text: string, size: number, color: number): Phaser.GameObjects.Text {
+    const t = this.scene.add
+      .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color: hex(color), stroke: '#14203a', strokeThickness: 7 })
+      .setDepth(14);
+    this.helpTexts.push(t);
+    return t;
+  }
+
+  private clearHelp(): void {
+    this.helpTimer?.remove();
+    this.helpTimer = null;
+    for (const g of [this.helpPulse, this.helpArrow, this.helpMarker]) {
+      this.scene.tweens.killTweensOf(g);
+      g.clear().setVisible(false).setPosition(0, 0).setAlpha(1);
+    }
+    this.helpLines.clear();
+    for (const text of this.helpTexts) {
+      this.scene.tweens.killTweensOf(text);
+      text.destroy();
+    }
+    this.helpTexts = [];
+    if (this.helpShown?.zoom) this.hideZoom();
+    this.helpShown = null;
+    this.resetHelpData();
+  }
+
+  private resetHelpData(): void {
+    const data = this.scene.game.canvas.dataset;
+    data.helpStep = '';
+    data.helpHighlight = '';
+    data.helpZoom = '';
+    data.helpCount = '';
+    data.helpOptions = '';
+    data.helpSolution = '';
   }
 
   /** The starting number of an addition or subtraction: a ring on the ruler and its number on a chip (T083). */
@@ -326,9 +521,11 @@ export class NumberLineView {
         .setDepth(13);
       this.zoomLabels.push(label);
     }
+    this.zoomed = { view, zx, axisY };
   }
 
   hideZoom(): void {
+    this.zoomed = null;
     this.zoom.clear();
     for (const label of this.zoomLabels) label.destroy();
     this.zoomLabels = [];
@@ -339,6 +536,7 @@ export class NumberLineView {
     this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.onMove, this);
     this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.onUp, this);
+    this.clearHelp();
     this.hideZoom();
     this.stopSteps();
     this.scene.tweens.killTweensOf(this.pulse);
@@ -503,6 +701,11 @@ export class NumberLineView {
     if (n !== this.controller.getState().selection) this.controller.selectNumber(n);
     else if (this.last) this.update(this.last);
   }
+}
+
+/** A colour number as a CSS colour for Phaser text. */
+function hex(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
 }
 
 /**

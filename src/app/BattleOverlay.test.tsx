@@ -278,3 +278,70 @@ describe('BattleOverlay comparison (US4, T091)', () => {
     expect(screen.queryByTestId('not-on-tank')).toBeNull();
   });
 });
+
+describe('BattleOverlay help (US5, T101, FR-030, FR-031, FR-034)', () => {
+  const onlyNumberLine = { challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } };
+
+  it('shows a help button during a guided challenge; a tap shows the next help step and its text, and it never takes focus', () => {
+    const { controller } = setupGuided(onlyNumberLine);
+    const button = screen.getByTestId('help-button');
+    expect(button.getAttribute('aria-label')).toBe(t().battle.help);
+    expect(button.getAttribute('tabindex')).toBe('-1');
+    expect(screen.queryByTestId('help-text')).toBeNull();
+    act(() => fireEvent.click(button));
+    expect(controller.getState().help.level).toBe(1);
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-help-level')).toBe('1');
+    expect(screen.getByTestId('help-text').textContent).not.toBe('');
+  });
+
+  it('has no help button in free play', () => {
+    setup();
+    expect(screen.queryByTestId('help-button')).toBeNull();
+  });
+
+  it('at the solution step the fire button reads "Feuer auf N" and the help button is disabled', () => {
+    const { controller } = setupGuided(onlyNumberLine);
+    act(() => {
+      controller.requestHelp();
+      controller.requestHelp();
+      controller.requestHelp();
+    });
+    const answer = controller.getState().challenge!.answer;
+    expect(screen.getByRole('button', { name: t().battle.fireAt(answer) })).toBeTruthy();
+    expect(screen.getByTestId('help-text').textContent).toBe(t().helpSteps.solution(answer));
+    expect((screen.getByTestId('help-button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the encouraging phrase from the state message after a miss', () => {
+    const { controller, advance } = setupGuided(onlyNumberLine);
+    const s = controller.getState();
+    advance(1000);
+    act(() => {
+      controller.fireAt(s.challenge!.answer > 50 ? s.challenge!.answer - 20 : s.challenge!.answer + 20);
+      controller.shotAnimationDone();
+    });
+    const message = controller.getState().message;
+    expect(message?.key).toBe('encouragement');
+    expect(screen.getByTestId('encouragement').textContent).toBe(encouragements[(message as { index: number }).index % encouragements.length]);
+  });
+
+  it('without a time limit shows no time indicator', () => {
+    setupGuided(onlyNumberLine);
+    expect(screen.queryByTestId('help-timer')).toBeNull();
+  });
+
+  it('with a time limit shows the indicator and ticks the controller once a second, so the next help step comes', () => {
+    vi.useFakeTimers();
+    const { controller, advance } = setupGuided({ ...onlyNumberLine, timeLimitSeconds: 5 });
+    expect(screen.getByTestId('help-timer')).toBeTruthy();
+    expect(controller.getState().help.level).toBe(0);
+    for (let i = 0; i < 6; i++) {
+      advance(1000);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+    }
+    expect(controller.getState().help.level).toBe(1);
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-help-level')).toBe('1');
+  });
+});

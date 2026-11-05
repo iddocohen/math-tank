@@ -32,7 +32,7 @@ import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
-import type { RoundState, ShotInFlight } from '../core/types';
+import type { RoundState, ShotInFlight, TankState } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
 import { YOU_MARKER_MS } from '../core/view/tankStyle';
 import { Effects } from './effects';
@@ -41,11 +41,13 @@ import { ProjectileView } from './ProjectileView';
 import { TankView } from './TankView';
 import { TerrainView } from './TerrainView';
 import { ensureTextures, TEX } from './textures';
+import { landingSounds } from '../audio/sfx';
 
 /** Sound hooks the scene calls; src/audio/sfx.ts provides them. */
 export interface BattleSounds {
   shot(): void;
   boom(): void;
+  chime(): void;
 }
 
 export interface BattleSceneOptions {
@@ -209,6 +211,8 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
+    this.drawPlateHelp(s);
+
     const tappable = [...(enemy.label !== undefined && enemy.alive ? [{ tank: enemy, view: this.enemy }] : [])];
     for (const decoy of s.decoys) {
       const view = this.decoyViews.get(decoy.id);
@@ -220,6 +224,38 @@ export class BattleScene extends Phaser.Scene {
         return `${tank.label}@${Math.round(p.x)},${Math.round(p.y)}`;
       })
       .join(';');
+  }
+
+  /**
+   * Comparison help on the plates (T100, FR-031): step 1 highlights the tens digits on every plate, step 3 marks the
+   * correct tank, or for order3 every tank with its place in the correct order. The canvas carries `data-help-tens`
+   * ('on' or '') and `data-help-tanks` (the marked numbers in order) for the end-to-end tests only.
+   */
+  private drawPlateHelp(s: RoundState): void {
+    const h = s.phase === 'roundOver' ? null : s.help.content;
+    const tens = h?.tensDigits === true;
+    const order = h?.order ?? null;
+    const target = h?.solution ?? null;
+    const markOf = (label: number | undefined): number | null => {
+      if (label === undefined || h === null || (target === null && order === null)) return null;
+      if (order) return order.includes(label) ? order.indexOf(label) + 1 : null;
+      return label === target ? 0 : null;
+    };
+    const tanks: Array<{ tank: TankState; view: TankView }> = [{ tank: s.enemy, view: this.enemy }];
+    for (const decoy of s.decoys) {
+      const view = this.decoyViews.get(decoy.id);
+      if (view) tanks.push({ tank: decoy, view });
+    }
+    const marked: number[] = [];
+    for (const { tank, view } of tanks) {
+      const labeled = tank.alive && tank.label !== undefined;
+      const mark = labeled ? markOf(tank.label) : null;
+      view.setPlateHelp(labeled && tens, mark);
+      if (mark !== null) marked.push(tank.label!);
+    }
+    if (order) marked.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    this.game.canvas.dataset.helpTens = tens && s.decoys.length > 0 ? 'on' : '';
+    this.game.canvas.dataset.helpTanks = marked.join(',');
   }
 
   private showYouMarker(): void {
@@ -263,15 +299,15 @@ export class BattleScene extends Phaser.Scene {
 
   private landed(shot: ShotInFlight): void {
     const y = toScreenY(shot.impact.y, WORLD_HEIGHT);
-    if (shot.outOfBounds) {
-      this.effects.puff(shot.impact.x, y);
-    } else {
-      this.effects.explosion(shot.impact.x, y, shot.blastRadius);
-      this.sounds?.boom();
-    }
+    if (shot.outOfBounds) this.effects.puff(shot.impact.x, y);
+    else this.effects.explosion(shot.impact.x, y, shot.blastRadius);
     // The controller applies the crater and damage; its update redraws the terrain right away.
+    const before = this.controller.getState().enemiesDestroyed;
     if (shot.shooter === 'player') this.controller.shotAnimationDone();
     else this.controller.enemyShotAnimationDone();
+    // The same soft boom for every explosion, a miss included, and the soft chime after a hit (FR-009, AC-07).
+    const destroyedEnemy = shot.shooter === 'player' && this.controller.getState().enemiesDestroyed > before;
+    for (const sound of landingSounds({ outOfBounds: shot.outOfBounds, destroyedEnemy })) this.sounds?.[sound]();
   }
 }
 

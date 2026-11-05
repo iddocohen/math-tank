@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSfx, MAX_GAIN, type AudioContextLike } from './sfx';
+import { createSfx, landingSounds, MAX_GAIN, type AudioContextLike } from './sfx';
 
 /** Minimal Web Audio stand-in that records started sources and gain values. */
 function fakeContext() {
@@ -95,5 +95,11 @@ describe('sfx', () => {
   it('offers no sound for a wrong answer', () => {
     const sfx = createSfx({ enabled: () => true, createContext: () => fakeContext().ctx });
     expect(Object.keys(sfx).sort()).toEqual(['boom', 'chime', 'installUnlock', 'shot', 'unlock']);
+  });
+
+  it('a landing plays only the soft boom, a hit adds the soft chime, and a miss adds nothing (FR-009, AC-07)', () => {
+    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false })).toEqual(['boom']);
+    expect(landingSounds({ outOfBounds: false, destroyedEnemy: true })).toEqual(['boom', 'chime']);
+    expect(landingSounds({ outOfBounds: true, destroyedEnemy: false })).toEqual([]);
   });
 });

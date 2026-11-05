@@ -43,19 +43,11 @@ export const SETTING_FIELDS = [
 export type SettingField = (typeof SETTING_FIELDS)[number];
 
 export const COMING_SOON: readonly SettingField[] = [
-  // Phase 20: help visuals. Phase 19 built the help logic (nextHelp honors these switches), but the child sees no
-  // help step until Phase 20 draws them, so the switches stay disabled until then.
-  'help.nearestTen',
-  'help.countSteps',
-  'help.zoom',
-  'help.stepAnimation',
   // Phase 23: spoken instructions. Music has no task yet.
   'sound.speech',
   'sound.music',
   // Phases 21 and 22: adaptive difficulty.
   'adaptive',
-  // Phase 20: time limit. Phase 19 built tick() (decision D1); the overlay calls it and shows the limit in T101.
-  'timeLimitSeconds',
 ];
 
 export function isComingSoon(field: SettingField): boolean {

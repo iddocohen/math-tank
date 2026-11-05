@@ -17,6 +17,9 @@
  * decoys alike, and makes the tank tappable: a tap area of at least TAP_MIN_CSS by TAP_MIN_CSS CSS pixels around the
  * tank and its plate calls the `onTap` handler. `setBadge` shows the order badge 1, 2 or 3 of an order3 search next to
  * the plate.
+ *
+ * Help (US5, T100, FR-031): `setPlateHelp` highlights the tens digit on the plate (comparison step 1) and marks the
+ * correct tank with a green border, or for order3 with its place 1, 2 or 3 in a green circle above the plate (step 3).
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -78,6 +81,9 @@ export class TankView {
   private readonly badgeText: Phaser.GameObjects.Text;
   private readonly tapZone: Phaser.GameObjects.Zone;
   private label: number | null = null;
+  private readonly plateHelp: Phaser.GameObjects.Graphics;
+  private readonly markText: Phaser.GameObjects.Text;
+  private plateHelpKey = '';
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -110,7 +116,12 @@ export class TankView {
     badgeBg.lineStyle(3, 0x14203a, 1);
     badgeBg.strokeCircle(0, 0, BADGE_R);
     this.badge = scene.add.container(0, 0, [badgeBg, this.badgeText]).setVisible(false);
-    this.plate = scene.add.container(0, PLATE_Y, [this.plateBg, this.plateText, this.badge]).setVisible(false);
+    this.plateHelp = scene.add.graphics();
+    this.markText = scene.add
+      .text(0, -PLATE_H - 6, '', { fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: '#14203a' })
+      .setOrigin(0.5, 0.5)
+      .setVisible(false);
+    this.plate = scene.add.container(0, PLATE_Y, [this.plateBg, this.plateHelp, this.plateText, this.badge, this.markText]).setVisible(false);
     this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
     if (onTap) this.tapZone.on('pointerdown', onTap);
     this.container = scene.add.container(0, 0, [this.flag, this.turret, this.body, this.target, this.hearts, this.plate, this.you, this.tapZone]);
@@ -137,8 +148,46 @@ export class TankView {
     this.plateBg.strokeRoundedRect(-w / 2, -PLATE_H / 2, w, PLATE_H, 8);
     this.badge.setX(w / 2 + BADGE_R + 4);
     this.plate.setVisible(true);
+    this.plateHelpKey = '';
+    this.plateHelp.clear();
+    this.markText.setVisible(false);
     this.fitTapZone();
     this.tapZone.setInteractive({ useHandCursor: true });
+  }
+
+  /**
+   * Help on the plate (FR-031): `tens` highlights the tens digit; `mark` 0 puts a green border on the plate of the
+   * correct tank, 1 to 3 also shows its place in the correct order above the plate; null shows no mark.
+   */
+  setPlateHelp(tens: boolean, mark: number | null): void {
+    const key = `${tens}|${mark}|${this.label}`;
+    if (key === this.plateHelpKey) return;
+    this.plateHelpKey = key;
+    const g = this.plateHelp.clear();
+    this.markText.setVisible(false);
+    if (this.label === null) return;
+    const text = String(this.label);
+    const w = this.plateText.width;
+    const digits = text.replace('-', '').length;
+    if (tens && digits >= 2) {
+      // System fonts draw digits with equal widths, so the tens digit's place follows from the text width.
+      const cw = w / text.length;
+      const cx = -w / 2 + cw * (text.length - 1.5);
+      g.fillStyle(0xffd54a, 1);
+      g.fillRoundedRect(cx - cw / 2 - 3, -PLATE_H / 2 + 4, cw + 6, PLATE_H - 8, 6);
+    }
+    if (mark !== null) {
+      const pw = w + 2 * PLATE_PAD_X;
+      g.lineStyle(6, 0x3fae5a, 1);
+      g.strokeRoundedRect(-pw / 2 - 4, -PLATE_H / 2 - 4, pw + 8, PLATE_H + 8, 10);
+      if (mark > 0) {
+        g.fillStyle(0x9be89f, 1);
+        g.fillCircle(0, -PLATE_H - 6, BADGE_R);
+        g.lineStyle(3, 0x14203a, 1);
+        g.strokeCircle(0, -PLATE_H - 6, BADGE_R);
+        this.markText.setText(String(mark)).setVisible(true);
+      }
+    }
   }
 
   /** The order badge 1, 2 or 3 of an order3 search next to the plate; null hides it (FR-026). */

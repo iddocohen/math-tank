@@ -18,6 +18,10 @@ export const de = {
   battle: {
     help: 'Hilfe',
     fire: 'Feuer!',
+    /** US5 step 3 (FR-013, FR-031): the fire button names the solution. */
+    fireAt: (n: number) => `Feuer auf ${n}`,
+    /** FR-034: the gentle indicator of a parent-set time limit, for screen readers only. */
+    helpSoon: 'Gleich kommt Hilfe',
     continue: 'Weiter',
     pause: 'Pause',
     resume: 'Weiterspielen',

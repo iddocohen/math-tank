@@ -280,6 +280,56 @@ input:focus-visible {
   background: rgb(20 28 48 / 0.8);
 }
 
+/* US5 help step text (FR-031): next to the encouraging phrase. */
+.help-text {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #9be89f;
+  background: rgb(20 28 48 / 0.8);
+}
+
+/* US5 help button (FR-030, FR-053): at the left of the control bar, 72 by 72 (at least 48 by 48), mouse and touch only. */
+.help-button {
+  position: absolute;
+  z-index: 1;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc((var(--controls-height) - 72px) / 2);
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #14203a;
+  background: #ffd54a;
+  box-shadow: 0 4px 0 #b8952a;
+}
+
+.help-button:disabled {
+  opacity: 0.4;
+}
+
+/* FR-034: a thin, calm bar above the control bar that shrinks until the next help step; no number, no warning colour. */
+.help-timer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--controls-height) + 6px);
+  transform: translateX(-50%);
+  width: min(320px, 50%);
+  height: 8px;
+  border-radius: 4px;
+  background: rgb(20 28 48 / 0.6);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.help-timer-fill {
+  height: 100%;
+  background: #7ec8ff;
+  transition: width 1s linear;
+}
+
 .range-hint,
 .landed {
   padding: 6px 16px;
@@ -345,6 +395,13 @@ input:focus-visible {
 
   .readout-value {
     font-size: 2.25rem;
+  }
+
+  .help-button {
+    width: 56px;
+    height: 56px;
+    bottom: calc((var(--controls-height) - 56px) / 2);
+    font-size: 1.75rem;
   }
 
   .fire-button {

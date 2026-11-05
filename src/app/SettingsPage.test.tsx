@@ -253,9 +253,12 @@ describe('SettingsPage', () => {
     for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps, L.beginnerAssist]) {
       expect(field(label).disabled, label).toBe(false);
     }
-    // Comparison works since Phase 18.
+    // Comparison works since Phase 18; the help switches and the time limit since Phase 20.
     expect(field(L.comparison).disabled).toBe(false);
-    for (const label of [L.helpNearestTen, L.music, L.speech, L.adaptive, L.timeLimit]) {
+    for (const label of [L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.timeLimit, L.timeLimitSeconds]) {
+      expect(field(label).disabled, label).toBe(false);
+    }
+    for (const label of [L.music, L.speech, L.adaptive]) {
       const input = field(label);
       expect(input.disabled, label).toBe(true);
       const note = document.getElementById(input.getAttribute('aria-describedby') ?? '');

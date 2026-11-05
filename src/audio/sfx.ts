@@ -34,6 +34,16 @@ export interface Sfx {
   installUnlock(target?: EventTarget): () => void;
 }
 
+/**
+ * The sounds of a shell landing (FR-009, AC-07): every explosion plays the same soft boom, a miss included, and a
+ * shot that destroyed the enemy adds the soft chime. A shell that left the battlefield makes no sound. There is no
+ * other sound for a miss.
+ */
+export function landingSounds(landing: { outOfBounds: boolean; destroyedEnemy: boolean }): Array<'boom' | 'chime'> {
+  if (landing.outOfBounds) return [];
+  return landing.destroyedEnemy ? ['boom', 'chime'] : ['boom'];
+}
+
 export function createSfx(options: SfxOptions): Sfx {
   const make = options.createContext ?? (() => new AudioContext());
   let ctx: AudioContextLike | null = null;

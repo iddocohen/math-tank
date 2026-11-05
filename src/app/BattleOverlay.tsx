@@ -27,6 +27,13 @@
  * Comparison (US4, T091, FR-026): for "equal" the banner also shows the reference number large
  * (`data-testid="reference-number"`). In order3 a typed number on no tank shows a hint (decision D15).
  *
+ * Help (US5, T101, FR-030, FR-031, FR-034): during every guided challenge a round help button (at least 48 by 48 CSS
+ * pixels, mouse and touch only like "Neue Landschaft"; H is the key) shows the next help step. The status line shows
+ * the encouraging phrase of the latest miss (state.message) and the help step's text (`data-testid="help-text"`). At
+ * the solution step the fire button reads "Feuer auf {n}". The overlay calls controller.tick() once a second while a
+ * challenge is shown, so a parent-set time limit brings the next help step; only with such a limit a thin bar shows
+ * the time until then (`data-testid="help-timer"`), with no number and no warning colour.
+ *
  * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
  * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
  */
@@ -35,7 +42,7 @@ import { formatTime } from '../core/records/records';
 import type { BattleController } from '../core/battle/controller';
 import { visibleEnemy } from '../core/battle/round';
 import type { LastShot, RoundState } from '../core/types';
-import { encouragements, promptText, t } from '../i18n';
+import { helpText, messageText, promptText, t } from '../i18n';
 
 interface Props {
   controller: BattleController;
@@ -55,7 +62,13 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
-  const encouragement = state.mode === 'guided' && lastShot !== null && !lastShot.hit && state.phase !== 'roundOver' ? encouragements[state.turn % encouragements.length] : null;
+  const inSearch = state.mode === 'guided' && state.challenge !== null && state.phase !== 'roundOver';
+  // The near-miss line is already shown with both numbers, so only an encouraging phrase gets its own line.
+  const encouragement = inSearch && lastShot !== null && !lastShot.hit && state.message?.key === 'encouragement' ? messageText(state.message) : null;
+  const content = inSearch && state.phase !== 'playerShot' ? state.help.content : null;
+  const hint = content ? helpText(content) : null;
+  const solution = state.help.level === 3 && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
+  useHelpTick(controller, state);
 
   return (
     <div
@@ -112,6 +125,11 @@ export function BattleOverlay({ controller, state, gear }: Props) {
             {encouragement}
           </span>
         )}
+        {hint && (
+          <span className="help-text" data-testid="help-text">
+            {hint}
+          </span>
+        )}
       </div>
 
       <div className="top-left">
@@ -139,6 +157,24 @@ export function BattleOverlay({ controller, state, gear }: Props) {
         <span aria-hidden="true">↻</span>
       </button>
 
+      {inSearch && (
+        <button
+          type="button"
+          className="icon-button help-button"
+          data-testid="help-button"
+          aria-label={m.battle.help}
+          title={m.battle.help}
+          tabIndex={-1}
+          disabled={state.phase !== 'challenge' || state.help.level >= 3}
+          onMouseDown={(e) => e.preventDefault()}
+          onKeyDown={(e) => e.preventDefault()}
+          onClick={() => controller.requestHelp()}
+        >
+          <span aria-hidden="true">?</span>
+        </button>
+      )}
+      {inSearch && <HelpTimer controller={controller} state={state} />}
+
       <div className="controls">
         <div className="readout" aria-label={m.battle.yourNumber}>
           <span className="readout-label">{m.battle.yourNumber}</span>
@@ -147,7 +183,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
           </span>
         </div>
         <button type="button" className="fire-button" disabled={!choosing} onClick={() => controller.confirm('pointer')}>
-          {m.battle.fire}
+          {solution !== null ? m.battle.fireAt(solution) : m.battle.fire}
         </button>
       </div>
     </div>
@@ -164,6 +200,39 @@ function useAnswerable(controller: BattleController, state: RoundState): boolean
     return () => clearTimeout(id);
   }, [waiting, state.answerableAt]);
   return state.phase === 'challenge' && state.challenge !== null && state.answerableAt !== null && waiting <= 0;
+}
+
+/** Calls controller.tick() once a second while a challenge is shown (decision D1, FR-034). */
+function useHelpTick(controller: BattleController, state: RoundState): void {
+  const ticking = state.phase === 'challenge' && state.challenge !== null;
+  useEffect(() => {
+    if (!ticking) return;
+    const id = setInterval(() => controller.tick(), 1000);
+    return () => clearInterval(id);
+  }, [controller, ticking]);
+}
+
+/**
+ * The time until a parent-set time limit shows the next help step (FR-034): a thin bar that shrinks, with no number.
+ * Shown only when the controller reports a limit; re-read once a second.
+ */
+function HelpTimer({ controller, state }: { controller: BattleController; state: RoundState }) {
+  const [, setTick] = useState(0);
+  const left = controller.helpTimeLeftMs();
+  const limit = controller.getRoundSettings().timeLimitSeconds;
+  const running = left !== null && state.phase === 'challenge';
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  if (left === null || limit === null) return null;
+  const share = Math.max(0, Math.min(1, left / (limit * 1000)));
+  return (
+    <div className="help-timer" data-testid="help-timer" role="img" aria-label={t().battle.helpSoon}>
+      <div className="help-timer-fill" style={{ width: `${Math.round(share * 100)}%` }} />
+    </div>
+  );
 }
 
 function lastShotKind(shot: LastShot): 'hit' | 'near' | 'miss' {
