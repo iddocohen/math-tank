@@ -100,11 +100,13 @@ All decisions below resolve the Technical Context of [plan.md](./plan.md). R6, R
 
 - **Decision**: The enemy computes an ideal shot to the player's tank by searching angle and power with `simulateShot`, then adds random error from a normal distribution whose spread depends on difficulty (large on Easy, medium on Normal, small on Challenging). Easy also halves enemy damage and forces the first enemy shot of a round to miss (FR-043). The enemy's random generator is separate from the challenge generator and is never given any attempt data (FR-042).
 - **Rationale**: Simple, testable, and visibly improving with difficulty.
+- **Changed by amendment 07**: the enemy no longer adds random error to an ideal shot. For each shot a seeded draw (`deriveSeed(roundSeed, 6, shotIndex)`) decides whether it hits, with probability 1/6, 1/4 or 1/3 by difficulty and never on the first shot of a round; a shot that does not hit aims 40 to 100 world units beside the child's tank. The path is the `solveArcToX` arc from the enemy's muzzle (R21), so the shell lands where the draw aimed. The draw reads only the round seed, the shot index and the difficulty (FR-042). Damage halving was already removed by amendment 06.
 
 ## R19. Aim solver for the enemy (aim correction removed)
 
 - **Decision**: `solveAim` searches a grid of angles (every 1 degree) and powers (every 1%) with `simulateShot` on the current terrain and returns the shot whose impact is closest to the target, flagging whether it hits. Only the enemy (R18) uses it. Aim correction (FR-012) was removed by amendment 01, because the player's shell always lands at the chosen number (R21).
 - **Rationale**: Takes hills into account; the search is about 9000 short simulations, done once per enemy turn, a few milliseconds of work.
+- **Changed by amendment 07**: the enemy no longer uses `solveAim`; it uses `solveArcToX` (R21) toward the x its draw chose. `solveAim` stays in `src/core/physics/aim.ts` with its tests and has no caller in the game.
 
 ## R20. Critique follow-up
 

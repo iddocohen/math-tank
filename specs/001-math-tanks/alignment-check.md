@@ -76,3 +76,16 @@ The product owner found the body-hit damage and the Volltreffer hard for a child
 - Settings become version 4 (`exactHit` dropped, `roundType`, `showClock`, `showRecords` added, `roundLength` counts enemies). The personal bests are stored under a new key and are part of the export file.
 
 The spec (US1, US2, US5, US6, US7, Edge Cases, FR-002, FR-006, FR-008, FR-010a, FR-013, FR-014, FR-043, FR-044, FR-046, FR-048a, FR-066, FR-068, FR-070, FR-072, FR-073, FR-075, FR-078, SC-005, SC-009, removed FR-071 and FR-074, new FR-080 to FR-087), data model, contracts, quickstart and tasks (Phase 13a) were updated to match.
+
+## Amendment 07
+
+**Date**: 2026-11-05
+
+The product owner reported that the enemy tank was missing after a page refresh, asked for the enemy to fire right after each of the child's shots while missing on purpose most of the time, and asked for the step count under the ruler back. The enemy was not off the battlefield: guided searches hid it by design (amendment 01 item 4, FR-010). This is an intended change, not drift.
+
+- **[Amendment 07](./amendment-07-visible-enemy-return-fire.md)** makes the enemy and its pointer line visible in every mode and challenge kind. The challenge banner stays the task; the child may solve it or read the ruler, and both practise the number line (PRD section 3.1). It replaces amendment 01 item 4 (the hidden enemy) and FR-010's rule that the enemy's position is not inferable during a search. Comparison turns keep the enemy among identical decoys.
+- After every miss or near miss, the ruler shows the bracket from the landing number to the enemy with the step count, in every mode. This removes the rule of tasks T068 and T215 that hid the step count during a search.
+- The enemy fires right after every shot of the child that does not destroy it. This replaces amendment 06 item 6 (one enemy shot after every 2 shots). Its shell usually lands 40 to 100 world units beside the child's tank, and a seeded draw makes it hit about 1 in 6 ("Leicht"), 1 in 4 ("Normal") or 1 in 3 ("Herausfordernd") shots; the first shot of a round always misses. PRD section 8 is kept: the enemy fires with visible trajectories (from its own tank, except in comparison turns, where the shell enters from the top edge so it does not show which tank is the enemy), its accuracy varies by difficulty, and the draw never depends on the child's answers, help use or mistakes, so the enemy does not exploit the child's mathematics difficulties. "Leicht" stays forgiving: about 1 hit in 6 shots, and never on the first shot.
+- `RoundState` loses `shotsSinceEnemyFire` and `enemyFound`; `getState()` no longer reduces the enemy during a search. The enemy no longer aims with random error added to `solveAim`: research R18's error model is replaced by the hit draw and a deliberate near miss.
+
+The spec (Overview, US1, US2, US4 scenario 2, US5, Edge Cases, FR-002, FR-010, FR-010a, FR-013, FR-014, FR-041, FR-042, FR-043, FR-066, FR-072, FR-073, FR-081, SC-005, Key Entities, Assumptions, new FR-043a), data model, contracts, quickstart and tasks (Phase 18b) were updated to match.

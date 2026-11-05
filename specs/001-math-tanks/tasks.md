@@ -7,7 +7,7 @@ description: "Task list for Math Tanks implementation"
 
 **Input**: Design documents from `/specs/001-math-tanks/`
 
-**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
+**Prerequisites**: [amendment-01-number-aiming.md](./amendment-01-number-aiming.md), [amendment-02-ruler-ranges-and-detail.md](./amendment-02-ruler-ranges-and-detail.md), [amendment-03-new-scene-button.md](./amendment-03-new-scene-button.md), [amendment-04-hit-rule.md](./amendment-04-hit-rule.md), [amendment-05-no-shortcuts-settings-early.md](./amendment-05-no-shortcuts-settings-early.md), [amendment-06-one-hit-lives.md](./amendment-06-one-hit-lives.md), [amendment-07-visible-enemy-return-fire.md](./amendment-07-visible-enemy-return-fire.md), [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/core-api.md](./contracts/core-api.md), [contracts/ui-flows.md](./contracts/ui-flows.md), [quickstart.md](./quickstart.md), [critique report](./critiques/critique-20261105-064803.md)
 
 **Tests**: Requested. PRD section 12 and the spec require automated tests for mathematics, number-line mapping and progression logic (Vitest), plus Playwright end-to-end tests in Chromium, WebKit and Firefox. In every phase, test tasks come before the implementation tasks they cover and must fail before the implementation exists.
 
@@ -43,6 +43,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **D15**: Comparison typing: a typed number that matches a tank's label acts like a tap on that tank. In single-choice comparisons any other typed number is fired like any number (a miss); in `order3` it places no badge and shows a hint.
 - **D17**: Amendment 05 arrived after Phase 11a. Phase 11b removes `nudge`, the arrow keys and the −1 and +1 buttons, hides every number while pointing, tracks `RoundState.inputMethod` so that keyboard input skips `findNumber`, and builds the clear tank identity. The settings phases moved directly after Phase 11b and were renumbered 12 and 13 (they keep task IDs T103 to T116 and T182); the guided phases that followed became Phases 14 to 20. The progress page stays in Phase 22, because it needs the attempt records of guided mode; until then the parent menu shows "Fortschritt" disabled with "kommt bald". Phase 12 works on free play alone: `updateSettings` applies at the next `startRound` in either mode. New tasks start at T194.
 - **D18**: Amendment 06 arrived after Phase 13. Phase 13a builds it on free play: `shotKind` returns `'hit'` (exact number, the enemy is destroyed and replaced), `'near'` (on the body, the enemy shakes, a miss) or `'miss'`; `TankState.health`, `MAX_DAMAGE`, `damageAt`, `enemyDamage`, `enemyDamageFactor`, `exactHit` and the outcome `'close'` are removed from new code (a stored `'close'` still loads). `RoundState` gains `lives` (3), `enemiesDestroyed`, `shotsSinceEnemyFire`, `elapsedMs` and `lastEnemyHit`; `outcome` becomes `'goalReached' | 'heartsGone'`. The enemy fires after every 2 shots of the child, misses included, in both modes; this changes the amendment 01 rule that a miss never gives the enemy a turn (FR-013, SC-005). Settings become version 4 (`roundType`, `showClock`, `showRecords`; `roundLength` 1 to 20 counts enemies). Personal bests live in `src/core/records/records.ts` under the storage key `mathtanks.records.v1` and are part of the export file. Later unchecked tasks that assumed health, damage values, the Volltreffer, `'close'`, `exactHit` or rounds counted in turns were rewritten in place; new tasks start at T204.
+- **D19**: Amendment 07 arrived after Phase 18a. Phase 18b makes the enemy and its pointer line visible in every mode and challenge kind (removing `enemyFound`, `HiddenTank`, `publicState` and the reduced `getState()` built in Phase 14 and T215), shows the step count after every miss in every mode (replacing D12's guided rule and the T068 and T215 rule that hid it during a search), and makes the enemy fire after every shot that does not destroy it (removing `shotsSinceEnemyFire` and `ENEMY_FIRE_EVERY` from Phase 13a). The enemy's aim becomes a seeded hit draw (1/6, 1/4, 1/3; never the first shot of a round) and a deliberate near miss 40 to 100 world units beside the child's tank. In comparison turns the shell still falls from the top edge. `data-shots-since-enemy-fire` (D4) is removed. Later unchecked tasks that assumed a hidden enemy or the every-2-shots rhythm (T095, T098, the Phase 19 goal) were rewritten in place; new tasks start at T220.
 
 ---
 
@@ -465,15 +466,34 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ---
 
+## Phase 18b: Amendment 07 visible enemy and return fire
+
+**Goal ([amendment 07](./amendment-07-visible-enemy-return-fire.md))**: The product owner's words: "When I refresh the page, the enemy tank is not there aka out of bound this needs fixing. Also the enemy tank should fire immediately after my kid tried to shoot at him, but on purpose miss him slightly. Also the calculation of how many steps away he is on the bottom of the ruler was a nice feature that is now gone and would like to have it back." The enemy and its pointer line are visible in every mode and challenge kind; after every miss the ruler shows the step count to the enemy; the enemy fires right after every shot that does not destroy it, usually landing 40 to 100 world units beside the child's tank, and hits with a seeded probability of 1/6, 1/4 or 1/3 by difficulty, never on the first shot of a round.
+
+**Independent Test**: In guided mode with only subtraction and the 43 − 7 fixture seed, the enemy and its dashed pointer line are visible from the start and after a page reload; firing at 30 shows the bracket from 30 to 36 with "6 Schritte" and is followed at once by an enemy shot from the enemy tank that lands beside the child's tank; `pnpm test src/core/ai` shows the hit rates per difficulty.
+
+- [ ] T220 [P] Rewrite `src/core/ai/enemy.test.ts` for amendment 07: over 3000 seeded shots (shot index 1 and later) the share of `planEnemyShot(...).hits` is within 0.03 of 1/6 on `easy`, 1/4 on `normal` and 1/3 on `challenging`; shot index 0 never hits on any difficulty; every non-hit has `NEAR_MISS_MIN <= |targetX - playerX| <= NEAR_MISS_MAX` (40 to 100, above `TANK_WIDTH / 2`), lands on both sides over many seeds, and uses the inner side when the child's tank stands at either end of the world; a hit aims at `playerX`; the same input gives the same plan; `enemyShot` returns a path from the enemy's muzzle whose impact is within 0.5 units of `targetX` on seeded terrains, so `enemyHitsPlayer` is true exactly for hits; the input type has no field for answers, help or mistakes (FR-041, FR-042, FR-043)
+- [ ] T221 Implement `src/core/ai/enemy.ts` (`ENEMY_HIT_CHANCE`, `NEAR_MISS_MIN`, `NEAR_MISS_MAX`, `planEnemyShot` with one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`, `enemyShot` with the `solveArcToX` arc from the enemy's muzzle); rename `src/core/battle/hiddenShell.ts` and `src/core/battle/hiddenShell.test.ts` to `src/core/battle/topShell.ts` and `src/core/battle/topShell.test.ts` (`topShellEntryX`, `topShellPath`), used only in comparison turns, until T220 and the shell tests pass (FR-041 to FR-043a)
+- [ ] T222 [P] Update `src/core/battle/battleController.test.ts` and `src/core/battle/hitRule.test.ts` for amendment 07, tests first: the enemy fires (`phase` `enemyTurn`) right after every shot that does not destroy it (a miss, a near miss, a decoy hit, a typed number on no tank in single-choice comparison) in guided and free play, and never after a shot that destroys it or after `requestHelp` or an order badge; `getState().enemy` has its number and coordinates in every challenge kind (findNumber, addition, subtraction, readPosition, comparison with its decoys), also right after `startRound`; after a guided miss `lastShot.distance` and `lastShot.enemyNumber` are set; the enemy's shell path starts at the enemy's muzzle, except in comparison turns, where it starts at the top edge; the first enemy shot of a round never costs a heart; a round played with only wrong answers and one played with help requests in between give the same sequence of enemy hits and misses; `ENEMY_FIRE_EVERY` and `shotsSinceEnemyFire` are gone. Delete the tests that only assert the hidden enemy (reduced `getState()`, `enemyFound`, the every-2-shots rhythm) (FR-002, FR-010, FR-010a, FR-013, FR-041 to FR-043a, FR-072, FR-073, FR-081, SC-005)
+- [ ] T223 Implement amendment 07 in `src/core/battle/controller.ts`, `src/core/battle/round.ts`, `src/core/battle/guided.ts`, `src/core/battle/hitRule.ts` and `src/core/types.ts`: remove `shotsSinceEnemyFire`, `ENEMY_FIRE_EVERY`, `enemyFound`, `HiddenTank`, `publicState` and `placedEnemy`; `visibleEnemy` returns the living enemy; every shot that does not destroy the enemy starts the enemy turn with `enemyShot`; the shell falls from the top edge only in comparison turns, until T222 passes (FR-010, FR-041 to FR-043a, FR-081)
+- [ ] T224 [P] Update `src/app/BattleOverlay.test.tsx` and `src/i18n/i18n.test.ts`: after a guided miss the overlay shows the landing number and the step count to the enemy; a guided near miss shows "Ganz knapp! Triff die Linie." with "Du: … · Gegner: … · N Schritte"; `data-enemy-number` is set during a guided search; `data-shots-since-enemy-fire` is gone; the hidden-enemy near-miss text of T215 is gone (FR-066, FR-072, FR-073)
+- [ ] T225 Update the views: `src/app/BattleOverlay.tsx` (step count after every miss in every mode, no `data-shots-since-enemy-fire`), `src/game/NumberLineView.ts` (bracket and pointer line in every mode), `src/game/BattleScene.ts` and `src/game/TankView.ts` (the enemy never hides; a new enemy fades in at its number; the enemy's turret turns toward its aim except in comparison turns), `src/i18n/de.ts` (remove the hidden near-miss text), until T224 passes and `pnpm build` succeeds (FR-010, FR-043a, FR-072, FR-073)
+- [ ] T226 Update the end-to-end tests: `tests/e2e/guided.spec.ts` (the enemy and its pointer line are visible at the start of a search and after a reload; a miss shows the step bracket and `data-phase` passes `enemyTurn` after every miss), `tests/e2e/battle.spec.ts` and `tests/e2e/range.spec.ts` (the enemy fires after every miss, not every second one), `tests/e2e/comparison.spec.ts` (an `enemyTurn` follows the decoy shot), `tests/e2e/steps.spec.ts` where it waits for the enemy; delete assertions that only check the hidden enemy. Make every e2e spec pass, muted, in Chromium, WebKit and Firefox (FR-010, FR-072, FR-073, FR-081)
+- [ ] T227 Verify with a muted headless Chromium screenshot (outside Playwright test: `--mute-audio`, `speechSynthesis.speak` stubbed) of a guided "Der Gegner ist bei 43 − 7" search after a miss: the enemy, its dashed pointer line and the step-count bracket are visible; store it in the session scratchpad, not in the repository (amendment 07)
+
+**Checkpoint**: The enemy is visible in every search, every miss shows the step count, and the enemy fires back after every shot that does not destroy it, at the hit rate of the chosen difficulty.
+
+---
+
 ## Phase 19: US5 help escalation logic
 
-**Goal (US5, P2)**: Help that appears after each miss and becomes more explicit, always ending with a solution the child fires at, with no penalty; the enemy's fire still follows the every-2-shots rhythm (amendment 06).
+**Goal (US5, P2)**: Help that appears after each miss and becomes more explicit, always ending with a solution the child fires at, with no penalty; the enemy fires back after every shot that does not destroy it (amendment 07).
 
 **Independent Test**: `pnpm test src/core/battle` passes, including three misses in a row.
 
 - [ ] T093 [P] [US5] Write `src/core/battle/help.test.ts`: `nextHelp(challenge, level, landed, settings)` returns step 1 (direction from the landing number to the answer, "right" or "left", none when `landed` is null, and the nearest major line to the answer), step 2 (the ten from `helpZoomView` and a count from the landing number to the answer, or from the nearest major line when `landed` is null; the step path for addition and subtraction), step 3 (solution) for position challenges, and the comparison variants (tens digits, ruler markers under options, correct tank or order); a help type turned off by the parent is skipped, but step 3 is always returned (FR-031, FR-032)
 - [ ] T094 [US5] Implement `src/core/battle/help.ts` (`nextHelp`, `nearestMajorTick`, `directionTo`), until `help.test.ts` passes (FR-031, FR-032)
-- [ ] T095 [P] [US5] Add help tests to `src/core/battle/battleController.test.ts`: each miss raises `help.level` by one and sets an encouraging message key from `encouragements`; `requestHelp` (help button or H) before firing shows the next step at once and is not counted as a shot; the third miss (or a help request at level 2) shows the solution and sets `selection` to the answer; `confirm` then fires at the solution, which destroys the enemy; a miss itself never changes lives, and over three misses the enemy fires exactly once (after the second shot, amendment 06); the recorded attempt has `helpLevel: 3`, `solved: false`, `independent: false`, `wrongAnswers: 3`; a near miss on the body raises `help.level` like a miss and sets the message "Ganz knapp! Triff die Linie."; with `timeLimitSeconds: 10`, `tick()` after 10 s shows the next help step with no penalty, and without a limit no timer exists (FR-013, FR-030, FR-031, FR-034, FR-066, FR-081, SC-005, AC-07, US5 scenarios 1 to 5 and 7)
+- [ ] T095 [P] [US5] Add help tests to `src/core/battle/battleController.test.ts`: each miss raises `help.level` by one and sets an encouraging message key from `encouragements`; `requestHelp` (help button or H) before firing shows the next step at once and is not counted as a shot; the third miss (or a help request at level 2) shows the solution and sets `selection` to the answer; `confirm` then fires at the solution, which destroys the enemy; a miss itself never changes lives, and the enemy fires back after each of the three misses (amendment 07); the recorded attempt has `helpLevel: 3`, `solved: false`, `independent: false`, `wrongAnswers: 3`; a near miss on the body raises `help.level` like a miss and sets the message "Ganz knapp! Triff die Linie."; with `timeLimitSeconds: 10`, `tick()` after 10 s shows the next help step with no penalty, and without a limit no timer exists (FR-013, FR-030, FR-031, FR-034, FR-066, FR-081, SC-005, AC-07, US5 scenarios 1 to 5 and 7)
 - [ ] T096 [US5] Implement help escalation in `src/core/battle/controller.ts` (`requestHelp` for all kinds, miss-driven escalation, solution step with `selection` set to the answer, `tick()` per decision D1) and add `help.content` and `message` to `RoundState` in `src/core/types.ts`, until the tests from T095 pass (FR-013, FR-030, FR-031, FR-034)
 - [ ] T097 [US5] Add help phrases to `src/i18n/de.ts` ("Versuch eine andere Stelle.", "Weiter nach rechts", "Weiter nach links", step-count texts), and extend `src/i18n/i18n.test.ts` so it also checks every text passed to `Speaker.speak` (spoken texts come only from the table) (FR-033, SC-006, US5 scenario 6)
 
@@ -487,7 +507,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 **Independent Test**: `pnpm e2e tests/e2e/help.spec.ts` passes.
 
-- [ ] T098 [P] [US5] Write `tests/e2e/help.spec.ts`: in a guided search, type and fire three wrong numbers; after each, the landing number and an encouraging message are visible and contain no forbidden word; `data-phase` passes `enemyTurn` only after the second shot; after the first, the direction text is shown; after the third, the solution is shown; one press of Enter fires at it and `data-enemies-destroyed` rises; a miss alone never lowers `data-lives` (only an enemy hit does); press H in a new search and confirm `data-help-level` rises and `data-shots-since-enemy-fire` does not (AC-07, SC-005, SC-006, FR-062, FR-081)
+- [ ] T098 [P] [US5] Write `tests/e2e/help.spec.ts`: in a guided search, type and fire three wrong numbers; after each, the landing number and an encouraging message are visible and contain no forbidden word; `data-phase` passes `enemyTurn` after each shot (amendment 07); after the first, the direction text is shown; after the third, the solution is shown; one press of Enter fires at it and `data-enemies-destroyed` rises; a miss alone never lowers `data-lives` (only an enemy hit does); press H in a new search and confirm `data-help-level` rises and no `enemyTurn` follows (AC-07, SC-005, SC-006, FR-062, FR-081)
 - [ ] T099 [US5] Add help visuals to `src/game/NumberLineView.ts`: step 1 a direction arrow from the landing marker and a pulsing highlight on the nearest major line; step 2 `showZoom(helpZoomView(...))` with all lines shown whatever the ruler level, and numbers popping up one by one from the landing number to the answer; step 3 a marker animated to the solution with the number shown large (FR-018, FR-031, US5 scenarios 1 to 3, US9 scenario 6)
 - [ ] T100 [US5] Add comparison help visuals to `src/game/TankView.ts` (highlight tens digits on every plate) and `src/game/NumberLineView.ts` (markers under each option's number), and show the correct tank or order at step 3 (FR-031)
 - [ ] T101 [US5] Update `src/app/BattleOverlay.tsx`: a help button visible during every challenge, the encouraging message line, the direction text, a label on the fire button at step 3 ("Feuer auf {n}"), and a time-limit indicator only when the parent set a limit; call `controller.tick()` once a second while a challenge is shown (FR-030, FR-031, FR-034)
@@ -590,6 +610,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **Phases 16 and 17 (US3)**: Phase 16 depends on Phase 10. Phase 17 depends on Phases 15 and 16.
 - **Phase 18 (US4)**: depends on Phases 10 and 15.
 - **Phase 18a (product owner report)**: depends on Phases 11 (ruler levels) and 12 (settings page). Blocks nothing; T217 runs before T218, which draws its label rows, and T219 runs last.
+- **Phase 18b (amendment 07)**: depends on Phases 14, 15, 17 and 18. Blocks Phases 19, 20 and 23, which assume a visible enemy and the enemy's return fire after every shot. T220 runs before T221, T222 before T223, T224 before T225; T226 and T227 run last.
 - **Phases 19 and 20 (US5)**: depend on Phase 15; Phase 20 needs Phase 11 (`showZoom`); comparison help needs Phase 18; step-path help needs Phase 17.
 - **Phases 21 and 22 (US7)**: Phase 21 depends on Phase 10 (ruler level settings). Phase 22 depends on Phases 13, 14 and 21.
 - **Phase 23 (US8)**: depends on Phase 15; the keyboard spec T183 needs Phases 18 and 20; speech needs Phase 9.
@@ -621,6 +642,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 - **Phase 11a**: T186, T188, T190, T191 together; then T187, T189, T181; then T192; T193 last.
 - **Phase 11b**: T194, T195, T196, T198, T199 together; then T197; then T200 and T201; T202 last.
 - **Phase 13a**: T204, T205, T206, T208, T210, T213 together; then T207 and T209; then T211 and T212; T214 last.
+- **Phase 18b**: T220, T222 and T224 together; then T221, T223 and T225; then T226; T227 last.
 - **Phase 16 (US3)**: T071, T072, T073, T074 together.
 - **Phase 21 (US7)**: T117, T118, T119, T120 together; Phase 21 as a whole can run in parallel with Phases 11 to 20.
 - **Phase 23 (US8)**: T134, T135, T136, T183, T137 together.
@@ -638,7 +660,7 @@ Single web project at the repository root, as in plan.md: `src/core/` (engine-fr
 
 ### Incremental delivery
 
-6. US3 (Phases 16, 17), US4 (Phase 18), US5 (Phases 19, 20): each adds one PRD acceptance criterion (AC-05, AC-06, AC-07).
+6. US3 (Phases 16, 17), US4 (Phase 18), Phase 18b (amendment 07, the visible enemy and its return fire), US5 (Phases 19, 20): each adds one PRD acceptance criterion (AC-05, AC-06, AC-07).
 7. US7 (Phases 21, 22) and US8 (Phase 23): AC-09, AC-10 and the keyboard-only check (SC-011).
 8. Phase 24.
 
@@ -651,7 +673,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | ID | Tasks |
 |----|-------|
 | FR-001 | T018, T022, T032, T035, T036, T043, T165 |
-| FR-002 | T032, T034, T041, T043, T060, T158, T163, T165, T208, T209 |
+| FR-002 | T032, T034, T041, T043, T060, T158, T163, T165, T208, T209, T222 |
 | FR-003 | T032, T041, T043, T047, T158, T163, T165, T169, T170 |
 | FR-004 | T019, T023, T032, T039, T041, T043, T066, T156, T158, T160, T165, T168 |
 | FR-005 | T018, T022, T032, T037, T043, T158, T165 |
@@ -659,11 +681,11 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-007 | T018, T022, T032, T038, T043, T158, T165 |
 | FR-008 | T032, T034, T043, T048, T158, T165, T208, T209, T214 |
 | FR-009 | T040, T042, T102, T142 |
-| FR-010 | T060, T062, T065, T066, T067, T068, T070 |
-| FR-010a | T030, T060, T061, T062 |
+| FR-010 | T060, T062, T065, T066, T067, T068, T070, T222, T223, T225, T226 |
+| FR-010a | T030, T060, T061, T062, T222 |
 | FR-011 | Removed by amendment 01 |
 | FR-012 | Removed by amendment 01 |
-| FR-013 | T060, T061, T062, T065, T066, T095, T096, T208 |
+| FR-013 | T060, T061, T062, T065, T066, T095, T096, T208, T222 |
 | FR-014 | T061, T070, T149, T158, T163, T168, T178, T180, T181, T190, T193, T214 |
 | FR-015 | T028, T029, T168, T184 |
 | FR-016 | T051, T052, T147, T149, T173, T174 |
@@ -691,9 +713,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-038 | T117, T121, T129, T130 |
 | FR-039 | T119, T124 |
 | FR-040 | T127, T128, T132, T133 |
-| FR-041 | T026, T027 |
-| FR-042 | T026, T027, T034 |
-| FR-043 | T026, T027, T032, T208, T209 |
+| FR-041 | T026, T027, T220, T221, T222, T223 |
+| FR-042 | T026, T027, T034, T220, T221, T222 |
+| FR-043 | T026, T027, T032, T208, T209, T220, T221, T222 |
+| FR-043a | T221, T222, T223, T225 |
 | FR-044 | T032, T208, T209, T213 |
 | FR-045 | T110, T111, T115, T166 |
 | FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213 |
@@ -718,14 +741,14 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-063 | T157, T158, T161, T170, T183 |
 | FR-064 | T087, T088, T145, T146, T183 |
 | FR-065 | T156, T160, T163, T169 |
-| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214 |
+| FR-066 | T060, T062, T067, T158, T162, T163, T165, T169, T181, T186, T187, T190, T192, T193, T204, T208, T209, T212, T214, T224 |
 | FR-067 | T061, T067, T148, T149, T177, T178, T180, T181 |
 | FR-068 | T068, T173, T177, T178, T179, T180, T181, T187, T190, T193, T214 |
 | FR-069 | T112, T113, T182 |
 | FR-070 | T185, T200, T208 |
 | FR-071 | Removed by amendment 06 (built in T186 to T193, removed in T204, T209, T211, T214) |
-| FR-072 | T068, T191, T192, T193, T210, T212, T214 |
-| FR-073 | T066, T089, T192, T193, T212 |
+| FR-072 | T068, T191, T192, T193, T210, T212, T214, T222, T224, T225, T226 |
+| FR-073 | T066, T089, T192, T193, T212, T222, T224, T225, T226 |
 | FR-074 | Removed by amendment 06 (built in T186 to T193, removed in T205, T207, T213, T214) |
 | FR-075 | T060, T062, T063, T117, T118, T119, T121, T123, T188, T189, T205 |
 | FR-076 | T060, T062, T065, T183, T195, T196, T197, T199 |
@@ -733,7 +756,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-078 | T198, T199, T200, T201, T202, T210, T212 |
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
-| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214 |
+| FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226 |
 | FR-082 | T061, T205, T207, T208, T209, T213, T214 |
 | FR-083 | T208, T209, T210, T211, T214 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
@@ -744,7 +767,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | SC-002 | T150 |
 | SC-003 | T055, T059, T079, T086, T107, T148 |
 | SC-004 | T028, T136 |
-| SC-005 | T061, T095, T098, T208 |
+| SC-005 | T061, T095, T098, T208, T222 |
 | SC-006 | T014, T097, T098 |
 | SC-007 | T016, T109 |
 | SC-008 | T134, T155 |

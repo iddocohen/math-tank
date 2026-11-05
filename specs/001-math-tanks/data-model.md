@@ -1,6 +1,6 @@
 # Data Model: Math Tanks
 
-All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed).
+All types live in `src/core/` and contain no DOM or Phaser references. Persisted types are validated with Zod on load (see [research.md](./research.md) R11). Changed by [amendment 01](./amendment-01-number-aiming.md) (number aiming, keyboard entry) [amendment 02](./amendment-02-ruler-ranges-and-detail.md) (any range, ruler levels, "read the ruler") [amendment 04](./amendment-04-hit-rule.md) (tank-body hit rule, Volltreffer, `exactHit` setting, outcome `'close'`) [amendment 05](./amendment-05-no-shortcuts-settings-early.md) (input method, no `nudge`) and [amendment 06](./amendment-06-one-hit-lives.md) (one exact hit destroys the enemy, 3 hearts, enemy fire rhythm, round types, score, time, personal best; `exactHit`, health, the Volltreffer and `'close'` removed) and [amendment 07](./amendment-07-visible-enemy-return-fire.md) (the enemy is always visible and fires back after every shot that does not destroy it; `shotsSinceEnemyFire` and `enemyFound` removed).
 
 ## Settings (persisted: `mathtanks.settings.v1`)
 
@@ -199,7 +199,6 @@ interface RoundState {
   turn: number;                    // player shots fired this round (challenge ids use it)
   lives: number;                   // child's hearts, 3 at the start (LIVES), 0 ends the round (FR-080)
   enemiesDestroyed: number;        // score (FR-083)
-  shotsSinceEnemyFire: number;     // child's shots at the current enemy since it last fired; at 2 the enemy fires and it resets; a destroyed enemy resets it (FR-081)
   elapsedMs: number;               // play time up to the last pause; final once the round is over (FR-084). The controller's elapsedMs() adds the running part
   phase: Phase;
   terrain: Heightmap;              // Float32Array of surface heights per column
@@ -207,7 +206,6 @@ interface RoundState {
   enemy: TankState;
   decoys: TankState[];             // comparison turns only
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
-  enemyFound: boolean;             // false during a position search: enemy hidden; true after a hit, for readPosition and in free play
   challenge: Challenge | null;     // in free play always a readPosition challenge
   answerableAt: number | null;     // clock time when answers became possible (1 s after display)
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
@@ -216,7 +214,7 @@ interface RoundState {
   orderTaps: string[];             // order3: tank ids badged so far
   inputMethod: 'pointer' | 'keyboard' | null;   // latest input method (amendment 05, FR-076); carried into the next round; null before any input
   rulerLevel: 1 | 2 | 3 | 4 | 5;   // for this round (FR-018)
-  lastShot: LastShot | null;       // landed number shown large; distance in steps shown in free play
+  lastShot: LastShot | null;       // landed number shown large; distance in steps shown after every miss, in every mode (amendment 07)
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
   stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
@@ -238,7 +236,7 @@ interface LastShot {
 interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: number /* number on the line */; x: number; y: number; label?: number; alive: boolean; }   // no health (amendment 06)
 ```
 
-Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain).
+Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (only searches remain). Removed by amendment 07: `shotsSinceEnemyFire` (the enemy fires after every shot that does not destroy it) and `enemyFound` (the enemy is always visible), and with them the reduced enemy that `getState()` reported during a guided search.
 
 **Keyboard entry** (`applyKey(entry, key, range)` in `src/core/battle/entry.ts`, pure): a digit appends to `typed` (ignored past the digit count of the longest number in the range); `-` is accepted only as the first character when `range.min < 0`; Backspace removes the last character. After each change, `selection` is the typed value when it is inside the range; otherwise `selection` is the nearest end and `outOfRange` is true. A pointer selection clears `typed`. *(The nudge is removed by amendment 05.)*
 
@@ -247,19 +245,19 @@ Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (o
 **State transitions**
 
 ```text
-start → challenge (guided search) | aiming (freePlay, readPosition, enemy visible)
+start → challenge (guided search, enemy visible) | aiming (freePlay, readPosition, enemy visible)
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
 challenge --tapTank (single choice)--> playerShot at that tank's number
 challenge --tapTank (order3)--> challenge (badge placed) ; third correct badge --> playerShot at the enemy ; wrong order --> challenge (badges reset, miss)
-playerShot (guided) --hit (exact number)--> enemy destroyed (enemyFound = true, enemiesDestroyed + 1, shotsSinceEnemyFire = 0, attempt recorded) --> roundOver (goalReached) | new search with a new hidden enemy
-playerShot (guided) --miss (near miss on the body or off it)--> shotsSinceEnemyFire + 1; at 2 --> enemyTurn, otherwise challenge (help.level + 1, lastShot shown)
+playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded) --> roundOver (goalReached) | new search with a new visible enemy; the destroyed enemy does not fire
+playerShot (guided) --miss (near miss on the body, off it, or a decoy)--> enemyTurn (help.level + 1, lastShot with the step count shown)
 challenge --help (button or H) or time limit--> challenge (help.level + 1)
 challenge at help.level 3 --> selection = answer; confirm fires at it (the shot hits)
-playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1, shotsSinceEnemyFire = 0 --> roundOver (goalReached) | aiming with a new readPosition challenge and a new visible enemy at its answer
-playerShot (freePlay) --miss--> shotsSinceEnemyFire + 1; at 2 --> enemyTurn (and reset to 0), otherwise aiming
-enemyTurn --impact--> lives - 1 when enemyHitsPlayer and not noDamage; lives 0 --> roundOver (heartsGone), otherwise the phase the child left (challenge or aiming)
+playerShot (freePlay) --hit--> enemy destroyed, enemiesDestroyed + 1 --> roundOver (goalReached) | aiming with a new readPosition challenge and a new visible enemy at its answer
+playerShot (freePlay) --miss--> enemyTurn
+enemyTurn --impact--> lives - 1 when the enemy's draw chose a hit (enemyHitsPlayer) and not noDamage; lives 0 --> roundOver (heartsGone), otherwise the phase the child left (challenge or aiming)
 any (except roundOver) --pause (button or Escape)--> paused --resume--> previous phase
 ```
 
@@ -267,6 +265,8 @@ Round over (amendment 06, FR-008, FR-082) when `lives == 0` (`heartsGone`), or, 
 
 **Time** (FR-084): `startRound` starts the clock at 0. `pause` adds the running part to `elapsedMs` and stops it; `resume` starts it again; the round end freezes it. The app pauses the battle while the parent gate is open and while the tab is hidden (`visibilitychange`), so those times are not counted. `formatTime(ms)` gives `m:ss` (for example `6:12`; `61:05` past an hour).
 
-The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the enemy hides (fades out) and the next challenge's answer becomes its position; it is drawn again only when `enemyFound` becomes `true` (at once for readPosition). The answer is always at least `minEnemyGap` from the player tank.
+The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the next challenge's answer becomes the enemy's position and the new enemy fades in there; it is visible in every challenge kind (amendment 07). The answer is always at least `minEnemyGap` from the player tank.
 
 In comparison turns, each option is shown on a tank standing at the position of its own number, so the battlefield keeps the same number-to-position mapping as the number line. The real enemy is the tank whose number is the correct answer.
+
+**Enemy shot** (amendment 07, FR-041 to FR-043a, FR-081; `src/core/ai/enemy.ts`): after every player shot that does not destroy the enemy, the enemy fires once. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: the shot hits with probability `ENEMY_HIT_CHANCE` (`easy` 1/6, `normal` 1/4, `challenging` 1/3), never on `shotIndexInRound` 0. A hit aims at the child's tank center. Otherwise the shell aims at a point `NEAR_MISS_MIN` (40) to `NEAR_MISS_MAX` (100) world units left or right of the child's tank, outside the hit area (half the tank width, 30 units); the side comes from the draw, and when that side would leave the battlefield the other side is used. The path is the arc of `solveArcToX` from the enemy's muzzle, so the shell lands at the aimed x. In comparison turns the shell falls from the top edge instead (`topShellPath`). The draw reads only the round seed, the shot index and the difficulty, never answers, help or mistakes (FR-042).

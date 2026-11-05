@@ -92,10 +92,20 @@ Guarantees: fixed timestep (1/120 s); identical output for identical input; terr
 ## `core/ai`
 
 ```ts
-enemyShot(input: { difficulty: 'easy'|'normal'|'challenging'; rng: Rng; shotIndexInRound: number; origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number }
+ENEMY_HIT_CHANCE: Record<Difficulty, number>   // easy 1/6, normal 1/4, challenging 1/3 (FR-041)
+NEAR_MISS_MIN = 40; NEAR_MISS_MAX = 100         // world units from the child's tank center (FR-041)
+planEnemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; playerX: number; worldWidth: number }): { hits: boolean; targetX: number }
+enemyShot(input: { difficulty: Difficulty; roundSeed: number; shotIndexInRound: number; origin: Point; playerX: number; terrain: Heightmap; worldWidth: number; worldHeight: number }):
+  { hits: boolean; targetX: number; path: Point[]; impact: Point }
 ```
 
-The input type has no field for attempts, help or challenge data (FR-042). On `easy`, `shotIndexInRound === 0` always returns a shot that misses by more than the blast radius, and over many seeded rounds most easy shots miss the player's tank (FR-043). `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
+Changed by amendment 07: the enemy no longer aims with `solveAim` plus random error. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: `hits` is true with probability `ENEMY_HIT_CHANCE[difficulty]` and always false for `shotIndexInRound === 0` (FR-043). With `hits`, `targetX` is `playerX`; otherwise it is `playerX ± d` with `d` from 40 to 100 on a drawn side, and the other side when the drawn one is outside `[0, worldWidth]`. `enemyShot` adds the arc of `solveArcToX` from `origin` to `targetX`, so `|impact.x - targetX|` is at most 0.5 units. The input type has no field for attempts, help, mistakes or challenge data, so the draw cannot depend on them (FR-042). Over 3000 seeded shots the hit rate is within 0.03 of the chance for each difficulty. `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
+
+```ts
+// core/battle/topShell (renamed from hiddenShell by amendment 07; used only in comparison turns, FR-043a)
+topShellEntryX(roundSeed: number, shotIndex: number, playerX: number, worldWidth?: number): number   // within 160 of playerX, clamped to the world
+topShellPath(input: { impact: Point; entryX: number; terrain: Heightmap; worldHeight: number }): Point[]   // falls from the top edge onto the impact
+```
 
 ## `core/battle` (stateful)
 
@@ -105,7 +115,7 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, shotsSinceEnemyFire 0, time 0 (amendment 06)
+  startRound(mode: 'guided' | 'freePlay'): void   // 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
   selectNumber(n: number): void            // pointer preview while dragging or after release; clears typed digits; never fires; sets inputMethod 'pointer'
   typeDigit(d: 0|1|2|3|4|5|6|7|8|9): void  // keyboard digit (FR-060); sets inputMethod 'keyboard' (also typeMinus and backspace)
@@ -117,10 +127,11 @@ class BattleController {
   fireAt(n: number): void                  // fires at n (the arc from solveArcToX); in phase 'challenge' this is the answer
   tapTank(tankId: string): void            // comparison: fires at the tank's number; order3 places a badge without firing
   requestHelp(): void                      // help button or H key: next help step
-  shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new enemy
-                                           // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help, and
-                                           // at the 2nd shot since the enemy last fired -> enemy turn (FR-066, FR-081); sets lastShot
+  shotAnimationDone(): void                // after replaying the path: crater; exact number -> enemy destroyed, score + 1, new visible enemy
+                                           // (or roundOver 'goalReached'); otherwise miss (near miss on the body -> shake) -> help and
+                                           // enemy turn at once (FR-066, FR-081, amendment 07); sets lastShot
   enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage; 0 hearts -> roundOver 'heartsGone'
+                                           // the shell comes from the enemy's muzzle, in comparison turns from the top edge (FR-043a)
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
   resume(): void
@@ -129,7 +140,7 @@ class BattleController {
 
 Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, `continueAfterSolution`, `requestBonusChallenge`. Removed by amendment 02: `selectInterval`, `leaveZoom`. Removed by amendment 05: `nudge` (no +1 and −1 buttons, no arrow keys). `RoundState.inputMethod` records the latest input method; the next search passes it to `generateChallenge` (FR-076). Digits and Enter are ignored outside the phases `challenge` and `aiming`, and fires before `answerableAt` are ignored.
 
-Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
+`getState()` returns the full state; there is no hidden enemy and no reduced view of it (amendment 07 removes `publicState`, `placedEnemy` and `HiddenTank`). `visibleEnemy(state)` in `round.ts` returns the enemy while it is alive. Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
 
 ## `core/battle/hitRule` (pure, amendment 04, changed by amendment 06)
 
@@ -140,7 +151,7 @@ shotKind(fired: number, target: number, range: { min: number; max: number }): Sh
                                                                       // 'hit' when fired === target (enemy destroyed); 'near' when the x distance is at most TANK_WIDTH / 2
 enemyHitsPlayer(impact: Point, hitTargetId: string | null, player: TankState): boolean
                                                                       // the enemy shell entered the player's hit circle or landed within TANK_WIDTH / 2 of its x
-LIVES = 3; ENEMY_FIRE_EVERY = 2
+LIVES = 3                                                             // ENEMY_FIRE_EVERY is removed by amendment 07
 ```
 
 Guarantees: `shotKind(n, n, r)` is `'hit'` for every range; in 0 to 100 a shot 2 away is `'near'` and 3 away is `'miss'`; in 0 to 10 a shot 1 away is `'miss'`; in 0 to 1000 a shot 20 away is `'near'`. `enemyDamage` is removed by amendment 06.
