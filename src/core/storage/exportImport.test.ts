@@ -191,7 +191,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(6);
+    expect(r.settings.version).toBe(7);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

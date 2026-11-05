@@ -194,7 +194,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(6);
+    expect(parsed.data?.version).toBe(7);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -215,7 +215,7 @@ describe('migrate', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(6);
+    expect(parsed.data?.version).toBe(7);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -235,7 +235,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(6);
+    expect(settings.version).toBe(7);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -261,7 +261,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(6);
+    expect(settings.version).toBe(7);
     expect(settings.roundLength).toBe(12);
   });
 
@@ -280,15 +280,15 @@ describe('migrate', () => {
     const v2 = v3Settings({ version: 2, roundLength: 7, rulerLevelStart: 3 });
     delete v2.exactHit;
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
-    expect(migrated).toEqual({ ...v2, version: 6, roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' });
+    expect(migrated).toEqual({ ...v2, version: 7, roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' });
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 6, roundType: 'untilHearts', garage: true });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 7, roundType: 'untilHearts', garage: true });
   });
 
   it('turns version 3 settings into version 6: exactHit dropped, roundType, showClock, showRecords and garage added (amendments 06 and 11)', () => {
     const v3 = v3Settings({ exactHit: true, rulerLevelStart: 2 });
     const migrated = migrate(v3, 'settings') as Record<string, unknown>;
-    const expected: Record<string, unknown> = { ...v3, version: 6, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true, garage: true, numberPad: 'auto' };
+    const expected: Record<string, unknown> = { ...v3, version: 7, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true, garage: true, numberPad: 'auto' };
     delete expected.exactHit;
     expect(migrated).toEqual(expected);
     const parsed = settingsSchema.safeParse(migrated);
@@ -309,7 +309,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 6, roundType: 'untilHearts', freePlay: true });
+    expect(settings).toMatchObject({ version: 7, roundType: 'untilHearts', freePlay: true });
     expect('exactHit' in settings).toBe(false);
   });
 
@@ -318,7 +318,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 6, roundType: 'enemyCount', noDamage: true });
+    expect(settings).toMatchObject({ version: 7, roundType: 'enemyCount', noDamage: true });
   });
 
   it('turns version 4 settings into version 6 with garage on, and keeps a stored garage value (amendment 11)', () => {
@@ -326,18 +326,18 @@ describe('migrate', () => {
     delete v4.garage;
     delete v4.numberPad;
     const migrated = migrate(v4, 'settings');
-    expect(migrated).toEqual({ ...v4, version: 6, garage: true, numberPad: 'auto' });
+    expect(migrated).toEqual({ ...v4, version: 7, garage: true, numberPad: 'auto' });
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 6, garage: false });
+    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 7, garage: false });
   });
 
   it('turns version 5 settings into version 6 with numberPad auto, and keeps a stored numberPad value (amendment 12)', () => {
     const v5: Record<string, unknown> = { ...defaultSettings(), version: 5, garage: false };
     delete v5.numberPad;
     const migrated = migrate(v5, 'settings');
-    expect(migrated).toEqual({ ...v5, version: 6, numberPad: 'auto' });
+    expect(migrated).toEqual({ ...v5, version: 7, numberPad: 'auto' });
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 6, numberPad: 'always' });
+    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 7, numberPad: 'always' });
   });
 
   it('loadSettings upgrades stored version 5 settings without a reset (amendment 12)', () => {
@@ -347,11 +347,25 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v5));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 6, numberPad: 'auto', freePlay: true });
+    expect(settings).toMatchObject({ version: 7, numberPad: 'auto', freePlay: true });
   });
 
-  it('leaves version 6 settings unchanged', () => {
-    const s = { ...defaultSettings(), roundType: 'enemyCount' as const, showClock: true, garage: false };
+  it('version 6 becomes version 7 with reading aloud turned off once (PO1)', () => {
+    const v6 = { ...defaultSettings(), version: 6, sound: { effects: false, music: true, speech: true }, showClock: true };
+    expect(migrate(v6, 'settings')).toEqual({ ...v6, version: 7, sound: { effects: false, music: true, speech: false } });
+  });
+
+  it('loadSettings turns reading aloud off in stored version 6 settings, and keeps it on when the parent turns it on again (PO1)', () => {
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...defaultSettings(), version: 6, sound: { effects: true, music: false, speech: true } }) });
+    const first = loadSettings(kv);
+    expect(first.resetReason).toBe('none');
+    expect(first.settings.sound.speech).toBe(false);
+    saveSettings(kv, { ...first.settings, sound: { ...first.settings.sound, speech: true } });
+    expect(loadSettings(kv).settings.sound.speech).toBe(true);
+  });
+
+  it('leaves version 7 settings unchanged', () => {
+    const s = { ...defaultSettings(), roundType: 'enemyCount' as const, showClock: true, garage: false, sound: { effects: true, music: false, speech: true } };
     expect(migrate(s, 'settings')).toEqual(s);
   });
 

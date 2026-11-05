@@ -8,7 +8,7 @@ import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings
  * `exactHit` added, default false). Version 3 becomes version 4 (amendment 06: `exactHit` dropped, `roundType`,
  * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Version 4 becomes version 5
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
- * 'auto'). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -19,12 +19,21 @@ export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   return version === 0 ? migrateProgressV0(raw) : raw;
 }
 
+/** Each step upgrades one version; older settings go through every later step in order. */
+const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unknown>> = [
+  migrateSettingsToV2, // from 0 and 1
+  migrateSettingsToV3,
+  migrateSettingsToV4,
+  migrateSettingsToV5,
+  migrateSettingsToV6,
+  migrateSettingsToV7,
+];
+
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
-  if (version === 0 || version === 1) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw)))));
-  if (version === 2) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(raw))));
-  if (version === 3) return migrateSettingsToV6(migrateSettingsToV5(migrateSettingsToV4(raw)));
-  if (version === 4) return migrateSettingsToV6(migrateSettingsToV5(raw));
-  return version === 5 ? migrateSettingsToV6(raw) : raw;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0) return raw;
+  // Step i turns version i + 1 into version i + 2; versions 0 and 1 both start at the first step.
+  const first = Math.max(0, version - 1);
+  return SETTINGS_STEPS.slice(first).reduce((r, step) => step(r), raw);
 }
 
 /**
@@ -109,6 +118,16 @@ function migrateSettingsToV5(raw: Record<string, unknown>): Record<string, unkno
 /** Version 5 to 6 (amendment 12): adds "Zahlenfeld", automatic unless already set. */
 function migrateSettingsToV6(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, numberPad: raw.numberPad ?? 'auto', version: 6 };
+}
+
+/**
+ * Version 6 to 7 (PO1, "I do not want a sound of reading the question out loud"): "Vorlesen" is now off by default,
+ * and stored settings get it turned off once; a parent who turns it on again keeps it on, because version 7 settings
+ * are not migrated.
+ */
+function migrateSettingsToV7(raw: Record<string, unknown>): Record<string, unknown> {
+  const sound = isRecord(raw.sound) ? { ...raw.sound, speech: false } : raw.sound;
+  return { ...raw, sound, version: 7 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

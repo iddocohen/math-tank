@@ -3,7 +3,7 @@ import type { Challenge, Settings } from '../types';
 import { arithmeticErrors } from './arithmetic';
 import { comparisonErrors } from './comparison';
 import { minEnemyGap } from './gaps';
-import { movementAllowed, rangeMajorStep } from './numberLine';
+import { isRangeEnd, MIN_STEP_COUNT, movementAllowed, rangeMajorStep } from './numberLine';
 import { readPositionAnswers } from './readPosition';
 
 /** Returns one message per broken rule; empty when the challenge is valid. */
@@ -43,9 +43,11 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
       break;
     case 'after':
       expect(p.n !== undefined && c.answer === p.n + 1, 'after: answer is not the next number');
+      expect(!isRangeEnd(c.answer, settings), 'after: answer is a range end');
       break;
     case 'before':
       expect(p.n !== undefined && c.answer === p.n - 1, 'before: answer is not the previous number');
+      expect(!isRangeEnd(c.answer, settings), 'before: answer is a range end');
       break;
     case 'stepsRight':
     case 'stepsLeft': {
@@ -56,6 +58,10 @@ export function validateChallenge(c: Challenge, settings: Settings, playerPositi
         break;
       }
       expect(c.answer === n + direction * k, `${c.kind}: answer does not follow from start and steps`);
+      // PO3: at least 2 steps, never as many steps as the start number, and no answer at a range end.
+      expect(k >= MIN_STEP_COUNT, `${c.kind}: fewer than ${MIN_STEP_COUNT} steps`);
+      expect(k !== n, `${c.kind}: the step count equals the start`);
+      expect(!isRangeEnd(c.answer, settings), `${c.kind}: answer is a range end`);
       expect(movementAllowed(n, c.answer, settings), `${c.kind}: crosses a ten or hundred that the settings forbid`);
       break;
     }

@@ -32,6 +32,12 @@ export const DEFAULT_MAX_STEP_COUNT = 10;
 
 const inRange = (n: number, s: Settings) => Number.isInteger(n) && n >= s.range.min && n <= s.range.max;
 
+/**
+ * PO3: an answer that the child finds without the question, because the ruler always labels the range ends, is not
+ * used by "after", "before" and the step kinds; "missingBetween" never reaches the ends anyway.
+ */
+export const isRangeEnd = (n: number, s: Settings) => n === s.range.min || n === s.range.max;
+
 /** Whether moving from `a` to `b` one step at a time is allowed by the crossing settings and the step. */
 export function movementAllowed(a: number, b: number, settings: Settings, step?: DifficultyStep): boolean {
   const crossTens = settings.crossTens && (step?.allowCrossTens ?? true);
@@ -47,12 +53,13 @@ export function rangeMajorStep(settings: Settings): number {
 
 function steps(direction: 1 | -1): Builder {
   return (answer, settings, step, rng) => {
-    if (!inRange(answer, settings)) return null;
+    if (!inRange(answer, settings) || isRangeEnd(answer, settings)) return null;
     const maxK = Math.max(MIN_STEP_COUNT, Math.min(step.maxOperand ?? DEFAULT_MAX_STEP_COUNT, DEFAULT_MAX_STEP_COUNT));
     const options: number[] = [];
     for (let k = MIN_STEP_COUNT; k <= maxK; k++) {
       const start = answer - direction * k;
-      if (inRange(start, settings) && movementAllowed(start, answer, settings, step)) options.push(k);
+      // PO3: "Von 2 aus 2 Schritte" reads as if the start and the count were mixed up; never the same number.
+      if (k !== start && inRange(start, settings) && movementAllowed(start, answer, settings, step)) options.push(k);
     }
     if (options.length === 0) return null;
     const k = rng.pick(options);
@@ -70,13 +77,13 @@ export const numberLineBuilders: Record<NumberLineKind, Builder> = {
 
   after: (answer, settings) => {
     const n = answer - 1;
-    if (!inRange(answer, settings) || !inRange(n, settings)) return null;
+    if (!inRange(answer, settings) || !inRange(n, settings) || isRangeEnd(answer, settings)) return null;
     return { kind: 'after', prompt: { key: 'after', params: { n } }, operands: [n], answer };
   },
 
   before: (answer, settings) => {
     const n = answer + 1;
-    if (!inRange(answer, settings) || !inRange(n, settings)) return null;
+    if (!inRange(answer, settings) || !inRange(n, settings) || isRangeEnd(answer, settings)) return null;
     return { kind: 'before', prompt: { key: 'before', params: { n } }, operands: [n], answer };
   },
 

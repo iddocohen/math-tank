@@ -47,6 +47,8 @@ export default defineConfig({
           name: 'jsdom',
           environment: 'jsdom',
           include: ['src/app/**/*.test.{ts,tsx}'],
+          // src/app/safeArea.test.ts reads the stylesheet as text (PO2); other CSS stays empty in tests.
+          css: { include: [/src\/app\/styles\.css/] },
         },
       },
     ],

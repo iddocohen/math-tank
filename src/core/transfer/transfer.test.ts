@@ -253,15 +253,16 @@ describe('invalid codes change nothing (FR-120)', () => {
 });
 
 describe('migration of an older transfer (FR-120)', () => {
-  it('a version 1 code with settings version 5 is migrated to settings version 6', async () => {
+  it('a version 1 code with settings version 5 is migrated to the current settings version', async () => {
     const { numberPad: _drop, ...v5 } = settings();
     void _drop;
     const old = { ...toTransfer(data()), settings: { ...v5, version: 5 } };
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(6);
+    expect(dec.data.settings.version).toBe(7);
     expect(dec.data.settings.numberPad).toBe('auto');
+    expect(dec.data.settings.sound.speech).toBe(false);
     expect(dec.data.settings.range).toEqual(settings().range);
   });
 

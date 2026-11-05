@@ -3,6 +3,12 @@
  * another language adds a file of type `Messages` with the same shape.
  * Child-facing strings must never contain a word from `forbiddenWords` (FR-033).
  */
+
+/** "1 Schritt" or "n Schritte". */
+function stepCount(n: number): string {
+  return n === 1 ? '1 Schritt' : `${n} Schritte`;
+}
+
 export const de = {
   appName: 'Mathe-Panzer',
 
@@ -109,8 +115,9 @@ export const de = {
     findNumber: (n: number) => `Finde ${n}`,
     after: (n: number) => `Welche Zahl kommt direkt nach ${n}?`,
     before: (n: number) => `Welche Zahl kommt direkt vor ${n}?`,
-    stepsRight: (n: number, k: number) => `Von ${n} aus ${k === 1 ? '1 Schritt' : `${k} Schritte`} nach rechts.`,
-    stepsLeft: (n: number, k: number) => `Von ${n} aus ${k === 1 ? '1 Schritt' : `${k} Schritte`} nach links.`,
+    /** PO3: worded like the other "Der Gegner ..." banners; "Von 2 aus 2 Schritte nach links." read as illogical. */
+    stepsRight: (n: number, k: number) => `Der Gegner steht ${stepCount(k)} rechts von ${n}.`,
+    stepsLeft: (n: number, k: number) => `Der Gegner steht ${stepCount(k)} links von ${n}.`,
     missingBetween: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
     midpoint: (a: number, b: number) => `Welche Zahl liegt mitten zwischen ${a} und ${b}?`,
     readPosition: 'Wo steht der Gegner?',

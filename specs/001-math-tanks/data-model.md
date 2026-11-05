@@ -6,7 +6,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `6` | `6` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; `migrate` upgrades version 0 to 5 data (see below) |
+| `version` | `7` | `7` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; `migrate` upgrades version 0 to 6 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true`, or `freePlay` is `true` (FR-047) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -19,7 +19,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `enemyDifficulty` | `'easy' \| 'normal' \| 'challenging'` | `'easy'` | |
 | `help` | `{ nearestTen: boolean; countSteps: boolean; zoom: boolean; stepAnimation: boolean }` | all `true` | Showing the solution is always on (FR-032) |
 | `beginnerAssist` | `boolean` | `true` | Splits addition and subtraction animations at ten boundaries (FR-024) |
-| `sound` | `{ effects: boolean; music: boolean; speech: boolean }` | `true`, `false`, `true` | |
+| `sound` | `{ effects: boolean; music: boolean; speech: boolean }` | `true`, `false`, `false` | `speech` ("Vorlesen") is off by default since version 7 (PO1) |
 | `roundType` | `'untilHearts' \| 'enemyCount'` | `'untilHearts'` | How a round ends (FR-082): "Bis alle Herzen weg" or "Gegner pro Runde". `'untilHearts'` with `noDamage: true` is invalid (it would never end) |
 | `roundLength` | `number` | `5` | Enemies per round for `roundType: 'enemyCount'`, whole number 1 to 20 (amendment 06). Ignored for `'untilHearts'` |
 | `adaptive` | `boolean` | `true` | |
@@ -42,6 +42,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 4** (amendment 11): `garage` is added with `true` unless already set; `version` becomes 5. Version 0 to 3 data go through every step.
 
 **Migration from version 5** (amendment 12): `numberPad` is added with `'auto'` unless already set; `version` becomes 6. Version 0 to 4 data go through every step.
+
+**Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
 `withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 6 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12).
+ * Structural schema for persisted settings, version 7 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -16,7 +16,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(6),
+  version: z.literal(7),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),

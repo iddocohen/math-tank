@@ -128,8 +128,10 @@ describe('de table', () => {
     expect(c.before(41)).toBe('Welche Zahl kommt direkt vor 41?');
     const prompts = [c.findNumber(37), c.after(41), c.before(41), c.stepsRight(40, 3), c.stepsLeft(40, 3), c.missingBetween(40, 42), c.midpoint(40, 60)];
     for (const p of prompts) expect(wordCount(p), p).toBeLessThanOrEqual(8);
-    expect(c.stepsRight(40, 3)).toContain('40');
-    expect(c.stepsRight(40, 1)).toContain('1 Schritt ');
+    // PO3: like the other "Der Gegner ..." banners, and never "Von 2 aus 2 Schritte nach links."
+    expect(c.stepsLeft(26, 3)).toBe('Der Gegner steht 3 Schritte links von 26.');
+    expect(c.stepsRight(26, 3)).toBe('Der Gegner steht 3 Schritte rechts von 26.');
+    expect(c.stepsRight(40, 1)).toBe('Der Gegner steht 1 Schritt rechts von 40.');
     expect(c.midpoint(40, 60)).toMatch(/40.*60/);
   });
 

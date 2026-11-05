@@ -104,6 +104,23 @@ describe('validateChallenge (FR-029)', () => {
     expect(validateChallenge(c, { ...wide, crossHundreds: false }, 0).length).toBeGreaterThan(0);
   });
 
+  it('reports a steps challenge whose step count equals the start, has fewer than 2 steps or ends on a range end (PO3)', () => {
+    const steps = (kind: 'stepsLeft' | 'stepsRight', n: number, k: number) =>
+      challenge({ kind, prompt: { key: kind, params: { n, k } }, operands: [n], answer: kind === 'stepsRight' ? n + k : n - k });
+    expect(validateChallenge(steps('stepsRight', 30, 3), settings, 0)).toEqual([]);
+    expect(validateChallenge(steps('stepsRight', 20, 20), settings, 0).length).toBeGreaterThan(0);
+    expect(validateChallenge(steps('stepsRight', 30, 1), settings, 0).length).toBeGreaterThan(0);
+    expect(validateChallenge(steps('stepsRight', 97, 3), settings, 0).length).toBeGreaterThan(0);
+    expect(validateChallenge(steps('stepsLeft', 3, 3), settings, 100).length).toBeGreaterThan(0);
+  });
+
+  it('reports an after or before challenge whose answer is a range end (PO3)', () => {
+    const after = challenge({ kind: 'after', prompt: { key: 'after', params: { n: 99 } }, operands: [99], answer: 100 });
+    const before = challenge({ kind: 'before', prompt: { key: 'before', params: { n: 1 } }, operands: [1], answer: 0 });
+    expect(validateChallenge(after, settings, 0).length).toBeGreaterThan(0);
+    expect(validateChallenge(before, settings, 100).length).toBeGreaterThan(0);
+  });
+
   it('reports a midpoint that is not between two neighboring major ticks', () => {
     const c = challenge({
       kind: 'midpoint',

@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 6,
+      version: 7,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -33,7 +33,8 @@ describe('defaults', () => {
       enemyDifficulty: 'easy',
       help: { nearestTen: true, countSteps: true, zoom: true, stepAnimation: true },
       beginnerAssist: true,
-      sound: { effects: true, music: false, speech: true },
+      // PO1: reading aloud is off unless the parent turns on "Vorlesen".
+      sound: { effects: true, music: false, speech: false },
       roundType: 'untilHearts',
       roundLength: 5,
       adaptive: true,

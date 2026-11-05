@@ -149,10 +149,14 @@ input:focus-visible {
   outline: none;
 }
 
-/* The canvas fills the space above the control bar, so no control covers the ruler. */
+/*
+ * The canvas fills the space above the control bar, so no control covers the ruler. PO2: it keeps out of the left and
+ * right safe-area insets (the notch and rounded corners of a phone held sideways), so the player's tank is never under
+ * the notch; the pad column's width already holds the right inset.
+ */
 .game-parent {
   position: absolute;
-  inset: 0 var(--controls-width) var(--controls-height) 0;
+  inset: 0 max(var(--controls-width), env(safe-area-inset-right)) var(--controls-height) env(safe-area-inset-left);
 }
 
 .app-root {
@@ -1117,6 +1121,11 @@ input:focus-visible {
 .battle[data-layout='side'][data-number-pad='true'] {
   --controls-height: 0px;
   --controls-width: calc(204px + env(safe-area-inset-right));
+}
+
+/* PO2: with no bottom bar, the battlefield keeps out of the home bar at the bottom. */
+.battle[data-layout='side'][data-number-pad='true'] .game-parent {
+  bottom: env(safe-area-inset-bottom);
 }
 
 .battle[data-layout='side'][data-number-pad='true'] .controls {

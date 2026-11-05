@@ -81,6 +81,16 @@ describe('number-line builders (FR-021)', () => {
     expect(c!.operands).toEqual([n]);
   });
 
+  it('"2 steps to the left from 2" can no longer occur: no step count equals the start, no answer is a range end (PO3)', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      // Answer 0 is the range start: refused.
+      expect(numberLineBuilders.stepsLeft(0, s, FULL_STEP, createRng(seed))).toBeNull();
+      // Answer 4 to the right: the start 2 with 2 steps is never chosen.
+      const c = numberLineBuilders.stepsRight(4, s, FULL_STEP, createRng(seed));
+      if (c) expect(c.prompt.params.k).not.toBe(c.prompt.params.n);
+    }
+  });
+
   it('stepsLeft starts k steps right of the answer', () => {
     const c = numberLineBuilders.stepsLeft(46, s, FULL_STEP, rng());
     expect(c).not.toBeNull();
@@ -233,4 +243,42 @@ describe('generateChallenge for number-line kinds (FR-021, FR-028)', () => {
     for (let seed = 0; seed < 500; seed++) kinds.add(generateChallenge({ ...all, roundSeed: seed }).kind);
     expect([...kinds].sort()).toEqual([...NUMBER_LINE_KINDS, 'readPosition'].sort());
   });
+});
+
+describe('number-line challenge rules over presets and seeds (PO3, FR-021)', () => {
+  const ranges: Array<[number, number]> = [
+    [0, 10],
+    [0, 20],
+    [0, 50],
+    [0, 100],
+    [0, 1000],
+    [-20, 30],
+    [550, 780],
+  ];
+  const kinds = ['after', 'before', 'stepsRight', 'stepsLeft', 'missingBetween'] as const;
+
+  for (const [min, max] of ranges) {
+    it(`${min} to ${max}: the answer is never a range end; steps have at least 2 steps, never as many as the start`, () => {
+      const settings = settingsFor(min, max, {
+        challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false },
+        negativeResults: min < 0,
+      });
+      for (const kind of kinds) {
+        for (let seed = 1; seed <= 60; seed++) {
+          for (const player of [min, max, Math.round((min + max) / 2)]) {
+            const c = generateChallenge(input(settings, kind, seed, player));
+            if (c.kind !== kind) continue;
+            expect(c.answer, `${kind} seed ${seed}`).not.toBe(min);
+            expect(c.answer, `${kind} seed ${seed}`).not.toBe(max);
+            if (kind === 'stepsRight' || kind === 'stepsLeft') {
+              const { n, k } = c.prompt.params as { n: number; k: number };
+              expect(k).toBeGreaterThanOrEqual(2);
+              expect(k, `${kind} seed ${seed}: ${k} steps from ${n}`).not.toBe(n);
+              expect(c.answer).not.toBe(n);
+            }
+          }
+        }
+      }
+    });
+  }
 });
