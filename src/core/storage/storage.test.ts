@@ -53,7 +53,6 @@ function sampleProgress(): Progress {
         difficultyStep: 2,
         solved: true,
         independent: false,
-        exact: false,
         helpLevel: 1,
         wrongAnswers: 1,
         responseMs: 5300,
@@ -407,14 +406,14 @@ describe('migrate', () => {
     expect(migrate(s, 'settings')).toEqual(s);
   });
 
-  it('the progress schema accepts the outcome close and attempts with or without exact (missing means true)', () => {
+  it('the progress schema accepts the outcome close and attempts with or without the old exact field', () => {
     const p = sampleProgress();
     expect(progressSchema.safeParse(p).success).toBe(true);
     const old: Record<string, unknown> = { ...p.attempts[0]! };
     delete old.exact;
     const parsed = progressSchema.safeParse({ ...p, attempts: [old] });
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.attempts[0]?.exact).toBe(true);
+    expect(progressSchema.safeParse({ ...p, attempts: [{ ...p.attempts[0]!, exact: true }] }).success).toBe(true);
     const bad = { ...p, skills: { 'x|0-100': { ...p.skills['subtraction|0-100']!, recent: ['nearly'] } } };
     expect(progressSchema.safeParse(bad).success).toBe(false);
   });

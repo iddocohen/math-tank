@@ -7,6 +7,7 @@
  * the side. The input holds the streak and the difficulty, never answers, help or challenge data (FR-042).
  */
 import { createRng, deriveSeed } from '../rng';
+import { clamp } from '../util';
 import type { Heightmap, Point, Settings } from '../types';
 import { solveArcToX } from '../physics/arc';
 
@@ -56,7 +57,7 @@ export function planEnemyShot(input: EnemyPlanInput): EnemyPlan {
   const hits = shotIndexInRound > 0 && missStreak >= HIT_STREAK[difficulty];
   if (hits) return { hits, targetX: playerX };
   const sideDraw = createRng(deriveSeed(roundSeed, 6, shotIndexInRound)).next();
-  const distance = ZERO_IN_DISTANCE[Math.min(Math.max(missStreak, 1), ZERO_IN_DISTANCE.length) - 1]!;
+  const distance = ZERO_IN_DISTANCE[clamp(missStreak, 1, ZERO_IN_DISTANCE.length) - 1]!;
   const side = sideDraw < 0.5 ? -1 : 1;
   const x = playerX + side * distance;
   // A side outside the battlefield gives way to the other side.

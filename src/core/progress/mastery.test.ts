@@ -54,7 +54,6 @@ describe('skillStatus (FR-039, FR-075, US7 scenario 4)', () => {
         difficultyStep: 0,
         solved: true,
         independent: true,
-        exact: true,
         helpLevel: 0,
         wrongAnswers: 0,
         responseMs: 4000,

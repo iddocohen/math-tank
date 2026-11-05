@@ -117,14 +117,13 @@ describe('sfx', () => {
   });
 
   it('a landing plays only the soft boom, a hit adds the soft chime, and a miss adds nothing (FR-009, AC-07)', () => {
-    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false })).toEqual(['boom']);
-    expect(landingSounds({ outOfBounds: false, destroyedEnemy: true })).toEqual(['boom', 'chime']);
-    expect(landingSounds({ outOfBounds: true, destroyedEnemy: false })).toEqual([]);
+    expect(landingSounds({ destroyedEnemy: false })).toEqual(['boom']);
+    expect(landingSounds({ destroyedEnemy: true })).toEqual(['boom', 'chime']);
   });
 
   it('a burst decoy plays only the light plopp, clearly different from the enemy explosion (amendment 10, FR-066)', () => {
-    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: true })).toEqual(['plopp']);
-    expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: false })).toEqual(['boom']);
+    expect(landingSounds({ destroyedEnemy: false, burstDecoy: true })).toEqual(['plopp']);
+    expect(landingSounds({ destroyedEnemy: false, burstDecoy: false })).toEqual(['boom']);
   });
 });
 

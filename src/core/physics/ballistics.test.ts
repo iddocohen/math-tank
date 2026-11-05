@@ -5,7 +5,7 @@ import { generateTerrain, surfaceY } from './terrain';
 const W = 1600;
 const H = 900;
 const flat = new Float32Array(W).fill(200);
-const base = { origin: { x: 200, y: 200 }, terrain: flat, targets: [], worldWidth: W, worldHeight: H };
+const base = { origin: { x: 200, y: 200 }, terrain: flat, worldWidth: W, worldHeight: H };
 
 describe('simulateShot', () => {
   it('uses a fixed step of 1/120 s and constant gravity', () => {
@@ -34,31 +34,22 @@ describe('simulateShot', () => {
     const terrain = generateTerrain(5, W, H);
     for (const [angleDeg, power] of [[30, 40], [45, 55], [70, 35], [120, 50]] as const) {
       const r = simulateShot({ ...base, terrain, origin: { x: 800, y: surfaceY(terrain, 800) + 10 }, angleDeg, power });
-      expect(r.outOfBounds).toBe(false);
-      expect(r.hitTargetId).toBeNull();
+      expect(r.impact.x).toBeGreaterThan(0);
+      expect(r.impact.x).toBeLessThan(W);
       expect(r.impact.y).toBeCloseTo(surfaceY(terrain, r.impact.x), 3);
       expect(r.path[r.path.length - 1]).toEqual(r.impact);
     }
   });
 
-  it('returns the id of a target it hits, with the impact on that target', () => {
-    const miss = simulateShot({ ...base, angleDeg: 45, power: 50 });
-    const target = { id: 'enemy', x: miss.impact.x, y: 215, radius: 20 };
-    const r = simulateShot({ ...base, angleDeg: 45, power: 50, targets: [{ id: 'other', x: 1500, y: 215, radius: 20 }, target] });
-    expect(r.hitTargetId).toBe('enemy');
-    expect(Math.hypot(r.impact.x - target.x, r.impact.y - target.y)).toBeLessThanOrEqual(target.radius + 1e-6);
-  });
-
-  it('reports a shell that leaves the right edge, clamped to the edge', () => {
+  it('stops a shell that leaves the right edge at the edge, in the air', () => {
     const r = simulateShot({ ...base, angleDeg: 45, power: 100 });
-    expect(r.outOfBounds).toBe(true);
-    expect(r.hitTargetId).toBeNull();
     expect(r.impact.x).toBe(W);
+    expect(r.impact.y).toBeGreaterThan(surfaceY(flat, W));
   });
 
-  it('reports a shell that leaves the left edge, clamped to the edge', () => {
+  it('stops a shell that leaves the left edge at the edge, in the air', () => {
     const r = simulateShot({ ...base, angleDeg: 135, power: 100 });
-    expect(r.outOfBounds).toBe(true);
     expect(r.impact.x).toBe(0);
+    expect(r.impact.y).toBeGreaterThan(surfaceY(flat, 0));
   });
 });

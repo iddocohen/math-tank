@@ -139,10 +139,4 @@ export class Effects {
   hitFlash(tank: TankView): void {
     tank.flash();
   }
-
-  /** Small puff where a shell left the battlefield; nothing explodes there. */
-  puff(x: number, y: number): void {
-    const dot = this.scene.add.circle(x, y, 14, 0xffffff, 0.6).setDepth(20);
-    this.scene.tweens.add({ targets: dot, scale: 2, alpha: 0, duration: 400, onComplete: () => dot.destroy() });
-  }
 }

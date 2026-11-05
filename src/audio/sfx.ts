@@ -56,11 +56,9 @@ export interface Sfx {
 /**
  * The sounds of a shell landing (FR-009, AC-07): every explosion plays the same soft boom, a miss included, and a
  * shot that destroyed the enemy adds the soft chime. A shot that burst a decoy plays only the light plopp, clearly
- * different from the enemy's explosion (amendment 10). A shell that left the battlefield makes no sound. There is no
- * other sound for a miss.
+ * different from the enemy's explosion (amendment 10). There is no other sound for a miss.
  */
-export function landingSounds(landing: { outOfBounds: boolean; destroyedEnemy: boolean; burstDecoy?: boolean }): Array<'boom' | 'chime' | 'plopp'> {
-  if (landing.outOfBounds) return [];
+export function landingSounds(landing: { destroyedEnemy: boolean; burstDecoy?: boolean }): Array<'boom' | 'chime' | 'plopp'> {
   if (landing.burstDecoy) return ['plopp'];
   return landing.destroyedEnemy ? ['boom', 'chime'] : ['boom'];
 }

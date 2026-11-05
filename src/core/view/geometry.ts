@@ -4,7 +4,7 @@
  * Physics coordinates: x to the right, y upward from the bottom of the world (terrain.ts).
  * Screen coordinates: x to the right, y downward from the top. Only toScreenY converts between them.
  */
-import type { Heightmap, Point, ShotInFlight } from '../types';
+import type { Heightmap, Point } from '../types';
 import { STEP } from '../physics/ballistics';
 
 export function toScreenY(y: number, worldHeight: number): number {
@@ -90,16 +90,4 @@ export function dottedTrail(path: readonly Point[], spacing: number): Point[] {
     carry = len - (d - spacing);
   }
   return dots;
-}
-
-export interface EdgeMarker {
-  x: number;
-  y: number;
-  side: 'left' | 'right';
-}
-
-/** Where an out-of-bounds shell crossed the side edge (US1 scenario 6); null if it landed inside. */
-export function edgeMarker(shot: Pick<ShotInFlight, 'outOfBounds' | 'impact'>, worldWidth: number): EdgeMarker | null {
-  if (!shot.outOfBounds) return null;
-  return { x: shot.impact.x, y: shot.impact.y, side: shot.impact.x >= worldWidth / 2 ? 'right' : 'left' };
 }

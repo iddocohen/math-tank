@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as damage from '../physics/damage';
 import * as hitRule from './hitRule';
 import type { TankState } from '../types';
-import { bodyHalfWidth, enemyHitsPlayer, LIVES, shotKind } from './hitRule';
+import { bodyHalfWidth, landsOnBody, LIVES, shotKind } from './hitRule';
 
 const r = (min: number, max: number) => ({ min, max });
 
@@ -59,22 +59,14 @@ describe('shotKind (amendment 06, FR-066)', () => {
   });
 });
 
-describe('enemyHitsPlayer (amendment 06, FR-006)', () => {
+describe('landsOnBody (amendment 06, FR-006)', () => {
   const player: TankState = { id: 'player', kind: 'player', position: 0, x: 200, y: 300, alive: true };
 
-  it('an enemy shot decided as a hit (hitTargetId) hits the player', () => {
-    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'player', player)).toBe(true);
-  });
-
-  it('a shell within half the tank width of the player\'s x hits, one unit further does not', () => {
-    expect(enemyHitsPlayer({ x: 230, y: 300 }, null, player)).toBe(true);
-    expect(enemyHitsPlayer({ x: 170, y: 300 }, null, player)).toBe(true);
-    expect(enemyHitsPlayer({ x: 231, y: 300 }, null, player)).toBe(false);
-    expect(enemyHitsPlayer({ x: 169, y: 300 }, null, player)).toBe(false);
-  });
-
-  it('another tank as target is not a hit on the player', () => {
-    expect(enemyHitsPlayer({ x: 900, y: 300 }, 'other-1', player)).toBe(false);
+  it('a shell within half the tank width of the tank\'s x lands on its body, one unit further does not', () => {
+    expect(landsOnBody({ x: 230, y: 300 }, player)).toBe(true);
+    expect(landsOnBody({ x: 170, y: 300 }, player)).toBe(true);
+    expect(landsOnBody({ x: 231, y: 300 }, player)).toBe(false);
+    expect(landsOnBody({ x: 169, y: 300 }, player)).toBe(false);
   });
 });
 

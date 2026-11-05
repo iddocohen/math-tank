@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { generateTerrain, surfaceY } from '../physics/terrain';
 import { TANK_WIDTH } from '../math/gaps';
-import { enemyHitsPlayer } from '../battle/hitRule';
+import { landsOnBody } from '../battle/hitRule';
 import { createRound, muzzle } from '../battle/round';
 import { defaultSettings } from '../settings/defaults';
 import {
@@ -62,7 +62,7 @@ describe('enemy zeroes in on misses in a row (amendment 13, FR-041, FR-043, FR-0
           const d = Math.abs(p.targetX - 800);
           expect(d).toBe(expectedDistance(streak));
           expect(d).toBeLessThanOrEqual(previous);
-          expect(enemyHitsPlayer({ x: p.targetX, y: 0 }, null, { id: 'player', kind: 'player', position: 0, x: 800, y: 0, alive: true })).toBe(false);
+          expect(landsOnBody({ x: p.targetX, y: 0 }, { id: 'player', kind: 'player', position: 0, x: 800, y: 0, alive: true })).toBe(false);
           previous = d;
           sides.add(Math.sign(p.targetX - 800));
         }
@@ -130,7 +130,7 @@ describe('enemyShot path (amendments 07 and 13)', () => {
         expect(shot.path[0]).toEqual(origin);
         expect(Math.abs(shot.impact.x - shot.targetX)).toBeLessThanOrEqual(0.5);
         expect(shot.impact.y).toBeCloseTo(surfaceY(round.terrain, shot.impact.x), 0);
-        expect(enemyHitsPlayer(shot.impact, null, round.player)).toBe(shot.hits);
+        expect(landsOnBody(shot.impact, round.player)).toBe(shot.hits);
         if (shot.hits) hits++;
         else misses++;
       }

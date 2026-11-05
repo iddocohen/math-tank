@@ -58,7 +58,6 @@ function attempt(i: number): Attempt {
     difficultyStep: 1,
     solved: true,
     independent: true,
-    exact: true,
     helpLevel: 0,
     wrongAnswers: 0,
     responseMs: 4000,

@@ -9,6 +9,7 @@ import {
   TIME_LIMIT_MAX,
   TIME_LIMIT_MIN,
 } from './defaults';
+import { clamp } from '../util';
 import type { Settings, SettingsRange } from './schema';
 
 /** Keys of `settingsErrors` in the translation table (src/i18n/de.ts). */
@@ -100,9 +101,6 @@ export function validateSettings(s: Settings): SettingsValidation {
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(Math.max(n, lo), hi);
-}
 
 /**
  * Returns settings with the new range and the linked limits clamped to fit it,

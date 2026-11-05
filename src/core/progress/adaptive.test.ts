@@ -31,7 +31,6 @@ function attempt(kind: Kind, skills: Skill[] = ['positions'], extra: Partial<Att
     difficultyStep: 0,
     solved: kind !== 'unsolved',
     independent: kind === 'independent' || kind === 'guess',
-    exact: true,
     helpLevel: kind === 'unsolved' ? 3 : kind === 'assisted' ? 1 : 0,
     wrongAnswers: 0,
     responseMs: kind === 'guess' ? 800 : 4000,

@@ -5,7 +5,6 @@
  * The form is checked with `validateSettings` on every change; errors appear next to their fields and "Speichern"
  * stays disabled while any error exists. A range change goes through `withRange`, starting from the limits the
  * parent last chose, so typing a custom range digit by digit does not shrink the limits for good (FR-047).
- * Fields listed in comingSoon.ts are shown disabled with "kommt bald" and keep their stored values (FR-079).
  * Saving writes through persistence.ts and hands the settings to the app, which passes them to
  * `controller.updateSettings`, so they apply from the next round (FR-049).
  *
@@ -28,7 +27,6 @@ import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/setti
 import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
 import { validateSettings, withRange } from '../core/settings/validate';
 import { t } from '../i18n';
-import { isComingSoon, type SettingField } from './comingSoon';
 import type { DataKind, Persistence } from './persistence';
 import { RulerPreview } from './RulerPreview';
 
@@ -44,6 +42,12 @@ interface Props {
 
 /** The limits the parent last chose; range changes clamp from these (FR-047). */
 type Limits = Pick<Settings, 'range' | 'addition' | 'subtraction'>;
+
+/** A setting that is on or off, as its path: a top-level switch or `group.switch` (A12). */
+type FlagGroup = 'challengeTypes' | 'playModes' | 'help' | 'sound';
+type FlagPath =
+  | { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings]
+  | { [G in FlagGroup]: `${G}.${Extract<keyof Settings[G], string>}` }[FlagGroup];
 
 type Notice = { kind: 'ok' | 'warn'; text: string } | null;
 
@@ -109,6 +113,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     setNotice(null);
   };
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => update({ ...draft, [key]: value });
+  /** The checked state and change handler of the checkbox for one on/off setting, top level or in a group. */
+  const bind = (path: FlagPath) => {
+    const [key, inner] = path.split('.') as [keyof Settings, string | undefined];
+    if (inner === undefined) return { checked: draft[key] as boolean, onChange: (v: boolean) => set(key, v as never) };
+    const group = draft[key] as unknown as Record<string, boolean>;
+    return { checked: group[inner] === true, onChange: (v: boolean) => set(key, { ...group, [inner]: v } as never) };
+  };
 
   const applyRange = (range: SettingsRange) => {
     const usable = Number.isInteger(range.min) && Number.isInteger(range.max) && range.min < range.max;
@@ -126,8 +137,9 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
 
   const save = () => {
     if (!valid) return;
+    // saveSettings keeps its own copy, and the receiver of onSaved (controller.updateSettings) copies too (E13).
     const r = persistence.saveSettings(draft);
-    onSaved(structuredClone(draft));
+    onSaved(draft);
     setLimits(limitsOf(draft));
     setSavedCount((n) => n + 1);
     setNotice(r.ok ? { kind: 'ok', text: m.settings.saved } : { kind: 'warn', text: m.settings.saveFailed });
@@ -165,7 +177,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     setLimits(limitsOf(r.settings));
     // The import stored everything or nothing (review M4), so success never comes with a failed save (review L2).
     setNotice(null);
-    onSaved(structuredClone(r.settings));
+    onSaved(r.settings);
     setSavedCount((n) => n + 1);
     setDataNotice({ kind: 'ok', text: m.settings.data.imported });
   };
@@ -203,10 +215,10 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
 
       <div className="settings-groups">
         <Group title={m.settings.groups.challengeTypes} errors={errorsAt('challengeTypes')}>
-          <Check field="challengeTypes.numberLine" label={L.numberLine} checked={draft.challengeTypes.numberLine} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, numberLine: v })} />
-          <Check field="challengeTypes.addition" label={L.addition} checked={draft.challengeTypes.addition} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, addition: v })} />
-          <Check field="challengeTypes.subtraction" label={L.subtraction} checked={draft.challengeTypes.subtraction} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, subtraction: v })} />
-          <Check field="challengeTypes.comparison" label={L.comparison} checked={draft.challengeTypes.comparison} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, comparison: v })} />
+          <Check label={L.numberLine} {...bind('challengeTypes.numberLine')} />
+          <Check label={L.addition} {...bind('challengeTypes.addition')} />
+          <Check label={L.subtraction} {...bind('challengeTypes.subtraction')} />
+          <Check label={L.comparison} {...bind('challengeTypes.comparison')} />
           {allTypesOff && (
             <div className="hint">
               <p>{m.settings.guidedNeedsType}</p>
@@ -221,14 +233,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
 
         {/* Amendment 17 (FR-121): the play modes the start screen offers. */}
         <Group title={m.settings.groups.playModes} errors={errorsAt('playModes')}>
-          <Check field="playModes.mixed" label={L.playModeMixed} checked={draft.playModes.mixed} onChange={(v) => set('playModes', { ...draft.playModes, mixed: v })} />
-          <Check field="playModes.ruler" label={L.playModeRuler} checked={draft.playModes.ruler} onChange={(v) => set('playModes', { ...draft.playModes, ruler: v })} />
-          <Check field="playModes.math" label={L.playModeMath} checked={draft.playModes.math} onChange={(v) => set('playModes', { ...draft.playModes, math: v })} />
+          <Check label={L.playModeMixed} {...bind('playModes.mixed')} />
+          <Check label={L.playModeRuler} {...bind('playModes.ruler')} />
+          <Check label={L.playModeMath} {...bind('playModes.math')} />
         </Group>
 
         <Group title={m.settings.groups.range} errors={errorsAt('range')}>
           <Select
-            field="range"
             label={L.rangePreset}
             value={draft.range.preset}
             options={PRESETS.map((p) => ({ value: p, label: p === 'custom' ? m.settings.presetCustom : p.replace('-', ' bis ') }))}
@@ -236,28 +247,28 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           />
           {custom && (
             <>
-              <NumberInput field="range" label={L.rangeMin} value={draft.range.min} onChange={(n) => applyRange({ ...draft.range, min: n })} />
-              <NumberInput field="range" label={L.rangeMax} value={draft.range.max} onChange={(n) => applyRange({ ...draft.range, max: n })} />
+              <NumberInput label={L.rangeMin} value={draft.range.min} onChange={(n) => applyRange({ ...draft.range, min: n })} />
+              <NumberInput label={L.rangeMax} value={draft.range.max} onChange={(n) => applyRange({ ...draft.range, max: n })} />
             </>
           )}
           {custom && draft.range.min < 0 && (
-            <Check field="negativeResults" label={L.negativeResults} checked={draft.negativeResults} onChange={(v) => set('negativeResults', v)} />
+            <Check label={L.negativeResults} {...bind('negativeResults')} />
           )}
         </Group>
 
         <Group title={m.settings.groups.arithmetic}>
-          <NumberInput field="addition.maxOperand" label={L.additionMaxOperand} value={draft.addition.maxOperand} errors={errorsAt('addition.maxOperand')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxOperand: n } })} />
-          <NumberInput field="addition.maxResult" label={L.additionMaxResult} value={draft.addition.maxResult} errors={errorsAt('addition.maxResult')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxResult: n } })} />
-          <Select field="addition.steps" label={L.additionSteps} value={String(draft.addition.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, addition: { ...draft.addition, steps: v === '2' ? 2 : 1 } })} />
-          <NumberInput field="subtraction.maxOperand" label={L.subtractionMaxOperand} value={draft.subtraction.maxOperand} errors={errorsAt('subtraction.maxOperand')} onChange={(n) => setLimit({ ...draft, subtraction: { ...draft.subtraction, maxOperand: n } })} />
-          <Select field="subtraction.steps" label={L.subtractionSteps} value={String(draft.subtraction.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, subtraction: { ...draft.subtraction, steps: v === '2' ? 2 : 1 } })} />
-          <Check field="crossTens" label={L.crossTens} checked={draft.crossTens} onChange={(v) => set('crossTens', v)} />
-          <Check field="crossHundreds" label={L.crossHundreds} checked={draft.crossHundreds} onChange={(v) => set('crossHundreds', v)} />
+          <NumberInput label={L.additionMaxOperand} value={draft.addition.maxOperand} errors={errorsAt('addition.maxOperand')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxOperand: n } })} />
+          <NumberInput label={L.additionMaxResult} value={draft.addition.maxResult} errors={errorsAt('addition.maxResult')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxResult: n } })} />
+          <Select label={L.additionSteps} value={String(draft.addition.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, addition: { ...draft.addition, steps: v === '2' ? 2 : 1 } })} />
+          <NumberInput label={L.subtractionMaxOperand} value={draft.subtraction.maxOperand} errors={errorsAt('subtraction.maxOperand')} onChange={(n) => setLimit({ ...draft, subtraction: { ...draft.subtraction, maxOperand: n } })} />
+          <Select label={L.subtractionSteps} value={String(draft.subtraction.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, subtraction: { ...draft.subtraction, steps: v === '2' ? 2 : 1 } })} />
+          <Check label={L.crossTens} {...bind('crossTens')} />
+          <Check label={L.crossHundreds} {...bind('crossHundreds')} />
         </Group>
 
         <Group title={m.settings.groups.numberLine} errors={errorsAt('rulerLevelStart')} wide>
-          <Select field="rulerLevelStart" label={L.rulerLevelStart} value={String(draft.rulerLevelStart)} options={levelOptions()} onChange={(v) => set('rulerLevelStart', Number(v) as RulerLevel)} />
-          <Select field="rulerLevelMax" label={L.rulerLevelMax} value={String(draft.rulerLevelMax)} options={levelOptions()} onChange={(v) => set('rulerLevelMax', Number(v) as RulerLevel)} />
+          <Select label={L.rulerLevelStart} value={String(draft.rulerLevelStart)} options={levelOptions()} onChange={(v) => set('rulerLevelStart', Number(v) as RulerLevel)} />
+          <Select label={L.rulerLevelMax} value={String(draft.rulerLevelMax)} options={levelOptions()} onChange={(v) => set('rulerLevelMax', Number(v) as RulerLevel)} />
           {rangeOk ? (
             <>
               <figure className="ruler-preview-figure" data-testid="ruler-preview-start">
@@ -275,16 +286,15 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
         </Group>
 
         <Group title={m.settings.groups.help}>
-          <Check field="help.nearestTen" label={L.helpNearestTen} checked={draft.help.nearestTen} onChange={(v) => set('help', { ...draft.help, nearestTen: v })} />
-          <Check field="help.countSteps" label={L.helpCountSteps} checked={draft.help.countSteps} onChange={(v) => set('help', { ...draft.help, countSteps: v })} />
-          <Check field="help.zoom" label={L.helpZoom} checked={draft.help.zoom} onChange={(v) => set('help', { ...draft.help, zoom: v })} />
-          <Check field="help.stepAnimation" label={L.helpStepAnimation} checked={draft.help.stepAnimation} onChange={(v) => set('help', { ...draft.help, stepAnimation: v })} />
-          <Check field="beginnerAssist" label={L.beginnerAssist} checked={draft.beginnerAssist} onChange={(v) => set('beginnerAssist', v)} />
+          <Check label={L.helpNearestTen} {...bind('help.nearestTen')} />
+          <Check label={L.helpCountSteps} {...bind('help.countSteps')} />
+          <Check label={L.helpZoom} {...bind('help.zoom')} />
+          <Check label={L.helpStepAnimation} {...bind('help.stepAnimation')} />
+          <Check label={L.beginnerAssist} {...bind('beginnerAssist')} />
         </Group>
 
         <Group title={m.settings.groups.enemy}>
           <Select
-            field="enemyDifficulty"
             label={L.enemyDifficulty}
             value={draft.enemyDifficulty}
             options={[
@@ -295,7 +305,6 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
             onChange={(v) => set('enemyDifficulty', v as Settings['enemyDifficulty'])}
           />
           <Check
-            field="noDamage"
             label={L.noDamage}
             checked={draft.noDamage}
             // Without damage the hearts never go down, so the round must end after a number of enemies (FR-082).
@@ -304,14 +313,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
         </Group>
 
         <Group title={m.settings.groups.sound}>
-          <Check field="sound.effects" label={L.soundEffects} checked={draft.sound.effects} onChange={(v) => set('sound', { ...draft.sound, effects: v })} />
-          <Check field="sound.music" label={L.music} checked={draft.sound.music} onChange={(v) => set('sound', { ...draft.sound, music: v })} />
-          <Check field="sound.speech" label={L.speech} checked={draft.sound.speech} onChange={(v) => set('sound', { ...draft.sound, speech: v })} />
+          <Check label={L.soundEffects} {...bind('sound.effects')} />
+          <Check label={L.music} {...bind('sound.music')} />
+          <Check label={L.speech} {...bind('sound.speech')} />
         </Group>
 
         <Group title={m.settings.groups.round}>
           <Select
-            field="roundType"
             label={L.roundType}
             value={draft.roundType}
             options={[
@@ -322,13 +330,12 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           />
           <Errors errors={errorsAt('roundType')} />
           {draft.roundType === 'enemyCount' && (
-            <NumberInput field="roundLength" label={L.roundLength} value={draft.roundLength} min={ROUND_LENGTH_MIN} max={ROUND_LENGTH_MAX} errors={errorsAt('roundLength')} onChange={(n) => set('roundLength', n)} />
+            <NumberInput label={L.roundLength} value={draft.roundLength} min={ROUND_LENGTH_MIN} max={ROUND_LENGTH_MAX} errors={errorsAt('roundLength')} onChange={(n) => set('roundLength', n)} />
           )}
-          <Check field="showClock" label={L.showClock} checked={draft.showClock} onChange={(v) => set('showClock', v)} />
-          <Check field="showRecords" label={L.showRecords} checked={draft.showRecords} onChange={(v) => set('showRecords', v)} />
-          <Check field="garage" label={L.garage} checked={draft.garage} onChange={(v) => set('garage', v)} />
+          <Check label={L.showClock} {...bind('showClock')} />
+          <Check label={L.showRecords} {...bind('showRecords')} />
+          <Check label={L.garage} {...bind('garage')} />
           <Select
-            field="numberPad"
             label={L.numberPad}
             value={draft.numberPad}
             options={[
@@ -338,10 +345,10 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
             ]}
             onChange={(v) => set('numberPad', v as Settings['numberPad'])}
           />
-          <Check field="adaptive" label={L.adaptive} checked={draft.adaptive} onChange={(v) => set('adaptive', v)} />
-          <Check field="timeLimitSeconds" label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
+          <Check label={L.adaptive} {...bind('adaptive')} />
+          <Check label={L.timeLimit} checked={draft.timeLimitSeconds !== null} onChange={(v) => set('timeLimitSeconds', v ? 30 : null)} />
           {draft.timeLimitSeconds !== null && (
-            <NumberInput field="timeLimitSeconds" label={L.timeLimitSeconds} value={draft.timeLimitSeconds} min={10} max={120} errors={errorsAt('timeLimitSeconds')} onChange={(n) => set('timeLimitSeconds', n)} />
+            <NumberInput label={L.timeLimitSeconds} value={draft.timeLimitSeconds} min={10} max={120} errors={errorsAt('timeLimitSeconds')} onChange={(n) => set('timeLimitSeconds', n)} />
           )}
         </Group>
 
@@ -540,59 +547,38 @@ function Errors({ errors }: { errors: string[] }) {
   );
 }
 
-/** The "kommt bald" note for a field whose feature is not built yet (FR-079). */
-function useSoon(field: SettingField): { disabled: boolean; noteId: string | undefined; note: ReactNode } {
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   const id = useId();
-  const soon = isComingSoon(field);
-  return {
-    disabled: soon,
-    noteId: soon ? id : undefined,
-    note: soon ? (
-      <span id={id} className="coming-soon">
-        {t().parent.comingSoon}
-      </span>
-    ) : null,
-  };
-}
-
-function Check({ field, label, checked, onChange }: { field: SettingField; label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  const id = useId();
-  const soon = useSoon(field);
   return (
     <div className="field check-field">
-      <input id={id} type="checkbox" checked={checked} disabled={soon.disabled} aria-describedby={soon.noteId} onChange={(e) => onChange(e.currentTarget.checked)} />
+      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.currentTarget.checked)} />
       <label htmlFor={id}>{label}</label>
-      {soon.note}
     </div>
   );
 }
 
 function Select({
-  field,
   label,
   value,
   options,
   onChange,
 }: {
-  field: SettingField;
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (v: string) => void;
 }) {
   const id = useId();
-  const soon = useSoon(field);
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} disabled={soon.disabled} aria-describedby={soon.noteId} onChange={(e) => onChange(e.currentTarget.value)}>
+      <select id={id} value={value} onChange={(e) => onChange(e.currentTarget.value)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
-      {soon.note}
     </div>
   );
 }
@@ -603,7 +589,6 @@ function Select({
  * `withRange`) replaces the text.
  */
 function NumberInput({
-  field,
   label,
   value,
   min,
@@ -611,7 +596,6 @@ function NumberInput({
   errors = [],
   onChange,
 }: {
-  field: SettingField;
   label: string;
   value: number;
   min?: number;
@@ -620,7 +604,6 @@ function NumberInput({
   onChange: (n: number) => void;
 }) {
   const id = useId();
-  const soon = useSoon(field);
   const [text, setText] = useState(() => String(value));
   const [seen, setSeen] = useState(value);
   if (!Object.is(value, seen)) {
@@ -638,8 +621,6 @@ function NumberInput({
         min={min}
         max={max}
         value={text}
-        disabled={soon.disabled}
-        aria-describedby={soon.noteId}
         aria-invalid={errors.length > 0 || undefined}
         onChange={(e) => {
           const next = e.currentTarget.value;
@@ -648,7 +629,6 @@ function NumberInput({
           onChange(parseWhole(next));
         }}
       />
-      {soon.note}
       <Errors errors={errors} />
     </div>
   );

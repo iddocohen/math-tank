@@ -4,7 +4,6 @@ import { classifyAttempt, isFastGuess, type ClassifyInput } from './classify';
 function input(extra: Partial<ClassifyInput> = {}): ClassifyInput {
   return {
     solved: true,
-    exact: true,
     helpLevel: 0,
     wrongAnswers: 0,
     responseMs: 4000,
@@ -45,7 +44,6 @@ describe('classifyAttempt (FR-038, FR-075)', () => {
     expect(classifyAttempt(input()).outcome).toBe('independent');
     expect(classifyAttempt(input({ wrongAnswers: 1, wrongAnswerTimes: [99_000] })).independent).toBe(false);
     expect(classifyAttempt(input({ helpLevel: 1 })).independent).toBe(false);
-    expect(classifyAttempt(input({ exact: false })).independent).toBe(false);
     expect(classifyAttempt(input({ solved: false, helpLevel: 3 })).independent).toBe(false);
   });
 
@@ -66,10 +64,9 @@ describe('classifyAttempt (FR-038, FR-075)', () => {
   it("produces only 'independent', 'assisted' or 'unsolved', never 'close'", () => {
     const outcomes = new Set<string>();
     for (const solved of [true, false])
-      for (const exact of [true, false])
-        for (const helpLevel of [0, 1, 2, 3])
-          for (const wrongAnswers of [0, 1, 4])
-            outcomes.add(classifyAttempt(input({ solved, exact, helpLevel, wrongAnswers })).outcome);
+      for (const helpLevel of [0, 1, 2, 3])
+        for (const wrongAnswers of [0, 1, 4])
+          outcomes.add(classifyAttempt(input({ solved, helpLevel, wrongAnswers })).outcome);
     expect([...outcomes].sort()).toEqual(['assisted', 'independent', 'unsolved']);
   });
 });
@@ -87,7 +84,7 @@ describe('isFastGuess (amendment 13, FR-038, FR-098)', () => {
   });
 
   it('classifyAttempt calls a solved fast answer a guess and an unsolved one not', () => {
-    const base = { exact: true, helpLevel: 0, wrongAnswers: 0, responseMs: 900, wrongAnswerTimes: [], submittedAt: 10_000 };
+    const base = { helpLevel: 0, wrongAnswers: 0, responseMs: 900, wrongAnswerTimes: [], submittedAt: 10_000 };
     expect(classifyAttempt({ ...base, solved: true }).guess).toBe(true);
     expect(classifyAttempt({ ...base, solved: false }).guess).toBe(false);
   });

@@ -126,7 +126,7 @@ describe('ParentGate', () => {
     hold(gear, 2000);
     const progress = screen.getByRole('button', { name: m.parent.progress }) as HTMLButtonElement;
     expect(progress.disabled).toBe(false);
-    expect(progress.textContent).not.toContain(m.parent.comingSoon);
+    expect(progress.textContent).not.toContain('kommt bald');
     fireEvent.click(progress);
     expect(onProgress).toHaveBeenCalledTimes(1);
     expect(menu()).toBeNull();

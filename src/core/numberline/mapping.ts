@@ -2,6 +2,7 @@
  * Mapping between numbers and world x (research R7, FR-015, FR-058).
  * The number line and the battlefield both use these functions, so a number sits at the same x on both.
  */
+import { clamp } from '../util';
 
 export interface Layout {
   worldWidth: number;
@@ -23,5 +24,5 @@ export function numberToX(n: number, min: number, max: number, layout: Layout = 
 export function xToNumber(x: number, min: number, max: number, layout: Layout = DEFAULT_LAYOUT): number {
   const n = Math.round(min + ((x - layout.left) / (layout.right - layout.left)) * (max - min));
   // `+ 0` turns -0 (from rounding values just below zero) into 0.
-  return Math.min(max, Math.max(min, n)) + 0;
+  return clamp(n, min, max) + 0;
 }

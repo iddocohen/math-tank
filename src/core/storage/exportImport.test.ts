@@ -42,7 +42,6 @@ function sampleProgress(): Progress {
         difficultyStep: 1,
         solved: true,
         independent: true,
-        exact: true,
         helpLevel: 0,
         wrongAnswers: 0,
         responseMs: 4200,
@@ -213,13 +212,13 @@ describe('importData (FR-048, FR-048a)', () => {
     }
   });
 
-  it('migrates version 0 progress and fills attempts stored before amendment 04 with exact: true', () => {
+  it('migrates version 0 progress and accepts attempts stored before amendment 04 without exact', () => {
     const attempt: Record<string, unknown> = { ...sampleProgress().attempts[0] };
     delete attempt.exact;
     const progress = { version: 1, attempts: [attempt], skills: {}, sessions: [] };
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: 'x', settings: defaultSettings(), progress }));
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.progress.attempts[0]?.exact).toBe(true);
+    if (r.ok) expect(r.progress.attempts).toHaveLength(1);
 
     const v0 = importData(JSON.stringify({ app: 'math-tanks', exportedAt: 'x', settings: defaultSettings(), progress: { skills: {} } }));
     expect(v0).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords(), garage: null });

@@ -5,6 +5,8 @@ export interface Rng {
   /** Uniform integer in [min, max], both inclusive. */
   int(min: number, max: number): number;
   pick<T>(items: readonly T[]): T;
+  /** A copy of `items` in random order (Fisher-Yates). */
+  shuffled<T>(items: readonly T[]): T[];
   /** Normal distribution sample (Box-Muller). */
   normal(mean: number, sd: number): number;
 }
@@ -21,17 +23,27 @@ export function createRng(seed: number): Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
+  const int = (min: number, max: number): number => {
+    const lo = Math.ceil(min);
+    const hi = Math.floor(max);
+    if (hi < lo) throw new RangeError(`int(${min}, ${max}): empty range`);
+    return lo + Math.floor(next() * (hi - lo + 1));
+  };
+
   return {
     next,
-    int(min, max) {
-      const lo = Math.ceil(min);
-      const hi = Math.floor(max);
-      if (hi < lo) throw new RangeError(`int(${min}, ${max}): empty range`);
-      return lo + Math.floor(next() * (hi - lo + 1));
-    },
+    int,
     pick<T>(items: readonly T[]): T {
       if (items.length === 0) throw new RangeError('pick: empty list');
       return items[Math.floor(next() * items.length)] as T;
+    },
+    shuffled<T>(items: readonly T[]): T[] {
+      const out = [...items];
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = int(0, i);
+        [out[i], out[j]] = [out[j]!, out[i]!];
+      }
+      return out;
     },
     normal(mean, sd) {
       // 1 - next() is in (0, 1], so the logarithm is finite.

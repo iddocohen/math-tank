@@ -31,7 +31,6 @@ export function buildAttempt(input: AttemptInput): NewAttempt {
   const responseMs = Math.max(0, input.answeredAt - input.answerableAt);
   const { independent, guess } = classifyAttempt({
     solved,
-    exact: true,
     helpLevel: help.level,
     wrongAnswers: help.wrongAnswers,
     responseMs,
@@ -47,7 +46,6 @@ export function buildAttempt(input: AttemptInput): NewAttempt {
     difficultyStep: challenge.difficultyStep,
     solved,
     independent,
-    exact: true,
     helpLevel: help.level,
     wrongAnswers: help.wrongAnswers,
     responseMs,

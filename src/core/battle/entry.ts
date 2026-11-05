@@ -2,6 +2,7 @@
  * Keyboard number entry (amendment 01, research R22, FR-060, FR-063, data-model.md "Keyboard entry").
  * Pure: applyKey returns a new entry and never changes its input.
  */
+import { clamp } from '../util';
 
 export type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -36,7 +37,7 @@ export function applyKey(entry: Entry, key: EntryKey, range: { min: number; max:
 
   if (typed === '' || typed === '-') return { entry: { typed, outOfRange: false }, selection: null };
   const value = Number(typed);
-  const selection = Math.min(range.max, Math.max(range.min, value)) + 0;
+  const selection = clamp(value, range.min, range.max) + 0;
   return { entry: { typed, outOfRange: selection !== value }, selection };
 }
 

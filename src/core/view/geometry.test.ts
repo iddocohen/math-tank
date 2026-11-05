@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   dottedTrail,
-  edgeMarker,
   launchAngle,
   pathDuration,
   pathPointAt,
@@ -93,17 +92,6 @@ describe('dottedTrail', () => {
 
   it('returns nothing for an empty path', () => {
     expect(dottedTrail([], 10)).toEqual([]);
-  });
-});
-
-describe('edgeMarker', () => {
-  it('marks the side edge where an out-of-bounds shell left the battlefield', () => {
-    expect(edgeMarker({ outOfBounds: true, impact: { x: 1600, y: 500 } }, 1600)).toEqual({ x: 1600, y: 500, side: 'right' });
-    expect(edgeMarker({ outOfBounds: true, impact: { x: 0, y: 300 } }, 1600)).toEqual({ x: 0, y: 300, side: 'left' });
-  });
-
-  it('returns null for a shell that landed inside', () => {
-    expect(edgeMarker({ outOfBounds: false, impact: { x: 800, y: 300 } }, 1600)).toBeNull();
   });
 });
 

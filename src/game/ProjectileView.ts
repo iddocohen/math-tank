@@ -1,8 +1,7 @@
 /**
  * Replays a precomputed shell path (FR-004, research R6) and draws the faint dotted trail of the
- * player's previous shot. A shell that leaves the battlefield gets a marker where it crossed the
- * side edge (US1 scenario 6). Playback advances only in advance(), which the scene calls from
- * update(), so pausing the scene stops the replay.
+ * player's previous shot. Playback advances only in advance(), which the scene calls from update(), so pausing
+ * the scene stops the replay.
  * Amendment 11 (FR-093): the child's shells draw the garage trail (`playerTrail`): sparkles, rainbow lines or
  * bubbles along the live path; the enemy's shells keep the plain trail. Amendment 14 (FR-112): the trail lines are 5
  * world units thick.
@@ -11,7 +10,7 @@
  */
 import Phaser from 'phaser';
 import type { Point, ShotInFlight } from '../core/types';
-import { dottedTrail, edgeMarker, pathDuration, pathPointAt, toScreenY } from '../core/view/geometry';
+import { dottedTrail, pathDuration, pathPointAt, toScreenY } from '../core/view/geometry';
 import { TEX } from './textures';
 import type { TrailId } from '../core/rewards/items';
 import { trailStyle, type TrailStyle } from '../core/rewards/looks';
@@ -19,7 +18,6 @@ import { trailStyle, type TrailStyle } from '../core/rewards/looks';
 /** Playback speed relative to physics time. */
 export const REPLAY_SPEED = 1.6;
 const TRAIL_SPACING = 18;
-const MARKER_SIZE = 22;
 /** Shell trail thickness and the gap between rainbow lines (amendment 14, FR-112: at least 5, it was 3). */
 const TRAIL_WIDTH = 5;
 const TRAIL_GAP = 4;
@@ -38,6 +36,8 @@ interface Replay {
   elapsed: number;
   /** The shot's own shell first, then the decoys' shells. */
   tracks: Track[];
+  /** The duration of the longest track: the volley is over then. */
+  longest: number;
   onDone: () => void;
   onShellLanded: (index: number, impact: Point) => void;
 }
@@ -48,24 +48,19 @@ export class ProjectileView {
   private readonly extraShells: Phaser.GameObjects.Image[] = [];
   private readonly live: Phaser.GameObjects.Graphics;
   private readonly trail: Phaser.GameObjects.Graphics;
-  private readonly marker: Phaser.GameObjects.Graphics;
   private replay: Replay | null = null;
   private trailPath: readonly Point[] | null = null;
-  /** Edge markers by shooter; each stays until that shooter fires again. */
-  private readonly markers = new Map<ShotInFlight['shooter'], { y: number; side: 'left' | 'right' }>();
   private readonly playerStyle: TrailStyle;
   private readonly plainStyle = trailStyle('plain');
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly worldWidth: number,
     private readonly worldHeight: number,
     playerTrail: TrailId = 'plain',
   ) {
     this.playerStyle = trailStyle(playerTrail);
     this.trail = scene.add.graphics();
     this.live = scene.add.graphics();
-    this.marker = scene.add.graphics();
     this.shell = scene.add.image(0, 0, TEX.shell).setVisible(false);
   }
 
@@ -78,8 +73,6 @@ export class ProjectileView {
    * (index 0 is the shot's own shell) and `onDone` runs once when every shell has reached its impact point.
    */
   play(shot: ShotInFlight, onDone: () => void, onShellLanded: (index: number, impact: Point) => void = () => {}): void {
-    this.markers.delete(shot.shooter);
-    this.drawMarkers();
     this.live.clear();
     this.hideShells();
     const shells = [shot, ...shot.decoyShells];
@@ -91,7 +84,7 @@ export class ProjectileView {
       landed: false,
     }));
     for (const t of tracks) t.image.setVisible(true);
-    this.replay = { shot, elapsed: 0, tracks, onDone, onShellLanded };
+    this.replay = { shot, elapsed: 0, tracks, longest: Math.max(...tracks.map((t) => t.duration)), onDone, onShellLanded };
     this.advance(0);
   }
 
@@ -100,15 +93,12 @@ export class ProjectileView {
     this.replay = null;
     this.hideShells();
     this.live.clear();
-    this.markers.clear();
-    this.drawMarkers();
   }
 
   advance(deltaMs: number): void {
     const r = this.replay;
     if (!r) return;
-    const longest = Math.max(...r.tracks.map((t) => t.duration));
-    r.elapsed = Math.min(longest, r.elapsed + deltaMs);
+    r.elapsed = Math.min(r.longest, r.elapsed + deltaMs);
     const style = r.shot.shooter === 'player' ? this.playerStyle : this.plainStyle;
     this.live.clear();
     r.tracks.forEach((t, i) => {
@@ -126,11 +116,6 @@ export class ProjectileView {
     if (!r.tracks.every((t) => t.landed)) return;
     this.replay = null;
     this.live.clear();
-    const m = edgeMarker(r.shot, this.worldWidth);
-    if (m) {
-      this.markers.set(r.shot.shooter, { y: this.sy(m.y), side: m.side });
-      this.drawMarkers();
-    }
     r.onDone();
   }
 
@@ -192,21 +177,6 @@ export class ProjectileView {
     }
   }
 
-  /** Arrows at the side edge pointing out of the battlefield where a shell left it. */
-  private drawMarkers(): void {
-    const g = this.marker;
-    g.clear();
-    for (const { y: screenY, side } of this.markers.values()) {
-      // A shell may leave above the top of the screen; keep the arrow visible.
-      const y = Phaser.Math.Clamp(screenY, MARKER_SIZE, this.worldHeight - MARKER_SIZE);
-      const tip = side === 'right' ? this.worldWidth - 4 : 4;
-      const back = side === 'right' ? tip - MARKER_SIZE * 1.4 : tip + MARKER_SIZE * 1.4;
-      g.fillStyle(0xffd54f, 0.95);
-      g.lineStyle(3, 0x1b1f27, 0.8);
-      g.fillTriangle(tip, y, back, y - MARKER_SIZE, back, y + MARKER_SIZE);
-      g.strokeTriangle(tip, y, back, y - MARKER_SIZE, back, y + MARKER_SIZE);
-    }
-  }
 
   private sy(y: number): number {
     return toScreenY(y, this.worldHeight);

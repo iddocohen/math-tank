@@ -12,7 +12,6 @@ import { memoryKeyValue } from '../core/storage/keyValue';
 import { PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
 import { decodeTransfer } from '../core/transfer/transfer';
 import { t } from '../i18n';
-import { COMING_SOON, SETTING_FIELDS } from './comingSoon';
 import { emptyRecords } from '../core/records/records';
 import { createPersistence } from './persistence';
 import { SettingsPage } from './SettingsPage';
@@ -227,7 +226,6 @@ describe('SettingsPage', () => {
   it('"Garage und Sterne" is on by default and saves garage (amendment 11, FR-096)', () => {
     const { persistence } = setup();
     expect(field(L.garage).checked).toBe(true);
-    expect(SETTING_FIELDS).toContain('garage');
     toggle(L.garage);
     fireEvent.click(saveButton());
     expect(persistence.settings().garage).toBe(false);
@@ -235,7 +233,6 @@ describe('SettingsPage', () => {
 
   it('"Zahlenfeld" offers Automatisch, Immer and Nie, starts at Automatisch and saves numberPad (amendment 12, FR-102)', () => {
     const { persistence } = setup();
-    expect(SETTING_FIELDS).toContain('numberPad');
     const select = field(L.numberPad);
     expect(select.value).toBe('auto');
     expect(Array.from(select.options).map((o) => o.textContent)).toEqual([L.numberPadAuto, L.numberPadAlways, L.numberPadNever]);
@@ -247,8 +244,9 @@ describe('SettingsPage', () => {
     expect(persistence.settings().numberPad).toBe('never');
   });
 
-  it('lists the amendment 06 fields in SETTING_FIELDS', () => {
-    for (const f of ['roundType', 'roundLength', 'showClock', 'showRecords'] as const) expect(SETTING_FIELDS).toContain(f);
+  it('shows the amendment 06 fields', () => {
+    setup({ roundType: 'enemyCount' });
+    for (const label of [L.roundType, L.roundLength, L.showClock, L.showRecords]) expect(field(label), label).toBeTruthy();
   });
 
   it('shows a reset notice that names the data that could not be read (review M3)', () => {
@@ -311,7 +309,6 @@ describe('SettingsPage', () => {
     };
     const { persistence } = setup(stored);
     // Every feature is built since Phase 23 (T138, T142).
-    expect(COMING_SOON).toEqual([]);
     // Addition and subtraction limits work since Phase 16, beginner assistance since Phase 17; they can be changed.
     for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps, L.beginnerAssist]) {
       expect(field(label).disabled, label).toBe(false);
@@ -324,7 +321,7 @@ describe('SettingsPage', () => {
     }
     // Music and spoken instructions work since Phase 23; nothing shows "kommt bald".
     for (const label of [L.music, L.speech]) expect(field(label).disabled, label).toBe(false);
-    expect(screen.queryByText(m.parent.comingSoon)).toBeNull();
+    expect(screen.queryByText('kommt bald')).toBeNull();
     expect(field(L.rangePreset).disabled).toBe(false);
     expect(field(L.enemyDifficulty).disabled).toBe(false);
     setValue(L.enemyDifficulty, 'normal');

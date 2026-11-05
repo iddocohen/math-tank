@@ -7,6 +7,7 @@
  * down. Unlocked items are not stored: they follow from the star total, so they cannot disagree with it.
  */
 import { z } from 'zod';
+import { isRecord } from '../util';
 import { STANDARD_LOOK, UNLOCK_ORDER, itemById, type GarageItem, type ItemId, type Look } from './items';
 
 export const garageSchema = z.object({
@@ -76,10 +77,6 @@ export function sanitizeLook(look: Record<keyof Look, string>, stars: number): L
 /** `color:<id> flag:<id> trail:<id> hat:<id>`, the canvas attribute `data-player-look` (D4). */
 export function lookKey(look: Look): string {
   return `color:${look.color} flag:${look.flag} trail:${look.trail} hat:${look.hat}`;
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /**

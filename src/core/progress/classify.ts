@@ -14,8 +14,6 @@ export const GUESS_MISS_WINDOW_MS = 5000;
 export interface ClassifyInput {
   /** A correct answer was given before the solution was shown. */
   solved: boolean;
-  /** The hit was at the enemy's exact number; always true since amendment 06. */
-  exact: boolean;
   /** Highest help step reached; 3 means the solution was shown. */
   helpLevel: number;
   wrongAnswers: number;
@@ -43,7 +41,7 @@ export function isFastGuess(a: Pick<ClassifyInput, 'responseMs' | 'wrongAnswerTi
 }
 
 export function classifyAttempt(a: ClassifyInput): Classification {
-  const independent = a.solved && a.exact && a.helpLevel === 0 && a.wrongAnswers === 0;
+  const independent = a.solved && a.helpLevel === 0 && a.wrongAnswers === 0;
   const guess = a.solved && isFastGuess(a);
   let outcome: RecentOutcome = 'assisted';
   if (!a.solved) outcome = 'unsolved';

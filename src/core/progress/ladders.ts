@@ -3,6 +3,7 @@
  * list of steps, easiest first. Parent settings are ceilings: `clampStep` narrows every field to what the settings
  * allow, and only the `positions` ladder sets a ruler level, clamped to [rulerLevelStart, rulerLevelMax].
  */
+import { clamp } from '../util';
 import type { DifficultyStep, Progress, RulerLevel, Settings, Skill } from '../types';
 
 export const ladders: Record<Skill, DifficultyStep[]> = {
@@ -63,7 +64,7 @@ export function skillKey(skill: Skill, rangeKey: string): string {
 }
 
 function clampRuler(level: RulerLevel, settings: Settings): RulerLevel {
-  return Math.min(Math.max(level, settings.rulerLevelStart), settings.rulerLevelMax) as RulerLevel;
+  return clamp(level, settings.rulerLevelStart, settings.rulerLevelMax) as RulerLevel;
 }
 
 /** The parent's operand limit for a skill, if the settings have one. */
@@ -76,9 +77,9 @@ function operandLimit(skill: Skill, settings: Settings): number | undefined {
 /** Ladder step `index` (clamped to the ladder) with every field narrowed to the parent settings. */
 export function clampStep(skill: Skill, index: number, settings: Settings): DifficultyStep {
   const ladder = ladders[skill];
-  const raw = ladder[Math.min(Math.max(0, Math.trunc(index)), ladder.length - 1)] as DifficultyStep;
+  const raw = ladder[clamp(Math.trunc(index), 0, ladder.length - 1)] as DifficultyStep;
   const out: DifficultyStep = {
-    maxNumberFraction: Math.min(Math.max(raw.maxNumberFraction, 0), 1),
+    maxNumberFraction: clamp(raw.maxNumberFraction, 0, 1),
     allowCrossTens: raw.allowCrossTens && settings.crossTens,
   };
   const limit = operandLimit(skill, settings);

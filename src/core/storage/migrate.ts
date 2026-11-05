@@ -1,5 +1,6 @@
 import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings/defaults';
 import { settingsSchema, type Settings } from '../settings/schema';
+import { clamp, isRecord, mergeDeep } from '../util';
 import { validateSettings } from '../settings/validate';
 
 /**
@@ -65,20 +66,6 @@ function clampAdditionOperand(raw: Record<string, unknown>): Record<string, unkn
   return { ...raw, addition: { ...addition, maxOperand: span } };
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-/** Deep merge: values from `over` replace those in `base`; nested objects merge key by key. */
-function mergeDeep(base: Record<string, unknown>, over: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...base };
-  for (const [k, v] of Object.entries(over)) {
-    const b = base[k];
-    out[k] = isRecord(b) && isRecord(v) ? mergeDeep(b, v) : v;
-  }
-  return out;
-}
-
 /** Version 1 `labelLevel` to version 2 `rulerLevelStart`: old level 4 showed only the end points, like new level 5. */
 const RULER_LEVEL_FROM_LABEL_LEVEL: Record<number, number> = { 1: 1, 2: 2, 3: 3, 4: 5 };
 
@@ -97,9 +84,12 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
   return { ...merged, version: 2 };
 }
 
-/** Version 2 to 3 (amendment 04): adds "Genau treffen", off unless already set. */
+/**
+ * Version 2 to 3 (amendment 04): version 3 added "Genau treffen" (`exactHit`), which version 4 drops again, so this step
+ * only raises the version. It stays a step of its own, so SETTINGS_STEPS keeps one step per version.
+ */
 function migrateSettingsToV3(raw: Record<string, unknown>): Record<string, unknown> {
-  return { ...raw, exactHit: raw.exactHit ?? false, version: 3 };
+  return { ...raw, version: 3 };
 }
 
 /**
@@ -111,7 +101,7 @@ function migrateSettingsToV4(raw: Record<string, unknown>): Record<string, unkno
   const { exactHit: _dropped, ...rest } = raw;
   void _dropped;
   const roundLength = Number.isInteger(rest.roundLength)
-    ? Math.min(ROUND_LENGTH_MAX, Math.max(ROUND_LENGTH_MIN, rest.roundLength as number))
+    ? clamp(rest.roundLength as number, ROUND_LENGTH_MIN, ROUND_LENGTH_MAX)
     : rest.roundLength;
   return {
     ...rest,

@@ -31,11 +31,10 @@ export function shotKind(fired: number, target: number, range: { min: number; ma
 }
 
 /**
- * An enemy shell hits the child's tank when the enemy's shot was decided as a hit (`hitTargetId`, set by the
- * misses-in-a-row rule of amendment 13 in ai/enemy.ts) or landed on the tank's body: within half the tank width of its
- * x. A shell next to the tank does nothing.
+ * The impact lies on the tank's body: within half the tank width of its x. The enemy's shots follow this rule
+ * (ai/enemy.ts, amendment 13): a shot decided as a hit lands on the child's tank, a deliberate miss lands beside it.
+ * applyImpact reads the decision (`hits`), so a shell next to the tank does nothing.
  */
-export function enemyHitsPlayer(impact: Point, hitTargetId: string | null, player: TankState): boolean {
-  if (hitTargetId !== null) return hitTargetId === player.id;
-  return Math.abs(impact.x - player.x) <= HALF_BODY + EPSILON;
+export function landsOnBody(impact: Point, tank: TankState): boolean {
+  return Math.abs(impact.x - tank.x) <= HALF_BODY + EPSILON;
 }

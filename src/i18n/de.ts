@@ -168,8 +168,6 @@ export const de = {
   parent: {
     holdGear: 'Zahnrad gedrückt halten',
     menu: 'Für Eltern',
-    /** Amendment 05, FR-079: a feature that is not built yet. */
-    comingSoon: 'kommt bald',
     settings: 'Einstellungen',
     progress: 'Fortschritt',
     close: 'Schließen',

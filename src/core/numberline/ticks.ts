@@ -96,16 +96,6 @@ function lineValues(min: number, max: number, majorStep: number, minorStep: numb
   return [min, ...inner, max];
 }
 
-function shuffled<T>(items: T[], seed: number): T[] {
-  const out = [...items];
-  const rng = createRng(seed);
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = rng.int(0, i);
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-}
-
 export function ticksFor(
   view: { min: number; max: number },
   level: RulerLevel,
@@ -168,7 +158,7 @@ export function ticksFor(
       for (const t of ticks) mark(t, true, false);
       // Label a seed-chosen half (rounded down) of the major lines between the end points.
       const innerMajors = ticks.filter((t) => t.major && !isEnd(t));
-      for (const t of shuffled(innerMajors, seed).slice(0, Math.floor(innerMajors.length / 2))) t.labeled = true;
+      for (const t of createRng(seed).shuffled(innerMajors).slice(0, Math.floor(innerMajors.length / 2))) t.labeled = true;
       break;
     }
     case 4:

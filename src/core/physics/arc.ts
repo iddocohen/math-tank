@@ -56,7 +56,7 @@ export function solveArcToX(input: ArcInput): ArcResult {
 
     const power = findPower(overshoot, tolerance);
     if (power === null) continue;
-    const r = simulateShot({ origin, angleDeg, power, terrain, targets: [], worldWidth, worldHeight });
+    const r = simulateShot({ origin, angleDeg, power, terrain, worldWidth, worldHeight });
     // Land exactly on the target x, so the landing number always equals the chosen number.
     const path = [...r.path.slice(0, -1), end];
     return { angleDeg, power, path, impact: end, lifted: false };

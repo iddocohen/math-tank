@@ -5,6 +5,7 @@
  * The renderer flips y. A heightmap holds one surface height per column x = 0 .. worldWidth - 1.
  * Heightmaps are never changed in place; carveCrater returns a new one.
  */
+import { clamp } from '../util';
 import { createRng } from '../rng';
 import type { Heightmap } from '../types';
 
@@ -40,7 +41,7 @@ export function generateTerrain(seed: number, worldWidth: number, worldHeight: n
 
   const min = FLOOR + worldHeight * 0.05;
   const max = worldHeight * 0.75;
-  for (let x = 0; x < width; x++) heights[x] = Math.min(max, Math.max(min, heights[x] as number));
+  for (let x = 0; x < width; x++) heights[x] = clamp(heights[x] as number, min, max);
   return heights;
 }
 

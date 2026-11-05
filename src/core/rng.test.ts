@@ -87,3 +87,13 @@ describe('deriveSeed', () => {
     expect(deriveSeed(1, 2)).not.toBe(deriveSeed(1, 2, 0));
   });
 });
+
+describe('shuffled', () => {
+  it('returns a permutation of the items, the same one for the same seed, and leaves the input alone', () => {
+    const items = [1, 2, 3, 4, 5, 6, 7, 8];
+    const a = createRng(7).shuffled(items);
+    expect([...a].sort((x, y) => x - y)).toEqual(items);
+    expect(createRng(7).shuffled(items)).toEqual(a);
+    expect(items).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+});

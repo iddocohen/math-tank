@@ -113,15 +113,6 @@ function pickOthers(
   return taken.slice(1);
 }
 
-function shuffled(items: number[], rng: Rng): number[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = rng.int(0, i);
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-}
-
 /**
  * Builds one comparison of `kind` whose enemy stands at `answer`, or null when the range does not allow it. With
  * `playerPosition`, every option keeps minTankGap from the player tank (amendment 10).
@@ -138,7 +129,7 @@ export function buildComparison(
   if (!Number.isInteger(answer) || answer < min || answer > max || !clearOfPlayer(answer, settings, playerPosition)) return null;
   const others = pickOthers(kind, answer, settings, step, rng, playerPosition);
   if (!others) return null;
-  const options = shuffled([answer, ...others], rng);
+  const options = rng.shuffled([answer, ...others]);
   const draft = (extra: Record<string, number>): ChallengeDraft => {
     const params: Record<string, number> = {};
     options.forEach((o, i) => (params[OPTION_KEYS[i]!] = o));
