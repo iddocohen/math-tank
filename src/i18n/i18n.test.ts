@@ -170,6 +170,8 @@ describe('de table', () => {
     expect(promptText({ key: 'stepsLeft', params: { n: 40, k: 2 } })).toBe(t().challenge.stepsLeft(40, 2));
     expect(promptText({ key: 'missingBetween', params: { a: 40, b: 42 } })).toBe(t().challenge.missingBetween(40, 42));
     expect(promptText({ key: 'readPosition', params: {} })).toBe(t().challenge.readPosition);
+    // Amendment 21 (FR-139): the banner of a wave in "Gemischt".
+    expect(promptText({ key: 'readPositionWave', params: {} })).toBe('Wo stehen die Gegner?');
     expect(promptText({ key: 'unknownKind', params: {} })).toBe('');
   });
 
@@ -254,5 +256,15 @@ describe('help and feedback texts (US5, T097, FR-033, SC-006)', () => {
       expect(allowed.has(text), text).toBe(true);
       expect(hasForbiddenWord(text), text).toBe(false);
     }
+  });
+});
+
+describe('amendment 21 settings texts (FR-136, FR-144)', () => {
+  it('names "Gegner gleichzeitig" and the three line styles, each with a one-line explanation', () => {
+    const L = t().settings.labels;
+    expect(L.enemiesAtOnce).toBe('Gegner gleichzeitig');
+    expect([L.lineStyle, L.lineStyleStraight, L.lineStyleCurved, L.lineStyleTangled]).toEqual(['Linien', 'Gerade', 'Gebogen', 'Gebogen und verschlungen']);
+    expect(t().settings.explanations.enemiesAtOnce.length).toBeGreaterThan(0);
+    expect(t().settings.explanations.lineStyle.length).toBeGreaterThan(0);
   });
 });

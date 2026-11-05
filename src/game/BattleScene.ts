@@ -45,12 +45,19 @@
  *   destroyed, a heart lost, a decoy burst) shakes the screen a little, unless the operating system asks for reduced
  *   motion, which also means fewer particles. For the end-to-end tests only (D4), the canvas carries
  *   `data-muzzle-flashes`, `data-reduced-motion` and `data-fps` (frames in the last second).
+ * - Amendment 21 (FR-137 to FR-142): a wave's other enemies get their own views (`waveViews`, by tank id), drawn like the
+ *   enemy with a target ring; views follow tank ids, because the help target moves into `RoundState.enemy`. A destroyed
+ *   enemy explodes and, while others of its wave stand, fades out; an enemy that comes alive fades in. The enemy shell
+ *   comes from the tank in `ShotInFlight.shooterId`. While 2 or more enemies stand and help shows, the help target's
+ *   ring pulses. For the end-to-end tests only (D4), the canvas carries `data-help-target` (the help target's number
+ *   while 2 or more enemies stand, '' otherwise).
  * - Amendment 18: a hit that does not count plays no chime. For the end-to-end tests only (D4), the canvas carries
  *   `data-chimes` (chimes played since the scene started).
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { ENEMY_ID, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { standingEnemies } from '../core/battle/wave';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
@@ -108,6 +115,8 @@ export class BattleScene extends Phaser.Scene {
   private enemy!: TankView;
   /** Decoy views by tank id, for the decoys of the current comparison search (amendment 10). */
   private readonly decoyViews = new Map<string, TankView>();
+  /** Views of the wave's other enemies by tank id (amendment 21); the tank with ENEMY_ID always uses `enemy`. */
+  private readonly waveViews = new Map<string, TankView>();
   private decoyBursts = 0;
   private enemyWarnings = 0;
   /** Whether the scene last asked Phaser to pause (true) or to resume (false). */
@@ -180,6 +189,8 @@ export class BattleScene extends Phaser.Scene {
     this.unsubscribe = null;
     for (const view of this.decoyViews.values()) view.destroy();
     this.decoyViews.clear();
+    for (const view of this.waveViews.values()) view.destroy();
+    this.waveViews.clear();
     this.numberLine.destroy();
   }
 
@@ -211,9 +222,7 @@ export class BattleScene extends Phaser.Scene {
     // The new search right after a hit (every play mode is a search, amendment 17): the destroyed enemy stays in view
     // during its explosion.
     const searchAfterHit = !newRound && !destroyed && prev?.phase === 'playerShot' && s.phase === 'challenge' && s.lastShot?.hit === true;
-    this.enemy.sync(s.enemy, newRound || destroyed || searchAfterHit);
-    // The new enemy is visible in every challenge kind and fades in at its number (amendment 07, FR-010).
-    if (searchAfterHit) this.enemy.appear(this.appearDelay);
+    this.drawEnemies(s, prev, newRound, destroyed || searchAfterHit);
     if (!newRound && prev && s.lives < prev.lives) {
       this.effects.hitFlash(this.player);
       this.effects.shake();
@@ -229,10 +238,10 @@ export class BattleScene extends Phaser.Scene {
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
     if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) {
       const id = s.lastShot.nearTankId;
-      (id === null || id === s.enemy.id ? this.enemy : this.decoyViews.get(id))?.shake();
+      (id === null ? this.enemy : (this.enemyView(id) ?? this.decoyViews.get(id)))?.shake();
     }
     // The large explosion where the destroyed enemy stood; the hit state itself holds the destroyed enemy.
-    const gone = destroyed ? s.enemy : null;
+    const gone = destroyed ? ([s.enemy, ...s.wave].find((t) => t.id === s.lastShot?.hitTankId) ?? s.enemy) : null;
     if (gone) {
       const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
@@ -256,6 +265,47 @@ export class BattleScene extends Phaser.Scene {
       if (pause) this.scene.pause();
       else this.scene.resume();
     }
+  }
+
+  /** The view of an enemy of the wave by tank id (amendment 21). */
+  private enemyView(id: string): TankView | undefined {
+    return id === ENEMY_ID ? this.enemy : this.waveViews.get(id);
+  }
+
+  /**
+   * The enemy and the wave's other enemies (amendment 21). `instant` places them without tweening (a new round, the hit
+   * and the search after it). An enemy that comes alive fades in at its number (amendment 07, FR-010); one destroyed
+   * while others of its wave stand fades out after its explosion; the last one stays as a wreck until the next wave.
+   */
+  private drawEnemies(s: RoundState, prev: RoundState | null, newRound: boolean, instant: boolean): void {
+    const tanks = [s.enemy, ...s.wave];
+    const ids = new Set(tanks.map((t) => t.id));
+    for (const [id, view] of this.waveViews) {
+      if (ids.has(id)) continue;
+      this.waveViews.delete(id);
+      view.destroy();
+    }
+    const before = prev === null || newRound ? new Map<string, TankState>() : new Map([prev.enemy, ...prev.wave].map((t) => [t.id, t]));
+    const standing = standingEnemies(s).length;
+    for (const tank of tanks) {
+      let view = this.enemyView(tank.id);
+      const created = !view;
+      if (!view) {
+        view = new TankView(this, 'enemy', WORLD_HEIGHT);
+        view.setBarrelAngle(s.playerSide === 'left' ? 150 : 30);
+        view.setTarget(true);
+        this.waveViews.set(tank.id, view);
+      }
+      const was = before.get(tank.id);
+      view.sync(tank, newRound || created || instant);
+      if (newRound) continue;
+      if (tank.alive && (was === undefined || !was.alive)) view.appear(this.appearDelay);
+      else if (!tank.alive && was?.alive && standing > 0) view.fadeOut(NEW_ENEMY_DELAY_MS);
+    }
+    // The help target's ring pulses while help shows and 2 or more enemies stand (FR-141).
+    const pulse = standing >= 2 && s.phase !== 'roundOver' && s.help.level > 0;
+    for (const tank of tanks) this.enemyView(tank.id)?.setTargetPulse(pulse && tank.id === s.enemy.id);
+    this.game.canvas.dataset.helpTarget = standing >= 2 ? String(s.enemy.position) : '';
   }
 
   /**
@@ -308,7 +358,10 @@ export class BattleScene extends Phaser.Scene {
     // Taps, the help mark and the test attributes.
     const choosing = s.phase === 'challenge' && s.decoys.length > 0;
     const standing: Array<{ tank: TankState; view: TankView }> = [];
-    if (s.enemy.alive) standing.push({ tank: s.enemy, view: this.enemy });
+    for (const tank of [s.enemy, ...s.wave]) {
+      const view = this.enemyView(tank.id);
+      if (view && tank.alive) standing.push({ tank, view });
+    }
     for (const decoy of s.decoys) {
       const view = this.decoyViews.get(decoy.id);
       if (view && decoy.alive) standing.push({ tank: decoy, view });
@@ -356,7 +409,7 @@ export class BattleScene extends Phaser.Scene {
     }
     // The enemy turns its turret toward its aim. In a comparison turn every standing decoy turns toward its own aim at
     // the same time and fires with it, so the volley does not show which tank is the enemy (bug report B2, FR-043a).
-    if (angle !== null) this.enemy.turnTo(angle, ENEMY_TURN_MS);
+    if (angle !== null) this.shooterView(shot).turnTo(angle, ENEMY_TURN_MS);
     for (const d of shot.decoyShells) {
       const a = launchAngle(d.path);
       if (a !== null) this.decoyViews.get(d.shooterId)?.turnTo(a, ENEMY_TURN_MS);
@@ -366,6 +419,11 @@ export class BattleScene extends Phaser.Scene {
       .sort((a, b) => a - b)
       .join(';');
     this.fireAfter(shot, ENEMY_FIRE_DELAY_MS);
+  }
+
+  /** The enemy view that fires an enemy shell: the tank in shooterId in a wave (amendment 21), otherwise the enemy. */
+  private shooterView(shot: ShotInFlight): TankView {
+    return (shot.shooterId === undefined ? undefined : this.enemyView(shot.shooterId)) ?? this.enemy;
   }
 
   private fireAfter(shot: ShotInFlight, ms: number): void {
@@ -378,7 +436,7 @@ export class BattleScene extends Phaser.Scene {
   private fire(shot: ShotInFlight): void {
     this.sounds?.shot();
     // Recoil, muzzle flash and smoke on every tank that fires (amendment 14, FR-111).
-    const shooters = [shot.shooter === 'player' ? this.player : this.enemy, ...shot.decoyShells.map((d) => this.decoyViews.get(d.shooterId))];
+    const shooters = [shot.shooter === 'player' ? this.player : this.shooterView(shot), ...shot.decoyShells.map((d) => this.decoyViews.get(d.shooterId))];
     for (const view of shooters) view?.fire();
     this.muzzleFlashes += shooters.filter(Boolean).length;
     this.game.canvas.dataset.muzzleFlashes = String(this.muzzleFlashes);

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 10 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
- * amendment 17; version 9 for amendment 18; version 10 for amendment 19).
+ * Structural schema for persisted settings, version 11 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -17,7 +17,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(10),
+  version: z.literal(11),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -86,11 +86,22 @@ export const settingsSchema = z.object({
     mode: z.enum(['always', 'upToLevel', 'never']),
     level: rulerLevelSchema,
   }),
+  /**
+   * "Gegner gleichzeitig" (amendment 21, FR-136): the size of an enemy wave in "Nur Zahlenstrahl" and in the
+   * "read the ruler" searches of "Gemischt" (src/core/battle/wave.ts). 1 keeps one enemy.
+   */
+  enemiesAtOnce: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  /**
+   * "Linien" (amendment 21, FR-144): straight, curved, or curved and tangled pointer lines. A stored 'tangled' with one
+   * enemy at once is drawn as 'curved' (effectiveLineStyle in src/core/view/pointerCurve.ts).
+   */
+  lineStyle: z.enum(['straight', 'curved', 'tangled']),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type RoundType = Settings['roundType'];
 export type AimCross = Settings['aimCross'];
+export type LineStyle = Settings['lineStyle'];
 /** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
 export type PlayMode = keyof Settings['playModes'];
 /** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */

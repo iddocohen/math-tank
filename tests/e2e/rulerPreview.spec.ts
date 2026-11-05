@@ -121,7 +121,8 @@ for (const [level, range, labels] of [
     const canvas = page.locator('canvas');
     await expect(canvas).toHaveAttribute('data-ruler-lines', '101');
     await expect(canvas).toHaveAttribute('data-ruler-labels', labels);
-    const dir = process.env.SCREENSHOT_DIR;
+    // playwright.config.ts passes SCREENSHOT_DIR as metadata (the e2e specs have no Node types).
+    const dir = test.info().config.metadata.screenshotDir as string | undefined;
     if (dir && test.info().project.name === 'chromium') await page.screenshot({ path: `${dir}/ruler-${range.min}-${range.max}-level-${level}.png` });
   });
 }

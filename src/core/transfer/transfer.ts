@@ -200,7 +200,7 @@ function settingsDiff(value: Record<string, unknown>, base: Record<string, unkno
  * existing code means. The settings version travels in the differences, and the reader migrates from it.
  * Amendment 18 adds `pointAfterFullHelp: true`: older codes hold no such field and the version 8 to 9 step gives the same
  * value, so no existing code changes meaning, and a code with the setting on leaves the field out. Amendment 19 adds
- * `aimCross` "Immer" with level 2 in the same way.
+ * `aimCross` "Immer" with level 2 in the same way, and amendment 21 `enemiesAtOnce` 1 and `lineStyle` 'straight'.
  */
 export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   version: 6,
@@ -229,6 +229,8 @@ export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   numberPad: 'auto',
   pointAfterFullHelp: true,
   aimCross: { mode: 'always', level: 2 },
+  enemiesAtOnce: 1,
+  lineStyle: 'straight',
 });
 
 function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {

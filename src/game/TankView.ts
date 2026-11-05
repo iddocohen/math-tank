@@ -81,6 +81,9 @@ const RECOIL_MS = 70;
 const FLASH_MS = 220;
 const SMOKE_MS = 700;
 const DEAD_COLOR = 0x555555;
+/** The help target's ring in a wave (amendment 21): grows to this size and back over twice this time. */
+const TARGET_PULSE_SCALE = 1.6;
+const TARGET_PULSE_MS = 450;
 
 export class TankView {
   readonly container: Phaser.GameObjects.Container;
@@ -106,6 +109,7 @@ export class TankView {
   private lastY: number | null = null;
   private lastLives: number | null = null;
   private hidden = false;
+  private pulsing = false;
   private readonly tapZone: Phaser.GameObjects.Zone;
   private tappable = false;
   private readonly mark: Phaser.GameObjects.Graphics;
@@ -142,6 +146,7 @@ export class TankView {
     this.hearts = scene.add.graphics().setY(-BAR_OFFSET + HEART_SIZE / 2);
     this.target = scene.add.graphics().setVisible(false);
     drawTarget(this.target);
+    this.target.setY(-TANK_BODY_HEIGHT / 2);
     this.you = createYouMarker(scene).setVisible(false);
     this.mark = scene.add.graphics().setVisible(false);
     this.mark.lineStyle(6, MARK_COLOR, 1);
@@ -304,6 +309,25 @@ export class TankView {
     this.scene.tweens.add({ targets: this.turret, angle: -angleDeg, duration: ms, ease: 'Sine.easeInOut' });
   }
 
+  /**
+   * Amendment 21 (FR-141): the target ring of the help target pulses while help shows. Off stops the pulse and keeps
+   * the ring at its normal size.
+   */
+  setTargetPulse(on: boolean): void {
+    if (on === this.pulsing) return;
+    this.pulsing = on;
+    this.scene.tweens.killTweensOf(this.target);
+    this.target.setScale(1);
+    if (on) this.scene.tweens.add({ targets: this.target, scale: TARGET_PULSE_SCALE, duration: TARGET_PULSE_MS, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** A destroyed enemy of a wave fades out after `delayMs` (amendment 21); `appear` brings it back with the next wave. */
+  fadeOut(delayMs: number): void {
+    if (this.hidden) return;
+    this.scene.tweens.killTweensOf(this.container);
+    this.scene.tweens.add({ targets: this.container, alpha: 0, delay: delayMs, duration: FADE_MS });
+  }
+
   /** Shows or hides the target ring where the pointer line meets the tank (amendment 06, FR-073). */
   setTarget(on: boolean): void {
     this.target.setVisible(on);
@@ -402,7 +426,8 @@ export class TankView {
 
 /** A small ring with a dot on the body's center line, where the pointer line meets the tank: the spot to hit. */
 function drawTarget(g: Phaser.GameObjects.Graphics): void {
-  const y = -TANK_BODY_HEIGHT / 2;
+  // Drawn around the graphics' own origin, which sits on the body's center line, so the pulse grows it in place.
+  const y = 0;
   g.lineStyle(5, 0x1b1f27, 0.9);
   g.strokeCircle(0, y, 9);
   g.lineStyle(3, 0xffffff, 1);

@@ -27,7 +27,8 @@ import { decoyShot, enemyShot } from '../ai/enemy';
 import { isFastGuess } from '../progress/classify';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
-import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
+import { afterHelpRequest, afterMiss, ANSWER_DELAY_MS, SOLUTION_HELP_LEVEL, startSearch } from './guided';
+import { challengeFor, nearestEnemy, retarget, standingEnemies } from './wave';
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
 import {
@@ -292,7 +293,8 @@ export class BattleController {
       // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
       // With "Punkt nach voller Hilfe" off, a hit after the shown solution destroys the enemy but does not count toward
       // the score, the stars, "Gegner pro Runde" or the personal best (amendment 18, FR-129).
-      const counts = this.settings.pointAfterFullHelp || next.help.level < SOLUTION_HELP_LEVEL;
+      // A wave enemy that is not the help target had no help (amendment 21, FR-143).
+      const counts = this.settings.pointAfterFullHelp || next.help.level < SOLUTION_HELP_LEVEL || next.lastShot.hitTankId !== next.enemy.id;
       const destroyed: RoundState = {
         ...next,
         enemiesDestroyed: next.enemiesDestroyed + (counts ? 1 : 0),
@@ -301,21 +303,36 @@ export class BattleController {
         missStreak: 0,
         decoys: next.decoys.map((d) => ({ ...d, alive: false })),
       };
-      this.recordAttempt(destroyed);
+      this.recordAttempt(destroyed, destroyed.lastShot?.hitTankId ?? null);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
         return;
       }
       this.set(destroyed);
+      // Amendment 21 (FR-138, FR-141): while enemies of the wave stand, the nearest one to the landing number becomes the
+      // help target, with the help from step 0 and the answer delay; the hills stay and no enemy fires.
+      const remaining = standingEnemies(destroyed);
+      if (remaining.length > 0) {
+        const target = nearestEnemy(destroyed.lastShot!.landed, remaining);
+        const next = retarget(destroyed, target, this.settings, false);
+        const now = this.deps.clock();
+        this.set({ ...next, phase: 'challenge', answerableAt: now + ANSWER_DELAY_MS, message: null, selection: null, entry: emptyEntry(), stepAnimation: null });
+        return;
+      }
       // The difficulty is read after the attempt was recorded, so a step change applies to this next search, also within
       // the round (amendment 17). New hills before the next enemy is placed on them (amendment 13, FR-101).
-      this.set(startSearch(renewTerrain(destroyed, this.settings), this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
+      this.set(startSearch(renewTerrain(destroyed, this.settings), this.settings, this.deps.clock(), destroyed.lastShot?.enemyNumber ?? destroyed.enemy.position, this.difficulty()));
       return;
     }
     // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081) and adds to the misses in
     // a row, 2 for a fast guess (amendment 13, FR-098). The guess rule reads the misses before this one.
     const step = this.isFastGuessMiss(next) ? 2 : 1;
-    const missed = afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true);
+    // Amendment 21 (FR-141): in a wave the miss counts for the standing enemy nearest the landing number, which becomes
+    // the help target with the help reached so far.
+    const standing = next.wave.length > 0 ? standingEnemies(next) : [];
+    const target = standing.length > 0 && next.lastShot ? nearestEnemy(next.lastShot.landed, standing) : null;
+    const aimed = target && target.id !== next.enemy.id ? retarget(next, target, this.settings, true) : next;
+    const missed = afterMiss(aimed, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true);
     const streaked: RoundState = { ...missed, missStreak: missed.missStreak + step };
     this.set({ ...streaked, phase: 'enemyTurn', shot: this.nextEnemyShot(streaked) });
   }
@@ -346,11 +363,16 @@ export class BattleController {
    * Stores the finished search through the ProgressStore (FR-035). Called after the shot animation, between turns,
    * never while a shell is in flight. Every play mode records its attempts (amendment 17, FR-124).
    */
-  private recordAttempt(s: RoundState): void {
+  private recordAttempt(s: RoundState, hitTankId: string | null = null): void {
     if (!s.challenge || s.answerableAt === null) return;
+    // Amendment 21 (FR-143): an enemy of the wave destroyed while it was not the help target counts as solved with no
+    // help and no wrong answer; the misses belong to the help target.
+    const other = hitTankId !== null && hitTankId !== s.enemy.id ? s.wave.find((t) => t.id === hitTankId) : undefined;
+    const challenge = other ? challengeFor(s.challenge, other, 2) : s.challenge;
+    const help = other ? { level: 0 as const, wrongAnswers: 0, wrongAnswerTimes: [], content: null } : s.help;
     const attempt = buildAttempt({
-      challenge: s.challenge,
-      help: s.help,
+      challenge,
+      help,
       answerableAt: s.answerableAt,
       answeredAt: this.firedAt,
       range: this.settings.range,
@@ -408,12 +430,15 @@ export class BattleController {
    */
   private nextEnemyShot(s: RoundState): ShotInFlight {
     const shotIndex = this.enemyShotIndex++;
+    // Amendment 21 (FR-140): in a wave one standing enemy, chosen by a seeded draw, fires from its own barrel.
+    const standing = s.wave.length > 0 ? standingEnemies(s) : [];
+    const shooter = standing.length > 0 ? standing[createRng(deriveSeed(s.seed, 9, shotIndex)).int(0, standing.length - 1)]! : s.enemy;
     const shot = enemyShot({
       difficulty: this.settings.enemyDifficulty,
       roundSeed: s.seed,
       shotIndexInRound: shotIndex,
       missStreak: s.missStreak,
-      origin: muzzle(s.enemy),
+      origin: muzzle(shooter),
       playerX: s.player.x,
       terrain: s.terrain,
       worldWidth: WORLD_WIDTH,
@@ -435,7 +460,7 @@ export class BattleController {
           worldHeight: WORLD_HEIGHT,
         }),
       }));
-    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hits: shot.hits, decoyShells };
+    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hits: shot.hits, decoyShells, ...(standing.length > 0 ? { shooterId: shooter.id } : {}) };
   }
 
   private impact(impact: Impact): RoundState {

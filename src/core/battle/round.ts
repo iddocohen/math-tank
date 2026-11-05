@@ -9,6 +9,7 @@ import { minEnemyGap } from '../math/gaps';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
 import { BLAST_RADIUS } from '../physics/damage';
 import { LIVES, shotKind } from './hitRule';
+import { nearestEnemy } from './wave';
 import { emptyEntry } from './entry';
 import { LAST_STEPS } from '../progress/ladders';
 
@@ -97,6 +98,7 @@ export function createRound(
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
     decoys: [],
+    wave: [],
     playerSide: side,
     challenge: null,
     answerableAt: null,
@@ -123,7 +125,7 @@ export function renewTerrain(s: RoundState, settings: Settings): RoundState {
   const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
   const settle = (tank: TankState): TankState => moveTank(tank, tank.position, settings, terrain);
   // The trail of the last shot belongs to the old ground and goes with it (bug report B1, FR-004).
-  return { ...s, terrainSeed, terrain, lastPlayerPath: null, player: settle(s.player), enemy: settle(s.enemy), decoys: s.decoys.map(settle) };
+  return { ...s, terrainSeed, terrain, lastPlayerPath: null, player: settle(s.player), enemy: settle(s.enemy), wave: s.wave.map(settle), decoys: s.decoys.map(settle) };
 }
 
 /**
@@ -196,6 +198,7 @@ export function applyImpact(state: RoundState, impact: Impact, rules: DamageRule
       terrain,
       player: settle(state.player),
       enemy: settle(state.enemy),
+      wave: state.wave.map((t) => settle(t)),
       decoys: state.decoys.map((d) => settle(d)),
       lives: lostHeart ? Math.max(0, state.lives - 1) : state.lives,
     };
@@ -203,33 +206,41 @@ export function applyImpact(state: RoundState, impact: Impact, rules: DamageRule
 
   const { fired, landed } = impact;
   const enemy = state.enemy;
-  const hit = enemy.alive && shotKind(fired, enemy.position, rules.range) === 'hit';
+  // Amendment 21: in a wave the shell destroys whichever standing enemy stands at the fired number.
+  const enemies = [enemy, ...state.wave];
+  const hitTank = enemies.find((t) => t.alive && shotKind(fired, t.position, rules.range) === 'hit') ?? null;
+  const hit = hitTank !== null;
   // Comparison (amendment 10): a decoy at the exact fired number bursts; it is a miss.
   const decoyHit = hit ? null : (state.decoys.find((d) => d.alive && d.position === fired) ?? null);
   const decoys = state.decoys.map((d) => settle(d, d === decoyHit));
-  // A near miss shakes the standing tank whose body the shell landed on (enemy or decoy).
-  const standingBefore = [enemy, ...state.decoys].filter((t) => t.alive);
+  // A near miss shakes the standing tank whose body the shell landed on (enemy, wave enemy or decoy).
+  const standingBefore = [...enemies, ...state.decoys].filter((t) => t.alive);
   const nearTank = hit || decoyHit ? null : (standingBefore.find((t) => shotKind(fired, t.position, rules.range) === 'near') ?? null);
-  // The step count refers to the enemy, or in comparison turns to the nearest tank still standing (FR-072).
+  // The step count refers to the enemy, in comparison turns to the nearest tank still standing (FR-072), and in a wave
+  // to the nearest enemy still standing (FR-140).
   const standingAfter = [enemy, ...decoys].filter((t) => t.alive || t === enemy);
-  const target = state.decoys.length === 0 ? enemy : nearestTo(landed, standingAfter);
+  const waveAfter = enemies.filter((t) => t.alive && t !== hitTank);
+  const inWave = state.wave.length > 0;
+  const target = inWave ? (waveAfter.length > 0 ? nearestEnemy(landed, waveAfter) : (hitTank ?? enemy)) : state.decoys.length === 0 ? enemy : nearestTo(landed, standingAfter);
   const lastShot: LastShot = {
     fired,
     landed,
     hit,
     nearMiss: nearTank !== null,
     nearTankId: nearTank?.id ?? null,
-    hitTankId: hit ? enemy.id : (decoyHit?.id ?? null),
+    hitTankId: hitTank?.id ?? decoyHit?.id ?? null,
     decoyHit: decoyHit !== null,
     targetNumber: target.position,
     distance: Math.abs(landed - target.position),
-    enemyNumber: enemy.position,
+    enemyNumber: (hitTank ?? enemy).position,
+    ...(inWave && enemies.filter((t) => t.alive).length >= 2 ? { wave: true } : {}),
   };
   return {
     ...state,
     terrain,
     player: settle(state.player),
-    enemy: settle(enemy, hit),
+    enemy: settle(enemy, hitTank === enemy),
+    wave: state.wave.map((t) => settle(t, t === hitTank)),
     decoys,
     lastShot,
   };

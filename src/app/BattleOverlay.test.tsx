@@ -768,3 +768,18 @@ describe('BattleOverlay play modes (amendment 17, FR-122, FR-123)', () => {
     expect(controller.getState().challenge!.difficultyStep).toBe(0);
   });
 });
+
+describe('BattleOverlay enemy waves (amendment 21, FR-139, FR-141)', () => {
+  it('"Gemischt" shows "Wo stehen die Gegner?" for a wave and names the help target in data-enemy-number', () => {
+    let found: BattleController | null = null;
+    for (let seed = 1; seed < 200 && !found; seed++) {
+      const c = new BattleController({ settings: { ...defaultSettings(), adaptive: false, enemiesAtOnce: 3 }, progress: memoryProgressStore(), clock: () => 1000, seed });
+      c.startRound('mixed');
+      if (c.getState().challenge?.kind === 'readPosition' && c.getState().wave.length > 0) found = c;
+    }
+    expect(found).not.toBeNull();
+    render(<Overlay controller={found!} />);
+    expect(screen.getByTestId('challenge-banner').textContent).toBe('Wo stehen die Gegner?');
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number')).toBe(String(found!.getState().enemy.position));
+  });
+});

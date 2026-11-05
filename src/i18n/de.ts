@@ -130,6 +130,8 @@ export const de = {
     missingBetween: (a: number, b: number) => `Welche Zahl liegt zwischen ${a} und ${b}?`,
     midpoint: (a: number, b: number) => `Welche Zahl liegt mitten zwischen ${a} und ${b}?`,
     readPosition: 'Wo steht der Gegner?',
+    /** Amendment 21 (FR-139): a wave of 2 or more enemies in "Gemischt". */
+    readPositionWave: 'Wo stehen die Gegner?',
     // US3: the result of the exercise is the enemy's number (T083).
     addition: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} + ${b}${c === undefined ? '' : ` + ${c}`}`,
     subtraction: (a: number, b: number, c?: number) => `Der Gegner ist bei ${a} − ${b}${c === undefined ? '' : ` − ${c}`}`,
@@ -374,6 +376,12 @@ export const de = {
       aimCrossUpToLevel: 'Bis Zahlenstrahl-Stufe',
       aimCrossNever: 'Nie',
       aimCrossLevel: 'Zielkreuz bis Stufe',
+      /** Amendment 21 (FR-136, FR-144). */
+      enemiesAtOnce: 'Gegner gleichzeitig',
+      lineStyle: 'Linien',
+      lineStyleStraight: 'Gerade',
+      lineStyleCurved: 'Gebogen',
+      lineStyleTangled: 'Gebogen und verschlungen',
       adaptive: 'Schwierigkeit automatisch anpassen',
       playModeMixed: 'Spielart „Gemischt“ anbieten',
       playModeRuler: 'Spielart „Nur Zahlenstrahl“ anbieten',
@@ -387,6 +395,8 @@ export const de = {
     /** Amendment 18 (FR-129): one line under each switch of the time limit and the point after the full help. */
     explanations: {
       aimCross: 'Das gelbe Kreuz mit der Linie zum Zahlenstrahl.',
+      enemiesAtOnce: 'So viele Gegner stehen beim Zahlenstrahl auf einmal da.',
+      lineStyle: 'Gebogene Linien muss das Kind bis zum Zahlenstrahl verfolgen.',
       timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
       pointAfterFullHelp: 'Wenn aus: Ein Treffer nach der gezeigten Lösung bringt keinen Panzer, keinen Stern und zählt nicht für den Rekord.',
     },

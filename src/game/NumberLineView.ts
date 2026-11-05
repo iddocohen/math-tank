@@ -741,6 +741,9 @@ export class NumberLineView {
       if (shot.nearMiss) {
         // A near miss on a tank body: the child's number and the distance, no enemy number (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.targetNumber, min, max), t().battle.compare(shot.fired, shot.targetNumber));
+      } else if (to !== shot.landed && shot.wave) {
+        // A miss at a wave: the landing number and the steps to the nearest standing enemy, no enemy number (FR-140).
+        this.drawBracket(lx, numberToX(to, min, max), t().battle.compare(shot.landed, to));
       } else if (to !== shot.landed) {
         // Every miss, in every mode: the steps from the landing number to the tank (amendments 07 and 10, FR-072).
         this.drawBracket(lx, numberToX(to, min, max), t().battle.steps(Math.abs(shot.landed - to)));
@@ -846,7 +849,10 @@ export class NumberLineView {
     const g = this.marks;
     const enemy = visibleEnemy(s);
     // "Nur Rechnen" has no ruler for the lines to point at (amendment 17).
-    const visible: TankState[] = !MODE_TRAITS[s.mode].showsRuler ? [] : [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
+    // Amendment 21: every standing enemy of a wave has its line too.
+    const visible: TankState[] = !MODE_TRAITS[s.mode].showsRuler
+      ? []
+      : [...(enemy ? [enemy] : []), ...s.wave.filter((t) => t.alive), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
     g.lineStyle(2, POINTER, 0.8);
     g.fillStyle(POINTER, 0.9);
     for (const tank of visible) {

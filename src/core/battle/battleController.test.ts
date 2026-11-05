@@ -133,7 +133,7 @@ describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US
     // Exactly the fields of data-model.md RoundState: the angle, power and charge fields of the old aiming are gone.
     expect(Object.keys(s).sort()).toEqual(
       [
-        'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'challenge', 'answerableAt',
+        'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'wave', 'playerSide', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
         'lives', 'enemiesDestroyed', 'enemiesHit', 'elapsedMs', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
       ].sort(),
@@ -2653,5 +2653,182 @@ describe('BattleController play modes (amendment 17, T333, FR-122 to FR-124)', (
     expect(s.mode).toBe('ruler');
     expect(s.phase).toBe('challenge');
     expect(s.challenge!.kind).toBe('readPosition');
+  });
+});
+
+describe('amendment 21: waves of enemies in the ruler searches (FR-137 to FR-143)', () => {
+  const WAVE: Partial<Settings> = { enemiesAtOnce: 3 };
+  const standing = (s: RoundState): TankState[] => [s.enemy, ...s.wave].filter((t) => t.alive).sort((a, b) => a.position - b.position);
+  const nearest = (n: number, tanks: TankState[]) => tanks.reduce((b, t) => (Math.abs(t.position - n) < Math.abs(b.position - n) ? t : b));
+
+  it('places 3 enemies in "Nur Zahlenstrahl"; the leftmost is the help target and the challenge answer', () => {
+    const { controller } = makeController(WAVE);
+    controller.startRound('ruler');
+    const s = controller.getState();
+    const tanks = standing(s);
+    expect(tanks).toHaveLength(3);
+    expect(s.wave).toHaveLength(2);
+    expect(new Set(tanks.map((t) => t.position)).size).toBe(3);
+    expect(tanks.every((t) => t.kind === 'enemy')).toBe(true);
+    expect(s.enemy.id).toBe(tanks[0]!.id);
+    expect(s.challenge?.answer).toBe(s.enemy.position);
+    expect(s.challenge?.kind).toBe('readPosition');
+  });
+
+  it('a hit destroys only the hit enemy, counts it, sends no enemy shot, keeps the hills and retargets with help reset', () => {
+    const { controller } = makeController(WAVE);
+    controller.startRound('ruler');
+    const before = controller.getState();
+    const far = standing(before)[2]!;
+    controller.fireAt(far.position);
+    controller.shotAnimationDone();
+    const s = controller.getState();
+    expect(s.phase).toBe('challenge');
+    expect(s.shot).toBeNull();
+    expect(s.enemiesDestroyed).toBe(1);
+    expect(s.enemiesHit).toBe(1);
+    expect(s.missStreak).toBe(0);
+    expect(s.terrainSeed).toBe(before.terrainSeed);
+    expect(s.lastShot).toMatchObject({ hit: true, hitTankId: far.id, enemyNumber: far.position });
+    const left = standing(s);
+    expect(left.map((t) => t.id)).toEqual(standing(before).slice(0, 2).map((t) => t.id));
+    expect(left.map((t) => t.position)).toEqual(standing(before).slice(0, 2).map((t) => t.position));
+    expect(s.enemy.id).toBe(nearest(far.position, left).id);
+    expect(s.challenge?.answer).toBe(s.enemy.position);
+    expect(s.help.level).toBe(0);
+    expect(s.help.wrongAnswers).toBe(0);
+    expect(s.answerableAt).toBeGreaterThan(before.answerableAt!);
+  });
+
+  it('a miss shows the steps to the nearest standing enemy, retargets with the help kept, and one standing enemy fires from its muzzle', () => {
+    const { controller } = makeController(WAVE);
+    controller.startRound('ruler');
+    const before = controller.getState();
+    const own = before.player.position;
+    controller.fireAt(own);
+    controller.shotAnimationDone();
+    const s = controller.getState();
+    const near = nearest(s.lastShot!.landed, standing(s));
+    expect(s.lastShot).toMatchObject({ hit: false, wave: true, targetNumber: near.position, distance: Math.abs(s.lastShot!.landed - near.position) });
+    expect(s.enemy.id).toBe(near.id);
+    expect(s.challenge?.answer).toBe(near.position);
+    expect(s.help.wrongAnswers).toBe(1);
+    expect(s.missStreak).toBe(1);
+    expect(s.phase).toBe('enemyTurn');
+    const shooter = standing(s).find((t) => t.id === s.shot?.shooterId);
+    expect(shooter).toBeDefined();
+    expect(s.shot!.path[0]!.x).toBeCloseTo(muzzle(shooter!).x, 0);
+  });
+
+  it('the shooter is a seeded draw among the standing enemies', () => {
+    const shooters = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) {
+      const { controller } = makeController(WAVE, seed);
+      controller.startRound('ruler');
+      fireAtOwnNumber(controller);
+      controller.shotAnimationDone();
+      const s = controller.getState();
+      const again = makeController(WAVE, seed).controller;
+      again.startRound('ruler');
+      fireAtOwnNumber(again);
+      again.shotAnimationDone();
+      expect(again.getState().shot?.shooterId).toBe(s.shot?.shooterId);
+      shooters.add(standing(s).findIndex((t) => t.id === s.shot?.shooterId) === 0 ? 'left' : 'other');
+    }
+    expect(shooters.size).toBe(2);
+  });
+
+  it('help works on the help target: the help steps follow it after a miss nearer another enemy', () => {
+    const { controller } = makeController(WAVE);
+    controller.startRound('ruler');
+    const [a, , c] = standing(controller.getState());
+    playTurn(controller, (k) => k.fireAt(a!.position + (a!.position > controller.getState().player.position ? -1 : 1)));
+    expect(controller.getState().enemy.id).toBe(a!.id);
+    playTurn(controller, (k) => k.fireAt(c!.position + (c!.position < WORLD_WIDTH ? -1 : 1)));
+    const s = controller.getState();
+    expect(s.enemy.id).toBe(c!.id);
+    expect(s.help.wrongAnswers).toBe(2);
+    expect(s.help.level).toBeGreaterThanOrEqual(1);
+    controller.requestHelp();
+    controller.requestHelp();
+    expect(controller.getState().help.content?.solution).toBe(c!.position);
+    expect(controller.getState().selection).toBe(c!.position);
+  });
+
+  it('the last enemy of a wave brings new hills and a new wave of 3; each destroyed enemy is one readPosition attempt', () => {
+    const { controller, progress } = makeController(WAVE);
+    controller.startRound('ruler');
+    const first = controller.getState();
+    for (let i = 0; i < 3; i++) playTurn(controller, fireAtEnemy);
+    const s = controller.getState();
+    expect(s.enemiesDestroyed).toBe(3);
+    expect(s.lives).toBe(LIVES);
+    expect(s.terrainSeed).not.toBe(first.terrainSeed);
+    expect(standing(s)).toHaveLength(3);
+    expect(s.wave.every((t) => t.alive)).toBe(true);
+    const attempts = progress.getProgress().attempts;
+    expect(attempts).toHaveLength(3);
+    expect(attempts.every((a) => a.kind === 'readPosition')).toBe(true);
+    expect(new Set(attempts.map((a) => a.challengeId)).size).toBe(3);
+  });
+
+  it('an enemy destroyed while it is not the help target is recorded with no help and no wrong answer; the target keeps its misses', () => {
+    const { controller, progress } = makeController(WAVE);
+    controller.startRound('ruler');
+    playTurn(controller, fireAtOwnNumber);
+    const s = controller.getState();
+    const other = standing(s).find((t) => t.id !== s.enemy.id)!;
+    playTurn(controller, (k) => k.fireAt(other.position));
+    expect(progress.getProgress().attempts.at(-1)).toMatchObject({ helpLevel: 0, wrongAnswers: 0, independent: true });
+
+    const g = makeController(WAVE);
+    g.controller.startRound('ruler');
+    playTurn(g.controller, fireAtOwnNumber);
+    playTurn(g.controller, fireAtEnemy);
+    expect(g.progress.getProgress().attempts.at(-1)).toMatchObject({ wrongAnswers: 1, independent: false });
+  });
+
+  it('"Neue Landschaft" replaces the whole wave', () => {
+    const { controller } = makeController(WAVE);
+    controller.startRound('ruler');
+    playTurn(controller, fireAtEnemy);
+    expect(standing(controller.getState())).toHaveLength(2);
+    controller.newScene();
+    const s = controller.getState();
+    expect(standing(s)).toHaveLength(3);
+    expect(s.enemiesDestroyed).toBe(1);
+  });
+
+  it('"Gegner pro Runde" ends the round in the middle of a wave', () => {
+    const { controller } = makeController({ ...WAVE, roundType: 'enemyCount', roundLength: 2 });
+    controller.startRound('ruler');
+    playTurn(controller, fireAtEnemy);
+    playTurn(controller, fireAtEnemy);
+    expect(controller.getState()).toMatchObject({ phase: 'roundOver', outcome: 'goalReached', enemiesDestroyed: 2 });
+  });
+
+  it('"Gemischt": a readPosition search has a wave with "Wo stehen die Gegner?" while 2 or more stand; other searches one enemy', () => {
+    const g = guidedRoundWhere((s) => s.challenge?.kind === 'readPosition', WAVE);
+    const s = g.controller.getState();
+    expect(standing(s)).toHaveLength(3);
+    expect(s.challenge?.prompt.key).toBe('readPositionWave');
+    answer(g, g.controller.getState().enemy.position);
+    expect(g.controller.getState().challenge?.prompt.key).toBe('readPositionWave');
+    answer(g, g.controller.getState().enemy.position);
+    expect(standing(g.controller.getState())).toHaveLength(1);
+    expect(g.controller.getState().challenge?.prompt.key).toBe('readPosition');
+    const other = guidedRoundWhere((x) => x.challenge !== null && x.challenge.kind !== 'readPosition', WAVE);
+    expect(other.controller.getState().wave).toEqual([]);
+  });
+
+  it('with one enemy at once there is no wave, no wave flag and no shooter id', () => {
+    const { controller } = makeController();
+    controller.startRound('ruler');
+    expect(controller.getState().wave).toEqual([]);
+    fireAtOwnNumber(controller);
+    controller.shotAnimationDone();
+    const s = controller.getState();
+    expect(s.lastShot?.wave).toBeUndefined();
+    expect(s.shot?.shooterId).toBeUndefined();
   });
 });

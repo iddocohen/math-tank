@@ -203,6 +203,11 @@ export interface RoundState {
    * A burst decoy stays here with alive false until the search ends.
    */
   decoys: TankState[];
+  /**
+   * Amendment 21 (FR-137): the other enemies of the current wave, kind 'enemy'; `enemy` is the help target. A destroyed
+   * one stays here with alive false until the wave ends. [] for a wave of one and in every other search.
+   */
+  wave: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
   /** The search's challenge; mode 'ruler' always readPosition, mode 'math' never readPosition or findNumber (amendment 17). */
@@ -295,6 +300,8 @@ export interface LastShot {
    * reads "Getroffen, mit Hilfe." (amendment 18, FR-129). Absent otherwise.
    */
   uncounted?: boolean;
+  /** Amendment 21: 2 or more enemies of a wave stood when the shell landed; a miss shows "Du: N · K Schritte" (FR-140). */
+  wave?: boolean;
 }
 
 export interface ShotInFlight {
@@ -310,6 +317,8 @@ export interface ShotInFlight {
    * and change neither the hearts nor the ground. Empty for every other shot.
    */
   decoyShells: DecoyShell[];
+  /** Amendment 21 (FR-140): in a wave, the id of the standing enemy that fires this enemy shell; absent means `enemy`. */
+  shooterId?: string;
 }
 
 /** One harmless shell of a decoy in a comparison turn's volley (bug report B2). */

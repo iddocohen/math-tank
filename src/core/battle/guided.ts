@@ -4,7 +4,7 @@
  * answer: only the exact number destroys the enemy, then a new enemy and a new search follow. A near miss
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
-import { deriveSeed } from '../rng';
+import { createRng, deriveSeed } from '../rng';
 import type { Challenge, FeedbackMessage, RoundState, Settings, TankState } from '../types';
 import { enabledKinds, generateChallenge, playModeKinds } from '../math/generate';
 import { isComparisonKind } from '../math/comparison';
@@ -13,6 +13,7 @@ import { emptyEntry } from './entry';
 import { nextHelp } from './help';
 import { MODE_TRAITS } from '../modes';
 import { makeTank, moveTank, parentDifficulty, type Difficulty } from './round';
+import { retarget, wavePositions, waveSize } from './wave';
 
 /** Answers count only after the challenge has been visible this long (edge case "Rapid tapping or typing"). */
 export const ANSWER_DELAY_MS = 1000;
@@ -86,7 +87,16 @@ export function startSearch(
   const decoys: TankState[] = (challenge.options ?? [])
     .filter((n) => n !== challenge.answer)
     .map((n, i) => makeTank(`decoy-${challenge.id}-${i}`, 'decoy', n, settings, s.terrain));
-  return {
+  // Amendment 21 (FR-137): a wave of enemies in the read-the-ruler searches of the ruler modes; the leftmost is the
+  // first help target (FR-141).
+  const size = waveSize(s.mode, settings, challenge);
+  const others =
+    size <= 1
+      ? []
+      : wavePositions({ settings, rulerLevel, first: challenge.answer, player: s.player.position, size, rng: createRng(deriveSeed(s.seed, 10, s.turn)) })
+          .slice(1)
+          .map((n, i) => makeTank(`wave-${challenge.id}-${i + 1}`, 'enemy', n, settings, s.terrain));
+  const searched: RoundState = {
     ...s,
     phase: 'challenge',
     rulerLevel,
@@ -99,7 +109,11 @@ export function startSearch(
     selection: null,
     entry: emptyEntry(),
     stepAnimation: null,
+    wave: others,
   };
+  if (others.length === 0) return searched;
+  const leftmost = [enemy, ...others].sort((a, b) => a.position - b.position)[0]!;
+  return retarget(searched, leftmost, settings, false);
 }
 
 /** The landing number of the search's latest miss, or null before any miss (the help steps count from it). */

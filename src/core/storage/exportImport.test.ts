@@ -113,16 +113,35 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(r.ok && r.settings.aimCross).toEqual({ mode: 'upToLevel', level: 4 });
   });
 
+  it('keeps the wave size and the line style (amendment 21, FR-136)', () => {
+    const wave: Settings = { ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'tangled' };
+    const r = importData(exportData(wave, sampleProgress(), sampleRecords(), sampleGarage()));
+    expect(r.ok && r.settings).toMatchObject({ enemiesAtOnce: 3, lineStyle: 'tangled' });
+  });
+
+  it('a version 10 settings file (exported before amendment 21) imports with one enemy and straight lines', () => {
+    const { enemiesAtOnce: _wave, lineStyle: _lines, ...v10 } = { ...sampleSettings(), version: 10 };
+    void _wave;
+    void _lines;
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const r = importData(JSON.stringify({ ...file, settings: v10 }));
+    expect(r.ok && r.settings).toEqual(sampleSettings());
+  });
+
   it('a version 9 settings file (exported before amendment 19) imports with the aiming cross "Immer"', () => {
-    const { aimCross: _cross, ...v9 } = { ...sampleSettings(), version: 9 };
+    const { aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v9 } = { ...sampleSettings(), version: 9 };
     void _cross;
+    void _wave;
+    void _lines;
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
     const r = importData(JSON.stringify({ ...file, settings: v9 }));
     expect(r.ok && r.settings).toEqual(sampleSettings());
   });
 
   it('a version 8 settings file (exported before amendment 18) imports with a point after the full help', () => {
-    const { pointAfterFullHelp: _point, aimCross: _cross, ...v8 } = { ...sampleSettings(), version: 8 };
+    const { pointAfterFullHelp: _point, aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v8 } = { ...sampleSettings(), version: 8 };
+    void _wave;
+    void _lines;
     void _point;
     void _cross;
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
@@ -226,7 +245,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(10);
+    expect(r.settings.version).toBe(11);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

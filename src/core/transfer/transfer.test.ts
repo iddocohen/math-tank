@@ -187,6 +187,18 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     expect('aimCross' in (JSON.parse(defJson) as [Record<string, unknown>])[0]).toBe(false);
   });
 
+  it('carries the wave size and the line style, and leaves the defaults out (amendment 21, FR-136)', async () => {
+    const wave: ReturnType<typeof data> = { ...data(), settings: { ...settings(), enemiesAtOnce: 4, lineStyle: 'curved' } };
+    const plain = await encodeTransfer(wave, PAGE, { codec: null });
+    const json = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)))) as [Record<string, unknown>];
+    expect(json[0]).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'curved' });
+    const dec = await decodeTransfer(codeOf(plain.link));
+    expect(dec.ok && dec.data.settings).toMatchObject({ enemiesAtOnce: 4, lineStyle: 'curved' });
+    const def = await encodeTransfer(data(), PAGE, { codec: null });
+    const defJson = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(def.link).slice(3)))) as [Record<string, unknown>];
+    expect('enemiesAtOnce' in defJson[0] || 'lineStyle' in defJson[0]).toBe(false);
+  });
+
   it('the compressed link is shorter than the uncompressed one', async () => {
     const zipped = await encodeTransfer(data(), PAGE, { codec: browserCodec() });
     const plain = await encodeTransfer(data(), PAGE, { codec: null });
@@ -293,7 +305,7 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(10);
+    expect(dec.data.settings.version).toBe(11);
     expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
     expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
     expect(dec.data.settings.pointAfterFullHelp).toBe(true);
@@ -439,7 +451,7 @@ describe('frozen version 2 codes (review T1, P4)', () => {
   it('the settings differences of version 2 codes are laid over the frozen version 6 defaults, a point after the full help and the aiming cross', () => {
     // Amendment 18 adds pointAfterFullHelp: true and amendment 19 aimCross "Immer", the values the version 8 to 9 and
     // 9 to 10 steps give, so no existing code changes meaning.
-    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true, aimCross: { mode: 'always', level: 2 } });
+    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true, aimCross: { mode: 'always', level: 2 }, enemiesAtOnce: 1, lineStyle: 'straight' });
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.aimCross)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.sound)).toBe(true);
@@ -467,7 +479,9 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       expect(dec.data.settings.pointAfterFullHelp).toBe(true);
       // Made before amendment 19: the aiming cross reads as "Immer", and the star total (garage payload 1) is migrated (FR-133).
       expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
-      expect(dec.data.settings.version).toBe(10);
+      // Made before amendment 21: one enemy at once and straight lines.
+      expect(dec.data.settings).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'straight' });
+      expect(dec.data.settings.version).toBe(11);
       expect(dec.data.garage).toEqual({
         version: 2,
         balance: 0,
@@ -551,6 +565,8 @@ function randomSettings(seed: number): Settings {
     aimCross: { mode: r.pick(['always', 'upToLevel', 'never'] as const), level: r.int(1, 5) as Settings['aimCross']['level'] },
     garage: bool(),
     numberPad: r.pick(['auto', 'always', 'never'] as const),
+    enemiesAtOnce: r.int(1, 4) as Settings['enemiesAtOnce'],
+    lineStyle: r.pick(['straight', 'curved', 'tangled'] as const),
   };
   const fitted = withRange(base, range);
   const span = range.max - range.min;

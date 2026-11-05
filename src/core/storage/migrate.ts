@@ -22,7 +22,7 @@ export function parseSettings(raw: unknown): Settings | null {
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
  * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
  * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Version 9 becomes version 10
- * (amendment 19: `aimCross` added, default "Immer"). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -44,6 +44,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV8,
   migrateSettingsToV9,
   migrateSettingsToV10,
+  migrateSettingsToV11,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -82,7 +83,7 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
   }
   // Fields added by later versions are left to their own migration step (amendment 06: roundType follows noDamage).
   const base = defaultSettings() as unknown as Record<string, unknown>;
-  for (const later of ['roundType', 'showClock', 'showRecords', 'garage', 'numberPad', 'pointAfterFullHelp', 'aimCross']) delete base[later];
+  for (const later of ['roundType', 'showClock', 'showRecords', 'garage', 'numberPad', 'pointAfterFullHelp', 'aimCross', 'enemiesAtOnce', 'lineStyle']) delete base[later];
   const merged = mergeDeep(base, over);
   return { ...merged, version: 2 };
 }
@@ -156,6 +157,11 @@ function migrateSettingsToV9(raw: Record<string, unknown>): Record<string, unkno
 /** Version 9 to 10 (amendment 19): adds "Zielkreuz" as "Immer" with level 2, unless already set. */
 function migrateSettingsToV10(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, aimCross: raw.aimCross ?? { mode: 'always', level: 2 }, version: 10 };
+}
+
+/** Version 10 to 11 (amendment 21): adds "Gegner gleichzeitig" as 1 and "Linien" as "Gerade", unless already set. */
+function migrateSettingsToV11(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, enemiesAtOnce: raw.enemiesAtOnce ?? 1, lineStyle: raw.lineStyle ?? 'straight', version: 11 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {
