@@ -13,7 +13,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
 | `crossTens` | `boolean` | `true` | |
 | `crossHundreds` | `boolean` | `false` | |
-| `negativeResults` | `boolean` | `false` | When `true`, results may go below 0 only if `range.min < 0`; otherwise no effect (results always stay in range) |
+| `negativeResults` | `boolean` | `false` | Shown only when `range.min < 0` (custom ranges may start below 0, down to -1000). When `false`, results are never below 0; when `true`, results may go down to `range.min` |
 | `labelLevel` | `1 \| 2 \| 3 \| 4` | `1` | |
 | `enemyDifficulty` | `'easy' \| 'normal' \| 'challenging'` | `'easy'` | |
 | `help` | `{ nearestTen: boolean; countSteps: boolean; zoom: boolean; stepAnimation: boolean }` | all `true` | Showing the solution is always on (FR-032) |
@@ -22,11 +22,13 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `sound` | `{ effects: boolean; music: boolean; speech: boolean }` | `true`, `false`, `true` | |
 | `roundLength` | `number` | `10` | Player turns, 3 to 30 |
 | `adaptive` | `boolean` | `true` | |
-| `freePlay` | `boolean` | `false` | When `true`, rounds start in free-play mode |
+| `freePlay` | `boolean` | `false` | When `true`, the start screen also offers "Freies Spiel"; guided stays the default |
 | `noDamage` | `boolean` | `false` | FR-044 |
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
 
 `validateSettings(s): { ok: true } | { ok: false; errors: SettingsError[] }` checks all rules. `SettingsError` is a key from the translation table plus the field path.
+
+`withRange(s, range): Settings` returns settings with the new range and linked limits clamped to fit it (`addition.maxResult`, `addition.maxOperand`, `subtraction.maxOperand`), so a range change never leaves the form invalid (FR-047).
 
 ## Rng
 
@@ -48,8 +50,9 @@ interface Challenge {
   id: string;                 // `${roundSeed}-${turn}`
   seed: number;
   kind: ChallengeKind;
-  difficultyStep: number;     // per-skill step used to build it
-  skills: Skill[];            // FR-036
+  difficultyStep: number;     // step of the main skill used to build it
+  mainSkill: Skill;           // fixed per kind (FR-036)
+  skills: Skill[];            // mainSkill plus further skills it counts toward
   prompt: PromptSpec;         // translation key + parameters, e.g. { key: 'subtraction', params: { a: 43, b: 7 } }
   operands: number[];         // all numbers in the question
   answer: number;             // the target position on the number line
@@ -60,7 +63,11 @@ interface Challenge {
 }
 ```
 
-**Validation** (`validateChallenge(c, settings)`): every value in `operands`, `options`, `steps` and `answer` is inside `[range.min, range.max]`; addition and subtraction respect operand, result, crossing and step rules; comparison has exactly one correct option and distinct options; `answer` is at least `minEnemyGap` units from the player tank position.
+**Validation** (`validateChallenge(c, settings, playerPosition)`): every value in `operands`, `options`, `steps` and `answer` is inside `[range.min, range.max]`; addition and subtraction respect operand, result, crossing and step rules; comparison has exactly one correct option and distinct options; `answer` is at least `minEnemyGap` from the player tank position; every comparison option is at least `minTankGap` from every other option and from the player tank.
+
+**Gaps**: `minTankGap = max(0.08 * (max - min), tankWidthInNumbers)`, where `tankWidthInNumbers` is the tank's 60-unit width converted to numbers; `minEnemyGap = 0.15 * (max - min)`. When the range cannot fit 2 options at `minTankGap` on the side away from the player, comparison is skipped for that configuration.
+
+**Main skill per kind**: `findNumber`, `missingBetween`, `midpoint` → `positions`; `after`, `stepsRight` → `countForward`; `before`, `stepsLeft` → `countBackward`; `addition` → `addition`; `subtraction` → `subtraction`; all comparison kinds → `comparison`. `tens` and `crossTens` are secondary skills added when a challenge involves a multiple of ten or crosses a ten boundary.
 
 ## Attempt (persisted inside Progress)
 
@@ -88,24 +95,30 @@ Keyed by `${skill}|${rangeKey}`.
 | Field | Type | Notes |
 |-------|------|-------|
 | `step` | `number` | Current difficulty step for this skill (index into the skill's step ladder) |
-| `recent` | `RecentOutcome[]` (max 10) | `'independent' \| 'assisted' \| 'unsolved' \| 'guess'`, newest last |
+| `recent` | `RecentOutcome[]` (max 6) | Non-guess outcomes since the last step change, `'independent' \| 'assisted' \| 'unsolved'`, newest last. Used only by the adaptive rule; cleared on a step change |
+| `masteryWindow` | `RecentOutcome[]` (max 10) | Last 10 non-guess outcomes in this skill and range; never cleared by step changes |
+| `guesses` | `number` | Count of attempts flagged as guesses |
 | `attempts` | `number` | |
 | `independentCorrect` | `number` | |
 | `assisted` | `number` | |
 
-`status(sp)`: `'mastered'` when at least 10 non-guess outcomes in `recent` and at least 8 of the last 10 non-guess outcomes are `'independent'`; otherwise `'developing'` (FR-039).
+`status(sp)`: `'mastered'` when `sp.independentCorrect >= 10`, `masteryWindow` holds 10 outcomes, and at least 8 of them are `'independent'`; otherwise `'developing'` (FR-039).
 
 ## Progress (persisted: `mathtanks.progress.v1`)
 
 ```ts
 interface Progress {
   version: 1;
-  attempts: Attempt[];                         // capped at the newest 5000
+  attempts: Attempt[];                         // capped at the newest 2000 (about 400 KB); summaries keep older totals
   skills: Record<string, SkillProgress>;
   sessions: SessionSummary[];                  // not capped
 }
-interface SessionSummary { id: string; startedAt: number; attempts: number; independentCorrect: number; assisted: number; }
+interface SessionSummary { id: string; startedAt: number; lastActiveAt: number; attempts: number; independentCorrect: number; assisted: number; }
 ```
+
+A new session starts on game load, when `now - lastActiveAt > 30 minutes`, or when the calendar day of `now` differs from `startedAt`. Progress is saved after each attempt, between turns, never during a shot animation.
+
+**Export file**: `{ app: 'math-tanks', exportedAt, settings, progress }` as JSON; import validates both parts with the same schemas and migrations as loading.
 
 ## Difficulty ladders
 
@@ -120,7 +133,9 @@ interface DifficultyStep {
 }
 ```
 
-**Adaptive rule** (`nextStep(sp, settings)`, FR-037): if `adaptive` is off, the step is 0 and the parent's label level applies. Otherwise: up one step when at least 5 of the last 6 outcomes are `'independent'`; down one step when at least 3 of the last 5 are `'assisted'` or `'unsolved'`; `'guess'` outcomes count toward neither and are skipped when counting. After a change, `recent` is cleared so the next change needs new evidence. The effective label level is the higher (harder) of the parent's level and the step's level only when the parent has set level 1 and adaptive is on; otherwise the parent's level applies.
+**Adaptive rule** (`nextStep(sp, settings)`, FR-037): if `adaptive` is off, the generator uses the parent settings directly (the top of every ladder, clamped by settings) and the parent's label level. Otherwise each skill starts at step 0: up one step when at least 5 of the last 6 entries in `recent` are `'independent'`; down one step when at least 3 of the last 5 are `'assisted'` or `'unsolved'`. Guesses never enter `recent` or `masteryWindow`. After a change, `recent` is cleared so the next change needs new evidence; `masteryWindow` is kept. Parent settings are ceilings: a step never allows numbers, operands or crossings that the settings forbid.
+
+**Label level**: when adaptive is off, the parent's level. When adaptive is on, the level comes from the `positions` skill's step (`labelLevel` on its ladder), but never easier than the parent's level. Other skills' ladders have no `labelLevel`, so labels do not change between challenge kinds.
 
 ## Round state (not persisted)
 
@@ -142,9 +157,14 @@ interface RoundState {
   player: TankState;
   enemy: TankState;
   decoys: TankState[];             // comparison turns only
+  playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
+  enemyFound: boolean;             // false during a search: enemy hidden, nothing drawn at its position
+  shotsAtEnemy: number;            // shots since the enemy was found; new search after a hit or 3 shots
   challenge: Challenge | null;
-  help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongTapTimes: number[] };
-  selection: number | null;        // number chosen on the number line
+  challengePurpose: 'search' | 'bonus' | null;
+  answerableAt: number | null;     // clock time when answers became possible (1 s after display)
+  help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
+  selection: number | null;        // previewed number; submitted only by the check button
   charged: boolean;                // FR-011
   aim: { angleDeg: number; power: number };
   lastPlayerPath: Point[] | null;  // FR-004 trail
@@ -157,17 +177,19 @@ interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: 
 **State transitions**
 
 ```text
-start → challenge (guided) | aiming (freePlay)
-challenge --correct--> aiming (charged = true)
+start → challenge/search (guided) | aiming (freePlay)
+challenge --correct--> aiming (charged = true, enemyFound = true for a search)
 challenge --wrong--> challenge (help.level + 1, message)
-challenge --wrong at level 2 or help at level 2--> challenge (help.level = 3, solution shown) --continue--> aiming (charged = false)
+challenge --wrong at level 2 or help at level 2 or time limit--> challenge (help.level = 3, solution shown) --continue--> aiming (charged = false, enemyFound = true)
+aiming --bonus button--> challenge/bonus --solved or solution shown--> aiming
 aiming --fire--> playerShot --impact--> enemyTurn | roundOver
-enemyTurn --impact--> challenge | aiming (next turn) | roundOver
+enemyTurn --impact--> next player turn | roundOver
+next player turn (guided): enemy hit by last shot or shotsAtEnemy == 3 → enemy hides and moves, challenge/search; otherwise aiming
 any (except roundOver) --pause--> paused --resume--> previous phase
 ```
 
 Round over when `player.health == 0` (`enemyWon`), `enemy.health == 0` (`playerWon`), or `turn == roundLength` after the enemy turn (`turnsUsed`). In `noDamage` mode the player's health never drops.
 
-Between turns in guided mode, the enemy drives to the next challenge's answer position; the player tank stays at the end farther from that position, at least `minEnemyGap` = 15% of the range away.
+The player tank stands at `range.min` (left side) or `range.max` (right side) for the whole round. When a new search starts, the enemy hides (fades out) and the next challenge's answer becomes its position; it is drawn again only when `enemyFound` becomes `true`. The answer is always at least `minEnemyGap` from the player tank.
 
 In comparison turns, each option is shown on a tank standing at the position of its own number, so the battlefield keeps the same number-to-position mapping as the number line. The real enemy is the tank whose number is the correct answer.

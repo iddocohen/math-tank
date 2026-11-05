@@ -10,13 +10,13 @@ A static, offline-capable browser game. A Phaser 4 canvas draws a side-view arti
 
 ## Technical Context
 
-**Language/Version**: TypeScript 7.0, strict mode, ES2022 target
+**Language/Version**: TypeScript 6.0 (pinned `~6.0.3` because `typescript-eslint` does not yet support 7.0), strict mode, ES2022 target
 
 **Primary Dependencies**: Phaser 4.2 (rendering, input, tweens, particles, audio, scaling); React 19.3 (menus and overlay); Vite 8.3 with `@vitejs/plugin-react`; `vite-plugin-pwa` 2.0 (service worker); Zod 4.6 (stored data validation)
 
 **Storage**: Browser `localStorage`, keys `mathtanks.settings.v1` and `mathtanks.progress.v1` (research R11)
 
-**Testing**: Vitest 5.1 (unit and property-style tests in `src/core/`, a few React component tests with Testing Library and jsdom); Playwright 1.64 (end-to-end against the production build)
+**Testing**: Vitest 5.1 (unit and property-style tests in `src/core/`, a few React component tests with Testing Library and jsdom); Playwright 1.64 (end-to-end against the production build in Chromium, WebKit and Firefox)
 
 **Target Platform**: Current Chrome, Edge, Firefox and Safari on desktop and tablet (iPadOS, Android); screens from 768 by 600 CSS pixels
 
@@ -128,7 +128,9 @@ Unit tests sit next to their modules as `*.test.ts`.
 3. **Engine-free physics with fixed timestep** (R5, R6): a heightmap terrain and precomputed shot paths make every shot reproducible; Phaser replays the path.
 4. **Controller as the single state owner** (R4): React and Phaser subscribe; neither mutates state directly.
 5. **Comparison tanks stand at their own numbers**: keeps one consistent number-to-position mapping everywhere, as PRD section 3.1 requires.
-6. **Hidden enemy in guided turns**: the enemy is shown as a "?" cloud until the challenge is solved or the solution is shown, so the math tells the child where to aim.
+6. **Hidden enemy in guided searches**: nothing marks the enemy's position until the challenge is solved or the solution is shown, so the math tells the child where to aim. The enemy then stays for up to 3 shots so the child can correct their aim; the player's tank keeps its side for the whole round.
+7. **Preview, then confirm**: releasing on the number line only previews a number; the check button submits it, so a finger slip never counts as a wrong answer.
+8. **Storage that survives Safari**: persistent storage request, Home Screen instructions, export and import, versioned data with migrations.
 
 ## Phasing (maps to spec priorities)
 
@@ -147,9 +149,10 @@ Unit tests sit next to their modules as `*.test.ts`.
 
 | Risk | Mitigation |
 |------|-----------|
-| Phaser 4 API differences from Phaser 3 examples | Use only core APIs (Scene, Graphics, Text, Container, tweens, input, ParticleEmitter, Scale FIT); check against the installed package types |
+| Phaser 4 API differences from Phaser 3 examples | Start the US1 work with a small Phaser 4 prototype task (scene, Graphics terrain, Scale FIT, pointer input) before the full battle scene; use only core APIs and check against the installed package types |
+| Safari deletes stored data after 7 days without a visit | Persistent storage request, Home Screen instructions, export and import (FR-048, FR-048a) |
 | Number line unreadable on small tablets at 0 to 100 | Unit spacing 14.4 logical units scales to about 9 CSS px at 1024 width; labels only on major ticks below level 1 when spacing is under 12 px; zoom help step |
-| Comparison is visually trivial because larger numbers stand further right | Accepted: it reinforces the number line concept; the child must still read numbers when labels are hidden |
+| Comparison is visually trivial because larger numbers stand further right | Accepted, see spec Assumptions: it reinforces the number line concept and keeps one mapping everywhere |
 | Speech voices missing on some devices | Feature-detect and hide the speaker icon |
 
 ## Complexity Tracking

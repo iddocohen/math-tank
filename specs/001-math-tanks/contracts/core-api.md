@@ -31,9 +31,13 @@ generateChallenge(input: {
   settings: Settings;
   skillSteps: Record<Skill, number>;     // current difficulty step per skill
   rng: Rng;
-  playerPosition: number;
-  kindsAllowed?: ChallengeKind[];         // free-play bonus may restrict kinds
+  playerPosition: number;                 // range.min or range.max, fixed for the round
+  purpose: 'search' | 'bonus';            // bonus excludes comparison kinds (FR-014)
+  kindsAllowed?: ChallengeKind[];
 }): Challenge
+mainSkillOf(kind: ChallengeKind): Skill
+minTankGap(min: number, max: number): number
+minEnemyGap(min: number, max: number): number
 
 validateChallenge(c: Challenge, settings: Settings, playerPosition: number): string[]   // empty when valid
 checkAnswer(c: Challenge, answer: number | number[]): boolean
@@ -42,12 +46,14 @@ crossesTen(a: number, b: number): boolean
 crossesHundred(a: number, b: number): boolean
 ```
 
-Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for every seed and every valid `Settings` (tested over 10,000 seeds per preset configuration, SC-003). Same seed and inputs give the same challenge.
+Guarantees: `validateChallenge(generateChallenge(x), ...)` returns `[]` for every seed and every valid `Settings` (tested over 10,000 seeds per preset configuration and over 200 random valid settings, SC-003). Same seed and inputs give the same challenge.
 
 ## `core/progress`
 
 ```ts
-classifyAttempt(a: { solved: boolean; helpLevel: number; wrongAnswers: number; responseMs: number; wrongTapTimes: number[] }): { independent: boolean; guess: boolean; outcome: RecentOutcome }
+classifyAttempt(a: { solved: boolean; helpLevel: number; wrongAnswers: number; responseMs: number; wrongAnswerTimes: number[]; submittedAt: number }): { independent: boolean; guess: boolean; outcome: RecentOutcome }
+// guess: solved and responseMs < 1500, or solved and 3+ wrongAnswerTimes within 5000 ms before submittedAt
+startOrContinueSession(p: Progress, now: number): Progress   // 30-minute idle and new-day rules
 recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // returns a new Progress; updates skill steps by the adaptive rule
 skillStatus(sp: SkillProgress): 'mastered' | 'developing'
 summarize(p: Progress): ProgressSummary                                   // data for the progress page
@@ -63,10 +69,10 @@ carveCrater(t: Heightmap, cx: number, cy: number, radius: number, floor: number)
 surfaceY(t: Heightmap, x: number): number
 simulateShot(input: { origin: Point; angleDeg: number; power: number; terrain: Heightmap; targets: Array<{ id: string; x: number; y: number; radius: number }>; worldWidth: number; worldHeight: number }): { path: Point[]; impact: Point; hitTargetId: string | null; outOfBounds: boolean }
 damageAt(impact: Point, tank: Point, blastRadius: number, directHit: boolean): number   // 0..maxDamage, decreasing with distance
-solveAim(input: { origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number } | null
+solveAim(input: { origin: Point; target: Point; terrain: Heightmap; worldWidth: number; worldHeight: number }): { angleDeg: number; power: number; hits: boolean; missDistance: number }
 ```
 
-Guarantees: fixed timestep (1/120 s); identical output for identical input; terrain never below `floor`; `solveAim` result, passed to `simulateShot` on the same terrain, lands within 10 units of the target or returns `null` when no shot within the angle and power limits reaches it.
+Guarantees: fixed timestep (1/120 s); identical output for identical input; terrain never below `floor`; `solveAim` always returns the shot whose impact is closest to the target, taking terrain into account; `hits` is true when that impact is within 10 units of the target.
 
 ## `core/ai`
 
@@ -85,9 +91,11 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(): void
-  selectNumber(n: number): void            // preview while dragging; no answer check
-  submitAnswer(answer: number | number[]): void
+  startRound(mode: 'guided' | 'freePlay'): void
+  selectNumber(n: number): void            // preview while dragging or after release; no answer check
+  nudgeSelection(delta: 1 | -1): void      // +1 / -1 buttons
+  submitSelection(): void                  // check button; submits the previewed number
+  tapTank(tankId: string): void            // comparison answers; order3 collects a sequence
   requestHelp(): void
   continueAfterSolution(): void
   setAim(angleDeg: number, power: number): void
@@ -110,6 +118,9 @@ loadSettings(kv: KeyValue): { settings: Settings; resetReason: 'none' | 'invalid
 saveSettings(kv: KeyValue, s: Settings): { ok: boolean }
 loadProgress(kv: KeyValue): { progress: Progress; resetReason: 'none' | 'invalid' | 'unavailable' }
 saveProgress(kv: KeyValue, p: Progress): { ok: boolean }
+migrate(raw: unknown, kind: 'settings' | 'progress'): unknown   // upgrades older versions before validation
+exportData(settings: Settings, progress: Progress): string        // JSON text for download
+importData(text: string): { ok: true; settings: Settings; progress: Progress } | { ok: false; reason: string }
 ```
 
 ## `i18n`

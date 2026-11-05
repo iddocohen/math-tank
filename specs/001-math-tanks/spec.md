@@ -41,7 +41,9 @@ The child starts a battle from the start screen. A side-view battlefield with ro
 
 ### User Story 2 - Find the enemy on the number line (Priority: P1)
 
-In guided mode (the default), each player turn starts with a challenge such as "Finde 37" (Find 37). A number line spans the bottom of the screen and covers the same range as the battlefield, so position 37 on the number line is directly below position 37 on the battlefield. The child taps or drags on the number line to choose a number. The game draws a vertical guide line from the chosen number up to the battlefield and places a target marker there. When the answer is correct, the enemy tank is revealed at that position and the cannon is charged. The child then aims and fires.
+In guided mode (the default), the enemy tank is hidden at the start of each search. The challenge, such as "Finde 37" (Find 37), says where it is. Nothing on the battlefield shows the enemy's position until the challenge is solved. A number line spans the bottom of the screen and covers the same range as the battlefield, so position 37 on the number line is directly below position 37 on the battlefield. The child taps or drags on the number line to choose a number, adjusts it with +1 and −1 buttons if needed, and confirms it with a large check button. The game draws a vertical guide line from the chosen number up to the battlefield and places a target marker there. When the confirmed answer is correct, the enemy tank is revealed at that position and the cannon is charged. The child then aims and fires.
+
+The enemy stays at its position until it is hit or the child has fired 3 shots at it, so the child can learn from misses and adjust. During those follow-up turns, the child can solve an optional bonus challenge to charge the cannon again. When the enemy is hit or the 3 shots are used, the enemy hides and moves, and a new search challenge starts.
 
 The number line shows major tick marks (for example 0, 10, 20 and so on) and minor tick marks for every unit in between, all equally spaced. How many labels are visible depends on the labeling level.
 
@@ -56,8 +58,10 @@ The number line shows major tick marks (for example 0, 10, 20 and so on) and min
 3. **Given** the challenge "Finde 37", **When** the child selects 37, **Then** the challenge counts as solved, the enemy is revealed at 37 and the cannon is charged.
 4. **Given** a challenge of the type "Welche Zahl kommt direkt nach 49?" (which number comes right after 49), **When** the child selects 50, **Then** the challenge counts as solved.
 5. **Given** labeling level 1, **Then** every number on the line is labeled. **Given** level 2, **Then** only major ticks are labeled. **Given** level 3, **Then** major ticks and some minor ticks are labeled and the rest are hidden. **Given** level 4, **Then** only the two end points are labeled.
-6. **Given** the child has selected a number, **When** the child moves their finger or pointer along the line before releasing, **Then** the selected number and the battlefield marker follow it, and the choice is confirmed only on release or on tapping a confirm button.
+6. **Given** the child has selected a number, **When** the child moves their finger or pointer along the line, **Then** the selected number (shown in large digits above the finger) and the battlefield marker follow it. Releasing only previews the number; the answer is checked only when the child taps the check button. The +1 and −1 buttons change the previewed number by one.
 7. **Given** a correct answer, **When** the child fires, **Then** the shot is not aimed automatically; whether it hits depends on the angle and power the child chose, unless aim correction is on.
+8. **Given** a guided search, **When** the challenge is shown, **Then** no marker, shadow or other sign of the enemy is visible on the battlefield until the challenge is solved or the solution is shown.
+9. **Given** the enemy has been found, **When** the child misses, **Then** the enemy stays in place for up to 3 shots in total, and the trail of the previous shot stays visible.
 
 ---
 
@@ -94,7 +98,7 @@ Some turns show the enemy tank together with one or two decoy tanks that look th
 3. **Given** three tanks and the question "Tippe die Zahlen von klein nach groß an" (tap the numbers from smallest to largest), **When** the child taps them in increasing order, **Then** the challenge counts as solved.
 4. **Given** an "equal" question showing a number and two tanks, **When** the child taps the tank with the same number, **Then** the challenge counts as solved.
 5. **Given** a question such as "Welche Zahl ist am nächsten an 50?" or "Welche Zahl liegt zwischen 30 und 40?", **When** the child taps the matching tank, **Then** the challenge counts as solved.
-6. **Given** any comparison challenge, **Then** every number shown is inside the configured range and exactly one choice is correct.
+6. **Given** any comparison challenge, **Then** every number shown is inside the configured range, exactly one choice is correct, and all tanks (options and the player's tank) stand at least the minimum tank gap apart so that they never overlap.
 
 ---
 
@@ -111,8 +115,8 @@ When the child chooses a wrong answer, the game responds with a friendly message
 1. **Given** a challenge, **When** the child gives the first wrong answer, **Then** the game shows an encouraging message such as "Versuch eine andere Stelle." (Try another spot) and highlights the nearest major tick.
 2. **Given** a second wrong answer, **Then** the game zooms into the ten-number interval that contains the answer and counts steps from the nearest major tick.
 3. **Given** a third wrong answer, **Then** the game animates a marker to the correct number, shows the answer, and lets the child continue with one tap.
-4. **Given** any challenge, **When** the child taps the help button before answering, **Then** the next help step is shown immediately, with no loss of health, turns, stars or progress.
-5. **Given** any challenge, **Then** no time limit is shown or enforced, unless the parent has turned one on.
+4. **Given** any challenge, **When** the child taps the help button before answering, **Then** the next help step is shown immediately, with no loss of health, turns or progress.
+5. **Given** any challenge, **Then** no time limit is shown or enforced, unless the parent has turned one on. When a parent-set time limit runs out, the game shows the next help step, with no penalty.
 6. **Given** the full set of on-screen and spoken texts, **Then** none contains discouraging words such as "falsch", "verloren" (lost) or "Fehler" (mistake) in feedback to the child.
 
 ---
@@ -148,7 +152,7 @@ The game tracks results separately for each skill: number positions, counting fo
 
 1. **Given** adaptive difficulty is on, **When** the child answers at least 5 of the last 6 challenges in a skill correctly without help, **Then** the next challenges in that skill are one difficulty step harder, but never beyond the parent's limits.
 2. **Given** adaptive difficulty is on, **When** the child answers 3 of the last 5 challenges in a skill wrong or with help, **Then** the next challenges are one difficulty step easier, but never below the easiest step.
-3. **Given** a correct answer given less than 1 second after the challenge appeared, or a correct answer that follows 3 or more wrong taps within 3 seconds, **Then** it is recorded as a guess and does not count toward raising difficulty or mastery.
+3. **Given** a correct answer confirmed less than 1.5 seconds after answers became possible, or a correct answer that follows 3 or more wrong answers within 5 seconds, **Then** it is recorded as a guess and does not count toward raising difficulty or mastery.
 4. **Given** a skill where all correct answers were given with help, **Then** the progress page never shows that skill as mastered.
 5. **Given** the parent opens the progress page, **Then** it shows, per skill, the number of attempts, independent correct answers and answers with help, the current difficulty step, a mastered or developing status per number range, the skills with the most help needed, and a per-session history.
 6. **Given** adaptive difficulty is off, **Then** difficulty stays at the levels the parent configured.
@@ -192,7 +196,11 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 ### Edge Cases
 
 - **Range too small for a challenge type**: in range 0 to 10 with crossing tens off, some exercise types (such as "midpoint" or addition crossing ten) cannot be generated. The generator must skip those types for that configuration and never produce an impossible or out-of-range exercise. If no type is possible, the game falls back to "Finde N" challenges.
-- **Enemy position overlaps the child's tank**: the child's tank is placed at the end of the battlefield farthest from the answer, and answers that would place the enemy within a minimum distance of the child's tank are not generated.
+- **Enemy position overlaps the child's tank**: the child's tank stands at one end of the battlefield for the whole round (the end alternates between rounds), and answers that would place any tank closer than the minimum gap to the child's tank are not generated.
+- **Comparison options too close together**: options must be at least the minimum tank gap apart; when the range cannot fit 2 options at that gap, comparison is skipped for that configuration.
+- **Finger slip on a dense number line**: releasing never submits an answer, so a slip only changes the preview.
+- **Browser deletes stored data after a long break** (Safari on iPad deletes site data after 7 days without a visit unless the game is on the Home Screen): the game asks the browser for persistent storage, the settings page explains how to add the game to the Home Screen, and parents can export and import settings and progress as a file.
+- **Game update available mid-round**: updates are applied only on the start screen, never during a round.
 - **Shell leaves the screen**: a shell that leaves the left or right edge counts as a miss and its landing point is shown at the edge.
 - **Tank on a destroyed slope**: when the ground under a tank is removed, the tank drops to the new surface and is never left floating or buried.
 - **Crater digs through the bottom**: terrain never becomes lower than a fixed floor, so tanks always have ground.
@@ -222,20 +230,21 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 
 **Guided and free-play modes**
 
-- **FR-010**: The game MUST offer guided mode, the default, in which each player turn begins with a challenge whose solution marks the target: either a battlefield position (number-line, addition and subtraction challenges) or one of several numbered tanks (comparison challenges).
+- **FR-010**: The game MUST offer guided mode, the default, in which each search for the enemy begins with a challenge whose solution marks the target: either a battlefield position (number-line, addition and subtraction challenges) or one of several numbered tanks (comparison challenges). During a position search, the enemy's position MUST NOT be visible or inferable from anything on the battlefield until the challenge is solved or the solution is shown.
+- **FR-010a**: The player's tank MUST stand at one end of the battlefield for a whole round; the end MUST alternate between rounds. A found enemy MUST stay in place until it is hit or the player has fired 3 shots at it; follow-up turns MUST offer an optional bonus challenge (FR-014) instead of a new search. Afterwards, the enemy hides and a new search starts.
 - **FR-011**: In guided mode, solving the challenge MUST reveal the target and charge the cannon. A charged cannon fires a shell with a larger blast radius than an uncharged one.
-- **FR-012**: A correct answer MUST NOT change the cannon's angle or power, unless the parent has turned on aim correction. With aim correction on, a correct answer MUST set the angle and power to a shot that hits the marked target when there is no terrain in the way.
+- **FR-012**: A correct answer MUST NOT change the cannon's angle or power, unless the parent has turned on aim correction. With aim correction on, a correct answer MUST set the angle and power to a shot that hits the marked target, taking the terrain into account; when no shot within the angle and power limits reaches the target, it MUST choose the shot that lands closest to it.
 - **FR-013**: After the help sequence shows the solution (FR-031), the child MUST be able to continue to aim and fire in that turn with an uncharged cannon. A wrong answer MUST NOT end the turn, skip the turn, or reduce health.
-- **FR-014**: The game MUST offer free-play mode, turned on or off by the parent, in which the enemy is visible, the player aims and fires without a required challenge, and an optional challenge button lets the player earn a charged shot.
+- **FR-014**: The game MUST offer free-play mode, which the parent makes available or unavailable. When available, the start screen shows a second button "Freies Spiel" (free play) next to "Spielen"; guided mode stays the default. In free play the enemy is visible, the player aims and fires without a required challenge, and an optional bonus challenge (number-line, addition or subtraction kinds only, not comparison) lets the player earn a charged shot.
 
 **Number line**
 
 - **FR-015**: A number line covering the configured range MUST be shown along the bottom of the battlefield. Its scale MUST be linear, and the position of each number on the line MUST be directly below the matching battlefield position.
-- **FR-016**: The number line MUST show major ticks at reference numbers (multiples of 10 for ranges up to 100, multiples of 100 for 0 to 1000) and minor ticks at every unit between them, or every 10 when units would be too dense. Ticks MUST be equally spaced for equal steps; major ticks MUST be longer and bolder but MUST NOT mark a different step size than minor ticks.
+- **FR-016**: The number line MUST show major ticks at reference numbers and minor ticks between them, with steps chosen by the width of the visible range: width up to 20, major every 5 and minor every 1 (major every 10 when the range includes a multiple of 10 and width is over 10); width 21 to 100, major 10 and minor 1; width 101 to 200, major 10 and minor 1 in the zoomed view, major 50 and minor 10 in the overview; width 201 to 1000, major 100 and minor 10 in the overview. Ticks MUST be equally spaced for equal steps; major ticks MUST be longer and bolder but MUST NOT mark a different step size than minor ticks. The two end points MUST always be labeled.
 - **FR-017**: The number line MUST support four labeling levels: 1 all ticks labeled; 2 only major ticks labeled; 3 major ticks plus a rotating subset of minor ticks labeled, with at least half of the minor labels hidden; 4 only the two end points labeled.
 - **FR-018**: Labeling level MUST be set by the parent, and MUST NOT advance automatically after a single correct answer; with adaptive difficulty on, it may advance only by the adaptive rules (FR-037).
-- **FR-019**: Selecting a number MUST work by tapping or by dragging along the line, snapping to the nearest whole number. While dragging, a vertical guide line MUST connect the chosen number to the battlefield, and the chosen number MUST be shown in large digits.
-- **FR-020**: For ranges with more than about 100 units, the number line MUST use a two-step selection: first the interval between two major ticks, then the number within a zoomed view of that interval.
+- **FR-019**: Selecting a number MUST work by tapping or by dragging along the line, snapping to the nearest whole number. While dragging, a vertical guide line MUST connect the chosen number to the battlefield, and the chosen number MUST be shown in large digits above the finger. Releasing MUST only preview the number. Buttons for +1 and −1 MUST adjust the preview, and a check button MUST submit it as the answer.
+- **FR-020**: For ranges with more than 100 units, the number line MUST use a two-step selection: first the interval between two major ticks, then the number within a zoomed view of that interval. The zoomed view MUST show connector lines from its two ends to the matching part of the battlefield.
 - **FR-021**: Number-line challenges MUST include: find a number; the number right after a number; the number right before a number; move N steps right; move N steps left; the missing number between two numbers; and the midpoint between two major ticks. Every number shown and every answer MUST be inside the configured range.
 
 **Addition and subtraction**
@@ -248,7 +257,7 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 **Comparison**
 
 - **FR-026**: Comparison challenges MUST show the enemy tank and one or two decoy tanks that look the same, each carrying a number in the configured range, and MUST include: greater, smaller, equal, ordering three numbers from smallest to largest, largest of three, smallest of three, closest to a given number, and between two given numbers.
-- **FR-027**: Every comparison challenge MUST have exactly one correct answer. The correct tank MUST be the real enemy; hitting a decoy MUST destroy only the decoy.
+- **FR-027**: Every comparison challenge MUST have exactly one correct answer. The correct tank MUST be the real enemy; hitting a decoy MUST destroy only the decoy. Each numbered tank MUST stand at the position of its own number, and all tanks MUST be at least the minimum tank gap apart (8% of the range width, and never less than one tank width).
 
 **Challenge generation**
 
@@ -258,18 +267,18 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 **Assistance and low frustration**
 
 - **FR-030**: A help button MUST be visible during every challenge. Using it MUST NOT cost health, turns or progress.
-- **FR-031**: Help MUST escalate with each wrong answer or help request in the same challenge: step 1, an encouraging message and a highlight of the nearest major tick; step 2, a zoom into the relevant ten-number interval and a step count from the nearest major tick (or the step animation for addition and subtraction); step 3, an animated marker moving to the solution, the solution shown, and a one-tap continue.
+- **FR-031**: Help MUST escalate with each wrong answer or help request in the same challenge: step 1, an encouraging message and a highlight of the nearest major tick; step 2, a zoom into the relevant ten-number interval and a step count from the nearest major tick (or the step animation for addition and subtraction); step 3, an animated marker moving to the solution, the solution shown, and a one-tap continue. For comparison challenges: step 1, an encouraging message and the tens digits of all options highlighted; step 2, a marker on the number line under each option's number, showing which lies further right; step 3, the correct tank (or, for ordering, the correct order) shown, and a one-tap continue.
 - **FR-032**: Each help type in FR-031 MUST be switchable on or off by the parent; the final step (showing the solution) MUST stay on so the child can always continue.
 - **FR-033**: All feedback to the child MUST use encouraging wording from a reviewed list of German phrases. Feedback MUST NOT include the words "falsch", "verloren", "Fehler", "versagt" or similar, and MUST NOT include public scores or rankings.
-- **FR-034**: No time limit MUST apply to challenges or turns by default.
+- **FR-034**: No time limit MUST apply to challenges or turns by default. When a parent sets a time limit and it runs out, the game MUST show the next help step, with no penalty.
 
 **Adaptive difficulty and progress**
 
 - **FR-035**: The game MUST record every challenge attempt with: skill, challenge type, number range, difficulty step, whether it was answered correctly, whether help was used and up to which step, number of wrong answers before the correct one, response time, whether it was flagged as a guess, and session.
-- **FR-036**: Skills tracked separately MUST be: number positions, counting forward, counting backward, understanding tens, crossing tens, addition, subtraction and comparison. One challenge MAY count toward more than one skill (for example 43 − 7 counts toward subtraction and crossing tens).
-- **FR-037**: When adaptive difficulty is on, the game MUST raise a skill's difficulty one step after at least 5 of the last 6 attempts in that skill were correct, independent and not guesses, and MUST lower it one step after 3 of the last 5 attempts needed help or were not solved independently. Difficulty MUST stay within parent limits. Difficulty steps MUST be defined per skill as a fixed ordered list (for example: smaller numbers, then larger numbers, then crossing tens, then lower labeling level).
-- **FR-038**: A correct answer given less than 1 second after the challenge became answerable, or following 3 or more wrong taps within 3 seconds, MUST be recorded as a guess and MUST NOT count toward raising difficulty or mastery.
-- **FR-039**: A skill in a number range MUST be shown as mastered only when there are at least 10 independent, non-guess attempts and at least 8 of the last 10 such attempts are correct. Assisted answers MUST NOT count toward mastery.
+- **FR-036**: Skills tracked separately MUST be: number positions, counting forward, counting backward, understanding tens, crossing tens, addition, subtraction and comparison. Each challenge kind MUST have exactly one main skill, whose difficulty step decides how the challenge is built; a challenge MAY also count toward further skills in the progress records (for example 43 − 7 has main skill subtraction and also counts toward crossing tens).
+- **FR-037**: When adaptive difficulty is on, the game MUST raise a skill's difficulty one step after at least 5 of the last 6 non-guess attempts in that skill were correct and independent, and MUST lower it one step after 3 of the last 5 non-guess attempts needed help or were not solved independently. Parent settings MUST act as ceilings: difficulty MUST never go beyond them. Adaptive difficulty MUST start each skill at the easiest step. Difficulty steps MUST be defined per skill as a fixed ordered list (for example: smaller numbers, then larger numbers, then crossing tens). The number-line labeling level MUST follow the number-positions skill only, so labels do not change between challenge types.
+- **FR-038**: A correct answer confirmed less than 1.5 seconds after answers became possible, or following 3 or more wrong answers within 5 seconds, MUST be recorded as a guess and MUST NOT count toward raising difficulty or mastery.
+- **FR-039**: A skill in a number range MUST be shown as mastered only when there are at least 10 independent, non-guess attempts and at least 8 of the last 10 non-guess attempts are independent and correct. The record used for mastery MUST NOT be cleared when the difficulty step changes. Assisted answers MUST NOT count toward mastery.
 - **FR-040**: A parent progress page, behind the same gate as settings, MUST show per skill: attempts, independent correct answers, answers with help (shown separately from accuracy), current difficulty step, mastered or developing status per range, the skills with the most help needed, and a history per session (date, attempts, independent correct, with help). The parent MUST be able to reset progress after a confirmation.
 
 **Enemy**
@@ -282,9 +291,10 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 **Parent settings**
 
 - **FR-045**: Settings and the progress page MUST open only after pressing and holding the gear icon for 2 seconds; a short tap MUST NOT open them. Opening them MUST pause the game.
-- **FR-046**: Settings MUST include: each challenge type on or off (number line, addition, subtraction, comparison); number range (0 to 10, 0 to 20, 0 to 50, 0 to 100, 0 to 1000, custom minimum and maximum, default 0 to 100); addition limits (maximum operand, maximum result, steps); subtraction limits (maximum operand, steps); crossing tens on or off; crossing hundreds on or off; negative results on or off (default off); labeling level 1 to 4 (default 1); enemy difficulty (default "Leicht"); each help type on or off; beginner assistance on or off (default on); aim correction on or off (default off); sound effects, music and spoken instructions on or off; round length in player turns (default 10); adaptive difficulty on or off (default on); free-play mode on or off; no-damage mode on or off (default off); optional time limit (default off).
-- **FR-047**: Settings MUST be validated before saving: the custom minimum must be smaller than the maximum, at least one challenge type or free-play mode must be on, and operand limits must allow at least one exercise in the range.
-- **FR-048**: Settings and progress MUST be stored in the browser and kept across browser sessions. If stored data cannot be read, the game MUST start with defaults and tell the parent on the settings page.
+- **FR-046**: Settings MUST include: each challenge type on or off (number line, addition, subtraction, comparison); number range (0 to 10, 0 to 20, 0 to 50, 0 to 100, 0 to 1000, custom minimum and maximum, default 0 to 100); addition limits (maximum operand, maximum result, steps); subtraction limits (maximum operand, steps); crossing tens on or off; crossing hundreds on or off; negative results on or off (default off; shown only when a custom range starts below 0, and then results may go below 0 only when it is on); labeling level 1 to 4 (default 1); enemy difficulty (default "Leicht"); each help type on or off; beginner assistance on or off (default on); aim correction on or off (default off); sound effects, music and spoken instructions on or off; round length in player turns (default 10); adaptive difficulty on or off (default on); free-play mode on or off; no-damage mode on or off (default off); optional time limit (default off).
+- **FR-047**: Settings MUST be validated before saving: the custom minimum must be smaller than the maximum, at least one challenge type or free-play mode must be on, and operand limits must allow at least one exercise in the range. When the parent changes the range, linked limits (maximum result, maximum operands) MUST be adjusted automatically to fit the new range.
+- **FR-048**: Settings and progress MUST be stored in the browser and kept across browser sessions. The game MUST ask the browser to keep its stored data permanently. If stored data cannot be read, the game MUST start with defaults and tell the parent on the settings page. Stored data MUST carry a version number, and older versions MUST be migrated on load.
+- **FR-048a**: The parent MUST be able to export settings and progress to a file and import them again. The settings page MUST explain how to add the game to the Home Screen of a tablet, which keeps stored data on Safari.
 - **FR-049**: Settings changes MUST apply from the next round.
 
 **Platform and usability**
@@ -292,9 +302,10 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 - **FR-050**: The game MUST run in current versions of Chrome, Edge, Firefox and Safari on desktop and tablet, without a server component, account or login.
 - **FR-051**: After the first complete load, the game MUST keep working without a network connection, including after a page reload.
 - **FR-052**: The game MUST NOT send any data to external services, and MUST NOT contain advertising, analytics or tracking.
-- **FR-053**: Every interactive target MUST be at least 48 by 48 CSS pixels; numbers MUST use a large, clear typeface.
+- **FR-053**: Every interactive target MUST be at least 48 by 48 CSS pixels; numbers MUST use a large, clear typeface. The number line as a whole is one large target; single ticks are exempt because the preview, the +1 and −1 buttons and the check button (each at least 48 pixels) make exact selection possible.
+- **FR-051a**: A new version of the game MUST be applied only from the start screen, never during a round.
 - **FR-054**: The game MUST support pause and resume, and fullscreen.
-- **FR-055**: Challenges MUST be readable aloud with the browser's speech function when it is available and spoken instructions are on; a speaker icon MUST repeat the current challenge.
+- **FR-055**: Challenges MUST be readable aloud with the browser's speech function when it is available and spoken instructions are on; a speaker icon MUST repeat the current challenge. Speech MUST be started from the "Spielen" tap, because tablet browsers do not speak before a user tap.
 - **FR-056**: All child-facing and parent-facing text MUST be in German, loaded from a translation table, so that adding English requires only a new table and no code change.
 - **FR-057**: Child-facing screens MUST rely mainly on numbers, icons and speech, with short German text of at most about 8 words per message.
 - **FR-058**: Rendering MUST adapt to the screen size and orientation, keeping the number line and battlefield aligned (FR-015).
@@ -305,7 +316,7 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 - **Challenge**: one exercise for one player turn: its type, the numbers shown, the expected answer, the target it marks, the skills it counts toward, and the seed that produced it.
 - **Attempt**: the record of one challenge as the child answered it (see FR-035).
 - **Skill progress**: per skill and number range: current difficulty step, recent attempts used for adaptive rules, and mastered or developing status.
-- **Session**: one period of play from opening to closing the game, with its date and attempt totals.
+- **Session**: one period of play with its date and attempt totals. A new session starts when the game is opened, after 30 minutes without input, or on a new calendar day.
 - **Round**: one battle: landscape, tanks with health, turn count and outcome.
 - **Tank**: player, enemy or decoy; position on the battlefield (as a number in the range), health, and for decoys and comparison targets, the number it carries.
 
@@ -321,7 +332,7 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 - **SC-006**: No child-facing message, spoken text or sound in the game contains discouraging wording or a negative sound effect, as checked against the forbidden word list in FR-033.
 - **SC-007**: Settings and progress are identical after closing and reopening the browser in 100% of test runs.
 - **SC-008**: After one full load, a round can be started and finished with the network disconnected.
-- **SC-009**: A child playing guided mode spends at least half of each turn's interactions on the number line or numbered targets, so the number line is part of every turn.
+- **SC-009**: In guided mode, the fire button of every search turn is enabled only after an answer has been confirmed on the number line or a numbered tank, or after the solution has been shown, so the number line is part of every search.
 - **SC-010**: In observation sessions with target children, the child voluntarily starts another round in most sessions, and uses fewer help steps over successive sessions for the same skill and range (PRD section 15). These are evaluation goals for parents and testers, not automated tests.
 
 ## Assumptions
@@ -329,6 +340,9 @@ A parent can choose 0 to 50, 0 to 1000 or a custom minimum and maximum in additi
 - **Scope**: the release covers the PRD's MVP list (section 14) and every acceptance criterion (AC-01 to AC-10). Ranges 0 to 50, 0 to 1000 and custom ranges are included as a lower-priority story because PRD section 3.2 requires them.
 - **Deferred, per PRD section 14**: cosmetic unlocks (new tank appearances, projectile effects, battlefield themes), stars and achievement badges, advanced AI, detailed learning analytics beyond FR-040, and additional battlefield themes. The PRD marks all rewards as optional.
 - **Guided-mode design**: each challenge's answer is the enemy's position (or, in comparison, the enemy among decoys). This choice ties every challenge to aiming. The PRD offers "selecting a target coordinate" as one valid design.
+- **Comparison tanks stand at their own numbers**, so a larger number is always further right. This keeps one consistent mapping between numbers and battlefield positions (PRD section 3.1) and reinforces the number line idea, even though a child can answer some comparisons by position.
+- **Hosting**: the game is served as static files over HTTPS (for example GitHub Pages) or from localhost; offline mode does not work when the files are opened directly from disk.
+- **Range presets 0 to 50, 0 to 1000 and custom** stay in this release as the lowest-priority story (US9), because PRD section 3.2 requires them; they can be cut first if time is short.
 - **Charged shot**: the bonus for a correct answer is a larger blast radius; the PRD lists "charge the cannon" as one valid reward.
 - **Parent gate**: press and hold for 2 seconds. This is a common pattern for apps for young children and needs no reading.
 - **Help thresholds**: three escalation steps, with the solution shown on the third wrong answer. The PRD asks for "progressively more explicit assistance" without numbers.

@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - Node.js 22 or later, pnpm 10 or later.
-- Chromium for Playwright: `pnpm exec playwright install chromium`.
+- Browsers for Playwright: `pnpm exec playwright install chromium webkit firefox`.
+- Offline mode needs HTTPS or localhost (`pnpm preview` serves on localhost).
 
 ## Setup and run
 
