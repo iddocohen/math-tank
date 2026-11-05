@@ -10,16 +10,14 @@
  * equipped look, a fresh landscape, a landscape with craters, a firing moment and an explosion with debris.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test, waitCalmly } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage } from '../../src/core/rewards/garage';
 import { itemNumber, UNLOCK_ORDER } from '../../src/core/rewards/items';
 import type { Settings } from '../../src/core/types';
-import { t } from '../../src/i18n';
 
-const m = t();
-const easy: Settings = { ...defaultSettings(), freePlay: true, enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 5 };
+const easy: Settings = { ...defaultSettings(), enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 5 };
 
 async function store(page: Page, entries: Record<string, unknown>): Promise<void> {
   await page.addInitScript((pairs: Array<[string, string]>) => {
@@ -28,11 +26,11 @@ async function store(page: Page, entries: Record<string, unknown>): Promise<void
 }
 
 async function start(page: Page): Promise<Locator> {
-  await page.goto('/?seed=3&mode=free');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.goto('/?seed=3&mode=ruler');
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   return overlay;
 }
 
@@ -41,7 +39,7 @@ async function count(canvas: Locator, name: string): Promise<number> {
 }
 
 async function type(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
+  await waitCalmly(page, overlay);
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
 }
@@ -53,7 +51,7 @@ async function miss(page: Page, overlay: Locator): Promise<void> {
   await type(page, overlay, Math.round((own + enemy) / 2));
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
 }
 
 async function destroyEnemy(page: Page, overlay: Locator, destroyed: number): Promise<void> {
@@ -142,8 +140,8 @@ test('screenshots of the garage looks, the landscape, a shot and an explosion', 
   test.skip(!dir || info.project.name !== 'chromium', 'only with SCREENSHOT_DIR, in Chromium');
   test.setTimeout(180_000);
   await store(page, { [SETTINGS_KEY]: easy, [GARAGE_KEY]: { ...emptyGarage(), stars: 130 } });
-  await page.goto('/?seed=3&mode=free');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.goto('/?seed=3&mode=ruler');
+  await expect(startButton(page)).toBeVisible();
 
   // Every unlockable item, chosen in turn by its number and Enter.
   await page.keyboard.press('g');
@@ -159,7 +157,7 @@ test('screenshots of the garage looks, the landscape, a shot and an explosion', 
 
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   const canvas = page.locator('canvas');
   await expect(canvas).toHaveAttribute('data-ground-texture', 'dirt');
   await page.screenshot({ path: `${dir}/battle-look.png` });

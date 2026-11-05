@@ -5,8 +5,8 @@
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
 import { deriveSeed } from '../rng';
-import type { BattleState, Challenge, FeedbackMessage, InputMethod, RulerLevel, Settings, Skill, TankState } from '../types';
-import { enabledKinds, generateChallenge } from '../math/generate';
+import type { BattleState, Challenge, FeedbackMessage, InputMethod, PlayMode, RulerLevel, Settings, Skill, TankState } from '../types';
+import { enabledKinds, generateChallenge, playModeKinds } from '../math/generate';
 import { isComparisonKind } from '../math/comparison';
 import { stepPath } from '../math/stepPath';
 import { emptyEntry } from './entry';
@@ -26,7 +26,8 @@ const NEW_POSITION_TRIES = 8;
  * The challenge of a guided search. The latest input method decides whether findNumber may come: before any input
  * the game treats the input as keyboard input (FR-076). With `avoid`, another answer is chosen whenever possible.
  * With `noComparison` (amendment 08 item 1, restored by amendment 10 item 10) the challenge is never a comparison, so
- * right after "Neue Landschaft" exactly one tank stands opposite the child.
+ * right after "Neue Landschaft" exactly one tank stands opposite the child. `mode` (amendment 17): "Nur Zahlenstrahl"
+ * only reads the ruler, "Nur Rechnen" never uses the ruler kinds (playModeKinds).
  */
 export function searchChallenge(
   settings: Settings,
@@ -38,8 +39,11 @@ export function searchChallenge(
   avoid: number | null = null,
   skillSteps: Record<Skill, number> = parentDifficulty(settings).skillSteps,
   noComparison = false,
+  mode: PlayMode = 'mixed',
 ): Challenge {
-  const kindsAllowed = noComparison ? enabledKinds(settings).filter((k) => !isComparisonKind(k)) : undefined;
+  const byMode = playModeKinds(mode, settings);
+  const base = byMode.kindsAllowed ?? enabledKinds(settings);
+  const kindsAllowed = noComparison ? base.filter((k) => !isComparisonKind(k)) : byMode.kindsAllowed;
   let challenge: Challenge | null = null;
   for (let i = 0; i < NEW_POSITION_TRIES; i++) {
     challenge = generateChallenge({
@@ -51,6 +55,7 @@ export function searchChallenge(
       rulerLevel,
       inputMethod: inputMethod ?? 'keyboard',
       ...(kindsAllowed ? { kindsAllowed } : {}),
+      ...(byMode.noRulerKinds ? { noRulerKinds: true } : {}),
     });
     if (challenge.answer !== avoid) break;
   }
@@ -77,7 +82,7 @@ export function startSearch(
   noComparison = false,
 ): BattleState {
   const rulerLevel = difficulty.rulerLevel;
-  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps, noComparison);
+  const challenge = searchChallenge(settings, s.seed, s.turn, s.player.position, rulerLevel, s.inputMethod, avoid, difficulty.skillSteps, noComparison, s.mode);
   const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, settings, s.terrain), alive: true };
   const decoys: TankState[] = (challenge.options ?? [])
     .filter((n) => n !== challenge.answer)
@@ -111,7 +116,7 @@ function landedOf(s: BattleState): number | null {
 export function raiseHelp(s: BattleState, settings: Settings): BattleState {
   const c = s.challenge;
   if (!c || s.help.level >= SOLUTION_HELP_LEVEL) return s;
-  const content = nextHelp(c, s.help.level + 1, landedOf(s), settings);
+  const content = nextHelp(c, s.help.level + 1, landedOf(s), settings, s.mode);
   const selection = content.step === SOLUTION_HELP_LEVEL ? c.answer : s.selection;
   const stepAnimation = s.stepAnimation ?? content.stepPath;
   return { ...s, help: { ...s.help, level: content.step, content }, selection, stepAnimation };

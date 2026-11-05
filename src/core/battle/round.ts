@@ -3,10 +3,9 @@
  * Pure functions: each returns a new RoundState and never changes its input.
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
-import type { BattleState, Challenge, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
+import type { BattleState, LastShot, Point, RoundState, RulerLevel, Settings, Skill, TankState } from '../types';
 import { numberToX } from '../numberline/mapping';
 import { minEnemyGap } from '../math/gaps';
-import { generateChallenge } from '../math/generate';
 import { carveCrater, FLOOR, generateTerrain, settleY } from '../physics/terrain';
 import { enemyHitsPlayer, LIVES, shotKind } from './hitRule';
 import { emptyEntry } from './entry';
@@ -56,48 +55,16 @@ export function parentDifficulty(settings: Settings): Difficulty {
   return { skillSteps: LAST_STEPS, rulerLevel: settings.rulerLevelStart };
 }
 
-/** Tries for a new enemy number after a hit before the same number is accepted again. */
-const MOVE_TRIES = 8;
-
-/**
- * Free play (amendment 02, FR-014, FR-067, decision D14): a "read the ruler" challenge for the round's ruler
- * level; the enemy stands at its answer. With `avoid`, another answer is chosen whenever the generator finds one.
- */
-export function freePlayChallenge(
-  settings: Settings,
-  roundSeed: number,
-  turn: number,
-  playerPosition: number,
-  rulerLevel: RulerLevel,
-  avoid: number | null = null,
-  skillSteps: Record<Skill, number> = LAST_STEPS,
-): Challenge {
-  let challenge: Challenge | null = null;
-  for (let i = 0; i < MOVE_TRIES; i++) {
-    challenge = generateChallenge({
-      settings,
-      skillSteps,
-      roundSeed: i === 0 ? roundSeed : deriveSeed(roundSeed, 3, i),
-      turn,
-      playerPosition,
-      rulerLevel,
-      kindsAllowed: ['readPosition'],
-    });
-    if (challenge.answer !== avoid) break;
-  }
-  return challenge!;
-}
-
 /**
  * A new round: terrain from the seed, the player at range.min (left) or range.max (right),
- * the enemy at a seeded position at least minEnemyGap away. Free play starts in 'aiming' with the enemy visible
- * and standing at the answer of a "read the ruler" challenge.
+ * the enemy at a seeded position at least minEnemyGap away, in 'aiming' with no challenge. The controller then starts
+ * the first search, which moves the enemy to its answer (guided.ts startSearch; every play mode, amendment 17).
  */
 export function createRound(
   settings: Settings,
   seed: number,
   side: 'left' | 'right',
-  mode: RoundState['mode'] = 'freePlay',
+  mode: RoundState['mode'] = 'mixed',
   difficulty: Difficulty = parentDifficulty(settings),
 ): BattleState {
   const { min, max } = settings.range;
@@ -106,8 +73,7 @@ export function createRound(
   const playerPosition = side === 'left' ? min : max;
   // The parent's starting level, or with adaptive difficulty the level of the positions skill (FR-018).
   const rulerLevel = difficulty.rulerLevel;
-  const challenge = mode === 'freePlay' ? freePlayChallenge(settings, seed, 0, playerPosition, rulerLevel, null, difficulty.skillSteps) : null;
-  const enemyPosition = challenge ? challenge.answer : enemyPositionFor(settings, side, createRng(deriveSeed(seed, 1)), null);
+  const enemyPosition = enemyPositionFor(settings, side, createRng(deriveSeed(seed, 1)), null);
 
   return {
     seed,
@@ -126,7 +92,7 @@ export function createRound(
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
     decoys: [],
     playerSide: side,
-    challenge,
+    challenge: null,
     answerableAt: null,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [], content: null },
     message: null,

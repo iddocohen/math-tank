@@ -207,17 +207,23 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           <Check field="challengeTypes.addition" label={L.addition} checked={draft.challengeTypes.addition} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, addition: v })} />
           <Check field="challengeTypes.subtraction" label={L.subtraction} checked={draft.challengeTypes.subtraction} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, subtraction: v })} />
           <Check field="challengeTypes.comparison" label={L.comparison} checked={draft.challengeTypes.comparison} onChange={(v) => set('challengeTypes', { ...draft.challengeTypes, comparison: v })} />
-          <Check field="freePlay" label={L.freePlay} checked={draft.freePlay} onChange={(v) => set('freePlay', v)} />
           {allTypesOff && (
             <div className="hint">
               <p>{m.settings.guidedNeedsType}</p>
-              {!draft.freePlay && (
-                <button type="button" className="secondary-button" onClick={() => set('freePlay', true)}>
-                  {m.settings.offerFreePlay}
+              {(draft.playModes.mixed || draft.playModes.math || !draft.playModes.ruler) && (
+                <button type="button" className="secondary-button" onClick={() => set('playModes', { mixed: false, ruler: true, math: false })}>
+                  {m.settings.offerRulerOnly}
                 </button>
               )}
             </div>
           )}
+        </Group>
+
+        {/* Amendment 17 (FR-121): the play modes the start screen offers. */}
+        <Group title={m.settings.groups.playModes} errors={errorsAt('playModes')}>
+          <Check field="playModes.mixed" label={L.playModeMixed} checked={draft.playModes.mixed} onChange={(v) => set('playModes', { ...draft.playModes, mixed: v })} />
+          <Check field="playModes.ruler" label={L.playModeRuler} checked={draft.playModes.ruler} onChange={(v) => set('playModes', { ...draft.playModes, ruler: v })} />
+          <Check field="playModes.math" label={L.playModeMath} checked={draft.playModes.math} onChange={(v) => set('playModes', { ...draft.playModes, math: v })} />
         </Group>
 
         <Group title={m.settings.groups.range} errors={errorsAt('range')}>

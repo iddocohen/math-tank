@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ATTEMPTS, recordAttempt } from './adaptive';
+import { MAX_ATTEMPTS, recordAttempt, rowToRaise } from './adaptive';
 import { effectiveStep, ladders, skillKey, topStep } from './ladders';
 import { defaultSettings } from '../settings/defaults';
 import { emptyProgress } from '../storage/storage';
@@ -82,13 +82,27 @@ describe('recordAttempt and effectiveStep (FR-018, FR-037, FR-075, AC-09)', () =
     expect(effectiveStep(emptyProgress(), 'positions', RANGE, s).maxNumberFraction).toBe(ladders.positions[0]?.maxNumberFraction);
   });
 
-  it('raises the step by one after 5 independent of the last 6 non-guess outcomes and clears recent', () => {
+  it('raises the step by one after 3 independent answers in a row and clears recent (amendment 17)', () => {
     const s = settings();
-    const before = play(emptyProgress(), ['independent', 'assisted', 'independent', 'independent', 'independent'], s);
-    expect(sp(before).step).toBe(0);
-    const after = recordAttempt(before, attempt('independent'), s);
+    const two = play(emptyProgress(), ['independent', 'independent'], s);
+    expect(sp(two).step).toBe(0);
+    const after = recordAttempt(two, attempt('independent'), s);
     expect(sp(after).step).toBe(1);
     expect(sp(after).recent).toEqual([]);
+  });
+
+  it('does not raise when an assisted or unsolved answer breaks the row', () => {
+    const s = settings();
+    expect(sp(play(emptyProgress(), ['independent', 'independent', 'assisted', 'independent', 'independent'], s)).step).toBe(0);
+    expect(sp(play(emptyProgress(), ['independent', 'unsolved', 'independent', 'independent'], s)).step).toBe(0);
+    expect(sp(play(emptyProgress(), ['independent', 'assisted', 'independent', 'independent', 'independent'], s)).step).toBe(1);
+  });
+
+  it('lets guesses neither count toward the row nor break it', () => {
+    const s = settings();
+    const withGuesses = play(emptyProgress(), ['independent', 'guess', 'independent', 'guess', 'guess'], s);
+    expect(sp(withGuesses).step).toBe(0);
+    expect(sp(recordAttempt(withGuesses, attempt('independent'), s)).step).toBe(1);
   });
 
   it('never raises after a single correct answer', () => {
@@ -96,21 +110,47 @@ describe('recordAttempt and effectiveStep (FR-018, FR-037, FR-075, AC-09)', () =
     expect(sp(p).step).toBe(0);
   });
 
-  it('lowers the step by one after 3 assisted or unsolved of the last 5, never below 0', () => {
+  it('lowers the step by one when 2 of the last 3 needed help or were unsolved, never below 0 (amendment 17)', () => {
     const s = settings();
-    const p = play(withSkill('positions', { step: 2 }), ['assisted', 'independent', 'unsolved', 'independent'], s);
+    const p = play(withSkill('positions', { step: 2 }), ['assisted', 'independent'], s);
     expect(sp(p).step).toBe(2);
-    const lowered = recordAttempt(p, attempt('assisted'), s);
+    const lowered = recordAttempt(p, attempt('unsolved'), s);
     expect(sp(lowered).step).toBe(1);
     expect(sp(lowered).recent).toEqual([]);
 
+    expect(sp(play(withSkill('positions', { step: 2 }), ['assisted', 'independent', 'independent', 'assisted'], s)).step).toBe(2);
     const atZero = play(emptyProgress(), ['assisted', 'unsolved', 'assisted', 'unsolved'], s);
     expect(sp(atZero).step).toBe(0);
+  });
+
+  it('starts the row again after a step change', () => {
+    const s = settings();
+    const raised = play(emptyProgress(), ['independent', 'independent', 'independent'], s);
+    expect(sp(raised).step).toBe(1);
+    expect(sp(play(raised, ['independent', 'independent'], s)).step).toBe(1);
+    expect(sp(play(raised, ['independent', 'independent', 'independent'], s)).step).toBe(2);
+    // After lowering, one assisted answer more does not lower again: the last 3 start empty.
+    const lowered = play(withSkill('positions', { step: 3 }), ['assisted', 'assisted'], s);
+    expect(sp(lowered).step).toBe(2);
+    expect(sp(play(lowered, ['assisted'], s)).step).toBe(2);
+  });
+
+  it('gives how many more independent answers in a row raise the step (FR-040)', () => {
+    const s = settings();
+    expect(rowToRaise(withSkill('positions', {}).skills[skillKey('positions', RANGE)]!, 'positions', s)).toBe(3);
+    expect(rowToRaise(sp(play(emptyProgress(), ['independent'], s)), 'positions', s)).toBe(2);
+    expect(rowToRaise(sp(play(emptyProgress(), ['independent', 'guess', 'independent'], s)), 'positions', s)).toBe(1);
+    expect(rowToRaise(sp(play(emptyProgress(), ['independent', 'assisted'], s)), 'positions', s)).toBe(3);
+    expect(rowToRaise(sp(withSkill('positions', { recent: ['independent', 'close'] })), 'positions', s)).toBe(2);
+    const top = topStep('positions', s);
+    expect(rowToRaise(sp(withSkill('positions', { step: top })), 'positions', s)).toBeNull();
+    expect(rowToRaise(sp(withSkill('positions', {})), 'positions', settings({ adaptive: false }))).toBeNull();
   });
 
   it('keeps masteryWindow when the step changes', () => {
     const p = play(emptyProgress(), ['independent', 'independent', 'independent', 'independent', 'independent'], settings());
     expect(sp(p).step).toBe(1);
+    expect(sp(p).recent).toEqual(['independent', 'independent']);
     expect(sp(p).masteryWindow).toHaveLength(5);
   });
 
@@ -183,21 +223,13 @@ describe('recordAttempt and effectiveStep (FR-018, FR-037, FR-075, AC-09)', () =
 
   it("counts a stored 'close' neither toward raising nor toward lowering", () => {
     const s = settings();
-    const raising = recordAttempt(
-      withSkill('positions', { step: 1, recent: ['close', 'close', 'independent', 'independent', 'independent'] }),
-      attempt('independent'),
-      s,
-    );
+    const raising = recordAttempt(withSkill('positions', { step: 1, recent: ['close', 'close', 'independent'] }), attempt('independent'), s);
     expect(sp(raising).step).toBe(1);
 
-    const lowering = recordAttempt(
-      withSkill('positions', { step: 1, recent: ['close', 'close', 'close', 'assisted'] }),
-      attempt('assisted'),
-      s,
-    );
+    const lowering = recordAttempt(withSkill('positions', { step: 1, recent: ['close', 'close', 'close'] }), attempt('assisted'), s);
     expect(sp(lowering).step).toBe(1);
 
-    const recent: RecentOutcome[] = ['close', 'independent', 'independent', 'independent', 'independent'];
+    const recent: RecentOutcome[] = ['independent', 'close', 'independent'];
     const stillRaises = recordAttempt(withSkill('positions', { step: 1, recent }), attempt('independent'), s);
     expect(sp(stillRaises).step).toBe(2);
   });

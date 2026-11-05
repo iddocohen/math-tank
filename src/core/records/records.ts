@@ -2,12 +2,12 @@
  * Personal bests (amendment 06, FR-084 to FR-086, data-model.md "Records"). Pure functions; storage.ts persists them
  * under `mathtanks.records.v1`, and the export file carries them.
  *
- * One best per number range, ruler starting level and round type: the most enemies destroyed in one round, with
+ * One best per number range, ruler starting level, round type and play mode (amendment 17): the most enemies destroyed in one round, with
  * the time of that round. A result is a new record only when it destroys more enemies than the stored best, and a
  * round with no destroyed enemy never is.
  */
 import { z } from 'zod';
-import type { Settings } from '../settings/schema';
+import type { PlayMode, Settings } from '../settings/schema';
 
 export const bestResultSchema = z.object({
   enemies: z.number().int().min(0),
@@ -28,9 +28,14 @@ export function emptyRecords(): Records {
   return { version: 1, best: {} };
 }
 
-/** `${min}-${max}|${rulerLevelStart}|${roundType}`, from the round's settings snapshot. */
-export function recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>): string {
-  return `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`;
+/**
+ * `${min}-${max}|${rulerLevelStart}|${roundType}`, from the round's settings snapshot, plus `|ruler` or `|math` for
+ * those play modes (amendment 17, FR-086). "Gemischt" keeps the key without a mode part, so the bests stored before
+ * amendment 17 stay its bests.
+ */
+export function recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>, mode: PlayMode = 'mixed'): string {
+  const key = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`;
+  return mode === 'mixed' ? key : `${key}|${mode}`;
 }
 
 export interface SubmitOutcome {

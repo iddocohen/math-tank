@@ -4,7 +4,7 @@
  * (only where the browser allows fullscreen) puts the app root in fullscreen, and after leaving it the app root has
  * the focus again, so the keys keep working. Game state comes from the overlay's data-* attributes (D4).
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
   );
   await page.goto('/?seed=6');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('battle-overlay')).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 10_000 });
 });

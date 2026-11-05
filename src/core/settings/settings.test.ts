@@ -21,7 +21,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 7,
+      version: 8,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -39,7 +39,7 @@ describe('defaults', () => {
       roundType: 'untilHearts',
       roundLength: 5,
       adaptive: true,
-      freePlay: false,
+      playModes: { mixed: true, ruler: true, math: true },
       noDamage: false,
       showClock: false,
       showRecords: true,
@@ -120,11 +120,23 @@ describe('validateSettings', () => {
     expect(paths(s)).toContain('range');
   });
 
-  it('rejects all challenge types off with freePlay false (US6 scenario 4)', () => {
+  it('rejects all challenge types off while "Gemischt" or "Nur Rechnen" is offered (US6 scenario 4, amendment 17)', () => {
     const s = clone(defaultSettings());
     s.challengeTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
     expect(paths(s)).toContain('challengeTypes');
-    s.freePlay = true;
+    s.playModes = { mixed: false, ruler: true, math: true };
+    expect(paths(s)).toContain('challengeTypes');
+    s.playModes = { mixed: true, ruler: true, math: false };
+    expect(paths(s)).toContain('challengeTypes');
+    s.playModes = { mixed: false, ruler: true, math: false };
+    expect(validateSettings(s)).toEqual({ ok: true });
+  });
+
+  it('rejects settings that offer no play mode (FR-121)', () => {
+    const s = clone(defaultSettings());
+    s.playModes = { mixed: false, ruler: false, math: false };
+    expect(errorsOf(s)).toContainEqual({ key: 'noPlayMode', path: 'playModes' });
+    s.playModes.math = true;
     expect(validateSettings(s)).toEqual({ ok: true });
   });
 
@@ -302,9 +314,10 @@ describe('whole numbers and one parse function (review T4)', () => {
   });
 
   it('parseSettings migrates, checks the schema and the rules, and gives null for anything invalid', () => {
-    const { numberPad: _drop, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
+    const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
-    expect(parseSettings(v5)).toMatchObject({ version: 7, numberPad: 'auto', freePlay: true });
+    void _modes;
+    expect(parseSettings(v5)).toMatchObject({ version: 8, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true } });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });

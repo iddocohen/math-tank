@@ -8,7 +8,8 @@
  *
  * Guided mode (US2, guided.ts): every fire is an answer to the search's challenge. The enemy is visible in every
  * challenge kind (amendment 07). A miss raises the help step; the exact number destroys the enemy, records an Attempt
- * and starts a new search with a new enemy.
+ * and starts a new search with a new enemy. Amendment 17: every play mode ("Gemischt", "Nur Zahlenstrahl", "Nur
+ * Rechnen") is such a search and records attempts; the mode only decides the challenge kinds and the help content.
  *
  * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
  * Amendment 07: the enemy fires once right after every shot of the child that does not destroy it. Amendment 13: there
@@ -18,7 +19,7 @@
  * gone, or with roundType 'enemyCount' after roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
 import { createRng, deriveSeed } from '../rng';
-import type { BattleState, InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
+import type { BattleState, InputMethod, PlayMode, RoundState, Settings, ShotInFlight } from '../types';
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
@@ -33,8 +34,6 @@ import {
   applyImpact,
   createRound,
   type Difficulty,
-  freePlayChallenge,
-  moveTank,
   muzzle,
   renewTerrain,
   WORLD_HEIGHT,
@@ -122,7 +121,7 @@ export class BattleController {
     this.nextSettings = structuredClone(settings);
   }
 
-  startRound(mode: 'guided' | 'freePlay'): void {
+  startRound(mode: PlayMode): void {
     this.settings = structuredClone(this.nextSettings);
     const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
     const side = this.nextSide;
@@ -134,7 +133,7 @@ export class BattleController {
     // The latest input method carries into the new round, so a keyboard player keeps getting no findNumber (FR-076).
     const difficulty = this.difficulty();
     const round: BattleState = { ...createRound(this.settings, seed, side, mode, difficulty), inputMethod: this.state.inputMethod };
-    this.set(mode === 'guided' ? startSearch(round, this.settings, this.deps.clock(), null, difficulty) : round);
+    this.set(startSearch(round, this.settings, this.deps.clock(), null, difficulty));
   }
 
   /**
@@ -164,7 +163,7 @@ export class BattleController {
       elapsedMs: prev.elapsedMs,
       inputMethod: prev.inputMethod,
     };
-    this.set(prev.mode === 'guided' ? startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true) : scene);
+    this.set(startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true));
   }
 
   /**
@@ -206,7 +205,7 @@ export class BattleController {
    */
   tapTank(tankId: string): void {
     const s = this.state;
-    if (s.mode !== 'guided' || s.phase !== 'challenge' || s.decoys.length === 0) return;
+    if (s.phase !== 'challenge' || s.decoys.length === 0) return;
     const tank = [s.enemy, ...s.decoys].find((t) => t.id === tankId && t.alive);
     if (tank) this.shoot(tank.position, 'pointer');
   }
@@ -241,11 +240,11 @@ export class BattleController {
   }
 
   /**
-   * Help button or H (FR-030): the next help step during a guided search, for every challenge kind (help.ts). It is
+   * Help button or H (FR-030): the next help step during a search, in every mode and challenge kind (help.ts). It is
    * not a shot and costs no heart, so lives and turn stay and the enemy does not fire (FR-081).
    */
   requestHelp(): void {
-    if (this.state.mode !== 'guided' || this.state.phase !== 'challenge') return;
+    if (this.state.phase !== 'challenge') return;
     const next = afterHelpRequest(this.state, this.settings);
     if (next !== this.state) this.set(next);
   }
@@ -262,13 +261,13 @@ export class BattleController {
   }
 
   /**
-   * Milliseconds until the time limit shows the next help step, or null when there is no limit, no guided search or
+   * Milliseconds until the time limit shows the next help step, or null when there is no limit, no search or
    * the solution is already shown. The wait stops while paused and while a shell is in flight.
    */
   helpTimeLeftMs(): number | null {
     const limit = this.settings.timeLimitSeconds;
     const s = this.state;
-    if (limit === null || s.mode !== 'guided' || !s.challenge || s.help.level >= SOLUTION_HELP_LEVEL) return null;
+    if (limit === null || !s.challenge || s.help.level >= SOLUTION_HELP_LEVEL) return null;
     return Math.max(0, limit * 1000 - this.helpWaitElapsed());
   }
 
@@ -284,31 +283,26 @@ export class BattleController {
     this.firedNumber = null;
     const s = this.impact({ point: shot.impact, hitTargetId: null, outOfBounds: false, shooter: 'player', fired, landed: xToNumber(shot.impact.x, min, max) }, shot.blastRadius);
     const next: BattleState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
-    const guided = next.mode === 'guided';
     if (next.lastShot?.hit) {
       // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
       // The remaining decoys fold away with it (amendment 10).
       // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
       const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, missStreak: 0, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
-      if (guided) this.recordAttempt(destroyed);
+      this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
         return;
       }
-      if (guided) {
-        this.set(destroyed);
-        // The difficulty is read after the attempt was recorded, so a step change applies to this next search.
-        // New hills before the next enemy is placed on them (amendment 13, FR-101).
-        this.set(startSearch(renewTerrain(destroyed, this.settings), this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
-        return;
-      }
-      this.set(this.nextReadPosition(renewTerrain(destroyed, this.settings)));
+      this.set(destroyed);
+      // The difficulty is read after the attempt was recorded, so a step change applies to this next search, also within
+      // the round (amendment 17). New hills before the next enemy is placed on them (amendment 13, FR-101).
+      this.set(startSearch(renewTerrain(destroyed, this.settings), this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
       return;
     }
     // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081) and adds to the misses in
     // a row, 2 for a fast guess (amendment 13, FR-098). The guess rule reads the misses before this one.
-    const step = guided && this.isFastGuessMiss(next) ? 2 : 1;
-    const missed = guided ? afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true) : next;
+    const step = this.isFastGuessMiss(next) ? 2 : 1;
+    const missed = afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true);
     const streaked: BattleState = { ...missed, missStreak: missed.missStreak + step };
     this.set({ ...streaked, phase: 'enemyTurn', shot: this.nextEnemyShot(streaked) });
   }
@@ -323,26 +317,21 @@ export class BattleController {
       this.endRound(s, 'heartsGone');
       return;
     }
-    this.set({ ...s, phase: this.choosingPhase() });
+    this.set({ ...s, phase: 'challenge' });
   }
 
   /**
-   * The FR-038 guess rule for the guided miss that just landed (amendment 13, FR-098): fired less than 1.5 s after
-   * answers became possible, or after 3 misses within the 5 seconds before it. Free play has no answer timing.
+   * The FR-038 guess rule for the miss that just landed (amendment 13, FR-098): fired less than 1.5 s after
+   * answers became possible, or after 3 misses within the 5 seconds before it.
    */
   private isFastGuessMiss(s: BattleState): boolean {
     if (s.answerableAt === null) return false;
     return isFastGuess({ responseMs: Math.max(0, this.firedAt - s.answerableAt), wrongAnswerTimes: s.help.wrongAnswerTimes, submittedAt: this.firedAt });
   }
 
-  /** The phase in which the child chooses a number: a guided search or free-play aiming. */
-  private choosingPhase(): 'challenge' | 'aiming' {
-    return this.state.mode === 'guided' ? 'challenge' : 'aiming';
-  }
-
   /**
    * Stores the finished search through the ProgressStore (FR-035). Called after the shot animation, between turns,
-   * never while a shell is in flight. Free play records nothing (decision D14).
+   * never while a shell is in flight. Every play mode records its attempts (amendment 17, FR-124).
    */
   private recordAttempt(s: BattleState): void {
     if (!s.challenge || s.answerableAt === null) return;
@@ -401,16 +390,6 @@ export class BattleController {
     if (!this.acceptsInput()) return;
     const r = applyKey(this.state.entry, key, this.settings.range);
     this.set({ ...this.state, entry: r.entry, selection: r.selection ?? this.state.selection, inputMethod: 'keyboard' });
-  }
-
-  /**
-   * Free play: after a hit a new "read the ruler" challenge follows and a new enemy stands at its answer, a new
-   * visible position (decision D12, FR-066, FR-067). After a miss the challenge stays. No attempt is recorded (D14).
-   */
-  private nextReadPosition(s: BattleState): BattleState {
-    const challenge = freePlayChallenge(this.settings, s.seed, s.turn, s.player.position, s.rulerLevel, s.enemy.position, this.difficulty().skillSteps);
-    const enemy: TankState = { ...moveTank(s.enemy, challenge.answer, this.settings, s.terrain), alive: true };
-    return { ...s, phase: 'aiming', challenge, enemy };
   }
 
   /**

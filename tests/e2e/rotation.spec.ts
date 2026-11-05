@@ -8,7 +8,7 @@
  * Runs in the `iphone-landscape` project only (WebKit, touch, iPhone 13). Every action is a tap.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -106,7 +106,7 @@ for (const ios of [false, true]) {
 
       await turn(page, LANDSCAPE);
       await expectSide(page);
-      await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+      await startButton(page).tap();
       const overlay = page.getByTestId('battle-overlay');
       await expectBattleFits(page);
       await fireWithPad(page, overlay);
@@ -125,7 +125,7 @@ for (const ios of [false, true]) {
     test('the parent menu opened on the rotate picture stays open and the round stays paused after turning sideways (review R1)', async ({ page }) => {
       await turn(page, LANDSCAPE);
       await page.goto('/?seed=5');
-      await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+      await startButton(page).tap();
       const overlay = page.getByTestId('battle-overlay');
       await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
 
@@ -152,9 +152,9 @@ for (const ios of [false, true]) {
     test('load sideways: the game shows without the rotate picture', async ({ page }) => {
       await turn(page, LANDSCAPE);
       await page.goto('/?seed=5');
-      await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+      await expect(startButton(page)).toBeVisible();
       await expectSide(page);
-      await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+      await startButton(page).tap();
       await expectBattleFits(page);
     });
   });

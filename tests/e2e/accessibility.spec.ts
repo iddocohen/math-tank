@@ -10,7 +10,7 @@
  * - No visible text on the start screen, the battle screen, the round end or the garage is smaller than 18 CSS px.
  */
 import type { Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 1 })] as const,
   );
   await page.goto('/?seed=8');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
 });
 
 test('start screen and garage: labels, focus and text size', async ({ page, browserName }) => {

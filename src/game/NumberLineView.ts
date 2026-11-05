@@ -53,6 +53,9 @@
  *   The canvas carries `data-help-step`, `data-help-highlight` (the highlighted major line), `data-help-zoom`
  *   ("30,40"), `data-help-count` (steps counted so far), `data-help-options` and `data-help-solution` ('' when
  *   none) for the end-to-end tests only.
+ * - "Nur Rechnen" (amendment 17, FR-123): no ruler band, lines, labels or pointer lines (`data-ruler-labels` and
+ *   `data-pointer-lines` are empty), and a tap on the ruler area selects nothing. The landing number, the step count
+ *   and the help steps still show; help step 2 shows the zoomed ten around the answer (showZoom) while it lasts.
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -135,6 +138,8 @@ interface Drawn {
   min: number;
   max: number;
   seed: number;
+  /** "Nur Rechnen" draws no ruler band (amendment 17). */
+  hidden: boolean;
   rulerLevel: RulerLevel;
 }
 
@@ -237,10 +242,12 @@ export class NumberLineView {
     const { min, max } = settings.range;
     const rulerLevel = s.rulerLevel;
     const d = this.drawn;
-    if (!d || d.min !== min || d.max !== max || d.seed !== s.seed || d.rulerLevel !== rulerLevel) {
-      this.drawn = { min, max, seed: s.seed, rulerLevel };
+    const hidden = s.mode === 'math';
+    if (!d || d.min !== min || d.max !== max || d.seed !== s.seed || d.rulerLevel !== rulerLevel || d.hidden !== hidden) {
+      this.drawn = { min, max, seed: s.seed, rulerLevel, hidden };
       this.dragging = false;
-      this.drawRuler(min, max, rulerLevel, s.seed);
+      if (hidden) this.hideRuler();
+      else this.drawRuler(min, max, rulerLevel, s.seed);
     }
     this.drawMarks(s, min, max);
     this.pulseHit(s, min, max);
@@ -628,6 +635,18 @@ export class NumberLineView {
     this.scene.tweens.killTweensOf(this.pulse);
   }
 
+  /** "Nur Rechnen" (amendment 17, FR-123): no ruler band, lines or labels. */
+  private hideRuler(): void {
+    for (const label of this.labels) label.destroy();
+    this.labels = [];
+    this.labelByValue.clear();
+    this.ruler.clear();
+    this.ruled = { ticks: [], labelTypedNumber: false };
+    this.labelBoxes = [];
+    this.renderChips();
+    this.scene.game.canvas.dataset.rulerLabels = '';
+  }
+
   private drawRuler(min: number, max: number, rulerLevel: RulerLevel, seed: number): void {
     for (const label of this.labels) label.destroy();
     this.labels = [];
@@ -799,7 +818,8 @@ export class NumberLineView {
   private drawPointerLines(s: RoundState): void {
     const g = this.marks;
     const enemy = visibleEnemy(s);
-    const visible: TankState[] = [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
+    // "Nur Rechnen" has no ruler for the lines to point at (amendment 17).
+    const visible: TankState[] = s.mode === 'math' ? [] : [...(enemy ? [enemy] : []), ...s.decoys.filter((d) => d.alive)].sort((a, b) => a.position - b.position);
     g.lineStyle(2, POINTER, 0.8);
     g.fillStyle(POINTER, 0.9);
     for (const tank of visible) {
@@ -815,7 +835,7 @@ export class NumberLineView {
   private onDown(p: Phaser.Input.Pointer): void {
     if (p.worldY < RULER_TOP - GRAB_MARGIN || p.worldY > RULER_BOTTOM + GRAB_MARGIN) return;
     const s = this.controller.getState();
-    if (s.phase !== 'aiming' && s.phase !== 'challenge') return;
+    if ((s.phase !== 'aiming' && s.phase !== 'challenge') || s.mode === 'math') return;
     this.dragging = true;
     this.select(p);
   }

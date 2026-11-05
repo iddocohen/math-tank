@@ -2,12 +2,9 @@
  * No external services (T135, FR-052): every request made while the game loads and while one whole round is played
  * goes to the game's own origin (or is a data: or blob: URL). No analytics, fonts, CDNs or tracking.
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
-import { t } from '../../src/i18n';
-
-const m = t();
 
 test('loading and playing a whole round sends no request to another origin', async ({ page, baseURL }) => {
   test.setTimeout(90_000);
@@ -21,7 +18,7 @@ test('loading and playing a whole round sends no request to another origin', asy
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 2 })] as const,
   );
   await page.goto('/?seed=8');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   for (let destroyed = 0; destroyed < 2; destroyed++) {

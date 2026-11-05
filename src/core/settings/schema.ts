@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 7 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1).
+ * Structural schema for persisted settings, version 8 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -16,7 +17,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(7),
+  version: z.literal(8),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -56,7 +57,12 @@ export const settingsSchema = z.object({
   /** Enemies per round for `roundType: 'enemyCount'`, 1 to 20. */
   roundLength: z.number().int(),
   adaptive: z.boolean(),
-  freePlay: z.boolean(),
+  /** The play modes the start screen offers (amendment 17, FR-121): "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen". */
+  playModes: z.object({
+    mixed: z.boolean(),
+    ruler: z.boolean(),
+    math: z.boolean(),
+  }),
   noDamage: z.boolean(),
   /** An up-counting clock at the top during play (FR-084). */
   showClock: z.boolean(),
@@ -71,5 +77,9 @@ export const settingsSchema = z.object({
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type RoundType = Settings['roundType'];
+/** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
+export type PlayMode = keyof Settings['playModes'];
+/** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */
+export const PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'math'];
 export type RangePreset = z.infer<typeof rangePresetSchema>;
 export type SettingsRange = z.infer<typeof rangeSchema>;

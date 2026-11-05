@@ -5,6 +5,8 @@
  * mastered or developing; the skills that needed the most help; the sessions; and the personal bests per range,
  * ruler starting level and round type as a plain list without ranking. "Fortschritt zurücksetzen" asks first and
  * then clears the progress; the personal bests and the stars stay.
+ * Amendment 17 (FR-040, FR-086): the column "Bis zur nächsten Stufe" shows how many more correct answers in a row raise
+ * each skill, and the bests name the play mode.
  * Amendment 11 (FR-096): the star total of the tank garage and a separate "Sterne zurücksetzen" with its own
  * confirmation, which sets 0 stars, locks every item and chooses the standard look.
  */
@@ -16,7 +18,7 @@ import { t } from '../i18n';
 import type { Persistence } from './persistence';
 
 interface Props {
-  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress' | 'garage' | 'resetStars'>;
+  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress' | 'garage' | 'resetStars' | 'settings'>;
   onClose: () => void;
 }
 
@@ -35,7 +37,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
   const [stars, setStars] = useState(() => persistence.garage().stars);
   const [confirmingStars, setConfirmingStars] = useState(false);
   const [starsDone, setStarsDone] = useState(false);
-  const summary = summarize(progress, persistence.records());
+  const summary = summarize(progress, persistence.records(), persistence.settings());
 
   const rangeText = (rangeKey: string) => {
     const r = parseRangeKey(rangeKey);
@@ -88,6 +90,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
                   <th scope="col">{P.columns.independent}</th>
                   <th scope="col">{P.columns.withHelp}</th>
                   <th scope="col">{P.columns.step}</th>
+                  <th scope="col">{P.columns.toRaise}</th>
                   <th scope="col">{P.columns.status}</th>
                 </tr>
               </thead>
@@ -100,6 +103,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
                     <td data-col="independent">{r.independentCorrect}</td>
                     <td data-col="withHelp">{r.withHelp}</td>
                     <td data-col="step">{P.step(r.step + 1, r.stepCount)}</td>
+                    <td data-col="toRaise">{r.toRaise !== null ? P.toRaise(r.toRaise) : persistence.settings().adaptive ? P.topStep : P.adaptiveOff}</td>
                     <td data-col="status">{P.status[r.status]}</td>
                   </tr>
                 ))}
@@ -164,18 +168,20 @@ export function ProgressPage({ persistence, onClose }: Props) {
                   <th scope="col">{P.bestColumns.range}</th>
                   <th scope="col">{P.bestColumns.roundType}</th>
                   <th scope="col">{P.bestColumns.level}</th>
+                  <th scope="col">{P.bestColumns.mode}</th>
                   <th scope="col">{P.bestColumns.enemies}</th>
                   <th scope="col">{P.bestColumns.time}</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.bests.map((b) => (
-                  <tr key={`${b.min}-${b.max}|${b.rulerLevelStart}|${b.roundType}`}>
+                  <tr key={`${b.min}-${b.max}|${b.rulerLevelStart}|${b.roundType}|${b.mode}`}>
                     <td data-col="range">{P.range(b.min, b.max)}</td>
                     <td data-col="roundType">
                       {b.roundType === 'enemyCount' ? m.settings.labels.roundTypeEnemyCount : m.settings.labels.roundTypeUntilHearts}
                     </td>
                     <td data-col="level">{P.level(b.rulerLevelStart)}</td>
+                    <td data-col="mode">{m.start.modes[b.mode]}</td>
                     <td data-col="enemies">{b.enemies}</td>
                     <td data-col="time">{formatTime(b.ms)}</td>
                   </tr>

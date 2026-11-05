@@ -4,7 +4,7 @@
  * 43 → 40 → 36 and costs no heart and no shot; typing 36 and Enter destroys the enemy. Game state comes from the
  * overlay's and the canvas's data-* attributes (D4).
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { SUBTRACTION_43_MINUS_7 } from '../../src/core/math/fixtures';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -20,7 +20,7 @@ test('43 − 7: H shows the step animation 43, 40, 36, then 36 and Enter destroy
     [SETTINGS_KEY, JSON.stringify(SUBTRACTION_43_MINUS_7.settings)] as const,
   );
   await page.goto(`/?seed=${SUBTRACTION_43_MINUS_7.seed}`);
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   const canvas = page.locator('canvas');

@@ -10,7 +10,7 @@ import {
 } from '../settings/defaults';
 import { validateSettings, withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
-import { generateChallenge } from './generate';
+import { generateChallenge, playModeKinds } from './generate';
 import { validateChallenge } from './validate';
 import { minEnemyGap, minTankGap } from './gaps';
 import { clampStep, ladders } from '../progress/ladders';
@@ -320,8 +320,8 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
       negativeResults: rng.next() < 0.5,
       rulerLevelStart: startLevel,
       rulerLevelMax: rng.pick(LEVELS.filter((l) => l >= startLevel)),
-      // Every switch off is valid only together with free play (FR-047).
-      freePlay: allOff || rng.next() < 0.3,
+      // Every switch off is valid only with "Nur Zahlenstrahl" as the only play mode (FR-047, amendment 17).
+      playModes: allOff ? { mixed: false, ruler: true, math: false } : { mixed: true, ruler: rng.next() < 0.7, math: rng.next() < 0.7 },
     };
     // withRange clamps the linked limits to the range, as the settings page does.
     return withRange(patched, range);
@@ -435,4 +435,58 @@ describe('difficulty steps only narrow the choices (US7, T130, FR-037)', () => {
       });
     }
   }
+});
+
+describe('play modes (amendment 17, FR-122, FR-123)', () => {
+  const PRESET_LIST = Object.keys(RANGE_PRESETS) as (keyof typeof RANGE_PRESETS)[];
+  const TYPES = [
+    { numberLine: true, addition: true, subtraction: true, comparison: true },
+    { numberLine: true, addition: false, subtraction: false, comparison: false },
+    { numberLine: false, addition: true, subtraction: false, comparison: false },
+    { numberLine: false, addition: false, subtraction: true, comparison: false },
+    { numberLine: false, addition: false, subtraction: false, comparison: true },
+  ];
+
+  for (const preset of PRESET_LIST) {
+    it(`range ${preset}: "Nur Rechnen" never gives readPosition or findNumber, with pointer and keyboard input`, () => {
+      const problems: string[] = [];
+      for (const types of TYPES) {
+        const settings = presetSettings(preset, { challengeTypes: types });
+        if (!validateSettings(settings).ok) continue;
+        const { min, max } = settings.range;
+        for (let seed = 0; seed < 2000 && problems.length < 5; seed++) {
+          const playerPosition = seed % 2 === 0 ? min : max;
+          const c = generateChallenge({
+            settings,
+            skillSteps: seed % 3 === 0 ? ZERO_STEPS : Object.fromEntries(Object.keys(ZERO_STEPS).map((k) => [k, 9])) as Record<Skill, number>,
+            roundSeed: seed,
+            turn: seed % 5,
+            playerPosition,
+            rulerLevel: ((seed % 5) + 1) as Settings['rulerLevelStart'],
+            inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
+            ...playModeKinds('math', settings),
+          });
+          if (c.kind === 'readPosition' || c.kind === 'findNumber') problems.push(`${JSON.stringify(types)} seed ${seed}: ${c.kind}`);
+          const errors = validateChallenge(c, settings, playerPosition);
+          if (errors.length > 0) problems.push(`${JSON.stringify(types)} seed ${seed} ${c.kind}: ${errors.join('; ')}`);
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+
+    it(`range ${preset}: "Nur Zahlenstrahl" always gives readPosition, whatever the challenge types`, () => {
+      const settings = presetSettings(preset, { challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } });
+      const { min, max } = settings.range;
+      const kinds = new Set<string>();
+      for (let seed = 0; seed < 500; seed++) {
+        const c = generateChallenge({ settings, skillSteps: ZERO_STEPS, roundSeed: seed, turn: 1, playerPosition: seed % 2 === 0 ? min : max, rulerLevel: 1, inputMethod: 'keyboard', ...playModeKinds('ruler', settings) });
+        kinds.add(c.kind);
+      }
+      expect([...kinds]).toEqual(['readPosition']);
+    });
+  }
+
+  it('"Gemischt" uses the enabled kinds unchanged', () => {
+    expect(playModeKinds('mixed', defaultSettings())).toEqual({});
+  });
 });

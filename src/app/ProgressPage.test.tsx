@@ -75,6 +75,16 @@ describe('ProgressPage', () => {
     expect(cell(row, 'status')).toBe(P.status.mastered);
   });
 
+  it('shows per skill how many more correct answers in a row raise its step (amendment 17, FR-040)', () => {
+    const p = fixture();
+    p.skills[skillKey('positions', '0-100')] = skill({ step: 3, attempts: 2, independentCorrect: 1, recent: ['independent'] });
+    p.skills[skillKey('comparison', '0-100')] = skill({ step: 2, attempts: 9, independentCorrect: 9 });
+    setup(p);
+    expect(screen.getByRole('columnheader', { name: P.columns.toRaise })).toBeTruthy();
+    expect(cell(skillRow(P.skills.positions), 'toRaise')).toBe(P.toRaise(2));
+    expect(cell(skillRow(P.skills.comparison), 'toRaise')).toBe(P.topStep);
+  });
+
   it('shows "with help" in its own column, apart from the independent correct answers', () => {
     setup();
     const table = screen.getByRole('table', { name: P.skillsTitle });
@@ -125,6 +135,7 @@ describe('ProgressPage', () => {
     expect(cell(rows[1]!, 'level')).toBe(P.level(1));
     expect(cell(rows[1]!, 'enemies')).toBe('12');
     expect(cell(rows[1]!, 'time')).toBe('6:12');
+    expect(cell(rows[1]!, 'mode')).toBe(m.start.modes.mixed);
     const text = table.textContent ?? '';
     for (const word of ['Platz', 'Rang', 'besser', 'schlechter', '1.']) expect(text).not.toContain(word);
   });

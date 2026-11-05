@@ -5,6 +5,22 @@ import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { memoryKeyValue, type KeyValue } from './keyValue';
 import { migrate } from './migrate';
+
+const ALL_MODES = { mixed: true, ruler: true, math: true };
+
+/** The current defaults in the shape of settings before version 8: `freePlay` instead of `playModes` (amendment 17). */
+function legacyDefaults(freePlay = false): Record<string, unknown> {
+  const { playModes: _modes, ...rest } = defaultSettings();
+  void _modes;
+  return { ...rest, freePlay };
+}
+
+/** Settings `v` after every migration step: `freePlay` dropped, all play modes offered, version 8. */
+function upgraded(v: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const { freePlay: _free, ...rest } = v;
+  void _free;
+  return { ...rest, playModes: ALL_MODES, ...extra, version: 8 };
+}
 import { progressSchema } from './progressSchema';
 import { emptyRecords, type Records } from '../records/records';
 import { emptyGarage, type Garage } from '../rewards/garage';
@@ -194,7 +210,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(7);
+    expect(parsed.data?.version).toBe(8);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -204,7 +220,7 @@ describe('migrate', () => {
   });
 
   function v1Settings(labelLevel: number, aimCorrection: boolean): Record<string, unknown> {
-    const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel, aimCorrection };
+    const v1: Record<string, unknown> = { ...legacyDefaults(), version: 1, labelLevel, aimCorrection };
     delete v1.rulerLevelStart;
     delete v1.rulerLevelMax;
     delete v1.exactHit;
@@ -215,7 +231,7 @@ describe('migrate', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(7);
+    expect(parsed.data?.version).toBe(8);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -235,7 +251,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(7);
+    expect(settings.version).toBe(8);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -261,13 +277,13 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(7);
+    expect(settings.version).toBe(8);
     expect(settings.roundLength).toBe(12);
   });
 
   /** A version 3 settings object as stored before amendment 06. */
   function v3Settings(over: Record<string, unknown> = {}): Record<string, unknown> {
-    const v3: Record<string, unknown> = { ...defaultSettings(), version: 3, exactHit: false, roundLength: 10, ...over };
+    const v3: Record<string, unknown> = { ...legacyDefaults(), version: 3, exactHit: false, roundLength: 10, ...over };
     delete v3.roundType;
     delete v3.showClock;
     delete v3.showRecords;
@@ -280,15 +296,15 @@ describe('migrate', () => {
     const v2 = v3Settings({ version: 2, roundLength: 7, rulerLevelStart: 3 });
     delete v2.exactHit;
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
-    expect(migrated).toEqual({ ...v2, version: 7, roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' });
+    expect(migrated).toEqual(upgraded(v2, { roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 7, roundType: 'untilHearts', garage: true });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 8, roundType: 'untilHearts', garage: true });
   });
 
   it('turns version 3 settings into version 6: exactHit dropped, roundType, showClock, showRecords and garage added (amendments 06 and 11)', () => {
     const v3 = v3Settings({ exactHit: true, rulerLevelStart: 2 });
     const migrated = migrate(v3, 'settings') as Record<string, unknown>;
-    const expected: Record<string, unknown> = { ...v3, version: 7, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true, garage: true, numberPad: 'auto' };
+    const expected: Record<string, unknown> = upgraded(v3, { roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true, garage: true, numberPad: 'auto' });
     delete expected.exactHit;
     expect(migrated).toEqual(expected);
     const parsed = settingsSchema.safeParse(migrated);
@@ -309,7 +325,8 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 7, roundType: 'untilHearts', freePlay: true });
+    expect(settings).toMatchObject({ version: 8, roundType: 'untilHearts', playModes: ALL_MODES });
+    expect('freePlay' in settings).toBe(false);
     expect('exactHit' in settings).toBe(false);
   });
 
@@ -318,45 +335,66 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 7, roundType: 'enemyCount', noDamage: true });
+    expect(settings).toMatchObject({ version: 8, roundType: 'enemyCount', noDamage: true });
   });
 
   it('turns version 4 settings into version 6 with garage on, and keeps a stored garage value (amendment 11)', () => {
-    const v4: Record<string, unknown> = { ...defaultSettings(), version: 4, roundType: 'enemyCount', showClock: true };
+    const v4: Record<string, unknown> = { ...legacyDefaults(), version: 4, roundType: 'enemyCount', showClock: true };
     delete v4.garage;
     delete v4.numberPad;
     const migrated = migrate(v4, 'settings');
-    expect(migrated).toEqual({ ...v4, version: 7, garage: true, numberPad: 'auto' });
+    expect(migrated).toEqual(upgraded(v4, { garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 7, garage: false });
+    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 8, garage: false });
   });
 
   it('turns version 5 settings into version 6 with numberPad auto, and keeps a stored numberPad value (amendment 12)', () => {
-    const v5: Record<string, unknown> = { ...defaultSettings(), version: 5, garage: false };
+    const v5: Record<string, unknown> = { ...legacyDefaults(), version: 5, garage: false };
     delete v5.numberPad;
     const migrated = migrate(v5, 'settings');
-    expect(migrated).toEqual({ ...v5, version: 7, numberPad: 'auto' });
+    expect(migrated).toEqual(upgraded(v5, { numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 7, numberPad: 'always' });
+    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 8, numberPad: 'always' });
   });
 
   it('loadSettings upgrades stored version 5 settings without a reset (amendment 12)', () => {
     const kv = memoryKeyValue();
-    const v5: Record<string, unknown> = { ...defaultSettings(), version: 5, freePlay: true };
+    const v5: Record<string, unknown> = { ...legacyDefaults(true), version: 5 };
     delete v5.numberPad;
     kv.set(SETTINGS_KEY, JSON.stringify(v5));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 7, numberPad: 'auto', freePlay: true });
+    expect(settings).toMatchObject({ version: 8, numberPad: 'auto', playModes: ALL_MODES });
   });
 
   it('version 6 becomes version 7 with reading aloud turned off once (PO1)', () => {
-    const v6 = { ...defaultSettings(), version: 6, sound: { effects: false, music: true, speech: true }, showClock: true };
-    expect(migrate(v6, 'settings')).toEqual({ ...v6, version: 7, sound: { effects: false, music: true, speech: false } });
+    const v6 = { ...legacyDefaults(), version: 6, sound: { effects: false, music: true, speech: true }, showClock: true };
+    expect(migrate(v6, 'settings')).toEqual(upgraded(v6, { sound: { effects: false, music: true, speech: false } }));
+  });
+
+  it('version 7 becomes version 8: free play becomes the play modes (amendment 17)', () => {
+    const v7 = { ...legacyDefaults(), version: 7 };
+    expect(migrate(v7, 'settings')).toEqual(upgraded(v7));
+    expect(migrate({ ...v7, freePlay: true }, 'settings')).toMatchObject({ version: 8, playModes: ALL_MODES });
+    const noTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
+    const onlyFree = migrate({ ...v7, freePlay: true, challengeTypes: noTypes }, 'settings') as Record<string, unknown>;
+    expect(onlyFree.playModes).toEqual({ mixed: false, ruler: true, math: false });
+    expect('freePlay' in onlyFree).toBe(false);
+    const parsed = settingsSchema.safeParse(onlyFree);
+    expect(parsed.success).toBe(true);
+    expect(validateSettings(parsed.data!)).toEqual({ ok: true });
+  });
+
+  it('loadSettings upgrades stored version 7 settings that offered only free play without a reset (amendment 17)', () => {
+    const noTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...legacyDefaults(true), version: 7, challengeTypes: noTypes }) });
+    const { settings, resetReason } = loadSettings(kv);
+    expect(resetReason).toBe('none');
+    expect(settings.playModes).toEqual({ mixed: false, ruler: true, math: false });
   });
 
   it('loadSettings turns reading aloud off in stored version 6 settings, and keeps it on when the parent turns it on again (PO1)', () => {
-    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...defaultSettings(), version: 6, sound: { effects: true, music: false, speech: true } }) });
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...legacyDefaults(), version: 6, sound: { effects: true, music: false, speech: true } }) });
     const first = loadSettings(kv);
     expect(first.resetReason).toBe('none');
     expect(first.settings.sound.speech).toBe(false);

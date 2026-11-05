@@ -7,15 +7,12 @@
  * heart. Game state comes from the data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test, waitCalmly } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import type { Settings } from '../../src/core/types';
-import { t } from '../../src/i18n';
 
-const m = t();
-
-const normal: Settings = { ...defaultSettings(), freePlay: true, enemyDifficulty: 'normal', roundType: 'enemyCount', roundLength: 5 };
+const normal: Settings = { ...defaultSettings(), enemyDifficulty: 'normal', roundType: 'enemyCount', roundLength: 5 };
 
 async function start(page: Page, settings: Settings): Promise<Locator> {
   await page.addInitScript(
@@ -24,16 +21,16 @@ async function start(page: Page, settings: Settings): Promise<Locator> {
     },
     [SETTINGS_KEY, JSON.stringify(settings)] as const,
   );
-  await page.goto('/?seed=3&mode=free');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.goto('/?seed=3&mode=ruler');
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   return overlay;
 }
 
 async function fire(page: Page, overlay: Locator, n: number): Promise<void> {
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
+  await waitCalmly(page, overlay);
   await page.keyboard.type(String(n));
   await expect(page.getByTestId('readout')).toHaveText(String(n));
   await page.keyboard.press('Enter');
@@ -46,7 +43,7 @@ async function miss(page: Page, overlay: Locator, settings: Settings): Promise<v
   await fire(page, overlay, Math.round((own + enemy) / 2));
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss', { timeout: GAME_WAIT });
   // The enemy fires back, then the child chooses again.
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
 }
 
 test('"Normal": the enemy zeroes in, warns after the second miss and hits at the third; a destroyed enemy brings new hills', async ({ page }) => {
@@ -100,6 +97,6 @@ test('bug report B1: the trail of the last shot goes with the old hills', async 
   await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: GAME_WAIT });
   await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
   await expect(canvas).toHaveAttribute('data-trail-points', '0');
 });

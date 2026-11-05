@@ -9,7 +9,7 @@
  * screen (amendment 11). Game state comes from the overlay's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { COMPARISON_47_74 } from '../../src/core/math/fixtures';
@@ -48,7 +48,7 @@ async function expectNoPointerEvents(page: Page): Promise<void> {
 
 async function startWithEnter(page: Page, seed: number): Promise<Locator> {
   await page.goto(`/?seed=${seed}`);
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
@@ -167,10 +167,10 @@ test('a comparison is answered by typing the number: 47 oder 74, type 74 and Ent
 test('G opens the garage on the start screen and Escape goes back (amendment 11)', async ({ page }) => {
   await prepare(page, defaultSettings());
   await page.goto('/');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('g');
   await expect(page.getByRole('heading', { name: m.garage.title })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await expectNoPointerEvents(page);
 });

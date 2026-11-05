@@ -127,3 +127,38 @@ describe('nextHelp with help types turned off by the parent (FR-032)', () => {
     }
   });
 });
+
+describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
+  const after26 = challenge('after', 27, { mainSkill: 'countForward', skills: ['countForward'], operands: [26] });
+
+  it('step 1 names only the direction: no highlighted ruler line', () => {
+    expect(nextHelp(after26, 1, 31, settings(), 'math')).toMatchObject({ step: 1, direction: 'left', nearestMajor: null });
+  });
+
+  it('step 1 before any miss has nothing to show, so the first help is step 2', () => {
+    expect(nextHelp(after26, 1, null, settings(), 'math').step).toBe(2);
+  });
+
+  it('step 2 shows the ten around the answer as a zoomed piece of ruler and no count', () => {
+    expect(nextHelp(after26, 2, 31, settings(), 'math')).toMatchObject({ step: 2, zoom: helpZoomView(27, 0, 100), count: null });
+  });
+
+  it('addition and subtraction keep their step path at step 2 and also get the zoomed ten', () => {
+    const h = nextHelp(sub43minus7, 2, null, settings(), 'math');
+    expect(h).toMatchObject({ step: 2, stepPath: stepPath(sub43minus7, true), zoom: helpZoomView(36, 0, 100) });
+  });
+
+  it('comparison keeps its option markers and gets no zoom, which would show the answer', () => {
+    const h = nextHelp(greater, 2, null, settings(), 'math');
+    expect(h).toMatchObject({ step: 2, optionMarkers: [47, 74], zoom: null });
+  });
+
+  it('with the zoom help type off, step 2 of a number line challenge is skipped', () => {
+    expect(nextHelp(after26, 2, 31, settings({ zoom: false }), 'math').step).toBe(3);
+  });
+
+  it('"Gemischt" and "Nur Zahlenstrahl" are unchanged', () => {
+    expect(nextHelp(find37, 1, 31, settings(), 'ruler')).toEqual(nextHelp(find37, 1, 31, settings()));
+    expect(nextHelp(find37, 2, 31, settings(), 'mixed')).toEqual(nextHelp(find37, 2, 31, settings()));
+  });
+});

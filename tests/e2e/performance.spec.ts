@@ -8,12 +8,9 @@
  * Frame rates depend on the machine being idle, so this spec runs in its own Playwright project `performance`, after
  * every other project has finished (playwright.config.ts). `pnpm e2e --project=performance --no-deps` runs it alone.
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
-import { t } from '../../src/i18n';
-
-const m = t();
 
 declare global {
   interface Window {
@@ -37,7 +34,7 @@ test('the battlefield is ready within 3 s of Enter, and a shot flies at 55 frame
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 })] as const,
   );
   await page.goto('/?seed=8');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
 
   const overlay = page.getByTestId('battle-overlay');
   const pressed = Date.now();

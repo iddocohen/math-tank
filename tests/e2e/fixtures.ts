@@ -5,7 +5,8 @@
  * All e2e specs import `test` and `expect` from here instead of @playwright/test. A spec that opens its own
  * browser context adds `silenceAudio` to that context with `context.addInitScript(silenceAudio)`.
  */
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
+import { GUESS_RESPONSE_MS } from '../../src/core/progress/classify';
 
 export function silenceAudio(): void {
   const w = window as unknown as Record<string, unknown>;
@@ -50,6 +51,25 @@ export async function recordPhases(page: Page): Promise<() => Promise<string[]>>
     new MutationObserver(() => w.__phases.push(el.getAttribute('data-phase') ?? '')).observe(el, { attributes: true, attributeFilter: ['data-phase'] });
   });
   return () => page.evaluate(() => (window as unknown as { __phases: string[] }).__phases);
+}
+
+/**
+ * The first button that starts a round on the start screen (amendment 17, FR-121): the "Gemischt" picture button when
+ * several play modes are offered, or the single "Spielen" button when only one is.
+ */
+export function startButton(page: Page): Locator {
+  return page.locator('.play-buttons > button').first();
+}
+
+/**
+ * Waits like a calm child before typing an answer (amendment 17: every play mode is a search). The search accepts
+ * answers 1 second after it appears (`data-challenge-answerable`), and an answer less than GUESS_RESPONSE_MS after that
+ * is a fast guess, whose miss adds 2 to the misses in a row (FR-038, FR-098); so the wait is GUESS_RESPONSE_MS + 300 ms.
+ */
+export async function waitCalmly(page: Page, overlay: Locator): Promise<void> {
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: GAME_WAIT });
+  await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: GAME_WAIT });
+  await page.waitForTimeout(GUESS_RESPONSE_MS + 300);
 }
 
 export const test = base.extend({

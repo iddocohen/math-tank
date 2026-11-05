@@ -7,7 +7,7 @@
  * comes from the overlay's and the canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, recordPhases, test } from './fixtures';
+import { expect, GAME_WAIT, recordPhases, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
@@ -50,7 +50,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
   );
   await page.goto('/?seed=11');
-  await page.getByRole('button', { name: m.start.play, exact: true }).click();
+  await startButton(page).click();
   const overlay = page.getByTestId('battle-overlay');
   const canvas = page.locator('canvas');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
@@ -128,26 +128,29 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
 
   // After a page reload the new round shows the enemy and its pointer line again (amendment 07, product owner report).
   await page.reload();
-  await page.getByRole('button', { name: m.start.play, exact: true }).click();
+  await startButton(page).click();
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
   await expect(canvas).toHaveAttribute('data-pointer-lines', (await overlay.getAttribute('data-enemy-number'))!);
 });
 
-test('Enter starts guided mode; "Freies Spiel" shows only when the parent allows free play (T070, FR-014)', async ({ page }) => {
+test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen" button starts it (T070, FR-121)', async ({ page }) => {
   await page.goto('/?seed=12');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: m.start.freePlay })).toHaveCount(0);
+  await expect(page.getByTestId('mode-button')).toHaveCount(3);
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expect(overlay).toHaveAttribute('data-mode', 'mixed');
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
 
-  // With free play allowed, "Freies Spiel" starts a free-play round with the enemy visible.
-  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), freePlay: true })] as const);
+  // The parent offers only "Nur Zahlenstrahl": one "Spielen" button, no banner, the enemy visible.
+  const onlyRuler = { ...defaultSettings(), playModes: { mixed: false, ruler: true, math: false } };
+  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(onlyRuler)] as const);
   await page.goto('/?seed=12');
-  await page.getByRole('button', { name: m.start.freePlay }).click();
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  await expect(page.getByTestId('mode-button')).toHaveCount(0);
+  await page.getByRole('button', { name: m.start.play, exact: true }).click();
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expect(overlay).toHaveAttribute('data-mode', 'ruler');
   await expect(overlay).toHaveAttribute('data-enemy-number', /^\d+$/);
-  await expect(page.getByTestId('challenge-banner')).toHaveText(m.challenge.readPosition);
+  await expect(page.getByTestId('challenge-banner')).toHaveCount(0);
 });

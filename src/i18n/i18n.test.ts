@@ -238,7 +238,7 @@ describe('help and feedback texts (US5, T097, FR-033, SC-006)', () => {
       if (s.help.content) allowed.add(helpText(s.help.content) ?? '');
     };
     controller.subscribe(remember);
-    controller.startRound('guided');
+    controller.startRound('mixed');
     for (let i = 0; i < 30 && controller.getState().phase !== 'roundOver'; i++) {
       const s = controller.getState();
       now += 1_000;

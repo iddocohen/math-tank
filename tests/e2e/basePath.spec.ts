@@ -6,12 +6,10 @@
  * round with the keyboard, and checks that every request stays under /math-tank/ and succeeds, and that the service
  * worker and the web app manifest use the sub-path.
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
-import { t } from '../../src/i18n';
 
-const m = t();
 const BASE = '/math-tank/';
 
 test('the game built for /math-tank/ loads, plays a round and requests nothing outside /math-tank/', async ({ page, baseURL }) => {
@@ -34,7 +32,7 @@ test('the game built for /math-tank/ loads, plays a round and requests nothing o
   // Relative to baseURL, so the page opens at /math-tank/.
   await page.goto('./?seed=8');
   expect(new URL(page.url()).pathname).toBe(BASE);
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
 
   // The manifest and its start address stay under /math-tank/, so "Zum Home-Bildschirm" opens the game there.
   const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');

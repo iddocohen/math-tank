@@ -1,3 +1,4 @@
+import { defaultSettings } from '../settings/defaults';
 import { describe, expect, it } from 'vitest';
 import { summarize } from './summarize';
 import { ladders, skillKey } from './ladders';
@@ -54,6 +55,7 @@ describe('summarize (FR-040, FR-087)', () => {
       guesses: 0,
       step: 3,
       stepCount: ladders.positions.length,
+      toRaise: null,
       status: 'mastered',
     });
     expect(row('addition', '0-100')).toMatchObject({ attempts: 6, independentCorrect: 0, withHelp: 6, step: 0, status: 'developing' });
@@ -85,11 +87,34 @@ describe('summarize (FR-040, FR-087)', () => {
   it('lists the personal bests per range, ruler starting level and round type with their time (FR-087, US7 scenario 8)', () => {
     const s = summarize(emptyProgress(), records());
     expect(s.bests).toEqual([
-      { min: -20, max: 30, rulerLevelStart: 3, roundType: 'untilHearts', enemies: 4, ms: 90_000 },
-      { min: 0, max: 20, rulerLevelStart: 2, roundType: 'enemyCount', enemies: 5, ms: 61_000 },
-      { min: 0, max: 100, rulerLevelStart: 1, roundType: 'untilHearts', enemies: 12, ms: 372_000 },
-      { min: 0, max: 100, rulerLevelStart: 3, roundType: 'untilHearts', enemies: 7, ms: 200_000 },
+      { min: -20, max: 30, rulerLevelStart: 3, roundType: 'untilHearts', mode: 'mixed', enemies: 4, ms: 90_000 },
+      { min: 0, max: 20, rulerLevelStart: 2, roundType: 'enemyCount', mode: 'mixed', enemies: 5, ms: 61_000 },
+      { min: 0, max: 100, rulerLevelStart: 1, roundType: 'untilHearts', mode: 'mixed', enemies: 12, ms: 372_000 },
+      { min: 0, max: 100, rulerLevelStart: 3, roundType: 'untilHearts', mode: 'mixed', enemies: 7, ms: 200_000 },
     ]);
+  });
+
+  it('reads the play mode of a personal best; a key without one is "Gemischt" (amendment 17, FR-086)', () => {
+    const r = emptyRecords();
+    r.best['0-100|1|untilHearts|math'] = { enemies: 3, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|ruler'] = { enemies: 2, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts'] = { enemies: 4, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|free'] = { enemies: 9, ms: 1000, at: 1 };
+    expect(summarize(emptyProgress(), r).bests.map((b) => [b.mode, b.enemies])).toEqual([
+      ['mixed', 4],
+      ['ruler', 2],
+      ['math', 3],
+    ]);
+  });
+
+  it('gives each skill row how many more independent answers in a row raise its step (amendment 17, FR-040)', () => {
+    const p = emptyProgress();
+    p.skills['positions|0-100'] = { step: 0, recent: ['assisted', 'independent'], masteryWindow: [], guesses: 0, attempts: 2, independentCorrect: 1, assisted: 1 };
+    p.skills['comparison|0-100'] = { step: 2, recent: [], masteryWindow: [], guesses: 0, attempts: 9, independentCorrect: 9, assisted: 0 };
+    const s = summarize(p, emptyRecords(), defaultSettings());
+    expect(s.skills.find((r) => r.skill === 'positions')!.toRaise).toBe(2);
+    expect(s.skills.find((r) => r.skill === 'comparison')!.toRaise).toBeNull();
+    expect(summarize(p, emptyRecords(), { ...defaultSettings(), adaptive: false }).skills.every((r) => r.toRaise === null)).toBe(true);
   });
 
   it('skips a personal best whose key cannot be read', () => {

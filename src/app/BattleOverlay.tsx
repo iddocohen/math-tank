@@ -9,6 +9,7 @@
  * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
+ * `data-mode` is the play mode and `data-skill-step` the main skill's step of the current challenge (amendment 17).
  * `data-miss-streak` is the child's misses in a row (amendment 13, FR-098).
  * `data-enemy-number` is the living enemy's number; the enemy is always visible (amendment 07). `data-last-distance`
  * is the step count of the last shot, which the ruler shows after every miss.
@@ -22,7 +23,7 @@
  *
  * Guided searches (T068, FR-010, FR-019, FR-053): the challenge banner at the top center shows the prompt; after a
  * miss the status line shows the landing number and an encouraging phrase; a near miss shows both numbers and the
- * step count, as in free play (amendment 07).
+ * step count, in every play mode (amendments 07 and 17).
  * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
  * `data-help-level` is the help step. The fire button stays the only submit control.
  *
@@ -115,7 +116,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused' || state.phase === 'roundOver';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
-  const inSearch = state.mode === 'guided' && state.challenge !== null && state.phase !== 'roundOver';
+  const inSearch = state.challenge !== null && state.phase !== 'roundOver';
   const content = inSearch && state.phase !== 'playerShot' ? state.help.content : null;
   const hint = content ? helpText(content) : null;
   const freshHit = useFreshHit(state);
@@ -149,8 +150,11 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemy?.position}
       data-number-pad={numberPad}
+      data-mode={state.mode}
+      data-skill-step={state.challenge?.difficultyStep}
     >
-      {state.challenge && (
+      {/* "Nur Zahlenstrahl" has no question banner: the child reads the ruler (amendment 17, FR-122). */}
+      {state.challenge && state.mode !== 'ruler' && (
         <div className={`challenge-banner placement-${placement}`} data-testid="challenge-banner" data-placement={placement}>
           <BannerText prompt={state.challenge.prompt} tens={state.help.content?.tensDigits === true} />
         </div>

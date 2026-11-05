@@ -198,8 +198,9 @@ export class BattleScene extends Phaser.Scene {
     this.player.sync(s.player, newRound, newHills ? TERRAIN_FADE.delayMs + TERRAIN_FADE.durationMs / 2 : 0);
     this.player.setLives(s.lives, LIVES);
     const destroyed = !newRound && s.lastShot !== prev?.lastShot && s.lastShot?.hit === true;
-    // The new search right after a guided hit: the destroyed enemy stays in view during its explosion.
-    const searchAfterHit = !newRound && !destroyed && s.mode === 'guided' && prev?.phase === 'playerShot' && s.phase === 'challenge' && s.lastShot?.hit === true;
+    // The new search right after a hit (every play mode is a search, amendment 17): the destroyed enemy stays in view
+    // during its explosion.
+    const searchAfterHit = !newRound && !destroyed && prev?.phase === 'playerShot' && s.phase === 'challenge' && s.lastShot?.hit === true;
     this.enemy.sync(s.enemy, newRound || destroyed || searchAfterHit);
     // The new enemy is visible in every challenge kind and fades in at its number (amendment 07, FR-010).
     if (searchAfterHit) this.enemy.appear(this.appearDelay);
@@ -220,14 +221,12 @@ export class BattleScene extends Phaser.Scene {
       const id = s.lastShot.nearTankId;
       (id === null || id === s.enemy.id ? this.enemy : this.decoyViews.get(id))?.shake();
     }
-    // The large explosion where the destroyed enemy stood. In free play the previous state holds the destroyed enemy
-    // and the new one fades in at its new number; in a guided search the hit state itself holds the destroyed enemy.
-    const gone = destroyed ? (s.mode === 'guided' ? s.enemy : (prev?.enemy ?? s.enemy)) : null;
+    // The large explosion where the destroyed enemy stood; the hit state itself holds the destroyed enemy.
+    const gone = destroyed ? s.enemy : null;
     if (gone) {
       const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
       this.effects.shake();
-      if (s.mode !== 'guided') this.enemy.appear(this.appearDelay);
     }
     this.drawDecoys(s, prev, newRound, searchAfterHit);
     this.numberLine.update(s);

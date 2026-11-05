@@ -4,12 +4,9 @@
  * offline, the page reloads from the cache, and a whole round (3 enemies) is played with the keyboard. Each answer is
  * the enemy's number, which the overlay reports (the enemy stands at the answer of every search, amendment 07).
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
-import { t } from '../../src/i18n';
-
-const m = t();
 
 test('after one load the game starts and plays a whole round offline, also after a reload', async ({ page, context, browserName }) => {
   test.setTimeout(120_000);
@@ -20,7 +17,7 @@ test('after one load the game starts and plays a whole round offline, also after
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, roundType: 'enemyCount', roundLength: 3 })] as const,
   );
   await page.goto('/');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   const supported = await page.evaluate(() => 'serviceWorker' in navigator);
   // D6: only where the browser under Playwright offers service workers at all.
   test.skip(!supported, `${browserName} under Playwright offers no service worker here (decision D6; checked on a real iPad instead)`);
@@ -32,7 +29,7 @@ test('after one load the game starts and plays a whole round offline, also after
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   for (let destroyed = 0; destroyed < 3; destroyed++) {

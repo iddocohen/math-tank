@@ -62,7 +62,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText(m.settings.saved)).toBeTruthy();
   });
 
-  it('turning off all challenge types shows the hint and offers free play', () => {
+  it('turning off all challenge types shows the hint and offers only "Nur Zahlenstrahl" (amendment 17)', () => {
     // Comparison is "kommt bald" and cannot be changed, so it starts off here.
     setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false } });
     toggle(L.numberLine);
@@ -70,9 +70,23 @@ describe('SettingsPage', () => {
     toggle(L.subtraction);
     expect(screen.getByText(m.settings.guidedNeedsType)).toBeTruthy();
     expect(saveButton().disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: m.settings.offerFreePlay }));
-    expect(field(L.freePlay).checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: m.settings.offerRulerOnly }));
+    expect(field(L.playModeMixed).checked).toBe(false);
+    expect(field(L.playModeRuler).checked).toBe(true);
+    expect(field(L.playModeMath).checked).toBe(false);
     expect(saveButton().disabled).toBe(false);
+  });
+
+  it('shows a switch per play mode, all on by default; all off shows the error and blocks saving (amendment 17, FR-121)', () => {
+    const { persistence } = setup();
+    for (const label of [L.playModeMixed, L.playModeRuler, L.playModeMath]) expect(field(label).checked).toBe(true);
+    toggle(L.playModeMixed);
+    toggle(L.playModeMath);
+    fireEvent.click(saveButton());
+    expect(persistence.settings().playModes).toEqual({ mixed: false, ruler: true, math: false });
+    toggle(L.playModeRuler);
+    expect(screen.getByText(m.settingsErrors.noPlayMode)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
   });
 
   it('changing the preset from 0-100 to 0-20 clamps addition.maxResult to 20', () => {
@@ -269,7 +283,7 @@ describe('SettingsPage', () => {
   it('shows every field of FR-046', () => {
     setup({ timeLimitSeconds: 30, roundType: 'enemyCount' });
     for (const label of [
-      L.numberLine, L.addition, L.subtraction, L.comparison, L.freePlay,
+      L.numberLine, L.addition, L.subtraction, L.comparison, L.playModeMixed, L.playModeRuler, L.playModeMath,
       L.rangePreset,
       L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps,
       L.crossTens, L.crossHundreds,

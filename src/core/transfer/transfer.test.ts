@@ -260,7 +260,8 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(7);
+    expect(dec.data.settings.version).toBe(8);
+    expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
     expect(dec.data.settings.numberPad).toBe('auto');
     expect(dec.data.settings.sound.speech).toBe(false);
     expect(dec.data.settings.range).toEqual(settings().range);
@@ -415,6 +416,8 @@ describe('frozen version 2 codes (review T1, P4)', () => {
         showClock: true,
       };
       expect(dec.data.settings).toEqual(migrate(v6, 'settings'));
+      expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
+      expect('freePlay' in dec.data.settings).toBe(false);
       expect(dec.data.garage).toEqual({ version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } });
       expect(dec.data.records.best).toEqual({ '550-780|1|untilHearts': { enemies: 4, ms: 61000, at: 1700000000000 } });
       expect(dec.data.progress.skills).toEqual({
@@ -461,7 +464,9 @@ function randomSettings(seed: number): Settings {
   }
   const noDamage = bool();
   const types = { numberLine: bool(), addition: bool(), subtraction: bool(), comparison: bool() };
-  const freePlay = bool() || !Object.values(types).some(Boolean);
+  const anyType = Object.values(types).some(Boolean);
+  const playModes = anyType ? { mixed: bool(), ruler: bool(), math: bool() } : { mixed: false, ruler: true, math: false };
+  if (!playModes.mixed && !playModes.ruler && !playModes.math) playModes.ruler = true;
   const start = r.int(1, 5) as Settings['rulerLevelStart'];
   // A range below 1 has exercises only with negative results.
   const negativeResults = range.min < 0 && (bool() || range.max < 1);
@@ -480,7 +485,7 @@ function randomSettings(seed: number): Settings {
     roundType: noDamage ? 'enemyCount' : r.pick(['untilHearts', 'enemyCount'] as const),
     roundLength: r.int(1, 20),
     adaptive: bool(),
-    freePlay,
+    playModes,
     noDamage,
     showClock: bool(),
     showRecords: bool(),

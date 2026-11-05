@@ -10,7 +10,7 @@
  * pauses the game until the parent closes it (FR-045); "Fortschritt" lists a finished search after a reload (T133).
  */
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { expect, GAME_WAIT, silenceAudio, test } from './fixtures';
+import { expect, GAME_WAIT, silenceAudio, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
@@ -52,7 +52,7 @@ async function storedSettings(page: Page): Promise<Settings | null> {
 
 test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
   // A custom range far from the default 0 to 100, so an enemy number inside it can only come from the stored settings.
-  const custom: Settings = { ...withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }), enemyDifficulty: 'normal', rulerLevelStart: 3, freePlay: true };
+  const custom: Settings = { ...withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }), enemyDifficulty: 'normal', rulerLevelStart: 3 };
 
   test(`stored settings are loaded in a new context, ${RUNS} runs in a row`, async ({ browser }) => {
     expect(validateSettings(custom)).toEqual({ ok: true });
@@ -66,12 +66,12 @@ test.describe('settings survive a browser restart (FR-048, SC-007)', () => {
 
       const second = await silentPage(browser, state);
       // Free play (?mode=free, T070) shows the enemy, so its number comes from the stored range.
-      await second.page.goto(`/?seed=${run}&mode=free`);
-      await expect(second.page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+      await second.page.goto(`/?seed=${run}&mode=ruler`);
+      await expect(startButton(second.page)).toBeVisible();
       expect(await storedSettings(second.page), `run ${run}`).toEqual(custom);
       await second.page.keyboard.press('Enter');
       const overlay = second.page.locator('[data-phase]');
-      await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+      await expect(overlay).toHaveAttribute('data-phase', 'challenge');
       const enemy = Number(await overlay.getAttribute('data-enemy-number'));
       expect(enemy, `run ${run}: enemy number from the stored range`).toBeGreaterThanOrEqual(550);
       expect(enemy, `run ${run}: enemy number from the stored range`).toBeLessThanOrEqual(780);
@@ -124,7 +124,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
 
   test('opening the gate in a battle pauses the game; closing the settings page resumes it', async ({ page }) => {
     await page.goto('/?seed=3');
-    await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+    await expect(startButton(page)).toBeVisible();
     await page.keyboard.press('Enter');
     const overlay = page.getByTestId('battle-overlay');
     await expect(overlay).toHaveAttribute('data-phase', 'challenge');
@@ -141,7 +141,7 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
   test('"Fortschritt" shows the saved attempt of a finished search, also after a reload (FR-040, FR-048, T133)', async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto('/?seed=1');
-    await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+    await expect(startButton(page)).toBeVisible();
     await page.keyboard.press('Enter');
     const overlay = page.locator('[data-phase]');
     await expect(overlay).toHaveAttribute('data-phase', 'challenge');

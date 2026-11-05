@@ -14,7 +14,8 @@ export const de = {
 
   start: {
     play: 'Spielen',
-    freePlay: 'Freies Spiel',
+    /** Amendment 17 (FR-121): the play mode buttons on the start screen. */
+    modes: { mixed: 'Gemischt', ruler: 'Nur Zahlenstrahl', math: 'Nur Rechnen' },
     fullscreen: 'Vollbild',
     parentHint: 'Für Eltern: Zahnrad gedrückt halten',
     gear: 'Für Eltern',
@@ -199,6 +200,7 @@ export const de = {
       independent: 'Allein richtig',
       withHelp: 'Mit Hilfe',
       step: 'Schwierigkeitsstufe',
+      toRaise: 'Bis zur nächsten Stufe',
       status: 'Stand',
     },
     skills: {
@@ -214,13 +216,17 @@ export const de = {
     status: { mastered: 'sicher', developing: 'noch am Üben' },
     range: (min: number, max: number) => `${min} bis ${max}`,
     step: (n: number, of: number) => `${n} von ${of}`,
+    /** Amendment 17 (FR-040): how many more correct answers in a row raise the step. */
+    toRaise: (n: number) => `noch ${n} richtig in Folge`,
+    topStep: 'höchste Stufe',
+    adaptiveOff: '–',
     mostHelpTitle: 'Am meisten Hilfe gebraucht',
     mostHelpLine: (skill: string, range: string, n: number) => `${skill}, ${range}: ${n}-mal mit Hilfe oder Lösung gezeigt`,
     noHelp: 'Bisher ohne Hilfe gelöst.',
     sessionsTitle: 'Spielzeiten',
     sessionColumns: { date: 'Datum', attempts: 'Aufgaben', independent: 'Allein richtig', withHelp: 'Mit Hilfe' },
     bestsTitle: 'Rekorde',
-    bestColumns: { range: 'Zahlenraum', roundType: 'Rundenende', level: 'Zahlenstrahl am Anfang', enemies: 'Gegner getroffen', time: 'Zeit' },
+    bestColumns: { range: 'Zahlenraum', roundType: 'Rundenende', level: 'Zahlenstrahl am Anfang', mode: 'Spielart', enemies: 'Gegner getroffen', time: 'Zeit' },
     level: (n: number) => `Stufe ${n}`,
     empty: 'Noch keine Aufgaben gespielt.',
     noBests: 'Noch keine Rekorde.',
@@ -253,8 +259,8 @@ export const de = {
     previewMax: 'Schwerste Stufe',
     previewUnavailable: 'Die Vorschau erscheint, sobald der Zahlenraum gültig ist.',
     /** Shown when every challenge type is off (FR-047, US6 scenario 4). */
-    guidedNeedsType: 'Geführtes Spielen braucht mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur freies Spiel.',
-    offerFreePlay: 'Nur freies Spiel anbieten',
+    guidedNeedsType: '„Gemischt“ und „Nur Rechnen“ brauchen mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur „Nur Zahlenstrahl“.',
+    offerRulerOnly: 'Nur „Nur Zahlenstrahl“ anbieten',
     data: {
       title: 'Daten',
       exportHint: 'Speichert Einstellungen, Fortschritt und Rekorde in einer Datei.',
@@ -297,6 +303,7 @@ export const de = {
     },
     groups: {
       challengeTypes: 'Aufgaben',
+      playModes: 'Spielarten',
       range: 'Zahlenraum',
       arithmetic: 'Plus und Minus',
       numberLine: 'Zahlenstrahl',
@@ -350,7 +357,9 @@ export const de = {
       numberPadAlways: 'Immer',
       numberPadNever: 'Nie',
       adaptive: 'Schwierigkeit automatisch anpassen',
-      freePlay: 'Freies Spiel erlauben',
+      playModeMixed: 'Spielart „Gemischt“ anbieten',
+      playModeRuler: 'Spielart „Nur Zahlenstrahl“ anbieten',
+      playModeMath: 'Spielart „Nur Rechnen“ anbieten',
       noDamage: 'Ohne Schaden spielen',
       timeLimit: 'Zeitlimit',
       timeLimitSeconds: 'Sekunden pro Aufgabe',
@@ -378,7 +387,8 @@ export const de = {
     rangeSpan: 'Der Zahlenraum muss 5 bis 1000 Zahlen umfassen.',
     rangeMinOutside: '„Von“ muss zwischen −1000 und 9000 liegen.',
     rangePresetMismatch: 'Der Zahlenraum passt nicht zur Auswahl.',
-    noChallengeTypes: 'Bitte mindestens eine Aufgabenart wählen oder freies Spiel erlauben.',
+    noChallengeTypes: 'Bitte mindestens eine Aufgabenart wählen oder nur „Nur Zahlenstrahl“ anbieten.',
+    noPlayMode: 'Bitte mindestens eine Spielart anbieten.',
     rulerLevelOrder: 'Die Startstufe darf nicht schwerer sein als die schwerste Stufe.',
     roundLength: 'Eine Runde hat 1 bis 20 Gegner.',
     roundTypeNoDamage: '„Bis alle Herzen weg“ geht nicht ohne Schaden. Bitte „Gegner pro Runde“ wählen.',

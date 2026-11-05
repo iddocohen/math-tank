@@ -14,6 +14,14 @@ describe('recordKey (amendment 06, FR-086)', () => {
     expect(recordKey(settings(550, 780, 2, 'untilHearts'))).toBe('550-780|2|untilHearts');
   });
 
+  it('adds the play mode for "Nur Zahlenstrahl" and "Nur Rechnen"; "Gemischt" keeps the key from before amendment 17 (FR-086)', () => {
+    const s = settings(0, 100, 1, 'untilHearts');
+    expect(recordKey(s, 'mixed')).toBe('0-100|1|untilHearts');
+    expect(recordKey(s)).toBe('0-100|1|untilHearts');
+    expect(recordKey(s, 'ruler')).toBe('0-100|1|untilHearts|ruler');
+    expect(recordKey(s, 'math')).toBe('0-100|1|untilHearts|math');
+  });
+
   it('differs when any of the three differs', () => {
     const base = recordKey(settings(550, 780, 2, 'untilHearts'));
     expect(recordKey(settings(550, 781, 2, 'untilHearts'))).not.toBe(base);

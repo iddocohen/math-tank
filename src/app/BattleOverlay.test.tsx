@@ -28,8 +28,10 @@ function Overlay({ controller }: { controller: BattleController }) {
 
 function setup(over: Partial<Settings> = {}) {
   let now = 1000;
-  const controller = new BattleController({ settings: { ...defaultSettings(), freePlay: true, ...over }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
-  controller.startRound('freePlay');
+  const controller = new BattleController({ settings: { ...defaultSettings(), ...over }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
+  controller.startRound('ruler');
+  // "Nur Zahlenstrahl" is a search (amendment 17): answers count 1 second after it appears, 2 seconds is calm.
+  now += 2000;
   const view = render(<Overlay controller={controller} />);
   return { controller, view, advance: (ms: number) => (now += ms) };
 }
@@ -170,7 +172,7 @@ describe('BattleOverlay (amendment 06)', () => {
     expect(screen.queryByTestId('hit-feedback')).toBeNull();
   });
 
-  it('a near miss line stays until the next shot (T233)', () => {
+  it('a near miss line shows after the shot, before the help text of the search replaces it (T233, T230)', () => {
     vi.useFakeTimers();
     const { controller } = setup();
     const e = enemyOf(controller.getState()).position;
@@ -181,7 +183,7 @@ describe('BattleOverlay (amendment 06)', () => {
       controller.enemyShotAnimationDone();
     });
     act(() => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(1_000);
     });
     expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, e));
   });
@@ -194,8 +196,9 @@ describe('BattleOverlay (amendment 06)', () => {
   it('with showClock shows an up-counting clock m:ss that stops while paused', () => {
     vi.useFakeTimers();
     const { controller, advance } = setup({ showClock: true });
-    expect(screen.getByTestId('clock').textContent).toBe('0:00');
-    advance(65_000);
+    // setup waits 2 seconds, so the first answer counts (amendment 17).
+    expect(screen.getByTestId('clock').textContent).toBe('0:02');
+    advance(63_000);
     act(() => {
       vi.advanceTimersByTime(1000);
     });
@@ -214,7 +217,7 @@ function setupGuided(over: Partial<Settings> = {}) {
   for (let seed = 1; seed < 200; seed++) {
     let now = 1000;
     const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true, ...over }, progress: memoryProgressStore(), clock: () => now, seed });
-    controller.startRound('guided');
+    controller.startRound('mixed');
     if (controller.getState().challenge?.kind === 'readPosition') continue;
     const view = render(<Overlay controller={controller} />);
     return { controller, view, advance: (ms: number) => (now += ms) };
@@ -387,7 +390,7 @@ describe('BattleOverlay comparison (US4, T091)', () => {
     for (let seed = 1; seed < 400; seed++) {
       let now = 1000;
       const controller = new BattleController({ settings: { ...defaultSettings(), ...onlyComparison }, progress: memoryProgressStore(), clock: () => now, seed });
-      controller.startRound('guided');
+      controller.startRound('mixed');
       if (!accept(controller.getState())) continue;
       render(<Overlay controller={controller} />);
       return { controller, advance: (ms: number) => (now += ms) };
@@ -474,9 +477,9 @@ describe('BattleOverlay help (US5, T101, FR-030, FR-031, FR-034)', () => {
     expect(screen.getByTestId('help-text').textContent).not.toBe('');
   });
 
-  it('has no help button in free play', () => {
+  it('shows the help button in "Nur Zahlenstrahl" too (amendment 17)', () => {
     setup();
-    expect(screen.queryByTestId('help-button')).toBeNull();
+    expect(screen.getByTestId('help-button')).toBeTruthy();
   });
 
   it('at the solution step the fire button reads "Feuer auf N" and the help button is disabled', () => {
@@ -534,8 +537,9 @@ describe('BattleOverlay number pad (amendment 12, FR-102, FR-103)', () => {
 
   function setupPad(numberPad: boolean, over: Partial<Settings> = {}) {
     let now = 1000;
-    const controller = new BattleController({ settings: { ...defaultSettings(), freePlay: true, ...over }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
-    controller.startRound('freePlay');
+    const controller = new BattleController({ settings: { ...defaultSettings(), ...over }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
+    controller.startRound('ruler');
+    now += 2000;
     render(<PadOverlay controller={controller} numberPad={numberPad} />);
     return { controller, advance: (ms: number) => (now += ms) };
   }
@@ -588,7 +592,7 @@ describe('BattleOverlay number pad (amendment 12, FR-102, FR-103)', () => {
     for (let seed = 1; seed < 200; seed++) {
       let now = 1000;
       const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true }, progress: memoryProgressStore(), clock: () => now, seed });
-      controller.startRound('guided');
+      controller.startRound('mixed');
       if (controller.getState().challenge?.kind === 'readPosition') continue;
       render(<PadOverlay controller={controller} numberPad />);
       act(() => {
@@ -621,7 +625,7 @@ describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', 
     const resumeScreen = screen.getByTestId('pause-screen');
     expect(resumeScreen.textContent).toContain(m.battle.pause);
     fireEvent.click(screen.getByRole('button', { name: m.battle.resume }));
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
     expect(screen.queryByTestId('pause-screen')).toBeNull();
   });
 
@@ -660,8 +664,8 @@ describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', 
       };
       document.body.appendChild(root);
       let now = 1000;
-      const controller = new BattleController({ settings: { ...defaultSettings(), freePlay: true }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
-      controller.startRound('freePlay');
+      const controller = new BattleController({ settings: { ...defaultSettings() }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
+      controller.startRound('ruler');
       render(<Overlay controller={controller} />, { container: root });
       const button = screen.getByRole('button', { name: m.start.fullscreen });
       expect(button.getAttribute('tabindex')).toBe('-1');
@@ -678,7 +682,7 @@ describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', 
   it('shows the speaker button only when speech is available, and it repeats the challenge (FR-055)', () => {
     let now = 1000;
     const controller = new BattleController({ settings: defaultSettings(), progress: memoryProgressStore(), clock: () => now, seed: 7 });
-    controller.startRound('guided');
+    controller.startRound('mixed');
     const view = render(<BattleOverlay controller={controller} state={controller.getState()} />);
     expect(screen.queryByRole('button', { name: m.battle.speak })).toBeNull();
     const onSpeak = vi.fn();
@@ -686,5 +690,37 @@ describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', 
     fireEvent.click(screen.getByRole('button', { name: m.battle.speak }));
     expect(onSpeak).toHaveBeenCalledTimes(1);
     now += 1;
+  });
+});
+
+describe('BattleOverlay play modes (amendment 17, FR-122, FR-123)', () => {
+  function start(mode: 'mixed' | 'ruler' | 'math', over: Partial<Settings> = {}) {
+    const controller = new BattleController({ settings: { ...defaultSettings(), ...over }, progress: memoryProgressStore(), clock: () => 1000, seed: 7 });
+    controller.startRound(mode);
+    render(<Overlay controller={controller} />);
+    return controller;
+  }
+
+  it('"Nur Zahlenstrahl" shows no challenge banner and no challenge text', () => {
+    const controller = start('ruler');
+    expect(controller.getState().challenge!.kind).toBe('readPosition');
+    expect(screen.queryByTestId('challenge-banner')).toBeNull();
+    expect(screen.getByTestId('battle-overlay').textContent).not.toContain(promptText(controller.getState().challenge!.prompt));
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-mode')).toBe('ruler');
+  });
+
+  it('"Nur Rechnen" and "Gemischt" show the banner', () => {
+    for (const mode of ['math', 'mixed'] as const) {
+      const controller = start(mode);
+      expect(screen.getByTestId('challenge-banner').textContent).toBe(promptText(controller.getState().challenge!.prompt));
+      expect(screen.getByTestId('battle-overlay').getAttribute('data-mode')).toBe(mode);
+      cleanup();
+    }
+  });
+
+  it('data-skill-step is the main skill step of the current challenge', () => {
+    const controller = start('ruler', { adaptive: true });
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-skill-step')).toBe(String(controller.getState().challenge!.difficultyStep));
+    expect(controller.getState().challenge!.difficultyStep).toBe(0);
   });
 });

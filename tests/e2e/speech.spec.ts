@@ -5,7 +5,7 @@
  * hidden.
  */
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -50,7 +50,7 @@ function spoken(page: Page): Promise<string[]> {
 test('with "Vorlesen" on, starting speaks a greeting and the challenge, and the speaker button repeats it', async ({ page }) => {
   await prepare(page, true);
   await page.goto('/?seed=4');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const banner = page.getByTestId('challenge-banner');
   await expect(banner).toBeVisible();
@@ -63,7 +63,7 @@ test('with "Vorlesen" on, starting speaks a greeting and the challenge, and the 
 test('with "Vorlesen" off nothing is spoken and there is no speaker button', async ({ page }) => {
   await prepare(page, false);
   await page.goto('/?seed=4');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
   await expect(page.getByRole('button', { name: m.battle.speak })).toHaveCount(0);
@@ -73,7 +73,7 @@ test('with "Vorlesen" off nothing is spoken and there is no speaker button', asy
 test('by default nothing is read aloud: no greeting, no challenge, no speaker button (PO1)', async ({ page }) => {
   await prepare(page, null);
   await page.goto('/?seed=4');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
   await expect(page.getByRole('button', { name: m.battle.speak })).toHaveCount(0);

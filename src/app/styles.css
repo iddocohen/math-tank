@@ -110,9 +110,49 @@ input:focus-visible {
   justify-content: center;
 }
 
-.free-play-button {
+/* Play mode picture buttons (amendment 17, FR-121): icon above the label, the start key in the corner. */
+.mode-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 220px;
+  min-height: 180px;
+  padding: 16px 24px;
+  font-size: 1.75rem;
+}
+
+.mode-ruler {
   background: #4a5a80;
   box-shadow: 0 6px 0 #313d58;
+}
+
+.mode-math {
+  background: #b5651d;
+  box-shadow: 0 6px 0 #7a4210;
+}
+
+.mode-key {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 1.25rem;
+  opacity: 0.85;
+}
+
+@media (max-height: 500px) {
+  .mode-button {
+    min-width: 160px;
+    min-height: 120px;
+    font-size: 1.3rem;
+  }
+
+  .mode-icon {
+    width: 64px;
+    height: 52px;
+  }
 }
 
 .secondary-button {

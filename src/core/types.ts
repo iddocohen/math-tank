@@ -1,8 +1,9 @@
 /** Shared core types from data-model.md. No DOM or Phaser references. */
 
-export type { Settings } from './settings/schema';
+export type { PlayMode, Settings } from './settings/schema';
 export type { RulerLevel } from './numberline/ticks';
 import type { RulerLevel } from './numberline/ticks';
+import type { PlayMode } from './settings/schema';
 
 export type Skill =
   | 'positions'
@@ -172,7 +173,8 @@ export type InputMethod = 'pointer' | 'keyboard';
 
 export interface RoundState {
   seed: number;
-  mode: 'guided' | 'freePlay';
+  /** The play mode (amendment 17, FR-121 to FR-123): every mode is a search that records attempts. */
+  mode: PlayMode;
   /** Player shots fired this round. */
   turn: number;
   /** The child's hearts, LIVES at the start; 0 ends the round (amendment 06, FR-080). */
@@ -202,7 +204,7 @@ export interface RoundState {
   decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
-  /** In free play a readPosition challenge whose answer is the enemy's number (amendment 02, FR-067). */
+  /** The search's challenge; mode 'ruler' always readPosition, mode 'math' never readPosition or findNumber (amendment 17). */
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;

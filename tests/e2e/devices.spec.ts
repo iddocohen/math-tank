@@ -9,7 +9,7 @@
  * With SCREENSHOT_DIR set, each case saves a screenshot of its size there.
  */
 import type { Locator, Page, TestInfo } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { t } from '../../src/i18n';
@@ -45,7 +45,7 @@ async function screenshot(page: Page, name: string): Promise<void> {
 
 async function startBattle(page: Page): Promise<Locator> {
   await page.goto('/?seed=3');
-  await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+  await startButton(page).tap();
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', /^(challenge|aiming)$/);
   await expect(page.locator('canvas')).toBeVisible();

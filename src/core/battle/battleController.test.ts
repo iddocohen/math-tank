@@ -18,10 +18,11 @@ import { COMPARISON_47_74, SUBTRACTION_43_MINUS_7 } from '../math/fixtures';
 import { stepPath } from '../math/stepPath';
 import { directionTo, nearestMajorTick, nextHelp } from './help';
 import { encouragements, messageText } from '../../i18n';
+import { GUESS_MISS_WINDOW_MS, GUESS_RESPONSE_MS } from '../progress/classify';
 
 /** Adaptive difficulty off, so challenges follow the parent settings; the adaptive tests turn it on (T129). */
-function freePlaySettings(overrides: Partial<Settings> = {}): Settings {
-  return { ...defaultSettings(), adaptive: false, freePlay: true, ...overrides };
+function rulerSettings(overrides: Partial<Settings> = {}): Settings {
+  return { ...defaultSettings(), adaptive: false, ...overrides };
 }
 
 /** The enemy with its number; it is always visible (amendment 07). */
@@ -29,11 +30,32 @@ function enemyOf(s: RoundState): TankState {
   return s.enemy;
 }
 
+/**
+ * A "Nur Zahlenstrahl" controller (amendment 17 replaces free play with it) whose child waits calmly before every shot:
+ * fireAt and confirm first let the time run until answers count plus GUESS_RESPONSE_MS, and more than
+ * GUESS_MISS_WINDOW_MS after the latest miss, so no shot is a fast guess (FR-038, FR-098).
+ */
 function makeController(overrides: Partial<Settings> = {}, seed = 1234) {
   let now = 1_000;
   const clock = () => now;
   const progress = memoryProgressStore();
-  const controller = new BattleController({ settings: freePlaySettings(overrides), progress, clock, seed });
+  const controller = new BattleController({ settings: rulerSettings(overrides), progress, clock, seed });
+  const wait = () => {
+    const s = controller.getState();
+    if (s.phase !== 'challenge' || s.answerableAt === null) return;
+    const lastMiss = s.help.wrongAnswerTimes.at(-1);
+    now = Math.max(now, s.answerableAt + GUESS_RESPONSE_MS, lastMiss === undefined ? 0 : lastMiss + GUESS_MISS_WINDOW_MS + 1);
+  };
+  const fireAt = controller.fireAt.bind(controller);
+  const confirm = controller.confirm.bind(controller);
+  controller.fireAt = (n) => {
+    wait();
+    fireAt(n);
+  };
+  controller.confirm = (method) => {
+    wait();
+    confirm(method);
+  };
   return { controller, progress, advance: (ms: number) => (now += ms) };
 }
 
@@ -73,23 +95,23 @@ function without(s: RoundState, ...keys: Array<keyof RoundState>): Partial<Round
   return copy;
 }
 
-describe('BattleController free play (US1, amendment 01)', () => {
+describe('BattleController "Nur Zahlenstrahl", before amendment 17 free play (US1, amendment 01)', () => {
   it('getRoundSettings returns the settings snapshot of the current round (FR-049)', () => {
     const { controller } = makeController({ range: { preset: '0-20', min: 0, max: 20 } });
-    controller.startRound('freePlay');
-    controller.updateSettings(freePlaySettings({ range: { preset: '0-50', min: 0, max: 50 } }));
+    controller.startRound('ruler');
+    controller.updateSettings(rulerSettings({ range: { preset: '0-50', min: 0, max: 50 } }));
     expect(controller.getRoundSettings().range).toEqual({ preset: '0-20', min: 0, max: 20 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     expect(controller.getRoundSettings().range.max).toBe(50);
   });
 
   it('starts a free-play round with terrain, both tanks and the aiming phase', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s = controller.getState();
     const { min, max } = defaultSettings().range;
-    expect(s.mode).toBe('freePlay');
-    expect(s.phase).toBe('aiming');
+    expect(s.mode).toBe('ruler');
+    expect(s.phase).toBe('challenge');
     expect(s.turn).toBe(0);
     expect(s.terrain.length).toBe(WORLD_WIDTH);
     expect(s.player.position).toBe(s.playerSide === 'left' ? min : max);
@@ -130,7 +152,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       const { controller } = makeController({ range: { preset: 'custom', min, max } }, min * 7 + max);
       let previousSide: RoundState['playerSide'] | null = null;
       for (let round = 0; round < 20; round++) {
-        controller.startRound('freePlay');
+        controller.startRound('ruler');
         const s = controller.getState();
         if (previousSide) expect(s.playerSide).not.toBe(previousSide);
         previousSide = s.playerSide;
@@ -145,9 +167,9 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('uses a new terrain seed for each new round', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const first = controller.getState();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const second = controller.getState();
     expect(second.seed).not.toBe(first.seed);
     expect(Array.from(second.terrain)).not.toEqual(Array.from(first.terrain));
@@ -156,7 +178,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
   it('fireAt(n) moves to playerShot with the solveArcToX path that lands at numberToX(n)', () => {
     for (const n of [0, 37, 63, 100]) {
       const { controller } = makeController();
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       const before = controller.getState();
       controller.fireAt(n);
       const s = controller.getState();
@@ -183,7 +205,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('ignores fireAt outside the range, for non-integers, and outside the aiming phase', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s0 = controller.getState();
     controller.fireAt(101);
     controller.fireAt(-1);
@@ -197,7 +219,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('typeDigit, backspace and selectNumber change only selection, entry and inputMethod', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const base = without(controller.getState(), 'selection', 'entry', 'inputMethod');
     const check = (selection: number | null, typed: string, outOfRange = false) => {
       const s = controller.getState();
@@ -238,7 +260,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('accepts a minus key only when the range has negative numbers', () => {
     const { controller } = makeController({ range: { preset: 'custom', min: -20, max: 30 } });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.typeMinus();
     controller.typeDigit(7);
     expect(controller.getState().selection).toBe(-7);
@@ -247,7 +269,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('confirm fires at the selection and clears the typed digits', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.typeDigit(4);
     controller.typeDigit(2);
     controller.confirm();
@@ -259,7 +281,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('confirm does nothing without a selection or when the entry is out of range', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s0 = controller.getState();
     controller.confirm();
     expect(controller.getState()).toBe(s0);
@@ -269,12 +291,12 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const s1 = controller.getState();
     controller.confirm();
     expect(controller.getState()).toBe(s1);
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
   });
 
   it('ignores digits, Backspace, selections and confirm in playerShot and enemyTurn', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     // The enemy fires after every shot that does not destroy it (amendment 07).
     controller.selectNumber(controller.getState().player.position);
     controller.confirm();
@@ -294,7 +316,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('the exact number destroys the enemy: crater, score + 1, a new enemy at a new number, no enemy turn (amendment 06, FR-066)', () => {
     const { controller } = makeController({ enemyDifficulty: 'normal' });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const n = enemyOf(controller.getState()).position;
     controller.fireAt(n);
     const before = controller.getState();
@@ -305,7 +327,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(after.terrain[Math.round(x)]).toBeLessThan(before.terrain[Math.round(x)] as number);
     expect(after.lastShot).toEqual({ fired: n, landed: n, hit: true, nearMiss: false, nearTankId: null, hitTankId: before.enemy.id, decoyHit: false, targetNumber: n, distance: 0, enemyNumber: n });
     expect(after.enemiesDestroyed).toBe(1);
-    expect(after.phase).toBe('aiming');
+    expect(after.phase).toBe('challenge');
     expect(after.shot).toBeNull();
     expect(after.enemy.alive).toBe(true);
     expect(enemyOf(after).position).not.toBe(n);
@@ -320,7 +342,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('a shot 1 away lands on the tank body: a near miss, the enemy stays and nothing is destroyed (amendment 06, FR-066)', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s = controller.getState();
     const n = enemyOf(s).position + (enemyOf(s).position < 100 ? 1 : -1);
     controller.fireAt(n);
@@ -336,7 +358,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('a shot 3 away is off the tank body: a plain miss, no near miss', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s = controller.getState();
     const n = enemyOf(s).position + (enemyOf(s).position < 97 ? 3 : -3);
     controller.fireAt(n);
@@ -346,7 +368,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('the body width follows the range: 4 away is a near miss in 550 to 780, 1 away a plain miss in 0 to 10', () => {
     const wide = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2 }, 99).controller;
-    wide.startRound('freePlay');
+    wide.startRound('ruler');
     const e = enemyOf(wide.getState()).position;
     wide.fireAt(e + (e <= 776 ? 4 : -4));
     wide.shotAnimationDone();
@@ -354,7 +376,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(wide.getState().enemiesDestroyed).toBe(0);
 
     const narrow = makeController({ range: { preset: '0-10', min: 0, max: 10 } }, 7).controller;
-    narrow.startRound('freePlay');
+    narrow.startRound('ruler');
     const m = enemyOf(narrow.getState()).position;
     narrow.fireAt(m + (m < 10 ? 1 : -1));
     narrow.shotAnimationDone();
@@ -363,7 +385,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('the own shell never costs the player a heart', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const s = controller.getState();
     controller.fireAt(s.player.position);
     controller.shotAnimationDone();
@@ -374,7 +396,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('the enemy fires from its own tank right after every shot that does not destroy it, miss or near miss (amendment 07, FR-081)', () => {
     const { controller } = makeController({ noDamage: true });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (const shoot of [fireAtOwnNumber, fireNextToEnemy, fireBetween, fireAtOwnNumber]) {
       shoot(controller);
       controller.shotAnimationDone();
@@ -383,7 +405,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       expect(s.shot?.shooter).toBe('enemy');
       expect(s.shot?.path[0]).toEqual(muzzle(enemyOf(s)));
       controller.enemyShotAnimationDone();
-      expect(controller.getState().phase).toBe('aiming');
+      expect(controller.getState().phase).toBe('challenge');
       expect(controller.getState().shot).toBeNull();
     }
     expect(controller.getState().turn).toBe(4);
@@ -392,11 +414,11 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('a shot that destroys the enemy is not answered: the new enemy appears and the child shoots next (FR-081)', () => {
     const { controller } = makeController({ noDamage: true });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     playTurn(controller, fireAtOwnNumber);
     fireAtEnemy(controller);
     controller.shotAnimationDone();
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
     fireAtOwnNumber(controller);
     controller.shotAnimationDone();
     expect(controller.getState().phase).toBe('enemyTurn');
@@ -406,7 +428,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     for (const enemyDifficulty of ['easy', 'normal', 'challenging'] as const) {
       for (let seed = 0; seed < 20; seed++) {
         const { controller } = makeController({ enemyDifficulty }, seed);
-        controller.startRound('freePlay');
+        controller.startRound('ruler');
         playTurn(controller, fireBetween);
         expect(controller.getState().lives).toBe(LIVES);
         expect(controller.getState().lastEnemyHit).toBe(false);
@@ -422,12 +444,12 @@ describe('BattleController free play (US1, amendment 01)', () => {
       [0, 1000, 4],
     ] as const) {
       const { controller } = makeController({ range: { preset: 'custom', min, max }, noDamage: true }, seed);
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       for (let i = 0; i < 3; i++) {
         const old = enemyOf(controller.getState()).position;
         playTurn(controller, fireAtEnemy);
         const s = controller.getState();
-        expect(s.phase).toBe('aiming');
+        expect(s.phase).toBe('challenge');
         expect(enemyOf(s).position).not.toBe(old);
         expect(s.enemy.alive).toBe(true);
         expect(Number.isInteger(enemyOf(s).position)).toBe(true);
@@ -445,12 +467,12 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('a scripted round fired with typeDigit plus confirm: "Gegner pro Runde" 2 ends after the second hit with goalReached (FR-082)', () => {
     const { controller } = makeController({ roundType: 'enemyCount', roundLength: 2 }, 77);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (const ch of String(enemyOf(controller.getState()).position)) controller.typeDigit(Number(ch) as Digit);
     controller.confirm();
     controller.shotAnimationDone();
     expect(controller.getState().enemiesDestroyed).toBe(1);
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
     fireAtEnemy(controller);
     controller.shotAnimationDone();
     const s = controller.getState();
@@ -463,15 +485,15 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('"Bis alle Herzen weg": ten destroyed enemies do not end the round (FR-082)', () => {
     const { controller } = makeController({ roundType: 'untilHearts', roundLength: 2 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (let i = 0; i < 10; i++) playTurn(controller, fireAtEnemy);
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
     expect(controller.getState().enemiesDestroyed).toBe(10);
   });
 
   it('each enemy hit removes one heart; when the 3 hearts are gone the round ends with heartsGone (FR-080)', () => {
     const { controller } = makeController({ enemyDifficulty: 'challenging' });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     let lives = controller.getState().lives;
     expect(lives).toBe(3);
     let hits = 0;
@@ -493,17 +515,17 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('keeps 3 hearts in noDamage mode', () => {
     const { controller } = makeController({ noDamage: true, enemyDifficulty: 'challenging', roundType: 'enemyCount', roundLength: 20 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (let i = 0; i < 40; i++) {
       playTurn(controller, fireAtOwnNumber);
       expect(controller.getState().lives).toBe(LIVES);
     }
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
   });
 
 
   it('applyImpact: an enemy shell on the player removes one heart unless noDamage; one next to the player does nothing', () => {
-    const s = createRound(freePlaySettings(), 99, 'left');
+    const s = createRound(rulerSettings(), 99, 'left');
     const rules = { noDamage: false, range: { min: 0, max: 100 } };
     const onPlayer = { point: tankCenter(s.player), hitTargetId: s.player.id, outOfBounds: false, shooter: 'enemy' as const };
     expect(applyImpact(s, onPlayer, BLAST_RADIUS, rules)).toMatchObject({ lives: LIVES - 1, lastEnemyHit: true });
@@ -524,7 +546,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
   });
 
   it('leaves the terrain and the hearts unchanged for an enemy shell that leaves the battlefield', () => {
-    const s = createRound(freePlaySettings(), 5, 'left');
+    const s = createRound(rulerSettings(), 5, 'left');
     const impact = { point: { x: 0, y: 500 }, hitTargetId: null, outOfBounds: true, shooter: 'enemy' as const };
     const next = applyImpact(s, impact, BLAST_RADIUS, { noDamage: false, range: { min: 0, max: 100 } });
     expect(next.terrain).toBe(s.terrain);
@@ -533,7 +555,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('measures the time played: it stops while paused, continues after resume and is frozen once the round is over (FR-084)', () => {
     const { controller, advance } = makeController({ roundType: 'enemyCount', roundLength: 1 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     expect(controller.elapsedMs()).toBe(0);
     expect(controller.getState().elapsedMs).toBe(0);
     advance(5_000);
@@ -552,13 +574,13 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(controller.getState().elapsedMs).toBe(6_500);
     advance(10_000);
     expect(controller.elapsedMs()).toBe(6_500);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     expect(controller.elapsedMs()).toBe(0);
   });
 
   it('startRound resets the hearts, the score and the time', () => {
     const { controller, advance } = makeController({ enemyDifficulty: 'challenging' });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     playTurn(controller, fireAtEnemy);
     for (let i = 0; i < 40 && controller.getState().lives === LIVES; i++) playTurn(controller, fireAtOwnNumber);
     fireAtOwnNumber(controller);
@@ -567,7 +589,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const before = controller.getState();
     expect(before.enemiesDestroyed).toBe(1);
     expect(before.lives).toBeLessThan(LIVES);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const after = controller.getState();
     expect(after).toMatchObject({ lives: LIVES, enemiesDestroyed: 0, elapsedMs: 0, lastEnemyHit: false });
     expect(controller.elapsedMs()).toBe(0);
@@ -575,7 +597,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('pause freezes the phase and resume returns to it', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.pause();
     expect(controller.getState().phase).toBe('paused');
     controller.fireAt(30);
@@ -583,7 +605,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(controller.getState().phase).toBe('paused');
     expect(controller.getState().selection).toBeNull();
     controller.resume();
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
 
     fireAtOwnNumber(controller);
     controller.pause();
@@ -595,12 +617,12 @@ describe('BattleController free play (US1, amendment 01)', () => {
     controller.shotAnimationDone();
     expect(controller.getState().phase).toBe('enemyTurn');
     controller.enemyShotAnimationDone();
-    expect(controller.getState().phase).toBe('aiming');
+    expect(controller.getState().phase).toBe('challenge');
   });
 
   it('does not pause a finished round', () => {
     const { controller } = makeController({ roundType: 'enemyCount', roundLength: 1 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     playTurn(controller, fireAtEnemy);
     controller.pause();
     expect(controller.getState().phase).toBe('roundOver');
@@ -610,14 +632,14 @@ describe('BattleController free play (US1, amendment 01)', () => {
     const { controller } = makeController();
     const seen: RoundState[] = [];
     const unsubscribe = controller.subscribe((s) => seen.push(s));
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.typeDigit(3);
     controller.confirm();
     controller.shotAnimationDone();
     controller.enemyShotAnimationDone();
     controller.pause();
     controller.resume();
-    expect(seen.map((s) => s.phase)).toEqual(['aiming', 'aiming', 'playerShot', 'enemyTurn', 'aiming', 'paused', 'aiming']);
+    expect(seen.map((s) => s.phase)).toEqual(['challenge', 'challenge', 'playerShot', 'enemyTurn', 'challenge', 'paused', 'challenge']);
     expect(seen.at(-1)).toBe(controller.getState());
     unsubscribe();
     controller.typeDigit(4);
@@ -626,7 +648,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
 
   it('gives each change a new state object', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const a = controller.getState();
     controller.selectNumber(30);
     expect(controller.getState()).not.toBe(a);
@@ -635,25 +657,30 @@ describe('BattleController free play (US1, amendment 01)', () => {
   });
 
   it('takes a settings snapshot at startRound; new settings apply from the next round (FR-049)', () => {
-    const settings = freePlaySettings({ roundType: 'enemyCount', roundLength: 1 });
-    const controller = new BattleController({ settings, progress: memoryProgressStore(), clock: () => 0, seed: 3 });
-    controller.startRound('freePlay');
+    const settings = rulerSettings({ roundType: 'enemyCount', roundLength: 1 });
+    let now = 0;
+    const controller = new BattleController({ settings, progress: memoryProgressStore(), clock: () => now, seed: 3 });
+    const calmly = (c: BattleController) => {
+      now += 3_000;
+      fireAtEnemy(c);
+    };
+    controller.startRound('ruler');
     settings.roundLength = 20;
-    controller.updateSettings(freePlaySettings({ roundType: 'enemyCount', roundLength: 2 }));
-    playTurn(controller, fireAtEnemy);
+    controller.updateSettings(rulerSettings({ roundType: 'enemyCount', roundLength: 2 }));
+    playTurn(controller, calmly);
     expect(controller.getState().outcome).toBe('goalReached');
 
-    controller.startRound('freePlay');
-    playTurn(controller, fireAtEnemy);
-    expect(controller.getState().phase).toBe('aiming');
-    playTurn(controller, fireAtEnemy);
+    controller.startRound('ruler');
+    playTurn(controller, calmly);
+    expect(controller.getState().phase).toBe('challenge');
+    playTurn(controller, calmly);
     expect(controller.getState().outcome).toBe('goalReached');
   });
 
   it('gives the same rounds for the same seed', () => {
     const run = () => {
       const { controller } = makeController({ enemyDifficulty: 'normal' }, 42);
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       playTurn(controller, fireAtEnemy);
       playTurn(controller, fireAtOwnNumber);
       playTurn(controller, fireAtOwnNumber);
@@ -668,19 +695,19 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(Array.from(b.terrain)).toEqual(Array.from(a.terrain));
   });
 
-  it('records no attempts in free play', () => {
+  it('records an attempt for each destroyed enemy in "Nur Zahlenstrahl", none for a miss (amendment 17, FR-124)', () => {
     const { controller, progress } = makeController({ noDamage: true });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (let i = 0; i < 3; i++) playTurn(controller, fireAtEnemy);
     for (let i = 0; i < 3; i++) playTurn(controller, fireAtOwnNumber);
-    expect(progress.getProgress().attempts).toHaveLength(0);
+    expect(progress.getProgress().attempts).toHaveLength(3);
   });
 });
 
 describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () => {
   it('keeps the round going: new terrain and one new enemy; hearts, score, turn and time stay; the side may switch', () => {
     const { controller, progress, advance } = makeController({ noDamage: false });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     playTurn(controller, fireBetween);
     playTurn(controller, fireAtEnemy);
     advance(5_000);
@@ -693,8 +720,8 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
 
     controller.newScene();
     const after = controller.getState();
-    expect(after.mode).toBe('freePlay');
-    expect(after.phase).toBe('aiming');
+    expect(after.mode).toBe('ruler');
+    expect(after.phase).toBe('challenge');
     expect(after.seed).not.toBe(before.seed);
     expect(Array.from(after.terrain)).not.toEqual(Array.from(before.terrain));
     expect(after).toMatchObject({ lives: before.lives, enemiesDestroyed: 1, turn: before.turn });
@@ -707,16 +734,17 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
     expect(after.selection).toBeNull();
     expect(after.lastShot).toBeNull();
     expect(after.outcome).toBeNull();
-    expect(progress.getProgress().attempts).toEqual([]);
+    // The destroyed enemy's search is recorded (amendment 17); the dropped one is not.
+    expect(progress.getProgress().attempts).toHaveLength(1);
   });
 
   it('keeps a lost heart', () => {
     for (let seed = 1; seed < 200; seed++) {
       const { controller } = makeController({ noDamage: false }, seed);
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       for (let i = 0; i < 6 && controller.getState().lives === LIVES; i++) playTurn(controller, fireBetween);
       const lives = controller.getState().lives;
-      if (lives === LIVES || controller.getState().phase !== 'aiming') continue;
+      if (lives === LIVES || controller.getState().phase !== 'challenge') continue;
       controller.newScene();
       expect(controller.getState().lives).toBe(lives);
       return;
@@ -728,7 +756,7 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
     const allTypes = { numberLine: true, addition: true, subtraction: true, comparison: true };
     for (let seed = 1; seed <= 40; seed++) {
       const g = guidedController({ noDamage: true, challengeTypes: allTypes }, seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       answer(g, g.controller.getState().challenge!.answer);
       answer(g, missNumber(g.controller.getState()));
       const before = g.controller.getState();
@@ -750,7 +778,7 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
   it('with only comparison on, the search after a refresh is not a comparison, so one tank stands opposite the child; later searches may be (amendment 10 item 10)', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const g = guidedController({ noDamage: true, challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } }, seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       expect(g.controller.getState().challenge!.options).toBeDefined();
       g.controller.newScene();
       const after = g.controller.getState();
@@ -764,7 +792,7 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
 
   it('the refresh causes no enemy shot', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const phases: string[] = [];
     controller.subscribe((s) => phases.push(s.phase));
     controller.newScene();
@@ -774,7 +802,7 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
 
   it('is ignored while a shell is in flight, while paused and after the round is over', () => {
     const { controller } = makeController({ roundType: 'enemyCount', roundLength: 1 });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
 
     fireBetween(controller);
     expect(controller.getState().phase).toBe('playerShot');
@@ -807,14 +835,14 @@ describe('BattleController newScene (amendment 03, amendment 08, FR-070)', () =>
   });
 });
 
-describe('BattleController free play reads the ruler (US9, amendment 02, T180)', () => {
+describe('BattleController "Nur Zahlenstrahl" reads the ruler (US9, amendment 02, T180)', () => {
   it('each free-play turn has a readPosition challenge with the visible enemy standing at its answer (FR-014, FR-067)', () => {
     const { controller } = makeController({ noDamage: true }, 4242);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     // Hits on turns 0, 3 and 6, misses and near misses between them.
     for (let i = 0; i < 7; i++) {
       const s = controller.getState();
-      expect(s.phase).toBe('aiming');
+      expect(s.phase).toBe('challenge');
       expect(s.challenge?.kind).toBe('readPosition');
       expect(s.challenge?.answer).toBe(enemyOf(s).position);
       expect(s.challenge?.rulerLevel).toBe(s.rulerLevel);
@@ -825,7 +853,7 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
 
   it('a near miss keeps the enemy; the exact number destroys it, and lastShot keeps the number it stood at (FR-066, FR-068)', () => {
     const { controller } = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2, noDamage: true }, 99);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const answer = controller.getState().challenge!.answer;
     const near = answer + (answer < 780 ? 1 : -1);
     controller.fireAt(near);
@@ -843,17 +871,19 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
     expect(next.challenge).not.toHaveProperty('hitTolerance');
   });
 
-  it('records no attempt in read-the-ruler free play', () => {
+  it('records every "Nur Zahlenstrahl" search as a readPosition attempt of the positions skill (amendment 17, FR-124)', () => {
     const { controller, progress } = makeController({ noDamage: true }, 5);
-    controller.startRound('freePlay');
-    for (let i = 0; i < 6; i++) playTurn(controller, i % 2 === 0 ? fireAtEnemy : fireBetween);
-    expect(progress.getProgress().attempts).toHaveLength(0);
+    controller.startRound('ruler');
+    for (let i = 0; i < 6; i++) playTurn(controller, i % 2 === 0 ? fireBetween : fireAtEnemy);
+    const attempts = progress.getProgress().attempts;
+    expect(attempts).toHaveLength(3);
+    expect(attempts.every((a) => a.kind === 'readPosition' && a.skills[0] === 'positions' && a.wrongAnswers === 1 && !a.independent)).toBe(true);
   });
 
   it('uses rulerLevelStart as the round ruler level', () => {
     for (const level of [1, 2, 3, 4, 5] as const) {
       const { controller } = makeController({ rulerLevelStart: level, rulerLevelMax: 5 }, 10 + level);
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       expect(controller.getState().rulerLevel).toBe(level);
       expect(controller.getState().challenge?.rulerLevel).toBe(level);
     }
@@ -862,7 +892,7 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
   it('range 550 to 780 on level 2: the player stands at 550 or 780 and the enemy on a multiple of 10 (US9 scenarios 4 and 5, D14)', () => {
     for (let seed = 0; seed < 60; seed++) {
       const { controller } = makeController({ range: { preset: 'custom', min: 550, max: 780 }, rulerLevelStart: 2, noDamage: true }, seed);
-      controller.startRound('freePlay');
+      controller.startRound('ruler');
       for (let turn = 0; turn < 3; turn++) {
         const s = controller.getState();
         expect([550, 780]).toContain(s.player.position);
@@ -879,7 +909,7 @@ describe('BattleController free play reads the ruler (US9, amendment 02, T180)',
 describe('BattleController any number range (US9, T145)', () => {
   it('range 0 to 1000: typing 4, 3, 7 and confirm fires at 437 and the shell lands at 437 (FR-020, FR-064)', () => {
     const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } }, 31);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (const d of [4, 3, 7] as const) controller.typeDigit(d);
     expect(controller.getState().selection).toBe(437);
     controller.confirm();
@@ -892,7 +922,7 @@ describe('BattleController any number range (US9, T145)', () => {
 
   it('range 0 to 1000: selectNumber(437) after typing 436 selects 437 and clears the typed digits', () => {
     const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     for (const d of [4, 3, 6] as const) controller.typeDigit(d);
     controller.selectNumber(437);
     expect(controller.getState().selection).toBe(437);
@@ -901,7 +931,7 @@ describe('BattleController any number range (US9, T145)', () => {
 
   it('range 0 to 1000: selectNumber from a pointer x snaps to the nearest whole number', () => {
     const { controller } = makeController({ range: { preset: '0-1000', min: 0, max: 1000 } });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const unit = (DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / 1000;
     controller.selectNumber(xToNumber(numberToX(437, 0, 1000) + 0.4 * unit, 0, 1000));
     expect(controller.getState().selection).toBe(437);
@@ -913,14 +943,14 @@ describe('BattleController any number range (US9, T145)', () => {
 
   it('range -20 to 30: typeMinus then 5 gives -5; range 0 to 100 ignores typeMinus (FR-060)', () => {
     const neg = makeController({ range: { preset: 'custom', min: -20, max: 30 } }).controller;
-    neg.startRound('freePlay');
+    neg.startRound('ruler');
     neg.typeMinus();
     neg.typeDigit(5);
     expect(neg.getState().selection).toBe(-5);
     expect(neg.getState().entry.typed).toBe('-5');
 
     const pos = makeController({ range: { preset: '0-100', min: 0, max: 100 } }).controller;
-    pos.startRound('freePlay');
+    pos.startRound('ruler');
     pos.typeMinus();
     expect(pos.getState().entry.typed).toBe('');
     pos.typeDigit(5);
@@ -931,13 +961,13 @@ describe('BattleController any number range (US9, T145)', () => {
 describe('BattleController input method (amendment 05, FR-076)', () => {
   it('is null before any input in the first round', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     expect(controller.getState().inputMethod).toBeNull();
   });
 
   it('typeDigit, typeMinus and backspace set keyboard; selectNumber sets pointer', () => {
     const { controller } = makeController({ range: { preset: 'custom', min: -20, max: 30 } });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.selectNumber(5);
     expect(controller.getState().inputMethod).toBe('pointer');
     controller.typeMinus();
@@ -952,14 +982,14 @@ describe('BattleController input method (amendment 05, FR-076)', () => {
 
   it('confirm() fires and sets keyboard; confirm(pointer) fires at the same number and sets pointer', () => {
     const a = makeController();
-    a.controller.startRound('freePlay');
+    a.controller.startRound('ruler');
     a.controller.selectNumber(42);
     a.controller.confirm();
     expect(a.controller.getState().phase).toBe('playerShot');
     expect(a.controller.getState().inputMethod).toBe('keyboard');
 
     const b = makeController();
-    b.controller.startRound('freePlay');
+    b.controller.startRound('ruler');
     b.controller.typeDigit(4);
     b.controller.typeDigit(2);
     b.controller.confirm('pointer');
@@ -971,7 +1001,7 @@ describe('BattleController input method (amendment 05, FR-076)', () => {
 
   it('ignored calls in playerShot, enemyTurn and paused do not change it', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     // The enemy fires after every shot that does not destroy it (amendment 07).
     controller.selectNumber(controller.getState().player.position);
     controller.confirm('pointer');
@@ -993,12 +1023,12 @@ describe('BattleController input method (amendment 05, FR-076)', () => {
 
   it('is kept by startRound and newScene', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.typeDigit(5);
     controller.newScene();
     expect(controller.getState().inputMethod).toBe('keyboard');
     controller.selectNumber(50);
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     expect(controller.getState().inputMethod).toBe('pointer');
   });
 });
@@ -1011,11 +1041,11 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
       enemyDifficulty: 'easy',
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     });
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const before = controller.getState();
     const roundSettingsBefore = structuredClone(controller.getRoundSettings());
 
-    const next = freePlaySettings({
+    const next = rulerSettings({
       range: { preset: '0-100', min: 0, max: 100 },
       rulerLevelStart: 3,
       enemyDifficulty: 'challenging',
@@ -1037,7 +1067,7 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
     expect(controller.getRoundSettings().enemyDifficulty).toBe('easy');
     expect(controller.getRoundSettings().challengeTypes.addition).toBe(true);
 
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     const after = controller.getState();
     expect(after.rulerLevel).toBe(3);
     expect(controller.getRoundSettings().range).toEqual({ preset: '0-100', min: 0, max: 100 });
@@ -1048,10 +1078,10 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
 
   it('applies the latest of several updates during one round', () => {
     const { controller } = makeController();
-    controller.startRound('freePlay');
-    controller.updateSettings(freePlaySettings({ enemyDifficulty: 'normal' }));
-    controller.updateSettings(freePlaySettings({ enemyDifficulty: 'challenging' }));
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
+    controller.updateSettings(rulerSettings({ enemyDifficulty: 'normal' }));
+    controller.updateSettings(rulerSettings({ enemyDifficulty: 'challenging' }));
+    controller.startRound('ruler');
     expect(controller.getRoundSettings().enemyDifficulty).toBe('challenging');
   });
 });
@@ -1068,7 +1098,7 @@ function guidedController(overrides: Partial<Settings> = {}, seed = 1234) {
 function guidedRoundWhere(accept: (s: RoundState) => boolean, overrides: Partial<Settings> = {}) {
   for (let seed = 1; seed < 400; seed++) {
     const g = guidedController(overrides, seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     if (accept(g.controller.getState())) return g;
   }
   throw new Error('no seed found');
@@ -1107,10 +1137,10 @@ function typeNumber(c: BattleController, n: number): void {
 }
 
 describe('BattleController guided turn flow (US2, T060)', () => {
-  it("startRound('guided') begins in challenge with the enemy visible at the answer, 3 hearts and score 0 (amendment 07)", () => {
+  it("startRound('mixed') begins in challenge with the enemy visible at the answer, 3 hearts and score 0 (amendment 07)", () => {
     const g = guidedRoundWhere(positionSearch);
     const s = g.controller.getState();
-    expect(s.mode).toBe('guided');
+    expect(s.mode).toBe('mixed');
     expect(s.phase).toBe('challenge');
     expect(s.enemy).toMatchObject({ position: s.challenge!.answer, x: numberToX(s.challenge!.answer, 0, 100), alive: true });
     expect(s.lives).toBe(LIVES);
@@ -1125,7 +1155,7 @@ describe('BattleController guided turn flow (US2, T060)', () => {
       const g = guidedController({ noDamage: true, challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true } }, seed);
       const seen: RoundState[] = [];
       g.controller.subscribe((s) => seen.push(s));
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       g.controller.selectNumber(40);
       for (const s of [g.controller.getState(), ...seen]) {
         if (s.phase !== 'challenge') continue;
@@ -1176,11 +1206,11 @@ describe('BattleController guided turn flow (US2, T060)', () => {
   it('with no input yet or keyboard input no search is findNumber; after pointer answers findNumber follows (FR-076)', () => {
     for (let seed = 1; seed <= 60; seed++) {
       const g = guidedController({}, seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       expect(g.controller.getState().challenge!.kind).not.toBe('findNumber');
     }
     const keyboard = guidedController({ noDamage: true }, 7);
-    keyboard.controller.startRound('guided');
+    keyboard.controller.startRound('mixed');
     for (let i = 0; i < 40; i++) {
       keyboard.advance(1_000);
       typeNumber(keyboard.controller, keyboard.controller.getState().challenge!.answer);
@@ -1189,7 +1219,7 @@ describe('BattleController guided turn flow (US2, T060)', () => {
       expect(keyboard.controller.getState().challenge!.kind).not.toBe('findNumber');
     }
     const pointer = guidedController({ noDamage: true }, 7);
-    pointer.controller.startRound('guided');
+    pointer.controller.startRound('mixed');
     const kinds = new Set<string>();
     for (let i = 0; i < 40; i++) {
       pointer.advance(1_000);
@@ -1314,7 +1344,7 @@ describe('BattleController guided misses, help and round end (US2, T061)', () =>
 
   it("'Gegner pro Runde' 3 ends the round with goalReached after the third destroyed enemy (FR-082)", () => {
     const g = guidedController({ roundType: 'enemyCount', roundLength: 3 });
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     for (let i = 0; i < 3; i++) {
       expect(g.controller.getState().phase).toBe('challenge');
       answer(g, g.controller.getState().challenge!.answer);
@@ -1327,7 +1357,7 @@ describe('BattleController guided misses, help and round end (US2, T061)', () =>
 
   it("'Bis alle Herzen weg' ends only when the hearts are gone", () => {
     const g = guidedController({ enemyDifficulty: 'challenging' });
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     for (let i = 0; i < 8; i++) answer(g, g.controller.getState().challenge!.answer);
     expect(g.controller.getState().phase).toBe('challenge');
     expect(g.controller.getState().enemiesDestroyed).toBe(8);
@@ -1363,7 +1393,7 @@ describe('BattleController guided misses, help and round end (US2, T061)', () =>
 describe('BattleController attempts (US2, T063; classifyAttempt since T130)', () => {
   it('records one attempt per finished search', () => {
     const g = guidedController({ noDamage: true });
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const challenges: string[] = [];
     for (let i = 0; i < 4; i++) {
       const s = g.controller.getState();
@@ -1423,24 +1453,25 @@ describe('BattleController attempts (US2, T063; classifyAttempt since T130)', ()
     expect(a).toMatchObject({ solved: false, independent: false, helpLevel: 3, wrongAnswers: 3 });
   });
 
-  it('records no attempt in free play and none for a search dropped by newScene', () => {
+  it('records none for a search dropped by newScene, and one for a "Nur Zahlenstrahl" search (amendment 17)', () => {
     const g = guidedRoundWhere(positionSearch);
     answer(g, missNumber(g.controller.getState()));
     g.controller.newScene();
-    g.controller.startRound('freePlay');
+    expect(g.progress.getProgress().attempts).toHaveLength(0);
+    g.controller.startRound('ruler');
     g.advance(1_000);
     g.controller.fireAt(g.controller.getState().challenge!.answer);
     g.controller.shotAnimationDone();
-    expect(g.progress.getProgress().attempts).toHaveLength(0);
+    expect(g.progress.getProgress().attempts.map((a) => a.kind)).toEqual(['readPosition']);
   });
 });
 
 describe('BattleController round ruler level (T064, FR-018)', () => {
   it('rulerLevelStart 3 gives state.rulerLevel 3 in both modes', () => {
-    const g = guidedController({ rulerLevelStart: 3, freePlay: true });
-    g.controller.startRound('guided');
+    const g = guidedController({ rulerLevelStart: 3 });
+    g.controller.startRound('mixed');
     expect(g.controller.getState().rulerLevel).toBe(3);
-    g.controller.startRound('freePlay');
+    g.controller.startRound('ruler');
     expect(g.controller.getState().rulerLevel).toBe(3);
   });
 });
@@ -1467,7 +1498,7 @@ describe('BattleController visible enemy and return fire (amendment 07, T222)', 
 
   it('in a comparison turn the enemy and every standing decoy fire together, each from its own barrel (FR-043a, bug report B2)', () => {
     const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const seen = record(g);
     answer(g, 30);
     const firing = seen.find((s) => s.phase === 'enemyTurn')!;
@@ -1483,7 +1514,7 @@ describe('BattleController visible enemy and return fire (amendment 07, T222)', 
 
   it('a help request is not a shot: no enemy turn follows (FR-081)', () => {
     const g = guidedController(SUBTRACTION_43_MINUS_7.settings, SUBTRACTION_43_MINUS_7.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     g.controller.requestHelp();
     g.controller.requestHelp();
     expect(g.controller.getState().phase).toBe('challenge');
@@ -1494,7 +1525,7 @@ describe('BattleController visible enemy and return fire (amendment 07, T222)', 
     /** Whether each enemy shot of the first `shots` enemy turns hits the child's tank. */
     function enemyHits(play: (g: Guided, s: RoundState) => void): boolean[] {
       const g = guidedController({ noDamage: true, enemyDifficulty: 'challenging' }, 31);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       const hits: boolean[] = [];
       for (let i = 0; i < 12; i++) {
         play(g, g.controller.getState());
@@ -1529,7 +1560,7 @@ describe('BattleController step animation for addition and subtraction (US3, T08
 
   function fixtureRound(beginnerAssist = true) {
     const g = guidedController({ ...onlySubtraction, beginnerAssist }, SUBTRACTION_43_MINUS_7.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     return g;
   }
 
@@ -1580,17 +1611,17 @@ describe('BattleController step animation for addition and subtraction (US3, T08
     expect(s.stepAnimation).toBeNull();
   });
 
-  it('requestHelp is ignored while a shell is in flight and in free play', () => {
+  it('requestHelp is ignored while a shell is in flight; in "Nur Zahlenstrahl" it shows help without a step animation', () => {
     const g = fixtureRound();
     g.advance(1_000);
     g.controller.fireAt(50);
     g.controller.requestHelp();
     expect(g.controller.getState().stepAnimation).toBeNull();
     const { controller } = makeController();
-    controller.startRound('freePlay');
+    controller.startRound('ruler');
     controller.requestHelp();
     expect(controller.getState().stepAnimation).toBeNull();
-    expect(controller.getState().help.level).toBe(0);
+    expect(controller.getState().help.level).toBe(1);
   });
 });
 
@@ -1600,7 +1631,7 @@ describe('BattleController comparison with decoys without number plates (US4, am
   /** The fixture round: "Der Gegner steht bei der größeren Zahl: 47 oder 74", answerable. */
   function fixtureRound() {
     const g = guidedController(onlyComparison, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     g.advance(1_000);
     return g;
   }
@@ -1630,7 +1661,7 @@ describe('BattleController comparison with decoys without number plates (US4, am
   it('every comparison search has one tank at each option: the enemy at the answer, decoys at the others', () => {
     for (let seed = 1; seed <= 30; seed++) {
       const g = guidedController({ ...onlyComparison, noDamage: true }, seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       const s = g.controller.getState();
       const options = s.challenge!.options!;
       expect(s.enemy.position).toBe(s.challenge!.answer);
@@ -1737,7 +1768,7 @@ describe('BattleController comparison with decoys without number plates (US4, am
 
   it('tapTank is ignored before the challenge is answerable and outside comparison searches', () => {
     const g = guidedController(onlyComparison, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const early = g.controller.getState();
     g.controller.tapTank('enemy');
     expect(g.controller.getState()).toBe(early);
@@ -1751,7 +1782,7 @@ describe('BattleController comparison with decoys without number plates (US4, am
   it('a middle-of-three search has two decoys, and each burst counts as a miss', () => {
     for (let seed = 1; seed <= 400; seed++) {
       const g = guidedController({ ...onlyComparison, noDamage: true }, seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       const s0 = g.controller.getState();
       if (s0.challenge!.kind !== 'middle3') continue;
       expect(s0.decoys).toHaveLength(2);
@@ -1811,7 +1842,7 @@ describe('BattleController help escalation (US5, T095)', () => {
 
   it('requestHelp works for every kind: a comparison gets the tens digits, then the markers, then the solution', () => {
     const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     g.controller.requestHelp();
     expect(g.controller.getState().help.content).toMatchObject({ step: 1, tensDigits: true });
     g.controller.requestHelp();
@@ -1982,7 +2013,7 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
   it('with adaptive on and every skill at step 0, challenges use the step 0 limits (FR-037)', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const g = adaptiveController(onlyNumberLine, emptyProgress(), seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       const s = g.controller.getState();
       const c = s.challenge!;
       // Step 0 of the number-line ladders: a fifth of the range, from the smallest answer allowed at minEnemyGap.
@@ -1992,7 +2023,7 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
     }
     for (let seed = 1; seed <= 40; seed++) {
       const g = adaptiveController(onlyAddition, emptyProgress(), seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       const s = g.controller.getState();
       const c = s.challenge!;
       // Addition step 0: half the range, added numbers up to 5, no crossing of a ten.
@@ -2008,16 +2039,16 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
     const answers = new Set<number>();
     for (let seed = 1; seed <= 40; seed++) {
       const g = adaptiveController({ ...onlyNumberLine, adaptive: false }, emptyProgress(), seed);
-      g.controller.startRound('guided');
+      g.controller.startRound('mixed');
       answers.add(g.controller.getState().challenge!.answer);
     }
     expect([...answers].some((n) => n > 50)).toBe(true);
   });
 
-  it('after 5 independent attempts in a skill the next challenge in that skill uses step 1 (FR-037, US7 scenario 1)', () => {
+  it('after 3 independent attempts in a row in a skill the next challenge in that skill uses step 1 (FR-037, US7 scenario 1, amendment 17)', () => {
     const g = adaptiveController({ ...onlyAddition, roundLength: 20 });
-    g.controller.startRound('guided');
-    for (let i = 0; i < 4; i++) {
+    g.controller.startRound('mixed');
+    for (let i = 0; i < 2; i++) {
       answerCalmly(g);
       expect(g.controller.getState().challenge!.difficultyStep, `search ${i + 2}`).toBe(0);
     }
@@ -2030,7 +2061,7 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
 
   it('classifies attempts with classifyAttempt: a hit 1 s after answerable is stored as a guess (FR-038)', () => {
     const g = adaptiveController(onlyAddition);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     g.advance(1_000 + 1_000);
     g.controller.fireAt(g.controller.getState().challenge!.answer);
     g.controller.shotAnimationDone();
@@ -2042,7 +2073,7 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
 
   it('a shot at the shown solution after 3 quick misses is stored as unsolved, not as a guess (FR-038)', () => {
     const g = adaptiveController(onlyAddition);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const s0 = g.controller.getState();
     g.advance(1_000);
     for (let i = 0; i < 3; i++) {
@@ -2061,7 +2092,7 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
 
   it('records attempts in the current session of the progress store (start or continue the session)', () => {
     const g = adaptiveController(onlyAddition);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     answerCalmly(g);
     answerCalmly(g);
     const p = g.progress.getProgress();
@@ -2073,24 +2104,24 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
   it('state.rulerLevel follows the positions skill only (FR-018, AC-09)', () => {
     // Positions step 3 is ruler level 2; a high addition step changes nothing.
     const g = adaptiveController({ rulerLevelStart: 1, rulerLevelMax: 5 }, progressWithSteps({ positions: 3, addition: 3, comparison: 2 }));
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     expect(g.controller.getState().rulerLevel).toBe(2);
-    g.controller.startRound('freePlay');
+    g.controller.startRound('ruler');
     expect(g.controller.getState().rulerLevel).toBe(2);
     const h = adaptiveController({ rulerLevelStart: 1, rulerLevelMax: 5 }, progressWithSteps({ addition: 3, comparison: 2 }));
-    h.controller.startRound('guided');
+    h.controller.startRound('mixed');
     expect(h.controller.getState().rulerLevel).toBe(1);
   });
 
   it('state.rulerLevel stays within the parent limits; with adaptive off it is the starting level (FR-018)', () => {
     const top = adaptiveController({ rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 6 }));
-    top.controller.startRound('guided');
+    top.controller.startRound('mixed');
     expect(top.controller.getState().rulerLevel).toBe(4);
     const bottom = adaptiveController({ rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 0 }));
-    bottom.controller.startRound('guided');
+    bottom.controller.startRound('mixed');
     expect(bottom.controller.getState().rulerLevel).toBe(2);
     const off = adaptiveController({ adaptive: false, rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 6 }));
-    off.controller.startRound('guided');
+    off.controller.startRound('mixed');
     expect(off.controller.getState().rulerLevel).toBe(2);
   });
 });
@@ -2109,7 +2140,7 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
 
   it('starts at 0 and adds 1 for each slow miss in free play', () => {
     const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     expect(c.controller.getState().missStreak).toBe(0);
     for (let i = 1; i <= 3; i++) {
       expect(slowMiss(c).missStreak).toBe(i);
@@ -2121,7 +2152,7 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
     it(`on ${difficulty} the shells come closer and hit exactly at ${LIMITS[difficulty]} misses in a row`, () => {
       for (let seed = 0; seed < 8; seed++) {
         const c = makeController({ enemyDifficulty: difficulty, roundType: 'enemyCount', roundLength: 20 }, seed);
-        c.controller.startRound('freePlay');
+        c.controller.startRound('ruler');
         for (let streak = 1; streak <= LIMITS[difficulty]; streak++) {
           const s = slowMiss(c);
           const shot = s.shot!;
@@ -2149,7 +2180,7 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
 
   it('in no-damage mode the shell lands on the tank at the limit but takes no heart (FR-044)', () => {
     const c = makeController({ enemyDifficulty: 'normal', noDamage: true, roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     for (let i = 0; i < 2; i++) {
       slowMiss(c);
       c.controller.enemyShotAnimationDone();
@@ -2163,7 +2194,7 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
 
   it('a shot that destroys the enemy sets the streak to 0', () => {
     const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     slowMiss(c);
     c.controller.enemyShotAnimationDone();
     slowMiss(c);
@@ -2176,14 +2207,14 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
 
   it('"Neue Landschaft" keeps the streak and a new round starts it at 0', () => {
     const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     slowMiss(c);
     c.controller.enemyShotAnimationDone();
     slowMiss(c);
     c.controller.enemyShotAnimationDone();
     c.controller.newScene();
     expect(c.controller.getState().missStreak).toBe(2);
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     expect(c.controller.getState().missStreak).toBe(0);
   });
 
@@ -2229,7 +2260,7 @@ describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100
     expect(near.controller.getState().missStreak).toBe(1);
 
     const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const decoy = g.controller.getState().decoys[0]!;
     g.advance(3_000);
     g.controller.fireAt(decoy.position);
@@ -2272,7 +2303,7 @@ describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
 
   it('free play: every destroyed enemy brings a new terrain seed and ground; hearts, counter and time continue', () => {
     const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     const seeds = new Set([c.controller.getState().terrainSeed]);
     c.advance(5_000);
     for (let i = 0; i < 4; i++) {
@@ -2301,7 +2332,7 @@ describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
 
   it('the destroyed enemy that brings the new ground also resets the misses in a row', () => {
     const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     fireAtEnemy(c.controller);
     c.controller.shotAnimationDone();
     expect(c.controller.getState().missStreak).toBe(0);
@@ -2309,7 +2340,7 @@ describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
 
   it('the last enemy of an enemyCount round ends it with no new ground', () => {
     const c = makeController({ roundType: 'enemyCount', roundLength: 1 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     const before = c.controller.getState();
     fireAtEnemy(c.controller);
     c.controller.shotAnimationDone();
@@ -2322,7 +2353,7 @@ describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
 describe('bug report B1: the trail of the last shot goes when the ground changes (FR-004)', () => {
   it('free play: the destroyed enemy that brings new hills also removes the trail', () => {
     const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     playTurn(c.controller, fireBetween);
     expect(c.controller.getState().lastPlayerPath).not.toBeNull();
     c.advance(1_000);
@@ -2348,7 +2379,7 @@ describe('bug report B1: the trail of the last shot goes when the ground changes
 
   it('"Neue Landschaft" and a new round remove the trail', () => {
     const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     playTurn(c.controller, fireBetween);
     expect(c.controller.getState().lastPlayerPath).not.toBeNull();
     c.controller.newScene();
@@ -2356,7 +2387,7 @@ describe('bug report B1: the trail of the last shot goes when the ground changes
     c.advance(1_000);
     playTurn(c.controller, fireBetween);
     expect(c.controller.getState().lastPlayerPath).not.toBeNull();
-    c.controller.startRound('freePlay');
+    c.controller.startRound('ruler');
     expect(c.controller.getState().lastPlayerPath).toBeNull();
   });
 });
@@ -2365,7 +2396,7 @@ describe('bug report B2: in comparison turns all option tanks fire a volley (FR-
   /** Plays plain misses in comparison searches and returns every state in which the enemy fires. */
   function volleys(seed: number, difficulty: Settings['enemyDifficulty']): RoundState[] {
     const g = guidedController({ ...COMPARISON_47_74.settings, noDamage: true, enemyDifficulty: difficulty }, seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     const seen = record(g);
     for (let i = 0; i < 6; i++) {
       const s = g.controller.getState();
@@ -2409,7 +2440,7 @@ describe('bug report B2: in comparison turns all option tanks fire a volley (FR-
 
   it('only the enemy shell counts: the decoy shells change neither the hearts nor the ground', () => {
     const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
-    g.controller.startRound('guided');
+    g.controller.startRound('mixed');
     g.advance(1_000);
     g.controller.fireAt(30);
     g.controller.shotAnimationDone();
@@ -2457,5 +2488,96 @@ describe('the solution step stays ready after another miss (T183, US5, FR-031)',
     g.controller.confirm();
     g.controller.shotAnimationDone();
     expect(g.controller.getState().enemiesDestroyed).toBe(1);
+  });
+});
+
+describe('BattleController play modes (amendment 17, T333, FR-122 to FR-124)', () => {
+  function destroyCalmly(g: { controller: BattleController; advance: (ms: number) => number }): void {
+    answerCalmly(g);
+    if (g.controller.getState().phase === 'enemyTurn') g.controller.enemyShotAnimationDone();
+  }
+
+  it("startRound('ruler') gives only readPosition searches in 'challenge' and records each as a positions attempt", () => {
+    const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } });
+    g.controller.startRound('ruler');
+    for (let i = 0; i < 6; i++) {
+      const s = g.controller.getState();
+      expect(s.mode).toBe('ruler');
+      expect(s.phase).toBe('challenge');
+      expect(s.challenge!.kind).toBe('readPosition');
+      expect(s.enemy.position).toBe(s.challenge!.answer);
+      destroyCalmly(g);
+    }
+    const attempts = g.progress.getProgress().attempts;
+    expect(attempts).toHaveLength(6);
+    expect(attempts.every((a) => a.kind === 'readPosition' && a.skills.includes('positions') && a.independent)).toBe(true);
+  });
+
+  it("startRound('math') never gives readPosition or findNumber, also for pointer input, and records attempts", () => {
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 12; seed++) {
+      const g = adaptiveController({ adaptive: false }, emptyProgress(), seed);
+      g.controller.startRound('math');
+      g.controller.selectNumber(50);
+      for (let i = 0; i < 5; i++) {
+        const s = g.controller.getState();
+        expect(s.mode).toBe('math');
+        kinds.add(s.challenge!.kind);
+        destroyCalmly(g);
+      }
+      g.controller.newScene();
+      kinds.add(g.controller.getState().challenge!.kind);
+      expect(g.progress.getProgress().attempts).toHaveLength(5);
+    }
+    expect(kinds.has('readPosition')).toBe(false);
+    expect(kinds.has('findNumber')).toBe(false);
+    expect(kinds.size).toBeGreaterThan(3);
+  });
+
+  it("startRound('mixed') is the guided flow with a challenge from the enabled kinds", () => {
+    const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } });
+    g.controller.startRound('mixed');
+    const s = g.controller.getState();
+    expect(s.mode).toBe('mixed');
+    expect(s.phase).toBe('challenge');
+    expect(s.challenge!.kind).toBe('addition');
+  });
+
+  it('with adaptive on, 3 independent hits in a row raise the next positions search within the same round (FR-037)', () => {
+    const g = adaptiveController();
+    g.controller.startRound('ruler');
+    const seed = g.controller.getState().seed;
+    for (let i = 0; i < 3; i++) {
+      expect(g.controller.getState().challenge!.difficultyStep, `search ${i + 1}`).toBe(0);
+      destroyCalmly(g);
+    }
+    const s = g.controller.getState();
+    expect(s.seed).toBe(seed);
+    expect(s.challenge!.difficultyStep).toBe(1);
+    expect(g.progress.getProgress().skills[skillKey('positions', '0-100')]!.step).toBe(1);
+  });
+
+  it('help works in every mode, and "Nur Rechnen" help step 2 shows the zoomed ten', () => {
+    for (const mode of ['mixed', 'ruler', 'math'] as const) {
+      const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } }, emptyProgress(), 5);
+      g.controller.startRound(mode);
+      g.controller.requestHelp();
+      const first = g.controller.getState();
+      // Before any miss "Nur Rechnen" has no step 1 (no direction yet, no ruler line to highlight).
+      if (mode === 'math') expect(first.help.content).toMatchObject({ step: 2, zoom: { min: expect.any(Number), max: expect.any(Number) } });
+      else expect(first.help.level, mode).toBe(1);
+      g.controller.requestHelp();
+      expect(g.controller.getState().help.level, mode).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('"Neue Landschaft" keeps the mode and starts a new search', () => {
+    const g = adaptiveController({ adaptive: false });
+    g.controller.startRound('ruler');
+    g.controller.newScene();
+    const s = g.controller.getState();
+    expect(s.mode).toBe('ruler');
+    expect(s.phase).toBe('challenge');
+    expect(s.challenge!.kind).toBe('readPosition');
   });
 });

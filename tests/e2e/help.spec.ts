@@ -9,7 +9,7 @@
  * canvas's data-* attributes (D4).
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, GAME_WAIT, recordPhases, test } from './fixtures';
+import { expect, GAME_WAIT, recordPhases, startButton, test } from './fixtures';
 import { GUESS_RESPONSE_MS } from '../../src/core/progress/classify';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -50,7 +50,7 @@ test('three wrong numbers: help escalates to the solution, Enter fires at it, H 
     [SETTINGS_KEY, JSON.stringify(settings)] as const,
   );
   await page.goto('/?seed=21');
-  await page.getByRole('button', { name: m.start.play, exact: true }).click();
+  await startButton(page).click();
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   const answer = Number(await overlay.getAttribute('data-enemy-number'));

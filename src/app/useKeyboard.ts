@@ -6,24 +6,27 @@
 import { useEffect, useRef } from 'react';
 import type { BattleController } from '../core/battle/controller';
 import { keyToAction, type KeyAction, type KeyScreen } from './keyboard';
+import type { PlayMode } from '../core/settings/schema';
 
 export interface KeyboardOptions {
   screen: KeyScreen | null;
   helpLevel?: number;
   /** The parent's garage setting (amendment 11): G on the start screen. */
   garage?: boolean;
+  /** The offered play modes (amendment 17): 1, 2 and 3 on the start screen. */
+  modes?: readonly PlayMode[];
   onAction: (action: KeyAction) => void;
 }
 
-export function useKeyboard({ screen, helpLevel = 0, garage = false, onAction }: KeyboardOptions): void {
-  const latest = useRef({ screen, helpLevel, garage, onAction });
-  latest.current = { screen, helpLevel, garage, onAction };
+export function useKeyboard({ screen, helpLevel = 0, garage = false, modes = [], onAction }: KeyboardOptions): void {
+  const latest = useRef({ screen, helpLevel, garage, modes, onAction });
+  latest.current = { screen, helpLevel, garage, modes, onAction };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const { screen: current, helpLevel: level, garage: garageOn, onAction: handle } = latest.current;
+      const { screen: current, helpLevel: level, garage: garageOn, modes: offered, onAction: handle } = latest.current;
       if (current === null || isTextField(event.target)) return;
-      const action = keyToAction(event, current, { helpLevel: level, garage: garageOn });
+      const action = keyToAction(event, current, { helpLevel: level, garage: garageOn, modes: offered });
       if (action === null) return;
       event.preventDefault();
       handle(action);

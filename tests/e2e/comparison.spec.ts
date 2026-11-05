@@ -7,14 +7,11 @@
  * tanks that look like the enemy, `data-tank-taps` gives each tappable tank's tap point in world units,
  * `data-decoy-bursts` counts burst decoys and `data-help-tanks` names the tank marked by help step 3.
  */
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import type { Page } from '@playwright/test';
 import { COMPARISON_47_74 } from '../../src/core/math/fixtures';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../../src/core/battle/round';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
-import { t } from '../../src/i18n';
-
-const m = t();
 
 /** Starts the AC-06 round and waits until the first search is answerable. */
 async function startFixture(page: Page): Promise<void> {
@@ -25,7 +22,7 @@ async function startFixture(page: Page): Promise<void> {
     [SETTINGS_KEY, JSON.stringify(COMPARISON_47_74.settings)] as const,
   );
   await page.goto(`/?seed=${COMPARISON_47_74.seed}`);
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   const canvas = page.locator('canvas');

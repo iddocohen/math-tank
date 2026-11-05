@@ -6,14 +6,12 @@
  * tests/e2e/devices.spec.ts (T278). Game state comes from the overlay's data-* attributes (D4).
  */
 import type { Page } from '@playwright/test';
-import { expect, GAME_WAIT, test } from './fixtures';
+import { expect, GAME_WAIT, startButton, test } from './fixtures';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
 import { numberToX } from '../../src/core/numberline/mapping';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../../src/core/battle/round';
-import { t } from '../../src/i18n';
 
-const m = t();
 const { min, max } = defaultSettings().range;
 /** The ruler's axis in world units (src/game/NumberLineView.ts). */
 const RULER_Y = 742;
@@ -38,7 +36,7 @@ test('a tap on the ruler and on "Feuer!" fires at the tapped number; no ±1 butt
     [SETTINGS_KEY, JSON.stringify({ ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } })] as const,
   );
   await page.goto('/?seed=5');
-  await page.getByRole('button', { name: m.start.play, exact: true }).tap();
+  await startButton(page).tap();
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-challenge-answerable', 'true', { timeout: 10_000 });

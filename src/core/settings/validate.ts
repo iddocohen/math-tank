@@ -19,6 +19,7 @@ export const SETTINGS_ERROR_KEYS = [
   'rangeMinOutside',
   'rangePresetMismatch',
   'noChallengeTypes',
+  'noPlayMode',
   'rulerLevelOrder',
   'roundLength',
   'roundTypeNoDamage',
@@ -61,8 +62,10 @@ export function validateSettings(s: Settings): SettingsValidation {
     if (fixed.min !== range.min || fixed.max !== range.max) add('rangePresetMismatch', 'range');
   }
 
+  // Amendment 17: at least one play mode; "Gemischt" and "Nur Rechnen" need a challenge type, "Nur Zahlenstrahl" does not.
   const anyType = Object.values(s.challengeTypes).some(Boolean);
-  if (!anyType && !s.freePlay) add('noChallengeTypes', 'challengeTypes');
+  if (!s.playModes.mixed && !s.playModes.ruler && !s.playModes.math) add('noPlayMode', 'playModes');
+  if (!anyType && (s.playModes.mixed || s.playModes.math)) add('noChallengeTypes', 'challengeTypes');
 
   if (s.rulerLevelStart > s.rulerLevelMax) add('rulerLevelOrder', 'rulerLevelStart');
 

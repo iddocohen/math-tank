@@ -5,7 +5,7 @@
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
 import { COMPARISON_KINDS, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
-import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, RulerLevel, Settings, Skill } from '../types';
+import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, PlayMode, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
 import { answerCandidates, NUMBER_LINE_KINDS, numberLineBuilders, type Builder, type ChallengeDraft } from './numberLine';
 import { buildReadPosition, readPositionAnswers } from './readPosition';
@@ -29,8 +29,13 @@ export interface GenerateInput {
   playerPosition: number;
   /** Ruler level of the round; decides where a readPosition enemy may stand (FR-067). */
   rulerLevel: RulerLevel;
-  /** Restricts the kinds, whatever the challenge-type switches say; free play passes ['readPosition']. */
+  /** Restricts the kinds, whatever the challenge-type switches say; see playModeKinds (amendment 17). */
   kindsAllowed?: ChallengeKind[];
+  /**
+   * "Nur Rechnen" (amendment 17, FR-123): the fallbacks never give readPosition or findNumber, which need the ruler;
+   * 'after' and 'before' take their place.
+   */
+  noRulerKinds?: boolean;
   /**
    * Latest input method (amendment 05, FR-076). With 'keyboard', findNumber is skipped, because typing a given
    * number needs no thinking, and the fallback is readPosition. Omitted: no restriction.
@@ -70,6 +75,19 @@ export function enabledKinds(settings: Settings): ChallengeKind[] {
     kinds.push(...COMPARISON_KINDS);
   }
   return kinds;
+}
+
+/** The kinds that need the ruler to be meaningful; "Nur Rechnen" never generates them (amendment 17, FR-123). */
+export const RULER_KINDS: readonly ChallengeKind[] = ['readPosition', 'findNumber'];
+
+/**
+ * The generator input of a play mode (amendment 17): "Nur Zahlenstrahl" only reads the ruler (FR-122), "Nur Rechnen"
+ * uses the enabled kinds without the ruler kinds (FR-123), "Gemischt" adds nothing.
+ */
+export function playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'noRulerKinds'> {
+  if (mode === 'ruler') return { kindsAllowed: ['readPosition'] };
+  if (mode === 'math') return { kindsAllowed: enabledKinds(settings).filter((k) => !RULER_KINDS.includes(k)), noRulerKinds: true };
+  return {};
 }
 
 /**
@@ -158,8 +176,16 @@ export function generateChallenge(input: GenerateInput): Challenge {
     kinds = kinds.filter((k) => k !== kind);
   }
 
+  // "Nur Rechnen": "after" or "before" works for almost every answer and needs no ruler (amendment 17).
+  if (input.noRulerKinds) {
+    for (const kind of ['after', 'before'] as const) {
+      const challenge = tryKind(kind, answers, input, rng, finish);
+      if (challenge) return challenge;
+    }
+  }
+
   // Keyboard input: "read the ruler" instead of "find N" (FR-076).
-  if (keyboard) {
+  if (keyboard && !input.noRulerKinds) {
     const challenge = tryKind('readPosition', answers, input, rng, finish);
     if (challenge) return challenge;
   }

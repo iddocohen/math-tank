@@ -150,6 +150,24 @@ describe('keyToAction: no key starts a new scene (amendment 03, FR-070)', () => 
   });
 });
 
+describe('keyToAction: play modes on the start screen (amendment 17, FR-062, FR-121)', () => {
+  const all = { modes: ['mixed', 'ruler', 'math'] as const };
+  it('1, 2 and 3 start "Gemischt", "Nur Zahlenstrahl" and "Nur Rechnen" when offered', () => {
+    expect(keyToAction(key('1'), 'start', all)).toEqual({ type: 'start', mode: 'mixed' });
+    expect(keyToAction(key('2'), 'start', all)).toEqual({ type: 'start', mode: 'ruler' });
+    expect(keyToAction(key('3'), 'start', all)).toEqual({ type: 'start', mode: 'math' });
+    expect(keyToAction(key('1', { code: 'Numpad1' }), 'start', all)).toEqual({ type: 'start', mode: 'mixed' });
+  });
+
+  it('a key for a mode that is not offered, other digits and repeated keys do nothing', () => {
+    expect(keyToAction(key('1'), 'start', { modes: ['ruler', 'math'] })).toBeNull();
+    expect(keyToAction(key('2'), 'start')).toBeNull();
+    for (const k of ['0', '4', '9']) expect(keyToAction(key(k), 'start', all)).toBeNull();
+    expect(keyToAction(key('2', { repeat: true }), 'start', all)).toBeNull();
+    expect(keyToAction(key('2', { ctrlKey: true }), 'start', all)).toBeNull();
+  });
+});
+
 describe('keyToAction: the tank garage (amendment 11, FR-062, FR-092)', () => {
   it('G and g on the start screen open the garage only when the garage is on', () => {
     expect(keyToAction(key('g'), 'start', { garage: true })).toEqual({ type: 'garage' });

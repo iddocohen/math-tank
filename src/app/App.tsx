@@ -14,9 +14,12 @@
  * the personal best for the round's range, ruler starting level and round type, and the end screen shows it. While
  * the browser tab is hidden the battle is paused, so the time does not run; it resumes only what it paused.
  *
- * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). "Spielen", Enter and Space
- * start guided mode; "Freies Spiel" (only with the parent's free-play setting) starts free play, and so do Enter and
- * Space with `?mode=free` (T070). "Nochmal" and Enter on the end screen start a new round in the same mode.
+ * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). Amendment 17 (FR-121): the
+ * start screen offers the play modes the parent chose; a mode button or the keys 1, 2 and 3 start that mode, Enter and
+ * Space the first offered one, or the offered mode of `?mode=mixed|ruler|math` (T070). "Nochmal" and Enter on the end
+ * screen start a new round in the same mode. The personal best is kept per play mode too. "Nur Zahlenstrahl" is not
+ * read aloud (it has no question), and "Nur Rechnen" shows the number pad unless "Zahlenfeld" is "Nie", because there is
+ * no ruler to tap.
  *
  * Amendment 11 (FR-089 to FR-096): every increase of `enemiesDestroyed` (enemies only, never decoys) adds stars at
  * once, with the garage on or off. The end screen names the items unlocked since the round started. The garage screen
@@ -58,7 +61,8 @@ import { RoundEnd, type RoundRecord } from './RoundEnd';
 import { recordKey } from '../core/records/records';
 import { SettingsPage } from './SettingsPage';
 import { ProgressPage } from './ProgressPage';
-import { keyStartMode, StartScreen, type StartMode } from './StartScreen';
+import { keyStartMode, offeredModes, StartScreen } from './StartScreen';
+import type { PlayMode } from '../core/settings/schema';
 import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
@@ -118,7 +122,9 @@ export function App() {
   const roundStartStars = useRef(garage.stars);
   const gameParent = useRef<HTMLDivElement>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
-  const { layout, numberPad } = useScreen(persistence.settings().numberPad);
+  // "Nur Rechnen" has no ruler to tap, so "Automatisch" shows the number pad on every screen there (amendment 17).
+  const padSetting = persistence.settings().numberPad;
+  const { layout, numberPad } = useScreen(screen === 'battle' && state.mode === 'math' && padSetting === 'auto' ? 'always' : padSetting);
   // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
   const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
 
@@ -143,7 +149,7 @@ export function App() {
   useEffect(() => {
     if (roundOverSeed === null) return;
     const s = controller.getState();
-    const record = persistence.submitResult(recordKey(controller.getRoundSettings()), { enemies: s.enemiesDestroyed, ms: s.elapsedMs, at: Date.now() });
+    const record = persistence.submitResult(recordKey(controller.getRoundSettings(), s.mode), { enemies: s.enemiesDestroyed, ms: s.elapsedMs, at: Date.now() });
     setRoundRecord({ seed: roundOverSeed, record });
   }, [roundOverSeed, controller, persistence]);
 
@@ -215,7 +221,8 @@ export function App() {
   }, [updateAllowed]);
 
   // Spoken challenges (FR-055): each new challenge is read aloud while "Vorlesen" is on and a German voice exists.
-  const speech = persistence.settings().sound.speech;
+  // "Nur Zahlenstrahl" shows no question, so nothing is read aloud (amendment 17, FR-122).
+  const speech = persistence.settings().sound.speech && state.mode !== 'ruler';
   const challenge = state.challenge;
   const speakChallenge = useCallback(() => {
     const c = controller.getState().challenge;
@@ -240,7 +247,7 @@ export function App() {
     controller.startRound(controller.getState().mode);
   }, [controller, persistence]);
   const play = useCallback(
-    (mode: StartMode) => {
+    (mode: PlayMode) => {
       // Tablet browsers play sound and speak only after a user tap: this tap (or Enter) unlocks both (FR-055).
       void sfx.unlock();
       if (persistence.settings().sound.speech) speaker.prime();
@@ -281,7 +288,7 @@ export function App() {
   const keyScreen = parent === 'closed' && !rotate && transfer === null ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
-      if (action.type === 'start') play(keyStartMode(window.location.search, persistence.settings().freePlay));
+      if (action.type === 'start') play(action.mode ?? keyStartMode(window.location.search, offeredModes(persistence.settings().playModes)));
       else if (action.type === 'garage') setScreen('garage');
       else if (action.type === 'newRound') startRound();
       else applyBattleAction(controller, action);
@@ -289,7 +296,8 @@ export function App() {
     [controller, persistence, play, startRound],
   );
   const garageOn = persistence.settings().garage;
-  useKeyboard({ screen: keyScreen, helpLevel: state.help.level, garage: garageOn, onAction });
+  const modes = offeredModes(persistence.settings().playModes);
+  useKeyboard({ screen: keyScreen, helpLevel: state.help.level, garage: garageOn, modes, onAction });
 
   // Focus the root on load and on every screen change (start, battle, round end).
   const root = useRef<HTMLDivElement>(null);
@@ -311,7 +319,7 @@ export function App() {
       {screen === 'start' ? (
         <StartScreen
           onPlay={play}
-          freePlay={persistence.settings().freePlay}
+          modes={modes}
           gear={screenGear}
           garage={garageOn ? garage : null}
           onGarage={() => setScreen('garage')}

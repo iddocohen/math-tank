@@ -19,7 +19,8 @@ export function parseSettings(raw: unknown): Settings | null {
  * `exactHit` added, default false). Version 3 becomes version 4 (amendment 06: `exactHit` dropped, `roundType`,
  * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Version 4 becomes version 5
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
- * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
+ * becomes `playModes`). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -38,6 +39,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV5,
   migrateSettingsToV6,
   migrateSettingsToV7,
+  migrateSettingsToV8,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -139,6 +141,18 @@ function migrateSettingsToV6(raw: Record<string, unknown>): Record<string, unkno
 function migrateSettingsToV7(raw: Record<string, unknown>): Record<string, unknown> {
   const sound = isRecord(raw.sound) ? { ...raw.sound, speech: false } : raw.sound;
   return { ...raw, sound, version: 7 };
+}
+
+/**
+ * Version 7 to 8 (amendment 17): `freePlay` becomes `playModes`. A parent who offered only free play (free play on and
+ * every challenge type off) gets only "Nur Zahlenstrahl"; all other settings offer all three modes, the new default.
+ */
+function migrateSettingsToV8(raw: Record<string, unknown>): Record<string, unknown> {
+  const { freePlay, ...rest } = raw;
+  const types = isRecord(raw.challengeTypes) ? Object.values(raw.challengeTypes) : [];
+  const onlyFreePlay = freePlay === true && types.length > 0 && !types.some((v) => v === true);
+  const playModes = onlyFreePlay ? { mixed: false, ruler: true, math: false } : { mixed: true, ruler: true, math: true };
+  return { ...rest, playModes, version: 8 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

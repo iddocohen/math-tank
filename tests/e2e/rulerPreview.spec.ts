@@ -6,7 +6,7 @@
  * the settings page. A second case checks that the game ruler at 0 to 100, level 1, labels every number.
  */
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, startButton, test } from './fixtures';
 import { ticksFor } from '../../src/core/numberline/ticks';
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { SETTINGS_KEY } from '../../src/core/storage/storage';
@@ -95,14 +95,14 @@ test('both ruler previews change with the levels and the range, and fill the pag
 });
 
 test('the game ruler at 0 to 100, level 1, labels the numbers in two rows, none crowding a large label (T217, T231, FR-017)', async ({ page }) => {
-  const settings = { ...defaultSettings(), freePlay: true };
+  const settings = { ...defaultSettings() };
   expect(settings.range).toMatchObject({ min: 0, max: 100 });
   expect(settings.rulerLevelStart).toBe(1);
   await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [SETTINGS_KEY, JSON.stringify(settings)] as const);
-  await page.goto('/?seed=4&mode=free');
-  await expect(page.getByRole('button', { name: m.start.play, exact: true })).toBeVisible();
+  await page.goto('/?seed=4&mode=ruler');
+  await expect(startButton(page)).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase', 'aiming');
+  await expect(page.locator('[data-phase]')).toHaveAttribute('data-phase', 'challenge');
   await expect(page.locator('canvas')).toHaveAttribute('data-ruler-labels', LEVEL1_LABELS.join(','));
   await page.screenshot({ path: test.info().outputPath('game-ruler-0-100-level-1.png') });
 });
