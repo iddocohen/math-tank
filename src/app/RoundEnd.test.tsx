@@ -90,30 +90,34 @@ describe('RoundEnd (amendment 06)', () => {
   });
 });
 
-describe('RoundEnd unlock line and star total (amendment 11, FR-094, FR-095)', () => {
-  it('names one new item in one line and shows the star total', () => {
-    show({ garage: { stars: 10, unlocked: [itemById('rocket')!] } });
-    expect(screen.getByTestId('unlocked').textContent).toBe('Neu freigeschaltet: Raketen-Flagge!');
-    expect(screen.getByTestId('star-total').textContent).toContain('10');
+describe('RoundEnd stars of the round, balance and one affordable item (amendments 11 and 19, FR-094, FR-095)', () => {
+  it('shows the stars of the round and the balance', () => {
+    show({ garage: { earned: 3, balance: 17, affordable: null } });
+    expect(screen.getByTestId('round-stars').textContent).toBe('+3 Sterne');
+    expect(screen.getByTestId('star-total').textContent).toContain('17');
+    expect(screen.queryByTestId('affordable')).toBeNull();
   });
 
-  it('names two new items in the same line', () => {
-    show({ garage: { stars: 21, unlocked: [itemById('rocket')!, itemById('sky')!] } });
-    expect(screen.getAllByTestId('unlocked')).toHaveLength(1);
-    expect(screen.getByTestId('unlocked').textContent).toBe(`Neu freigeschaltet: ${m.garage.items.rocket}, ${m.garage.items.sky}!`);
+  it('says "+1 Stern" for one star and "+0 Sterne" for none', () => {
+    show({ garage: { earned: 1, balance: 1, affordable: null } });
+    expect(screen.getByTestId('round-stars').textContent).toBe('+1 Stern');
+    cleanup();
+    show({ garage: { earned: 0, balance: 5, affordable: null } });
+    expect(screen.getByTestId('round-stars').textContent).toBe('+0 Sterne');
   });
 
-  it('shows only the star total when nothing was unlocked, and no line about missing stars', () => {
-    const { root } = show({ garage: { stars: 14, unlocked: [] } });
-    expect(screen.queryByTestId('unlocked')).toBeNull();
-    expect(screen.getByTestId('star-total').textContent).toContain('14');
+  it('names one item the balance now reaches: "Genug Sterne für: Krone"', () => {
+    const { root } = show({ garage: { earned: 4, balance: 41, affordable: itemById('crown')! } });
+    expect(screen.getAllByTestId('affordable')).toHaveLength(1);
+    expect(screen.getByTestId('affordable').textContent).toBe('Genug Sterne für: Krone');
     expect(root.textContent).not.toMatch(/noch \d+ Stern/i);
+    expect(root.textContent).not.toMatch(/freigeschaltet/i);
   });
 
-  it('shows neither without garage data (garage off)', () => {
+  it('shows no star lines without garage data (garage off)', () => {
     show({ garage: null });
-    expect(screen.queryByTestId('unlocked')).toBeNull();
+    expect(screen.queryByTestId('round-stars')).toBeNull();
+    expect(screen.queryByTestId('affordable')).toBeNull();
     expect(screen.queryByTestId('star-total')).toBeNull();
   });
 });
-

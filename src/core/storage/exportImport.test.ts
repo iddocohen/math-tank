@@ -22,7 +22,7 @@ function sampleSettings(): Settings {
 }
 
 function sampleGarage(): Garage {
-  return { version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
+  return { version: 2, balance: 7, totalEarned: 87, owned: ['sky', 'rocket', 'sparkles', 'crown'], look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
 }
 
 function sampleRecords(): Records {
@@ -96,7 +96,7 @@ describe('exportData (FR-048a)', () => {
 });
 
 describe('importData (FR-048, FR-048a)', () => {
-  it('returns the same settings, progress, records and garage (stars and look) that were exported (amendment 11)', () => {
+  it('returns the same settings, progress, records and garage (balance, owned items, look, total ever earned) that were exported (amendments 11 and 19)', () => {
     const r = importData(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage()));
     expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords(), garage: sampleGarage() });
   });
@@ -107,9 +107,24 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(r.ok && r.settings.pointAfterFullHelp).toBe(false);
   });
 
+  it('keeps the aiming cross (amendment 19, FR-135)', () => {
+    const never: Settings = { ...sampleSettings(), aimCross: { mode: 'upToLevel', level: 4 } };
+    const r = importData(exportData(never, sampleProgress(), sampleRecords(), sampleGarage()));
+    expect(r.ok && r.settings.aimCross).toEqual({ mode: 'upToLevel', level: 4 });
+  });
+
+  it('a version 9 settings file (exported before amendment 19) imports with the aiming cross "Immer"', () => {
+    const { aimCross: _cross, ...v9 } = { ...sampleSettings(), version: 9 };
+    void _cross;
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const r = importData(JSON.stringify({ ...file, settings: v9 }));
+    expect(r.ok && r.settings).toEqual(sampleSettings());
+  });
+
   it('a version 8 settings file (exported before amendment 18) imports with a point after the full help', () => {
-    const { pointAfterFullHelp: _point, ...v8 } = { ...sampleSettings(), version: 8 };
+    const { pointAfterFullHelp: _point, aimCross: _cross, ...v8 } = { ...sampleSettings(), version: 8 };
     void _point;
+    void _cross;
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
     const r = importData(JSON.stringify({ ...file, settings: v8 }));
     expect(r.ok && r.settings).toEqual(sampleSettings());
@@ -130,13 +145,20 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords(), garage: null });
   });
 
-  it('a garage without a version is migrated, and a locked look part becomes the standard item', () => {
+  it('a garage without a version is migrated to version 2, and a look part not owned becomes the basic item', () => {
     const r = importData(exportedFile((f) => (f.garage = { stars: 12, look: { color: 'navyStripes', flag: 'rocket', trail: 'plain', hat: 'none' } })));
-    expect(r.ok && r.garage).toEqual({ version: 1, stars: 12, look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } });
+    expect(r.ok && r.garage).toEqual({ version: 2, balance: 2, totalEarned: 12, owned: ['rocket'], look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } });
+  });
+
+  it('a version 1 garage (exported before amendment 19) imports migrated: unlocked items owned, the rest as balance (FR-133)', () => {
+    const look = { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } as const;
+    const r = importData(exportedFile((f) => (f.garage = { version: 1, stars: 47, look })));
+    expect(r.ok && r.garage).toEqual({ version: 2, balance: 0, totalEarned: 47, owned: ['sky', 'rocket', 'sparkles', 'crown'], look });
   });
 
   it.each([
-    ['negative stars', (f: Record<string, unknown>) => (f.garage = { ...sampleGarage(), stars: -1 })],
+    ['a negative balance', (f: Record<string, unknown>) => (f.garage = { ...sampleGarage(), balance: -1 })],
+    ['negative version 1 stars', (f: Record<string, unknown>) => (f.garage = { version: 1, stars: -1, look: sampleGarage().look })],
     ['an unknown garage version', (f: Record<string, unknown>) => (f.garage = { ...sampleGarage(), version: 9 })],
     ['a garage that is not an object', (f: Record<string, unknown>) => (f.garage = 'lots of stars')],
   ])('rejects an invalid garage: %s', (_name, change) => {
@@ -204,7 +226,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(9);
+    expect(r.settings.version).toBe(10);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

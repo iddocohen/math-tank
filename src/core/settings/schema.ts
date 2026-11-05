@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 8 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
- * amendment 17; version 9 for amendment 18).
+ * Structural schema for persisted settings, version 10 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -17,7 +17,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(9),
+  version: z.literal(10),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -78,10 +78,19 @@ export const settingsSchema = z.object({
   garage: z.boolean(),
   /** "Zahlenfeld" (amendment 12, FR-102): the on-screen number pad in battle, automatic, always or never. */
   numberPad: z.enum(['auto', 'always', 'never']),
+  /**
+   * "Zielkreuz" (amendment 19, FR-134): the yellow aiming cross and its guide line. `'always'` shows it, `'never'`
+   * hides it, `'upToLevel'` shows it while the round's ruler level is at most `level` (src/core/battle/aimCross.ts).
+   */
+  aimCross: z.object({
+    mode: z.enum(['always', 'upToLevel', 'never']),
+    level: rulerLevelSchema,
+  }),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type RoundType = Settings['roundType'];
+export type AimCross = Settings['aimCross'];
 /** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
 export type PlayMode = keyof Settings['playModes'];
 /** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */

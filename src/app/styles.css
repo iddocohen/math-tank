@@ -1027,6 +1027,82 @@ input:focus-visible {
   color: #ffd54a;
 }
 
+/* Amendment 19 (FR-130, FR-131): the star shop. Price, "Zurückgeben" and the buy and return question. */
+.garage-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.garage-price {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+.garage-item[data-locked='true'] .garage-price {
+  color: #c4cad6;
+}
+
+/* FR-053: at least 48 by 48 CSS pixels. */
+.garage-return {
+  min-width: 112px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 2px solid #c4cad6;
+  border-radius: 12px;
+  font-size: 1.125rem;
+  color: #ffffff;
+  background: transparent;
+}
+
+.garage-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(10 16 32 / 70%);
+}
+
+.garage-dialog {
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 18px;
+  text-align: center;
+  background: #24304d;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 50%);
+}
+
+.garage-dialog-text {
+  margin: 0 0 20px;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.garage-dialog-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Large "Ja" and "Nein" (FR-053, FR-130). */
+.dialog-button {
+  min-width: 120px;
+  min-height: 64px;
+  font-size: 1.5rem;
+}
+
+.round-stars {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+
 
 /*
  * Amendment 12 (FR-102 to FR-105, contracts/ui-flows.md "Screen layouts and the number pad"): the on-screen number pad

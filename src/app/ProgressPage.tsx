@@ -8,7 +8,8 @@
  * Amendment 17 (FR-040, FR-086): the column "Bis zur nächsten Stufe" shows how many more correct answers in a row raise
  * each skill, and the bests name the play mode.
  * Amendment 11 (FR-096): the star total of the tank garage and a separate "Sterne zurücksetzen" with its own
- * confirmation, which sets 0 stars, locks every item and chooses the standard look.
+ * confirmation, which sets the balance to 0, keeps only the basic items and equips the basic look (amendment 19: the
+ * balance and the total stars ever earned show, and the total stays after the reset, FR-132).
  */
 import { useMemo, useState } from 'react';
 import { formatTime } from '../core/records/records';
@@ -33,7 +34,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
   const P = m.progressPage;
   const [progress, setProgress] = useState(() => persistence.progress());
   const [done, setDone] = useState(false);
-  const [stars, setStars] = useState(() => persistence.garage().stars);
+  const [garage, setGarage] = useState(() => persistence.garage());
   const [starsDone, setStarsDone] = useState(false);
   const records = persistence.records();
   const settings = persistence.settings();
@@ -53,7 +54,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
 
   const resetStars = () => {
     persistence.resetStars();
-    setStars(persistence.garage().stars);
+    setGarage(persistence.garage());
     setStarsDone(true);
   };
 
@@ -195,7 +196,8 @@ export function ProgressPage({ persistence, onClose }: Props) {
       </section>
 
       <section className="settings-group">
-        <p data-testid="progress-stars">{P.stars(stars)}</p>
+        <p data-testid="progress-stars">{P.stars(garage.balance)}</p>
+        <p data-testid="progress-stars-total">{P.starsTotal(garage.totalEarned)}</p>
         <ConfirmReset label={P.starsReset} question={P.starsResetConfirm} yes={P.starsResetYes} no={P.resetNo} onAsk={() => setStarsDone(false)} onConfirm={resetStars} />
       </section>
     </div>

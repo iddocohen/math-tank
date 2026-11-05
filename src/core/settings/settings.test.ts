@@ -21,7 +21,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 9,
+      version: 10,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -47,6 +47,7 @@ describe('defaults', () => {
       pointAfterFullHelp: true,
       garage: true,
       numberPad: 'auto',
+      aimCross: { mode: 'always', level: 2 },
     });
   });
 
@@ -316,6 +317,18 @@ describe('whole numbers and one parse function (review T4)', () => {
     expect(settingsSchema.safeParse(without).success).toBe(false);
   });
 
+  it('the schema needs aimCross with a known mode and a level from 1 to 5 (amendment 19, FR-134)', () => {
+    for (const mode of ['always', 'upToLevel', 'never'] as const) {
+      for (const level of [1, 2, 3, 4, 5] as const) expect(settingsSchema.safeParse({ ...defaultSettings(), aimCross: { mode, level } }).success).toBe(true);
+    }
+    for (const aimCross of [{ mode: 'sometimes', level: 2 }, { mode: 'upToLevel', level: 0 }, { mode: 'upToLevel', level: 6 }, { mode: 'never' }, 'always']) {
+      expect(settingsSchema.safeParse({ ...defaultSettings(), aimCross }).success, JSON.stringify(aimCross)).toBe(false);
+    }
+    const { aimCross: _drop, ...without } = defaultSettings();
+    void _drop;
+    expect(settingsSchema.safeParse(without).success).toBe(false);
+  });
+
   it('the schema accepts only whole numbers for roundLength and timeLimitSeconds', () => {
     expect(settingsSchema.safeParse({ ...defaultSettings(), roundLength: 5.5 }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...defaultSettings(), timeLimitSeconds: 30.5 }).success).toBe(false);
@@ -326,7 +339,7 @@ describe('whole numbers and one parse function (review T4)', () => {
     const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
     void _modes;
-    expect(parseSettings(v5)).toMatchObject({ version: 9, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
+    expect(parseSettings(v5)).toMatchObject({ version: 10, aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });

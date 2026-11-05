@@ -143,7 +143,7 @@ describe('export and import through persistence (FR-048a)', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
     const records = { version: 1 as const, best: { 'k': { enemies: 2, ms: 1000, at: 1 } } };
-    const garage = { version: 1 as const, stars: 21, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+    const garage = { version: 2 as const, balance: 1, totalEarned: 21, owned: ['sky' as const, 'rocket' as const], look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
     const r = p.importText(exportData(changedSettings(), emptyProgress(), records, garage));
     expect(r.ok).toBe(true);
     expect(p.settings()).toEqual(changedSettings());
@@ -187,59 +187,97 @@ describe('personal bests through persistence (amendment 06, FR-086)', () => {
   });
 });
 
-describe('stars and the chosen look through persistence (amendment 11, FR-089, FR-096, FR-097)', () => {
+describe('stars and the star shop through persistence (amendments 11 and 19, FR-089, FR-096, FR-097, FR-130, FR-131)', () => {
   it('loads the stored garage', () => {
-    const stored = { version: 1, stars: 33, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'none' } };
+    const stored = { version: 2, balance: 3, totalEarned: 33, owned: ['rocket'], look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } };
     const p = createPersistence({ kv: memoryKeyValue({ [GARAGE_KEY]: JSON.stringify(stored) }), storage: undefined });
     expect(p.garage()).toEqual(stored);
   });
 
-  it('addStars saves at once and returns the unlocked items', () => {
-    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ version: 1, stars: 9, look: emptyGarage().look }) });
+  it('loads a stored version 1 garage migrated (FR-133)', () => {
+    const p = createPersistence({ kv: memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ version: 1, stars: 12, look: emptyGarage().look }) }), storage: undefined });
+    expect(p.garage()).toEqual({ ...emptyGarage(), balance: 2, totalEarned: 12, owned: ['rocket'] });
+  });
+
+  it('addStars saves the balance and the total ever earned at once', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ ...emptyGarage(), balance: 9, totalEarned: 9 }) });
     const p = createPersistence({ kv, storage: undefined });
-    expect(p.addStars(1).map((i) => i.id)).toEqual(['rocket']);
-    expect(p.garage().stars).toBe(10);
-    expect(createPersistence({ kv, storage: undefined }).garage().stars).toBe(10);
-    expect(p.addStars(2)).toEqual([]);
+    p.addStars(1);
+    expect(p.garage()).toMatchObject({ balance: 10, totalEarned: 10 });
+    expect(createPersistence({ kv, storage: undefined }).garage()).toMatchObject({ balance: 10, totalEarned: 10 });
+  });
+
+  it('buy saves and returns true only when the balance reaches the price', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    p.addStars(14);
+    expect(p.buy('teal')).toBe(false);
+    expect(p.garage().balance).toBe(14);
+    expect(p.buy('rocket')).toBe(true);
+    const again = createPersistence({ kv, storage: undefined }).garage();
+    expect(again).toEqual({ version: 2, balance: 4, totalEarned: 14, owned: ['rocket'], look: { ...emptyGarage().look, flag: 'rocket' } });
+    expect(p.buy('rocket')).toBe(false);
+  });
+
+  it('returnItem saves the refund and the basic look', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    p.addStars(40);
+    p.buy('crown');
+    expect(p.returnItem('crown')).toBe(true);
+    expect(createPersistence({ kv, storage: undefined }).garage()).toEqual({ ...emptyGarage(), balance: 40, totalEarned: 40 });
+    expect(p.returnItem('crown')).toBe(false);
   });
 
   it('a progress reset keeps the stars and the look', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
     p.addStars(12);
-    p.equip('rocket');
+    p.buy('rocket');
     p.saveProgress(emptyProgress());
     const again = createPersistence({ kv, storage: undefined });
-    expect(again.garage()).toEqual({ version: 1, stars: 12, look: { ...emptyGarage().look, flag: 'rocket' } });
+    expect(again.garage()).toEqual({ version: 2, balance: 2, totalEarned: 12, owned: ['rocket'], look: { ...emptyGarage().look, flag: 'rocket' } });
   });
 
-  it('equip saves the look and ignores a locked item', () => {
+  it('equip saves the look and ignores an item not owned', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
     p.addStars(10);
     p.equip('sky');
     expect(p.garage().look.color).toBe('blue');
+    p.buy('rocket');
+    p.equip('star');
+    expect(createPersistence({ kv, storage: undefined }).garage().look.flag).toBe('star');
     p.equip('rocket');
     expect(createPersistence({ kv, storage: undefined }).garage().look.flag).toBe('rocket');
   });
 
-  it('resetStars saves 0 stars and the standard look', () => {
+  it('resetStars saves balance 0, no owned items and the basic look, and keeps the total ever earned', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
     p.addStars(25);
-    p.equip('sky');
+    p.buy('sky');
     p.resetStars();
-    expect(p.garage()).toEqual(emptyGarage());
-    expect(createPersistence({ kv, storage: undefined }).garage()).toEqual(emptyGarage());
+    expect(p.garage()).toEqual({ ...emptyGarage(), totalEarned: 25 });
+    expect(createPersistence({ kv, storage: undefined }).garage()).toEqual({ ...emptyGarage(), totalEarned: 25 });
   });
 
-  it('importing a file without garage keeps the stars of this browser', () => {
+  it('exportText and importText keep the whole garage', () => {
+    const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
+    p.addStars(30);
+    p.buy('dragon');
+    const other = createPersistence({ kv: memoryKeyValue(), storage: undefined });
+    expect(other.importText(p.exportText()).ok).toBe(true);
+    expect(other.garage()).toEqual(p.garage());
+  });
+
+  it('importing a file without garage keeps the garage of this browser', () => {
     const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
     p.addStars(14);
     const file = JSON.parse(exportData(changedSettings(), emptyProgress(), emptyRecords(), emptyGarage())) as Record<string, unknown>;
     delete file.garage;
     expect(p.importText(JSON.stringify(file)).ok).toBe(true);
-    expect(p.garage().stars).toBe(14);
+    expect(p.garage().balance).toBe(14);
     expect(p.settings()).toEqual(changedSettings());
   });
 
@@ -266,7 +304,7 @@ describe('saveData and applyTransfer (amendment 15, FR-119)', () => {
     const p = createPersistence({ kv, storage: undefined });
     const progress = { ...emptyProgress(), skills: { 'positions|0-20': { step: 1, recent: [], masteryWindow: ['independent' as const], guesses: 0, attempts: 4, independentCorrect: 3, assisted: 1 } } };
     const records = { version: 1 as const, best: { '0-20|3|untilHearts': { enemies: 6, ms: 90_000, at: 5 } } };
-    const garage = { version: 1 as const, stars: 23, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+    const garage = { version: 2 as const, balance: 3, totalEarned: 23, owned: ['sky' as const, 'rocket' as const], look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
     expect(p.applyTransfer({ settings: changedSettings(), progress, records, garage })).toEqual({ ok: true });
     for (const loaded of [p, createPersistence({ kv, storage: undefined })]) {
       expect(loaded.settings()).toEqual(changedSettings());
@@ -351,14 +389,14 @@ describe('data that could not be loaded is never overwritten (review M2, M3, P1)
 
   it('never saves over data from a newer version of the game, and tells the parent which data it is', () => {
     const newer = JSON.stringify({ version: 2, attempts: [], skills: {}, sessions: [], extra: 1 });
-    const kv = memoryKeyValue({ [PROGRESS_KEY]: newer, [GARAGE_KEY]: JSON.stringify({ version: 5, stars: 40 }) });
+    const kv = memoryKeyValue({ [PROGRESS_KEY]: newer, [GARAGE_KEY]: JSON.stringify({ version: 5, balance: 40 }) });
     const p = createPersistence({ kv, storage: undefined });
     expect(p.status().resetReason).toBe('newer');
     expect(p.status().newerData).toEqual(['progress', 'garage']);
     expect(p.saveProgress(emptyProgress())).toEqual({ ok: false });
     p.addStars(3);
     expect(kv.get(PROGRESS_KEY)).toBe(newer);
-    expect(JSON.parse(kv.get(GARAGE_KEY)!)).toEqual({ version: 5, stars: 40 });
+    expect(JSON.parse(kv.get(GARAGE_KEY)!)).toEqual({ version: 5, balance: 40 });
     // The other data still saves.
     expect(p.saveSettings(changedSettings())).toEqual({ ok: true });
   });
@@ -371,7 +409,7 @@ describe('data that could not be loaded is never overwritten (review M2, M3, P1)
 });
 
 describe('import and transfer are all or nothing (review M4, P2)', () => {
-  const garage = { version: 1 as const, stars: 21, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+  const garage = { version: 2 as const, balance: 1, totalEarned: 21, owned: ['sky' as const, 'rocket' as const], look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
   const records = { version: 1 as const, best: { k: { enemies: 2, ms: 1000, at: 1 } } };
 
   function seeded() {
@@ -392,7 +430,7 @@ describe('import and transfer are all or nothing (review M4, P2)', () => {
     expect(snapshot()).toEqual(stored);
     expect(inner.get(PROGRESS_KEY)).toBeNull();
     expect(p.settings()).toEqual(defaultSettings());
-    expect(p.garage().stars).toBe(4);
+    expect(p.garage().balance).toBe(4);
     expect(p.status().saveFailed).toBe(true);
   });
 
@@ -404,7 +442,7 @@ describe('import and transfer are all or nothing (review M4, P2)', () => {
     expect(snapshot()).toEqual(stored);
     expect(p.settings()).toEqual(defaultSettings());
     expect(p.records()).toEqual(emptyRecords());
-    expect(p.garage().stars).toBe(4);
+    expect(p.garage().balance).toBe(4);
   });
 
   it('an import does not write over data from a newer version and changes nothing', () => {

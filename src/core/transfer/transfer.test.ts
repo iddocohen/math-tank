@@ -35,7 +35,7 @@ function settings(): Settings {
 }
 
 function garage(): Garage {
-  return { version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
+  return { version: 2, balance: 7, totalEarned: 87, owned: ['sky', 'rocket', 'sparkles', 'crown'], look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
 }
 
 function records(): Records {
@@ -122,7 +122,7 @@ describe('toTransfer (FR-116)', () => {
     const t = toTransfer(data());
     expect(t.v).toBe(1);
     expect(t.settings).toEqual(settings());
-    expect(t.garage).toEqual({ stars: 47, look: garage().look });
+    expect(t.garage).toEqual(garage());
     expect(t.records).toEqual(records().best);
     expect(t.skills['positions|550-780']).toEqual([2, 40, 30, 8, 1, 'iiauiciiai']);
     expect(t.sessions).toHaveLength(3);
@@ -152,7 +152,8 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
       expect(dec.data.progress.sessions).toEqual(progress().sessions);
       const expectedSkills = Object.fromEntries(Object.entries(progress().skills).map(([k, sp]) => [k, { ...sp, recent: [] }]));
       expect(dec.data.progress.skills).toEqual(expectedSkills);
-      expect(dec.summary).toEqual({ stars: 47, record: 9, min: 550, max: 780 });
+      // The dialog names the balance (amendment 19).
+      expect(dec.summary).toEqual({ stars: 7, record: 9, min: 550, max: 780 });
     });
   }
 
@@ -166,6 +167,24 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     const on = await encodeTransfer(data(), PAGE, { codec: null });
     const onJson = new TextDecoder().decode(fromB64url(codeOf(on.link).slice(3)));
     expect('pointAfterFullHelp' in (JSON.parse(onJson) as [Record<string, unknown>])[0]).toBe(false);
+  });
+
+  it('writes the garage as payload 2 with balance, total ever earned, owned items and look (amendment 19, FR-116)', async () => {
+    const plain = await encodeTransfer(data(), PAGE, { codec: null });
+    const json = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)))) as unknown[];
+    expect(json[1]).toEqual([2, 7, 87, ['sky', 'rocket', 'sparkles', 'crown'], 'sky', 'rocket', 'sparkles', 'crown']);
+  });
+
+  it('carries the aiming cross "Nie", and leaves the field out for the default (amendment 19, FR-135)', async () => {
+    const never: ReturnType<typeof data> = { ...data(), settings: { ...settings(), aimCross: { mode: 'never', level: 2 } } };
+    const plain = await encodeTransfer(never, PAGE, { codec: null });
+    const json = new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)));
+    expect((JSON.parse(json) as [Record<string, unknown>])[0].aimCross).toEqual({ mode: 'never' });
+    const dec = await decodeTransfer(codeOf(plain.link));
+    expect(dec.ok && dec.data.settings.aimCross).toEqual({ mode: 'never', level: 2 });
+    const def = await encodeTransfer(data(), PAGE, { codec: null });
+    const defJson = new TextDecoder().decode(fromB64url(codeOf(def.link).slice(3)));
+    expect('aimCross' in (JSON.parse(defJson) as [Record<string, unknown>])[0]).toBe(false);
   });
 
   it('the compressed link is shorter than the uncompressed one', async () => {
@@ -243,6 +262,9 @@ describe('invalid codes change nothing (FR-120)', () => {
     ['unknown version', `v3.${b64url(JSON.stringify(validTransfer()))}`],
     ['version 2 payload that is an object', `v2.${b64url(JSON.stringify(validTransfer()))}`],
     ['version 2 payload with a bad garage', `v2.${b64url(JSON.stringify([{ version: 6 }, [-1, 'blue', 'star', 'plain', 'none'], [], [], []]))}`],
+    ['garage payload 2 with a negative balance', `v2.${b64url(JSON.stringify([{ version: 6 }, [2, -1, 0, [], 'blue', 'star', 'plain', 'none'], [], [], []]))}`],
+    ['garage payload 2 with owned items that are not a list', `v2.${b64url(JSON.stringify([{ version: 6 }, [2, 0, 0, 'rocket', 'blue', 'star', 'plain', 'none'], [], [], []]))}`],
+    ['unknown garage payload', `v2.${b64url(JSON.stringify([{ version: 6 }, [3, 0, 0, [], 'blue', 'star', 'plain', 'none'], [], [], []]))}`],
     ['bad base64url', 'v1.@@@!!'],
     ['damaged compressed data', 'v1.AAECAwQFBgcICQ'],
     ['not a transfer', `v1.${b64url(JSON.stringify({ hello: 1 }))}`],
@@ -271,7 +293,8 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(9);
+    expect(dec.data.settings.version).toBe(10);
+    expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
     expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
     expect(dec.data.settings.pointAfterFullHelp).toBe(true);
     expect(dec.data.settings.numberPad).toBe('auto');
@@ -279,7 +302,14 @@ describe('migration of an older transfer (FR-120)', () => {
     expect(dec.data.settings.range).toEqual(settings().range);
   });
 
-  it('a look part that is not unlocked for the stars becomes the standard item', async () => {
+  it('a version 1 code carries the star total, which is migrated like a stored version 1 garage (FR-133)', async () => {
+    const old = { ...toTransfer(data()), garage: { stars: 47, look: garage().look } };
+    const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
+    expect(dec.ok && dec.data.garage).toEqual({ version: 2, balance: 0, totalEarned: 47, owned: ['sky', 'rocket', 'sparkles', 'crown'], look: garage().look });
+    expect(dec.ok && dec.summary.stars).toBe(0);
+  });
+
+  it('a look part that is not owned becomes the basic item', async () => {
     const old = { ...toTransfer(data()), garage: { stars: 0, look: garage().look } };
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
@@ -323,7 +353,7 @@ function typicalSave(): SaveData {
         '0-100|2|enemyCount': { enemies: 5, ms: 200_123, at: t0 + 3000 },
       },
     },
-    garage: { version: 1, stars: 20, look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } },
+    garage: { version: 2, balance: 13, totalEarned: 33, owned: ['rocket', 'helmet'], look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'helmet' } },
   };
 }
 
@@ -406,9 +436,11 @@ const V6_DEFAULTS = {
 };
 
 describe('frozen version 2 codes (review T1, P4)', () => {
-  it('the settings differences of version 2 codes are laid over the frozen version 6 defaults and a point after the full help', () => {
-    // Amendment 18 adds pointAfterFullHelp: true, the value the version 8 to 9 step gives, so no existing code changes meaning.
-    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true });
+  it('the settings differences of version 2 codes are laid over the frozen version 6 defaults, a point after the full help and the aiming cross', () => {
+    // Amendment 18 adds pointAfterFullHelp: true and amendment 19 aimCross "Immer", the values the version 8 to 9 and
+    // 9 to 10 steps give, so no existing code changes meaning.
+    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true, aimCross: { mode: 'always', level: 2 } });
+    expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.aimCross)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.sound)).toBe(true);
   });
@@ -433,8 +465,17 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       expect('freePlay' in dec.data.settings).toBe(false);
       // Made before amendment 18: the setting reads as on.
       expect(dec.data.settings.pointAfterFullHelp).toBe(true);
-      expect(dec.data.settings.version).toBe(9);
-      expect(dec.data.garage).toEqual({ version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } });
+      // Made before amendment 19: the aiming cross reads as "Immer", and the star total (garage payload 1) is migrated (FR-133).
+      expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
+      expect(dec.data.settings.version).toBe(10);
+      expect(dec.data.garage).toEqual({
+        version: 2,
+        balance: 0,
+        totalEarned: 47,
+        owned: ['sky', 'rocket', 'sparkles', 'crown'],
+        look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' },
+      });
+      expect(dec.summary.stars).toBe(0);
       expect(dec.data.records.best).toEqual({ '550-780|1|untilHearts': { enemies: 4, ms: 61000, at: 1700000000000 } });
       expect(dec.data.progress.skills).toEqual({
         'positions|550-780': { step: 2, recent: [], masteryWindow: ['independent', 'assisted'], guesses: 1, attempts: 12, independentCorrect: 9, assisted: 2 },
@@ -507,6 +548,7 @@ function randomSettings(seed: number): Settings {
     showRecords: bool(),
     timeLimitSeconds: bool() ? null : r.int(10, 120),
     pointAfterFullHelp: bool(),
+    aimCross: { mode: r.pick(['always', 'upToLevel', 'never'] as const), level: r.int(1, 5) as Settings['aimCross']['level'] },
     garage: bool(),
     numberPad: r.pick(['auto', 'always', 'never'] as const),
   };

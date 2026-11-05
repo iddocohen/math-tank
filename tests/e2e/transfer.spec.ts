@@ -18,7 +18,7 @@ import { t } from '../../src/i18n';
 const m = t();
 
 const SETTINGS = { ...withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }), enemyDifficulty: 'normal' as const, showClock: true };
-const GARAGE = { version: 1, stars: 37, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'none' } };
+const GARAGE = { version: 2, balance: 37, totalEarned: 67, owned: ['sky', 'rocket', 'sparkles'], look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'none' } };
 const RECORDS = { version: 1, best: { '550-780|1|untilHearts': { enemies: 4, ms: 61_000, at: 1_700_000_000_000 } } };
 const SKILL = {
   step: 2,
@@ -186,7 +186,10 @@ test.describe('move a save to another browser (amendment 15)', () => {
 
 });
 
-/** An uncompressed version 2 code: 47 stars, record 4, range 550 to 780 (the frozen code of transfer.test.ts). */
+/**
+ * An uncompressed version 2 code: 47 stars, record 4, range 550 to 780 (the frozen code of transfer.test.ts). Made before
+ * amendment 19: the 47 stars own rocket, sky, sparkles and crown (70 stars), so the balance is 0 (FR-133).
+ */
 const CODE = 'v2.W3sidmVyc2lvbiI6NiwicmFuZ2UiOnsicHJlc2V0IjoiY3VzdG9tIiwibWluIjo1NTAsIm1heCI6NzgwfSwiYWRkaXRpb24iOnsibWF4UmVzdWx0Ijo3ODB9LCJlbmVteURpZmZpY3VsdHkiOiJub3JtYWwiLCJzaG93Q2xvY2siOnRydWV9LFs0Nywic2t5Iiwicm9ja2V0Iiwic3BhcmtsZXMiLCJjcm93biJdLFtbIjU1MC03ODB8MXx1bnRpbEhlYXJ0cyIsNCw2MTAwMCwxNzAwMDAwMDAwMDAwXV0sW1sicG9zaXRpb25zfDU1MC03ODAiLDIsMTIsOSwyLDEsImlhIl1dLFtbMTcwMDAwMDAwMDAwMCw2MDAwMDAsMTIsOSwyLDNdXV0';
 
 async function holdAccept(page: Page): Promise<void> {
@@ -200,7 +203,7 @@ test.describe('save links in a running tab and failed take-overs (review fixes)'
     await page.evaluate((code) => {
       window.location.hash = `save=${code}`;
     }, CODE);
-    await expect(page.getByTestId('transfer-dialog')).toContainText(m.transfer.summary(47, 4, 550, 780));
+    await expect(page.getByTestId('transfer-dialog')).toContainText(m.transfer.summary(0, 4, 550, 780));
   });
 
   test('the dialog pauses a running round, and "Abbrechen" resumes it (review R4)', async ({ page }) => {
@@ -227,7 +230,7 @@ test.describe('save links in a running tab and failed take-overs (review fixes)'
     });
     await page.goto(`/#save=${CODE}`);
     const dialog = page.getByTestId('transfer-dialog');
-    await expect(dialog).toContainText(m.transfer.summary(47, 4, 550, 780));
+    await expect(dialog).toContainText(m.transfer.summary(0, 4, 550, 780));
     await holdAccept(page);
     await expect(dialog).toContainText(m.transfer.saveFailed);
     expect(page.url()).toContain('#save=');

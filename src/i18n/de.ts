@@ -53,7 +53,15 @@ export const de = {
       crown: 'Krone',
       helmet: 'Helm',
     },
-    /** A locked item (FR-091). */
+    /** Amendment 19 (FR-130): the price of an item not owned. */
+    price: (n: number) => `★ ${n}`,
+    buyQuestion: (n: number) => `Für ${n} Sterne kaufen?`,
+    yes: 'Ja',
+    no: 'Nein',
+    /** Amendment 19 (FR-131): give an owned item back for its full price. */
+    returnItem: 'Zurückgeben',
+    returnQuestion: (n: number) => `Zurückgeben? Du bekommst ${n} Sterne.`,
+    /** An item the balance does not reach (FR-091). */
     stillNeeded: (n: number) => (n === 1 ? 'noch 1 Stern' : `noch ${n} Sterne`),
     chosen: 'Gewählt',
     /** The star total, for screen readers (FR-095). */
@@ -163,8 +171,9 @@ export const de = {
     yourRecord: (n: number) => `Dein Rekord: ${n}`,
     again: 'Nochmal',
     backToStart: 'Zum Start',
-    /** Amendment 11 (FR-094): every item the round unlocked, in one line. */
-    unlocked: (names: string) => `Neu freigeschaltet: ${names}!`,
+    /** Amendment 19 (FR-094): the stars of this round, and one item the balance now reaches. */
+    starsEarned: (n: number) => (n === 1 ? '+1 Stern' : `+${n} Sterne`),
+    affordable: (name: string) => `Genug Sterne für: ${name}`,
   },
 
   parent: {
@@ -237,8 +246,10 @@ export const de = {
     resetDone: 'Der Fortschritt wurde zurückgesetzt.',
     /** Amendment 11 (FR-096): the stars of the tank garage, reset only here. */
     stars: (n: number) => `Sterne in der Garage: ${n}`,
+    /** Amendment 19 (FR-132): every star ever earned, also the spent ones. */
+    starsTotal: (n: number) => `Insgesamt verdient: ${n}`,
     starsReset: 'Sterne zurücksetzen',
-    starsResetConfirm: 'Alle Sterne löschen? Die Garage ist dann wieder leer.',
+    starsResetConfirm: 'Alle Sterne und gekauften Teile löschen? Die Garage ist dann wieder leer.',
     starsResetYes: 'Ja, Sterne zurücksetzen',
     starsResetDone: 'Die Sterne wurden zurückgesetzt.',
   },
@@ -356,6 +367,11 @@ export const de = {
       numberPadAuto: 'Automatisch',
       numberPadAlways: 'Immer',
       numberPadNever: 'Nie',
+      aimCross: 'Zielkreuz',
+      aimCrossAlways: 'Immer',
+      aimCrossUpToLevel: 'Bis Zahlenstrahl-Stufe',
+      aimCrossNever: 'Nie',
+      aimCrossLevel: 'Zielkreuz bis Stufe',
       adaptive: 'Schwierigkeit automatisch anpassen',
       playModeMixed: 'Spielart „Gemischt“ anbieten',
       playModeRuler: 'Spielart „Nur Zahlenstrahl“ anbieten',
@@ -368,6 +384,7 @@ export const de = {
     },
     /** Amendment 18 (FR-129): one line under each switch of the time limit and the point after the full help. */
     explanations: {
+      aimCross: 'Das gelbe Kreuz mit der Linie zum Zahlenstrahl.',
       timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
       pointAfterFullHelp: 'Wenn aus: Ein Treffer nach der gezeigten Lösung bringt keinen Panzer, keinen Stern und zählt nicht für den Rekord.',
     },

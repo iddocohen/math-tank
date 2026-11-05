@@ -19,6 +19,10 @@
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler, and no
  *   number (amendment 05). The canvas carries `data-preview-text`, the typed number's label under the preview marker ('' when
  *   none), for the end-to-end tests only.
+ * - "Zielkreuz" (amendment 19, FR-134, FR-135): the guide line, the target marker, the ruler marker and the typed label
+ *   are drawn only while `aimCrossShown(settings.aimCross, state.rulerLevel)` is true, checked on every update, so an
+ *   adaptive level change shows or hides them at once. Choosing and firing work the same. The canvas carries
+ *   `data-aim-cross` (`on` or `off`) for the end-to-end tests only.
  * - After each player shot: a landing marker with the landing number in large digits (FR-004); after a hit it fades
  *   out after about 2 seconds and goes at once when a later challenge starts (T233). The canvas carries
  *   `data-landing`, the landing number shown ('' when none), for the end-to-end tests only. After a miss, in
@@ -61,6 +65,7 @@
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { landedOf } from '../core/battle/guided';
+import { aimCrossShown } from '../core/battle/aimCross';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../core/numberline/mapping';
 import { labelFontSize, ticksFor, typedNumberLabels, type RulerLevel, type Tick, type TickSize } from '../core/numberline/ticks';
 import { surfaceY } from '../core/physics/terrain';
@@ -751,9 +756,12 @@ export class NumberLineView {
     this.drawPointerLines(s);
 
     // Selection: guide line from the ruler up to the battlefield, target marker on the ground, marker on the ruler.
+    // Hidden by "Zielkreuz" (amendment 19): no guide line, target marker, ruler marker or typed label.
+    const cross = aimCrossShown(this.controller.getRoundSettings().aimCross, s.rulerLevel);
+    this.scene.game.canvas.dataset.aimCross = cross ? 'on' : 'off';
     const choosing = acceptsInput(s.phase) || s.phase === 'paused';
-    this.drawTypedLabel(choosing ? s.selection : null, s.entry.typed !== '', min, max);
-    if (s.selection === null || !choosing) return;
+    this.drawTypedLabel(choosing && cross ? s.selection : null, s.entry.typed !== '', min, max);
+    if (s.selection === null || !choosing || !cross) return;
     const x = numberToX(s.selection, min, max);
     const groundY = toScreenY(surfaceY(s.terrain, x), this.worldHeight);
     g.lineStyle(3, SELECT, 0.9);

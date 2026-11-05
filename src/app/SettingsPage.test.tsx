@@ -289,7 +289,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.pointAfterFullHelp, L.garage, L.numberPad,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.pointAfterFullHelp, L.garage, L.numberPad, L.aimCross,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }
@@ -361,6 +361,30 @@ describe('SettingsPage', () => {
     toggle(L.pointAfterFullHelp);
     fireEvent.click(saveButton());
     expect(persistence.settings().pointAfterFullHelp).toBe(false);
+  });
+
+  it('"Zielkreuz" offers Immer, Bis Zahlenstrahl-Stufe and Nie with an explanation, starts at Immer (amendment 19, FR-134)', () => {
+    setup();
+    const select = field(L.aimCross);
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([L.aimCrossAlways, L.aimCrossUpToLevel, L.aimCrossNever]);
+    expect(select.value).toBe('always');
+    expect(screen.getByRole('combobox', { name: L.aimCross, description: m.settings.explanations.aimCross })).toBeTruthy();
+    expect(screen.queryByLabelText(L.aimCrossLevel)).toBeNull();
+  });
+
+  it('the level field shows only with "Bis Zahlenstrahl-Stufe", starts at 2 and saves aimCross (amendment 19)', () => {
+    const { persistence } = setup();
+    setValue(L.aimCross, 'upToLevel');
+    const level = field(L.aimCrossLevel);
+    expect(level.value).toBe('2');
+    setValue(L.aimCrossLevel, '4');
+    fireEvent.click(saveButton());
+    expect(persistence.settings().aimCross).toEqual({ mode: 'upToLevel', level: 4 });
+    setValue(L.aimCross, 'never');
+    expect(screen.queryByLabelText(L.aimCrossLevel)).toBeNull();
+    fireEvent.click(saveButton());
+    // The level is kept, so switching back restores it.
+    expect(persistence.settings().aimCross).toEqual({ mode: 'never', level: 4 });
   });
 
   it('"Schließen" calls onClose', () => {

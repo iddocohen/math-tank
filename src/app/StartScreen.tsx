@@ -40,7 +40,7 @@ interface Props {
   modes: readonly PlayMode[];
   gear?: ReactNode;
   /** The star total, or null when the parent turned the garage off. */
-  garage?: { stars: number } | null;
+  garage?: { balance: number } | null;
   onGarage?: () => void;
   /** True while the latest save failed (review H1): a small note for the parent, not a blocking message. */
   saveFailed?: boolean;
@@ -108,7 +108,7 @@ export function StartScreen({ onPlay, modes, gear, garage = null, onGarage, save
         )}
       </div>
       <h1 className="title">{m.appName}</h1>
-      {garage && <StarTotal stars={garage.stars} />}
+      {garage && <StarTotal stars={garage.balance} />}
       <div className="play-buttons">
         {modes.length === 1 ? (
           <button type="button" className="play-button" onClick={() => onPlay(modes[0]!)}>

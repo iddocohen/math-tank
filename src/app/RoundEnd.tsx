@@ -5,8 +5,9 @@
  * says "verloren" or "nicht geschafft". `record` is null when the parent turned off "Rekord zeigen".
  * "Nochmal" (or Enter or Space, handled by the app's keyboard listener, FR-062) starts a new round without a page
  * reload; "Zum Start" goes back to the start screen.
- * Amendment 11 (FR-094, FR-095): with the garage on, one line names every item the round unlocked, with sparkles,
- * and the star total shows. Nothing says how many stars are missing.
+ * Amendments 11 and 19 (FR-094, FR-095): with the garage on, the end screen shows the stars of this round ("+3 Sterne"),
+ * the balance, and at most one line naming an item the balance now reaches ("Genug Sterne für: Krone"), with sparkles.
+ * Nothing says how many stars are missing, and nothing asks the child to buy.
  */
 import { formatTime, type BestResult } from '../core/records/records';
 import type { RoundState } from '../core/types';
@@ -25,8 +26,8 @@ interface Props {
   elapsedMs: number;
   /** The personal best after this round, or null when records are not shown. */
   record: RoundRecord | null;
-  /** The star total and the items this round unlocked, or null when the garage is off. */
-  garage?: { stars: number; unlocked: GarageItem[] } | null;
+  /** The stars of this round, the balance and one item the balance now reaches, or null when the garage is off. */
+  garage?: { earned: number; balance: number; affordable: GarageItem | null } | null;
   onAgain: () => void;
   onBackToStart: () => void;
 }
@@ -50,12 +51,17 @@ export function RoundEnd({ outcome, enemiesDestroyed, elapsedMs, record, garage 
           {m.roundEnd.yourRecord(record.best.enemies)}
         </p>
       ) : null}
-      {garage && garage.unlocked.length > 0 && (
-        <p className="unlocked" data-testid="unlocked">
-          {m.roundEnd.unlocked(garage.unlocked.map((i) => m.garage.items[i.id]).join(', '))}
+      {garage && (
+        <p className="round-stars" data-testid="round-stars">
+          {m.roundEnd.starsEarned(garage.earned)}
         </p>
       )}
-      {garage && <StarTotal stars={garage.stars} />}
+      {garage && <StarTotal stars={garage.balance} />}
+      {garage?.affordable && (
+        <p className="unlocked" data-testid="affordable">
+          {m.roundEnd.affordable(m.garage.items[garage.affordable.id])}
+        </p>
+      )}
       <div className="round-end-buttons">
         <button type="button" className="primary-button" onClick={onAgain}>
           {m.roundEnd.again}

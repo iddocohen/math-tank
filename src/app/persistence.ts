@@ -26,8 +26,7 @@ import {
   unreadableKey,
   type ResetReason,
 } from '../core/storage/storage';
-import { addStars, equip, resetStars, type Garage } from '../core/rewards/garage';
-import type { GarageItem } from '../core/rewards/items';
+import { addStars, buy, equip, resetStars, returnItem, type Garage } from '../core/rewards/garage';
 import { submitResult, type BestResult, type Records } from '../core/records/records';
 import type { Progress } from '../core/types';
 import type { SaveData } from '../core/transfer/transfer';
@@ -74,13 +73,17 @@ export interface Persistence {
    * at once. Returns whether it is a new record and the best after it (FR-086).
    */
   submitResult(key: string, result: BestResult): { newRecord: boolean; best: BestResult | null };
-  /** Stars and the chosen look (amendment 11). */
+  /** The star balance, the owned items, the equipped look and the total ever earned (amendments 11 and 19). */
   garage(): Garage;
-  /** Adds stars for destroyed enemies, saves at once and returns the items they unlocked (FR-089). */
-  addStars(n: number): GarageItem[];
-  /** Chooses an unlocked item and saves; a locked or unknown id changes nothing (FR-091). */
+  /** Adds stars for destroyed enemies to the balance and the total ever earned, and saves at once (FR-089). */
+  addStars(n: number): void;
+  /** Buys an item the balance reaches, equips it and saves; false when it cannot be bought (FR-130). */
+  buy(id: string): boolean;
+  /** Gives an owned item back for its full price and saves; false when it is basic or not owned (FR-131). */
+  returnItem(id: string): boolean;
+  /** Equips an owned item and saves; an item not owned or unknown changes nothing (FR-091). */
   equip(id: string): void;
-  /** "Sterne zurücksetzen": 0 stars, every item locked, the standard look (FR-096). */
+  /** "Sterne zurücksetzen": balance 0, only the basic items and the basic look; the total ever earned stays (FR-096). */
   resetStars(): void;
   /** Calls `persist()` at most once per instance; later calls return the first result. */
   requestPersistentStorage(): Promise<Exclude<PersistOutcome, 'notAsked'>>;
@@ -241,17 +244,27 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
     },
     garage: () => values.garage,
     addStars(n) {
-      const r = addStars(values.garage, n);
-      if (r.garage === values.garage) return [];
-      saveOne('garage', r.garage);
-      return r.unlocked;
+      const next = addStars(values.garage, n);
+      if (next !== values.garage) saveOne('garage', next);
+    },
+    buy(id) {
+      const next = buy(values.garage, id);
+      if (next === values.garage) return false;
+      saveOne('garage', next);
+      return true;
+    },
+    returnItem(id) {
+      const next = returnItem(values.garage, id);
+      if (next === values.garage) return false;
+      saveOne('garage', next);
+      return true;
     },
     equip(id) {
       const next = equip(values.garage, id);
       if (next !== values.garage) saveOne('garage', next);
     },
     resetStars() {
-      saveOne('garage', resetStars());
+      saveOne('garage', resetStars(values.garage));
     },
     requestPersistentStorage() {
       request ??= ask().then((outcome) => {

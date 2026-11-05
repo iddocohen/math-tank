@@ -56,7 +56,7 @@ describe('StartScreen play modes (T070, amendment 17, FR-121)', () => {
 describe('StartScreen garage button and star total (amendment 11, FR-091, FR-095, FR-096)', () => {
   it('shows a "Garage" button and the star total when the garage is on', () => {
     const onGarage = vi.fn();
-    render(<StartScreen onPlay={vi.fn()} modes={ALL} garage={{ stars: 12 }} onGarage={onGarage} />);
+    render(<StartScreen onPlay={vi.fn()} modes={ALL} garage={{ balance: 12 }} onGarage={onGarage} />);
     expect(screen.getByTestId('star-total').textContent).toContain('12');
     fireEvent.click(screen.getByRole('button', { name: t().start.garage }));
     expect(onGarage).toHaveBeenCalledTimes(1);

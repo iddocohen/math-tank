@@ -116,8 +116,9 @@ export function saveRecords(kv: KeyValue, r: Records): { ok: boolean } {
 }
 
 /**
- * Loads the stars and the chosen look; damaged, invalid or unreadable data falls back to 0 stars and the standard
- * look (FR-097). Data without a version is migrated; a locked or unknown look part becomes the standard item.
+ * Loads the garage (balance, owned items, equipped look, total ever earned); damaged, invalid or unreadable data falls
+ * back to an empty garage (FR-097). Versions 0 and 1 are migrated to version 2 (FR-133); an owned id that is unknown
+ * is dropped and a look part that is not owned becomes the basic item.
  */
 export function loadGarage(kv: KeyValue): { garage: Garage; resetReason: ResetReason } {
   const r = read(kv, GARAGE_KEY);

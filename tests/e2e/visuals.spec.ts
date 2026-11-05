@@ -6,7 +6,7 @@
  * - `data-muzzle-flashes` grows with every shell fired, `data-explosions` with every explosion, and
  *   `data-screen-shakes` with every screen shake (none with reduced motion, `data-reduced-motion`);
  * - `data-fps` is the frame rate over the last second.
- * With SCREENSHOT_DIR set, the Chromium run saves the garage preview of every unlockable item, a battle with the
+ * With SCREENSHOT_DIR set, the Chromium run saves the garage preview of every item that is not basic, a battle with the
  * equipped look, a fresh landscape, a landscape with craters, a firing moment and an explosion with debris.
  */
 import type { Locator, Page } from '@playwright/test';
@@ -14,7 +14,7 @@ import { enemyNumber, expect, GAME_WAIT, seedStorage, startButton, test, waitCal
 import { defaultSettings } from '../../src/core/settings/defaults';
 import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
 import { emptyGarage } from '../../src/core/rewards/garage';
-import { itemNumber, UNLOCK_ORDER } from '../../src/core/rewards/items';
+import { GARAGE_ITEMS, itemNumber } from '../../src/core/rewards/items';
 import type { Settings } from '../../src/core/types';
 
 const easy: Settings = { ...defaultSettings(), enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 5 };
@@ -132,14 +132,15 @@ test('screenshots of the garage looks, the landscape, a shot and an explosion', 
   const dir = info.config.metadata.screenshotDir as string | undefined;
   test.skip(!dir || info.project.name !== 'chromium', 'only with SCREENSHOT_DIR, in Chromium');
   test.setTimeout(180_000);
-  await seedStorage(page, { [SETTINGS_KEY]: easy, [GARAGE_KEY]: { ...emptyGarage(), stars: 130 } });
+  // A version 1 garage with 130 stars: the amendment 19 migration makes all 13 items owned (FR-133).
+  await seedStorage(page, { [SETTINGS_KEY]: easy, [GARAGE_KEY]: { version: 1, stars: 130, look: emptyGarage().look } });
   await page.goto('/?seed=3&mode=ruler');
   await expect(startButton(page)).toBeVisible();
 
-  // Every unlockable item, chosen in turn by its number and Enter.
+  // Every item that is not basic, chosen in turn by its number and Enter.
   await page.keyboard.press('g');
   const preview = page.getByTestId('garage-preview');
-  for (const [i, id] of UNLOCK_ORDER.entries()) {
+  for (const [i, id] of GARAGE_ITEMS.filter((item) => item.price > 0).map((item) => item.id).entries()) {
     await page.keyboard.type(String(itemNumber(id)));
     await page.keyboard.press('Enter');
     await expect(page.getByTestId(`garage-item-${id}`)).toHaveAttribute('data-chosen', 'true');

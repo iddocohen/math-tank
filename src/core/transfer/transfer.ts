@@ -18,7 +18,6 @@
 import { z } from 'zod';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
 import { parseGarage, type Garage } from '../rewards/garage';
-import type { Look } from '../rewards/items';
 import type { Settings } from '../settings/schema';
 import { migrate, parseSettings } from '../storage/migrate';
 import { progressSchema } from '../storage/progressSchema';
@@ -52,7 +51,11 @@ type SessionTuple = [id: string, startedAt: number, lastActiveAt: number, attemp
 export interface TransferV1 {
   v: 1;
   settings: Settings;
-  garage: { stars: number; look: Look };
+  /**
+   * Since amendment 19 the stored garage (version 2: balance, total ever earned, owned items, look). Codes made before
+   * it carry `{ stars, look }`, which decoding reads as a version 1 garage and migrates (FR-133).
+   */
+  garage: Garage | { stars: number; look: Garage['look'] };
   records: Records['best'];
   skills: Record<string, SkillTuple>;
   /** Oldest first, like Progress.sessions. */
@@ -61,6 +64,7 @@ export interface TransferV1 {
 
 /** What the receive dialog shows (FR-119). */
 export interface TransferSummary {
+  /** The garage balance (amendment 19). */
   stars: number;
   /** The most enemies of any personal best; 0 without one. */
   record: number;
@@ -103,7 +107,7 @@ export function toTransfer(data: SaveData): TransferV1 {
   return {
     v: 1,
     settings: data.settings,
-    garage: { stars: data.garage.stars, look: { ...data.garage.look } },
+    garage: { ...data.garage, owned: [...data.garage.owned], look: { ...data.garage.look } },
     records: data.records.best,
     skills,
     sessions: data.progress.sessions.map((s) => [s.id, s.startedAt, s.lastActiveAt, s.attempts, s.independentCorrect, s.assisted]),
@@ -195,7 +199,8 @@ function settingsDiff(value: Record<string, unknown>, base: Record<string, unkno
  * Writer and reader both use it, whatever the current defaults are, so changing a default later never changes what an
  * existing code means. The settings version travels in the differences, and the reader migrates from it.
  * Amendment 18 adds `pointAfterFullHelp: true`: older codes hold no such field and the version 8 to 9 step gives the same
- * value, so no existing code changes meaning, and a code with the setting on leaves the field out.
+ * value, so no existing code changes meaning, and a code with the setting on leaves the field out. Amendment 19 adds
+ * `aimCross` "Immer" with level 2 in the same way.
  */
 export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   version: 6,
@@ -223,6 +228,7 @@ export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   garage: true,
   numberPad: 'auto',
   pointAfterFullHelp: true,
+  aimCross: { mode: 'always', level: 2 },
 });
 
 function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {
@@ -231,6 +237,16 @@ function deepFreeze<T extends Record<string, unknown>>(o: T): Readonly<T> {
 }
 
 const EMPTY_WINDOW = '';
+
+/** Garage payload 2 (amendment 19); payload 1 is the 5-element `[stars, color, flag, trail, hat]` written before it. */
+const GARAGE_PAYLOAD = 2;
+
+/** The garage part of a version 2 code: payload 2 for a version 2 garage, payload 1 for an old `{ stars, look }`. */
+function compactGarage(g: TransferV1['garage']): unknown[] {
+  const { color, flag, trail, hat } = g.look;
+  if ('stars' in g) return [g.stars, color, flag, trail, hat];
+  return [GARAGE_PAYLOAD, g.balance, g.totalEarned, [...g.owned], color, flag, trail, hat];
+}
 
 /** Transfer version 2: `[settings, garage, records, skills, sessions]` (T305). */
 function compact(t: TransferV1): unknown[] {
@@ -245,10 +261,9 @@ function compact(t: TransferV1): unknown[] {
     previous = startedAt;
     return row;
   });
-  const { color, flag, trail, hat } = t.garage.look;
   return [
     settingsDiff(t.settings as unknown as Record<string, unknown>, TRANSFER_V2_SETTINGS_BASE),
-    [t.garage.stars, color, flag, trail, hat],
+    compactGarage(t.garage),
     Object.entries(t.records).map(([key, r]) => [key, r.enemies, r.ms, r.at]),
     skills,
     sessions,
@@ -257,7 +272,10 @@ function compact(t: TransferV1): unknown[] {
 
 const compactSchema = z.tuple([
   z.record(z.string(), z.unknown()),
-  z.tuple([z.unknown(), z.string(), z.string(), z.string(), z.string()]),
+  z.union([
+    z.tuple([z.unknown(), z.string(), z.string(), z.string(), z.string()]),
+    z.tuple([z.literal(GARAGE_PAYLOAD), z.unknown(), z.unknown(), z.array(z.string()), z.string(), z.string(), z.string(), z.string()]),
+  ]),
   z.array(z.tuple([z.string(), z.unknown(), z.unknown(), z.unknown()])),
   z.array(z.tuple([z.string(), intMin0(), intMin0(), intMin0(), intMin0(), intMin0(), z.string()])),
   z.array(z.tuple([z.number(), z.number(), intMin0(), intMin0(), intMin0(), z.union([intMin0(), z.string()])])),
@@ -267,12 +285,20 @@ const compactSchema = z.tuple([
 function expand(raw: unknown): unknown {
   const parsed = compactSchema.safeParse(raw);
   if (!parsed.success) return undefined;
-  const [diff, [stars, color, flag, trail, hat], records, skills, sessions] = parsed.data;
+  const [diff, g, records, skills, sessions] = parsed.data;
+  let garage: unknown;
+  if (g.length === 5) {
+    const [stars, color, flag, trail, hat] = g;
+    garage = { stars, look: { color, flag, trail, hat } };
+  } else {
+    const [version, balance, totalEarned, owned, color, flag, trail, hat] = g;
+    garage = { version, balance, totalEarned, owned, look: { color, flag, trail, hat } };
+  }
   let startedAt = 0;
   return {
     v: 1,
     settings: mergeDeep(TRANSFER_V2_SETTINGS_BASE, diff),
-    garage: { stars, look: { color, flag, trail, hat } },
+    garage,
     records: Object.fromEntries(records.map(([key, enemies, ms, at]) => [key, { enemies, ms, at }])),
     skills: Object.fromEntries(skills.map(([key, ...s]) => [key, s])),
     sessions: sessions.map(([startDelta, activeDelta, attempts, independentCorrect, assisted, id]) => {
@@ -351,7 +377,7 @@ export async function encodeTransfer(
 const transferSchema = z.object({
   v: z.literal(1),
   settings: z.unknown(),
-  garage: z.object({ stars: z.unknown(), look: z.unknown() }),
+  garage: z.record(z.string(), z.unknown()),
   records: z.unknown(),
   skills: z.record(z.string(), z.tuple([intMin0(), intMin0(), intMin0(), intMin0(), intMin0(), z.string().regex(/^[icau]{0,10}$/)])),
   sessions: z.array(z.tuple([z.string(), z.number(), z.number(), intMin0(), intMin0(), intMin0()])),
@@ -405,7 +431,8 @@ export async function decodeTransfer(code: string, opts: { codec?: Codec | null 
   const settings = parseSettings(t.settings);
   if (!settings) return { ok: false };
 
-  const garage = parseGarage({ version: 1, stars: t.garage.stars, look: t.garage.look });
+  // A garage without a version is the `{ stars, look }` of a code made before amendment 19: a version 1 garage (FR-133).
+  const garage = parseGarage(t.garage.version === undefined ? { ...t.garage, version: 1 } : t.garage);
   if (!garage) return { ok: false };
 
   const records = recordsSchema.safeParse({ ...emptyRecords(), best: t.records });
@@ -432,5 +459,5 @@ export async function decodeTransfer(code: string, opts: { codec?: Codec | null 
 
 export function transferSummary(data: SaveData): TransferSummary {
   const record = Object.values(data.records.best).reduce((most, b) => Math.max(most, b.enemies), 0);
-  return { stars: data.garage.stars, record, min: data.settings.range.min, max: data.settings.range.max };
+  return { stars: data.garage.balance, record, min: data.settings.range.min, max: data.settings.range.max };
 }

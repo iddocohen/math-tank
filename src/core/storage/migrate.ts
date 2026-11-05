@@ -21,7 +21,8 @@ export function parseSettings(raw: unknown): Settings | null {
  * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Version 4 becomes version 5
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
  * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
- * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Version 9 becomes version 10
+ * (amendment 19: `aimCross` added, default "Immer"). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -42,6 +43,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV7,
   migrateSettingsToV8,
   migrateSettingsToV9,
+  migrateSettingsToV10,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -80,7 +82,7 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
   }
   // Fields added by later versions are left to their own migration step (amendment 06: roundType follows noDamage).
   const base = defaultSettings() as unknown as Record<string, unknown>;
-  for (const later of ['roundType', 'showClock', 'showRecords', 'garage', 'numberPad', 'pointAfterFullHelp']) delete base[later];
+  for (const later of ['roundType', 'showClock', 'showRecords', 'garage', 'numberPad', 'pointAfterFullHelp', 'aimCross']) delete base[later];
   const merged = mergeDeep(base, over);
   return { ...merged, version: 2 };
 }
@@ -149,6 +151,11 @@ function migrateSettingsToV8(raw: Record<string, unknown>): Record<string, unkno
 /** Version 8 to 9 (amendment 18): adds "Punkt nach voller Hilfe", on unless already set. */
 function migrateSettingsToV9(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, pointAfterFullHelp: raw.pointAfterFullHelp ?? true, version: 9 };
+}
+
+/** Version 9 to 10 (amendment 19): adds "Zielkreuz" as "Immer" with level 2, unless already set. */
+function migrateSettingsToV10(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, aimCross: raw.aimCross ?? { mode: 'always', level: 2 }, version: 10 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

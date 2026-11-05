@@ -283,6 +283,26 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           ) : (
             <p className="hint">{m.settings.previewUnavailable}</p>
           )}
+          {/* Amendment 19 (FR-134): the aiming cross; the level is kept when another choice is made. */}
+          <Select
+            label={L.aimCross}
+            description={m.settings.explanations.aimCross}
+            value={draft.aimCross.mode}
+            options={[
+              { value: 'always', label: L.aimCrossAlways },
+              { value: 'upToLevel', label: L.aimCrossUpToLevel },
+              { value: 'never', label: L.aimCrossNever },
+            ]}
+            onChange={(v) => set('aimCross', { ...draft.aimCross, mode: v as Settings['aimCross']['mode'] })}
+          />
+          {draft.aimCross.mode === 'upToLevel' && (
+            <Select
+              label={L.aimCrossLevel}
+              value={String(draft.aimCross.level)}
+              options={levelOptions()}
+              onChange={(v) => set('aimCross', { ...draft.aimCross, level: Number(v) as RulerLevel })}
+            />
+          )}
         </Group>
 
         <Group title={m.settings.groups.help}>
@@ -584,23 +604,31 @@ function Select({
   value,
   options,
   onChange,
+  description,
 }: {
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (v: string) => void;
+  description?: string;
 }) {
   const id = useId();
+  const descriptionId = `${id}-description`;
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.currentTarget.value)}>
+      <select id={id} value={value} aria-describedby={description === undefined ? undefined : descriptionId} onChange={(e) => onChange(e.currentTarget.value)}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
+      {description !== undefined && (
+        <p className="hint" id={descriptionId}>
+          {description}
+        </p>
+      )}
     </div>
   );
 }

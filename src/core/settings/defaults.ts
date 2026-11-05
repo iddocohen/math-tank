@@ -24,7 +24,7 @@ export const TIME_LIMIT_MAX = 120;
 /** Data-model.md defaults (FR-046). Returns a fresh object on each call. */
 export function defaultSettings(): Settings {
   return {
-    version: 9,
+    version: 10,
     challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     range: { preset: '0-100', min: 0, max: 100 },
     addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -50,5 +50,6 @@ export function defaultSettings(): Settings {
     pointAfterFullHelp: true,
     garage: true,
     numberPad: 'auto',
+    aimCross: { mode: 'always', level: 2 },
   };
 }

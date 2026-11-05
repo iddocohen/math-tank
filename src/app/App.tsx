@@ -22,9 +22,10 @@
  * no ruler to tap.
  *
  * Amendment 11 (FR-089 to FR-096): every increase of `enemiesDestroyed` (enemies only, never decoys) adds stars at
- * once, with the garage on or off. The end screen names the items unlocked since the round started. The garage screen
- * opens from the start screen (button or G, only with the garage on), and the battle draws the child's tank with the
- * chosen look, or the standard look when the garage is off.
+ * once, with the garage on or off. The garage screen opens from the start screen (button or G, only with the garage
+ * on), and the battle draws the child's tank with the chosen look, or the standard look when the garage is off.
+ * Amendment 19 (FR-094, FR-130, FR-131): the garage is a star shop (buy and return), and the end screen shows the stars
+ * of the round, the balance and, from `newlyAffordable`, at most one item the balance reached during the round.
  *
  * Amendment 12 (FR-102, FR-104): useScreen picks the battle layout (`data-layout` on the battle: wide, portrait or
  * side) and whether the number pad shows (`data-number-pad`). A phone held upright shows RotateScreen over the start
@@ -67,7 +68,7 @@ import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
 import { Garage } from './Garage';
-import { newlyDestroyed, unlockedBetween } from '../core/rewards/garage';
+import { newlyAffordable, newlyDestroyed } from '../core/rewards/garage';
 import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
 import { RotateScreen } from './RotateScreen';
@@ -134,9 +135,9 @@ export function App() {
   const state = useRoundState(controller);
   // Stars and the chosen look (amendment 11); a copy of persistence.garage() so screens redraw when it changes.
   const [garage, setGarage] = useState(() => persistence.garage());
-  // The destroyed-enemy count already turned into stars, and the star total when the current round started.
+  // The destroyed-enemy count already turned into stars, and the balance when the current round started.
   const seenDestroyed = useRef(0);
-  const roundStartStars = useRef(garage.stars);
+  const roundStartBalance = useRef(garage.balance);
   const gameParent = useRef<HTMLDivElement>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
   // "Nur Rechnen" has no ruler to tap, so "Automatisch" shows the number pad on every screen there (amendment 17).
@@ -241,8 +242,8 @@ export function App() {
     }
     controller.updateSettings(persistence.settings());
     setGarage(persistence.garage());
-    // The end screen lists items unlocked during the round, not the stars that came with the save (review R4).
-    roundStartStars.current = persistence.garage().stars;
+    // The end screen counts the stars of the round, not the stars that came with the save (review R4).
+    roundStartBalance.current = persistence.garage().balance;
     closeTransfer();
   }, [transfer, persistence, controller, closeTransfer]);
 
@@ -276,7 +277,7 @@ export function App() {
 
   // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070).
   const startRound = useCallback(() => {
-    roundStartStars.current = persistence.garage().stars;
+    roundStartBalance.current = persistence.garage().balance;
     controller.startRound(controller.getState().mode);
   }, [controller, persistence]);
   const play = useCallback(
@@ -284,7 +285,7 @@ export function App() {
       // Tablet browsers play sound and speak only after a user tap: this tap (or Enter) unlocks both (FR-055).
       void sfx.unlock();
       if (persistence.settings().sound.speech) speaker.prime();
-      roundStartStars.current = persistence.garage().stars;
+      roundStartBalance.current = persistence.garage().balance;
       controller.startRound(mode);
       setScreen('battle');
     },
@@ -297,11 +298,25 @@ export function App() {
     },
     [persistence],
   );
+  const buy = useCallback(
+    (id: string) => {
+      persistence.buy(id);
+      setGarage(persistence.garage());
+    },
+    [persistence],
+  );
+  const returnItem = useCallback(
+    (id: string) => {
+      persistence.returnItem(id);
+      setGarage(persistence.garage());
+    },
+    [persistence],
+  );
 
   const openParent = useCallback(() => setParent('menu'), []);
   const closeParent = useCallback(() => {
     setParent('closed');
-    // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendment 11).
+    // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendments 11 and 19).
     setGarage(persistence.garage());
   }, [persistence]);
   // One gear shows at a time: on the rotate picture while it shows, otherwise on the screen below. The app keeps the
@@ -359,7 +374,7 @@ export function App() {
           saveFailed={persistence.status().saveFailed}
         />
       ) : screen === 'garage' ? (
-        <Garage garage={garage} onEquip={equip} onBack={() => setScreen('start')} />
+        <Garage garage={garage} onEquip={equip} onBuy={buy} onReturn={returnItem} onBack={() => setScreen('start')} />
       ) : (
         <main className="battle" data-testid="battle-main" data-layout={layout === 'rotate' ? 'portrait' : layout} data-number-pad={numberPad}>
           <div className="game-parent" ref={gameParent} />
@@ -376,7 +391,15 @@ export function App() {
               enemiesDestroyed={state.enemiesDestroyed}
               elapsedMs={state.elapsedMs}
               record={controller.getRoundSettings().showRecords && roundRecord?.seed === state.seed ? roundRecord.record : null}
-              garage={garageOn ? { stars: garage.stars, unlocked: unlockedBetween(roundStartStars.current, garage.stars) } : null}
+              garage={
+                garageOn
+                  ? {
+                      earned: Math.max(0, garage.balance - roundStartBalance.current),
+                      balance: garage.balance,
+                      affordable: newlyAffordable(roundStartBalance.current, garage.balance, garage.owned),
+                    }
+                  : null
+              }
               onAgain={startRound}
               onBackToStart={() => setScreen('start')}
             />
