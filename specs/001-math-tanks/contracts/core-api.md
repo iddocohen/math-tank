@@ -123,7 +123,7 @@ class BattleController {
 
   startRound(mode: PlayMode): void   // 'mixed' | 'ruler' | 'math' (amendment 17); every mode starts a search and records attempts; 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
-                                           // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed,
+                                           // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed, enemiesHit,
                                            // turn, round time, enemy shot index and missStreak stay (amendment 13); no enemy shot; an unfinished challenge is dropped
                                            // without an attempt; ignored in 'playerShot', 'enemyTurn', 'paused' and 'roundOver'
   elapsedMs(): number                      // time played this round: elapsedMs plus the running part; stopped while paused and after the round ends (FR-084)
@@ -157,7 +157,7 @@ Removed by amendment 01: `setAim`, `fire`, `submitSelection`, `nudgeSelection`, 
 
 `getState()` returns the full state; there is no hidden enemy and no reduced view of it (amendment 07 removes `publicState`, `placedEnemy` and `HiddenTank`). `visibleEnemy(state)` in `round.ts` returns the enemy while it is alive. Renderers never change state directly; they call these methods. Keys reach the controller through `keyToAction(key, screen)` in `src/app/keyboard.ts` (see [ui-flows.md](./ui-flows.md)). The controller records an `Attempt` through the `ProgressStore` when a challenge ends.
 
-`renewTerrain(s: RoundState, settings: Settings): RoundState` in `core/battle/round.ts` (pure, amendment 13, FR-101): `terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed)`, a new `terrain` from it, the player, the enemy and every decoy moved to their numbers on the new ground; every other field, `seed` included, is unchanged. `createRound` sets `terrainSeed = deriveSeed(seed, 0)`, the seed its terrain was always made from.
+`renewTerrain(s: RoundState, settings: Settings): RoundState` in `core/battle/round.ts` (pure, amendment 13, FR-101): `terrainSeed = deriveSeed(s.seed, 8, s.enemiesHit)` (amendment 18: every destroyed enemy, also one that does not count, so the hills change after it; with every hit counted this is the same as `enemiesDestroyed`), a new `terrain` from it, the player, the enemy and every decoy moved to their numbers on the new ground; every other field, `seed` included, is unchanged. `createRound` sets `terrainSeed = deriveSeed(seed, 0)`, the seed its terrain was always made from.
 
 ## `core/battle/hitRule` (pure, amendment 04, changed by amendment 06)
 

@@ -869,6 +869,21 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
   - T346 note: not built, because T345 passed with a wide margin; the canvas already draws at most 1600 by 900 pixels at any device pixel ratio. The product owner's check on the child's tablet (quickstart scenario 33) is still open.
   - T347 note: the full `pnpm e2e` run passes in every project (188 passed, 28 skipped by their own conditions, including the Fire tests that run on one size only). Screenshots: `fire-<project>.png` for the six Fire projects from `tests/e2e/fire.spec.ts` with SCREENSHOT_DIR set.
 
+## Phase 24c: Amendment 18 point after the full help
+
+**Purpose**: [Amendment 18](./amendment-18-point-after-full-help.md). A parent setting "Punkt nach voller Hilfe" (`pointAfterFullHelp`, on by default) in the group "Hilfe" next to "Zeitlimit". When it is off, an enemy destroyed after help step 3 is still destroyed and followed by new hills and a new enemy, but it does not raise the tank counter, gives no star and does not count toward "Gegner pro Runde" or the personal best; the feedback line reads "Getroffen, mit Hilfe." (FR-129).
+
+**Independent test**: `tests/e2e/fullHelp.spec.ts` turns the setting off, fires at the shown solution after three help requests and sees the tank counter and the star total stay, then destroys an enemy without help and sees both rise by 1.
+
+- [ ] T349 [P] Write settings version 9 tests before the code: `src/core/settings/settings.test.ts` (defaults have `version: 9` and `pointAfterFullHelp: true`); `src/core/storage/storage.test.ts` (version 8 settings migrate to version 9 with `pointAfterFullHelp: true`; a stored `false` stays; version 0 and version 7 data go through every step); `src/core/storage/exportImport.test.ts` (an export with the setting off imports with it off); `src/core/transfer/transfer.test.ts` (a save with the setting off makes a round trip with it off; a save with it on leaves the field out of the code; the frozen base is the version 6 defaults plus `pointAfterFullHelp: true`; the frozen version 2 codes made before amendment 18 still decode, with `pointAfterFullHelp: true`) (FR-046, FR-048a, FR-115, FR-129)
+- [ ] T350 Implement settings version 9: `pointAfterFullHelp` in `src/core/settings/schema.ts` and `src/core/settings/defaults.ts`, the version 8 to 9 step in `src/core/storage/migrate.ts`, and `pointAfterFullHelp: true` in `TRANSFER_V2_SETTINGS_BASE` in `src/core/transfer/transfer.ts`; update every test fixture that names the settings version (FR-046, FR-129)
+- [ ] T351 [P] Write controller tests in `src/core/battle/battleController.test.ts` before the code: with `pointAfterFullHelp: false`, a hit after help step 3 (reached by help requests, by misses, and by the time limit) leaves `enemiesDestroyed` unchanged, raises `enemiesHit`, sets `lastShot.uncounted`, resets `missStreak`, brings a new `terrainSeed` and a new search, and records the attempt as with help; with "Gegner pro Runde" 1 the round goes on after it and ends after the next counted hit; hits after help steps 1 and 2 count; with the setting on, a hit after help step 3 counts and has no `uncounted` (FR-082, FR-083, FR-089, FR-101, FR-129)
+- [ ] T352 Implement until T351 passes: `RoundState.enemiesHit` and `LastShot.uncounted` in `src/core/types.ts`; `enemiesHit` in `createRound` and the terrain seed from `enemiesHit` in `renewTerrain` in `src/core/battle/round.ts`; the counted or uncounted hit in `shotAnimationDone` and `enemiesHit` kept by `newScene` in `src/core/battle/controller.ts`; the hit sound in `src/game/BattleScene.ts` follows `enemiesHit` (FR-129)
+- [ ] T353 [P] Write screen tests before the code: `src/app/BattleOverlay.test.tsx` (an uncounted hit shows "Getroffen, mit Hilfe." with the enemy's number and the tank counter stays; a counted hit shows "Getroffen!"); `src/app/SettingsPage.test.tsx` (the group "Hilfe" holds "Zeitlimit", its seconds field and "Punkt nach voller Hilfe", each with a one-line explanation; the new switch is on by default; turning it off and saving stores `pointAfterFullHelp: false`; "Zeitlimit" is no longer in the group "Runde") (FR-129)
+- [ ] T354 Implement the screens until T353 passes: the feedback line in `src/app/BattleOverlay.tsx`; "Zeitlimit" moved into the group "Hilfe" and the new switch with the explanations in `src/app/SettingsPage.tsx`; the texts in `src/i18n/de.ts` (FR-129)
+- [ ] T355 Write `tests/e2e/fullHelp.spec.ts` (keyboard only, every browser project): stored settings with `pointAfterFullHelp: false` and "Gegner pro Runde" 2; three help requests and a shot at the solution leave `data-enemies-destroyed` at 0 and show "Getroffen, mit Hilfe."; a hit without help raises it to 1, a hit after one help request to 2 and ends the round, and the end screen shows 2 stars (FR-129)
+- [ ] T356 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project)
+
 ---
 
 ## Dependencies and Execution Order
@@ -909,6 +924,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 24 Polish**: depends on all earlier phases.
 - **Phase 24a (amendment 17)**: depends on Phase 24. T327 runs before T328, T329 before T330, T331 before T332, T333 before T334, T335 before T336, T337 before T338; T330 and T332 run before T334; T334 before T336 to T339; T340 after T338 and T339; T341 last.
 - **Phase 24b (amendment 16)**: depends on Phases 22h (device projects and layouts), 23 (offline play) and 24a (play-mode buttons on the start screen). T342 runs before T344; T343 before T344 and T345; T346 only if T345 or the product owner's check fails; T347 last.
+- **Phase 24c (amendment 18)**: depends on Phases 24a (play modes, settings version 8) and 24b. T349 runs before T350, T351 before T352, T353 before T354; T350 before T352 (the controller reads the setting) and T354; T355 after T352 and T354; T356 last.
 
 ### User story dependencies
 
@@ -1019,10 +1035,10 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-043a | T221, T222, T223, T225, T238, T239, T246, T247, T249, T250 |
 | FR-044 | T032, T208, T209, T213, T267, T269 |
 | FR-045 | T110, T111, T115, T166 |
-| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330 |
+| FR-046 | T011, T012, T112, T113, T175, T176, T188, T189, T205, T207, T213, T255, T256, T262, T273, T274, T275, T276, T329, T330, T349, T350 |
 | FR-047 | T011, T013, T112, T113, T175, T176, T329, T330 |
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
-| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295 |
+| FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295, T349 |
 | FR-049 | T034, T105, T106, T113 |
 | FR-050 | T001, T003, T005, T045, T154, T278, T303, T304, T343 |
 | FR-051 | T003, T134, T139, T304 |
@@ -1057,14 +1073,14 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-079 | T111, T112, T113, T116, T213 |
 | FR-080 | T208, T209, T212, T214 |
 | FR-081 | T060, T061, T062, T087, T095, T098, T208, T209, T214, T222, T223, T226, T238, T246, T247, T267 |
-| FR-082 | T061, T205, T207, T208, T209, T213, T214 |
-| FR-083 | T208, T209, T210, T211, T214 |
+| FR-082 | T061, T205, T207, T208, T209, T213, T214, T351 |
+| FR-083 | T208, T209, T210, T211, T214, T351, T352, T353 |
 | FR-084 | T206, T208, T209, T210, T211, T213, T214 |
 | FR-085 | T206, T210, T211, T214 |
-| FR-086 | T205, T206, T207, T210, T211, T213, T214, T335, T336 |
+| FR-086 | T205, T206, T207, T210, T211, T213, T214, T335, T336, T351 |
 | FR-087 | T127, T128, T132, T133, T252 |
 | FR-088 | T234 |
-| FR-089 | T252, T254, T257, T258, T261, T262 |
+| FR-089 | T252, T254, T257, T258, T261, T262, T351, T355 |
 | FR-090 | T252, T253, T254 |
 | FR-091 | T260, T261, T262, T264 |
 | FR-092 | T259, T260, T261, T262 |
@@ -1090,7 +1106,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-112 | T290, T291, T293, T294 |
 | FR-113 | T287, T289, T292, T293, T294 |
 | FR-114 | T290, T291, T294 |
-| FR-115 | T297, T298, T299, T300, T301 |
+| FR-115 | T297, T298, T299, T300, T301, T349 |
 | FR-116 | T295, T297, T300 |
 | FR-117 | T295, T297, T300, T305 |
 | FR-118 | T295, T296, T297, T298, T299, T300, T301, T305 |
@@ -1104,6 +1120,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-126 | T344 |
 | FR-127 | T345 |
 | FR-128 | T345, T346 |
+| FR-129 | T349, T350, T351, T352, T353, T354, T355, T356 |
 | SC-001 | T043, T046, T150, T165, T345 |
 | SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1133,3 +1150,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 15 | T295 to T301 |
 | US11 | T327 to T341 |
 | Amendment 17 | T327 to T341 |
+| Amendment 18 | T349 to T356 |

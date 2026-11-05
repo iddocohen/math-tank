@@ -6,7 +6,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `8` | `8` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; `migrate` upgrades version 0 to 7 data (see below) |
+| `version` | `9` | `9` | Schema version. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; `migrate` upgrades version 0 to 8 data (see below) |
 | `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
@@ -28,6 +28,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `showClock` | `boolean` | `false` | Shows an up-counting clock at the top during play (FR-084) |
 | `showRecords` | `boolean` | `true` | Shows "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086); the best is stored either way |
 | `timeLimitSeconds` | `number \| null` | `null` | 10 to 120 when set |
+| `pointAfterFullHelp` | `boolean` | `true` | "Punkt nach voller Hilfe" (amendment 18, FR-129), in the "Hilfe" group next to "Zeitlimit". When `false`, an enemy destroyed after help step 3 does not raise `enemiesDestroyed`, so it gives no star and does not count toward "Gegner pro Runde" or the personal best; the attempt is recorded as with help either way |
 | `garage` | `boolean` | `true` | "Garage und Sterne" (amendment 11, FR-096): shows the garage button, the G key, the star total and the unlock line, and gives the child's tank the chosen look. When `false`, all of these are hidden and the tank has the standard look; stars are counted either way |
 | `numberPad` | `'auto' \| 'always' \| 'never'` | `'auto'` | "Zahlenfeld" (amendment 12, FR-102): `'auto'` shows the on-screen number pad in battle when the main pointer is not fine or the screen is narrower than 1100 CSS pixels; `'always'` shows it on every screen; `'never'` hides it |
 
@@ -44,6 +45,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 5** (amendment 12): `numberPad` is added with `'auto'` unless already set; `version` becomes 6. Version 0 to 4 data go through every step.
 
 **Migration from version 7** (amendment 17): `freePlay` is dropped and `playModes` is added: when `freePlay` was `true` and every challenge type was off (the parent offered only free play), `{ mixed: false, ruler: true, math: false }`; otherwise all three `true`. `version` becomes 8. Version 0 to 6 data and version 2 transfer codes (whose frozen base is version 6) go through every step.
+
+**Migration from version 8** (amendment 18): `pointAfterFullHelp` is added with `true` unless already set; `version` becomes 9. Version 0 to 7 data and version 2 transfer codes go through every step.
 
 **Migration from version 6** (PO1, product owner: "I do not want a sound of reading the question out loud"): `sound.speech` is set to `false`; `version` becomes 7. A parent who turns "Vorlesen" on again keeps it on, because version 7 data is not migrated. Version 0 to 5 data go through every step. After every step, a whole-number `addition.maxOperand` above the range width is clamped to it (review R5).
 
@@ -179,7 +182,7 @@ interface Garage { version: 1; stars: number; look: Look }   // stars: whole num
 
 - Unlocked items are not stored: `isUnlocked(stars, id)` is `stars >= item.stars` (FR-097).
 - `addStars(garage, n)` returns `{ garage, unlocked }` with `unlocked` the items whose threshold lies in `(stars, stars + n]`, in unlock order. `unlockedBetween(from, to)` gives the same list for any two totals; the end screen uses it with the star total at the start of the round.
-- `newlyDestroyed(seen, current)` is `current - seen` when `current > seen`, else 0; the app calls it with each new `RoundState.enemiesDestroyed`, which counts enemies only, never decoys (FR-083), and resets `seen` when a new round starts at 0.
+- `newlyDestroyed(seen, current)` is `current - seen` when `current > seen`, else 0; the app calls it with each new `RoundState.enemiesDestroyed`, which counts enemies only, never decoys (FR-083), and with `pointAfterFullHelp` off not an enemy destroyed after help step 3 (amendment 18), and resets `seen` when a new round starts at 0.
 - `equip(garage, id)` returns the garage with `id` chosen for its kind when it is unlocked, else the garage unchanged. `resetStars()` returns `{ version: 1, stars: 0, look: STANDARD_LOOK }`.
 - `starsNeeded(stars, id)` is `max(0, item.stars - stars)`, shown as "noch N Sterne".
 - `lookKey(look)` is `color:<id> flag:<id> trail:<id> hat:<id>`, the canvas attribute `data-player-look` in battle.
@@ -226,7 +229,7 @@ type TransferV2 = [
 ];
 ```
 
-  The code is `v2.<data>`. Writing and decoding both use `TRANSFER_V2_SETTINGS_BASE`, a frozen copy of the version 6 defaults in `src/core/transfer/transfer.ts`, never the live `defaultSettings()`, so changing a default later never changes what an existing code means (review T1). Decoding lays the differences over that base, then migrates from the settings version in the code and checks everything exactly like version 1. `src/core/transfer/transfer.test.ts` keeps two codes written on 2026-11-05 and checks that they still decode to the same save.
+  The code is `v2.<data>`. Writing and decoding both use `TRANSFER_V2_SETTINGS_BASE`, a frozen copy of the version 6 defaults in `src/core/transfer/transfer.ts`, never the live `defaultSettings()`, so changing a default later never changes what an existing code means (review T1). Amendment 18 adds `pointAfterFullHelp: true` to that base: a code written before it holds no such field and reads as `true`, which is also what the version 8 to 9 step gives, so its meaning does not change; a code with the setting on leaves the field out, and one with it off carries `false`. Decoding lays the differences over that base, then migrates from the settings version in the code and checks everything exactly like version 1. `src/core/transfer/transfer.test.ts` keeps two codes written on 2026-11-05 and checks that they still decode to the same save.
 - **Size limits when reading** (review R3): a code longer than `TRANSFER_MAX_CODE_LENGTH` = 8192 characters is refused without reading it, and unpacking stops and refuses the code as soon as the JSON passes `TRANSFER_MAX_JSON_BYTES` = 65536 bytes.
 
 ## Screen layout (not persisted, amendment 12)
@@ -294,7 +297,8 @@ interface RoundState {
   mode: PlayMode;                  // 'mixed' | 'ruler' | 'math' (amendment 17, FR-121 to FR-123); replaces 'guided' | 'freePlay'
   turn: number;                    // player shots fired this round (challenge ids use it)
   lives: number;                   // child's hearts, 3 at the start (LIVES), 0 ends the round (FR-080)
-  enemiesDestroyed: number;        // score (FR-083)
+  enemiesDestroyed: number;        // score (FR-083): the enemies that count; with pointAfterFullHelp off, an enemy destroyed after help step 3 is not counted (amendment 18, FR-129)
+  enemiesHit: number;              // every enemy destroyed this round, counted or not (amendment 18); seeds the new hills (renewTerrain) and the view's hit sound
   elapsedMs: number;               // play time up to the last pause; final once the round is over (FR-084). The controller's elapsedMs() adds the running part
   missStreak: number;              // the child's misses in a row (amendment 13, FR-098): + 1 per shot that does not destroy the enemy (near misses and burst decoys included), + 2 for a fast guess (FR-038 rule);
                                    // 0 after a shot that destroys the enemy and after an enemy hit; kept by newScene; 0 at startRound
@@ -331,6 +335,7 @@ interface LastShot {
   targetNumber: number;            // the number the step count refers to: the enemy's, or in comparison turns the nearest tank still standing (amendment 10, FR-072)
   distance: number | null;         // steps from the landed number to targetNumber
   enemyNumber: number;             // the enemy's number when the shell landed; feedback shows it after the enemy moved
+  uncounted?: boolean;             // true for a hit after help step 3 with pointAfterFullHelp off: not counted, feedback "Getroffen, mit Hilfe." (amendment 18, FR-129)
 }
 
 interface TankState { id: string; kind: 'player' | 'enemy' | 'decoy'; position: number /* number on the line */; x: number; y: number; alive: boolean; }   // no health (amendment 06); no number plate `label` (amendment 09); decoys are back without it (amendment 10)
@@ -349,7 +354,7 @@ start → challenge (a search in every play mode, enemy visible; mode 'ruler' al
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
-playerShot --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
+playerShot --hit (exact number)--> enemy destroyed (enemiesHit + 1; enemiesDestroyed + 1 unless pointAfterFullHelp is off and help.level is 3, then lastShot.uncounted; attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
 playerShot --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, missStreak + 1, or + 2 for a fast guess, lastShot with the step count shown)
 playerShot (guided, comparison) --decoy's exact number--> decoy destroyed (alive false, lastShot.decoyHit), a miss --> enemyTurn (help.level + 1; the enemy and every standing decoy fire together from their own barrels, bug report B2)
 playerShot (guided, comparison) --hit--> enemy destroyed, every decoy alive false (folded away) --> new search

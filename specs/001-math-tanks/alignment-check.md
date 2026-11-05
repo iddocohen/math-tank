@@ -240,3 +240,23 @@ The product owner asked that the game also work in Amazon Silk, the browser on t
   - The example Silk version in the user agent (Silk 130, Android 11 for Fire OS 8) is illustrative.
 
 The spec (FR-050, new FR-125 to FR-128, US8 scenario 13, SC-002, Assumptions, Amendments), the contracts (Fire sizes in the screen layouts), quickstart (scenarios 31 to 33) and tasks (Phase 24b) were updated to match.
+
+## Amendment 18
+
+**Date**: 2026-11-05
+
+The product owner asked for a parent setting that decides whether a hit after the full help gives a point: "If the whole help was provided after timer is gone, a point should be provided if then hitting the enemy. This is a setting I would like to have, same as the timer itself how long the child has." The code check found that every destroyed enemy already raised the tank counter and gave a star, also after help step 3. This is an intended change, not drift.
+
+- **PRD section 7.1 (low-frustration design)** asks for progressively more explicit help and that the child can always continue. Both stay: the help steps, the shown solution and the one-tap fire at it do not change, and the round goes on after the hit (FR-031, FR-129).
+- **PRD section 7.3 (rewards)** says rewards must not depend on perfect mathematical performance. With the setting off, a hit after the shown solution gives no star, so the stars depend a little more on solving without the full help. Hits after help steps 1 and 2 still count, the setting is on by default, and the parent turns it off on purpose, which the product owner asked for.
+- **FR-034 (time limit without penalty)** stays: when the time limit reaches help step 3 and the setting is off, the child loses no heart and no star already earned; only the next hit does not count.
+- **PRD section 10 (learning progress)** is unchanged: an attempt that reached help step 3 is recorded as with help either way (FR-035).
+- **FR-089 (stars never go down)** holds: with the setting off, the hit adds no star, and no star is taken away.
+- Decisions of this update that the amendment does not state:
+  - The setting is called `pointAfterFullHelp` in settings version 9.
+  - "Zeitlimit" moves from the group "Runde" to the group "Hilfe", so the two switches stand together, as the amendment asks.
+  - The explosion, the hit sound and the new hills stay for a hit that does not count; only the feedback line changes. The line still names the enemy's number after "Getroffen, mit Hilfe.", as FR-068 asks for every hit.
+  - The round state keeps two counts: `enemiesDestroyed` (the score, which the stars, the round goal and the personal best read) and `enemiesHit` (every destroyed enemy, which seeds the new hills). The hit carries `lastShot.uncounted`.
+  - The frozen transfer base gains `pointAfterFullHelp: true`, so a code with the setting on leaves the field out, and a code made before amendment 18 reads as on.
+
+The spec (User Story 5 scenario 8, FR-046, FR-082, FR-083, FR-086, FR-089, new FR-129, Amendments), the data model (Settings version 9, `RoundState.enemiesHit`, `LastShot.uncounted`, the transfer base), the contracts (`renewTerrain`, `newScene`, the settings group "Hilfe"), quickstart (scenario 34) and tasks (Phase 24c) were updated to match.

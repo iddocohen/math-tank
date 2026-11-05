@@ -168,6 +168,7 @@ In the garage (amendment 11, FR-092): 0 to 9 type the number of an item (at most
 - "Genau treffen" is removed by amendment 06. "Rundenende" offers "Bis alle Herzen weg" and "Gegner pro Runde"; the number of enemies (1 to 20) appears only with "Gegner pro Runde"; with "Ohne Schaden spielen" on, "Bis alle Herzen weg" is not offered and the choice switches to "Gegner pro Runde". Switches "Uhr beim Spielen zeigen" (off) and "Rekord zeigen" (on).
 - "Daten sichern" also includes the personal bests, the stars and the chosen look (amendment 11).
 - "Garage und Sterne" switch in the group Runde (on), amendment 11.
+- The group Hilfe ends with "Zeitlimit" (switch, and the seconds field 10 to 120 while it is on; moved from the group Runde by amendment 18) and "Punkt nach voller Hilfe" (switch, on), each with a one-line explanation below it (amendment 18, FR-129).
 - "Daten sichern" (export) downloads a JSON file; "Daten laden" (import) reads one and shows the result.
 - A short note explains how to add the game to the Home Screen on iPad and Android.
 - A setting for a feature that is not built yet is shown disabled, with the note "kommt bald" (coming soon), instead of being hidden (amendment 05, FR-079).
