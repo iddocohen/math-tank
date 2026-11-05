@@ -11,6 +11,7 @@ export const de = {
     freePlay: 'Freies Spiel',
     fullscreen: 'Vollbild',
     parentHint: 'Für Eltern: Zahnrad gedrückt halten',
+    gear: 'Für Eltern',
     updateReady: 'Eine neue Version ist bereit.',
   },
 
@@ -30,6 +31,14 @@ export const de = {
     yourTurn: 'Du bist dran.',
     enemyTurn: 'Der Gegner ist dran.',
     enemyFound: 'Gefunden!',
+    angleUp: 'Winkel größer',
+    angleDown: 'Winkel kleiner',
+    powerUp: 'Mehr Kraft',
+    powerDown: 'Weniger Kraft',
+    plus: '+',
+    minus: '−',
+    playerHealth: 'Dein Panzer',
+    enemyHealth: 'Gegner',
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
   },
 
@@ -60,7 +69,7 @@ export const de = {
 
   roundEnd: {
     playerWon: 'Super! Du hast den Gegner getroffen.',
-    enemyWon: 'Die Runde ist vorbei. Gleich noch einmal?',
+    enemyWon: 'Gut gekämpft! Noch eine Runde?',
     turnsUsed: 'Alle Züge sind gespielt. Gut gemacht!',
     again: 'Nochmal',
     backToStart: 'Zum Start',
