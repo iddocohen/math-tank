@@ -606,3 +606,85 @@ describe('BattleOverlay number pad (amendment 12, FR-102, FR-103)', () => {
     throw new Error('no guided seed');
   });
 });
+
+describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', () => {
+  const m = t();
+
+  it('the pause button pauses the round and the resume screen continues it (FR-054)', () => {
+    const { controller } = setup();
+    expect(screen.queryByTestId('pause-screen')).toBeNull();
+    const pause = screen.getByRole('button', { name: m.battle.pause });
+    // Mouse and touch only: it never takes focus, so Enter and Space cannot press it.
+    expect(pause.getAttribute('tabindex')).toBe('-1');
+    fireEvent.click(pause);
+    expect(controller.getState().phase).toBe('paused');
+    const resumeScreen = screen.getByTestId('pause-screen');
+    expect(resumeScreen.textContent).toContain(m.battle.pause);
+    fireEvent.click(screen.getByRole('button', { name: m.battle.resume }));
+    expect(controller.getState().phase).toBe('aiming');
+    expect(screen.queryByTestId('pause-screen')).toBeNull();
+  });
+
+  it('the pause button also works while a shell flies, and is off once the round is over', () => {
+    const { controller } = setup({ roundType: 'enemyCount', roundLength: 1 });
+    act(() => controller.fireAt(controller.getState().player.position));
+    fireEvent.click(screen.getByRole('button', { name: m.battle.pause }));
+    expect(controller.getState().phase).toBe('paused');
+    fireEvent.click(screen.getByRole('button', { name: m.battle.resume }));
+    expect(controller.getState().phase).toBe('playerShot');
+    act(() => {
+      controller.shotAnimationDone();
+      if (controller.getState().phase === 'enemyTurn') controller.enemyShotAnimationDone();
+      controller.fireAt(controller.getState().enemy.position);
+      controller.shotAnimationDone();
+    });
+    expect(controller.getState().phase).toBe('roundOver');
+    expect((screen.getByRole('button', { name: m.battle.pause }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the fullscreen button only where the browser allows fullscreen, and asks for it on the app root (FR-054, FR-106)', () => {
+    const original = Object.getOwnPropertyDescriptor(Document.prototype, 'fullscreenEnabled');
+    try {
+      Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true });
+      setup();
+      expect(screen.queryByRole('button', { name: m.start.fullscreen })).toBeNull();
+      cleanup();
+
+      Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+      const requested: Element[] = [];
+      const root = document.createElement('div');
+      root.dataset.testid = 'app-root';
+      root.requestFullscreen = function (this: Element) {
+        requested.push(this);
+        return Promise.resolve();
+      };
+      document.body.appendChild(root);
+      let now = 1000;
+      const controller = new BattleController({ settings: { ...defaultSettings(), freePlay: true }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
+      controller.startRound('freePlay');
+      render(<Overlay controller={controller} />, { container: root });
+      const button = screen.getByRole('button', { name: m.start.fullscreen });
+      expect(button.getAttribute('tabindex')).toBe('-1');
+      fireEvent.click(button);
+      expect(requested).toEqual([root]);
+      now += 1;
+      root.remove();
+    } finally {
+      delete (document as unknown as Record<string, unknown>).fullscreenEnabled;
+      if (original) Object.defineProperty(Document.prototype, 'fullscreenEnabled', original);
+    }
+  });
+
+  it('shows the speaker button only when speech is available, and it repeats the challenge (FR-055)', () => {
+    let now = 1000;
+    const controller = new BattleController({ settings: defaultSettings(), progress: memoryProgressStore(), clock: () => now, seed: 7 });
+    controller.startRound('guided');
+    const view = render(<BattleOverlay controller={controller} state={controller.getState()} />);
+    expect(screen.queryByRole('button', { name: m.battle.speak })).toBeNull();
+    const onSpeak = vi.fn();
+    view.rerender(<BattleOverlay controller={controller} state={controller.getState()} onSpeak={onSpeak} />);
+    fireEvent.click(screen.getByRole('button', { name: m.battle.speak }));
+    expect(onSpeak).toHaveBeenCalledTimes(1);
+    now += 1;
+  });
+});

@@ -121,6 +121,10 @@ test('the battle shows the number pad, and nothing is cut off or overlapping', a
     ['help', page.getByTestId('help-button')],
     ['gear', page.getByTestId('parent-gate')],
     ['new scene', page.getByTestId('new-scene')],
+    // Pause and fullscreen in the battle (T140, T141); fullscreen only where the browser allows it (FR-106).
+    ['pause', page.getByTestId('pause-button')],
+    ...((await page.getByTestId('battle-fullscreen').count()) > 0 ? [['fullscreen', page.getByTestId('battle-fullscreen')] as [string, Locator]] : []),
+    ...((await page.getByTestId('speaker-button').count()) > 0 ? [['speaker', page.getByTestId('speaker-button')] as [string, Locator]] : []),
     ['fire', page.locator('.fire-button')],
     ['readout', page.getByTestId('readout')],
     ...keys.map((k, i): [string, Locator] => [`key ${i}`, k]),
@@ -142,8 +146,9 @@ test('the battle shows the number pad, and nothing is cut off or overlapping', a
   for (const name of [...targets.filter((n) => n.startsWith('key') || n === 'fire' || n === 'help'), 'readout']) {
     expect(overlap(boxes.get('canvas')!, boxes.get(name)!), `canvas and ${name} overlap`).toBe(false);
   }
-  // The banner covers no control: it sits over the sky.
+  // The banner covers no control and not the tank counter: it sits over the sky.
   for (const name of targets) expect(overlap(boxes.get('banner')!, boxes.get(name)!), `banner and ${name} overlap`).toBe(false);
+  expect(overlap(boxes.get('banner')!, await boxOf(page.getByTestId('score'))), 'banner and counter overlap').toBe(false);
   await expectNoScroll(page);
 
   const fontSize = await banner.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

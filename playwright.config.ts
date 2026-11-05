@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/** Specs that run only in the device projects (amendment 12). */
-const DEVICE_SPECS = /devices\.spec\.ts$/;
+/** Specs that run only in the device projects (amendment 12, T136). */
+const DEVICE_SPECS = /(devices|touch)\.spec\.ts$/;
 
 export default defineConfig({
   testDir: 'tests/e2e',

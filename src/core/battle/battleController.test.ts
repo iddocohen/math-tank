@@ -2435,3 +2435,27 @@ describe('bug report B2: in comparison turns all option tanks fire a volley (FR-
     expect(firing.shot!.decoyShells).toEqual([]);
   });
 });
+
+describe('the solution step stays ready after another miss (T183, US5, FR-031)', () => {
+  it('a miss at help step 3 points the selection at the solution again, so Enter fires at it', () => {
+    const g = guidedRoundWhere(positionSearch, { noDamage: true });
+    const s0 = g.controller.getState();
+    answer(g, missNumber(s0));
+    g.controller.requestHelp();
+    answer(g, missNumber(s0));
+    expect(g.controller.getState().help.level).toBe(3);
+    // The third wrong number is typed, as the child would.
+    g.advance(1_000);
+    typeNumber(g.controller, missNumber(s0));
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    g.controller.enemyShotAnimationDone();
+    const s = g.controller.getState();
+    expect(s.help.level).toBe(3);
+    expect(s.selection).toBe(s0.challenge!.answer);
+    g.advance(1_000);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().enemiesDestroyed).toBe(1);
+  });
+});

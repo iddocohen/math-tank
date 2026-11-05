@@ -261,7 +261,7 @@ describe('SettingsPage', () => {
     }
   });
 
-  it('shows fields of features not built yet disabled with "kommt bald" and keeps their stored values on save', () => {
+  it('shows no field as "kommt bald" once every feature is built, and keeps the stored values on save', () => {
     const stored: Partial<Settings> = {
       help: { nearestTen: false, countSteps: true, zoom: false, stepAnimation: true },
       sound: { effects: true, music: true, speech: false },
@@ -271,7 +271,8 @@ describe('SettingsPage', () => {
       addition: { maxOperand: 7, maxResult: 90, steps: 2 },
     };
     const { persistence } = setup(stored);
-    expect(COMING_SOON.length).toBeGreaterThan(0);
+    // Every feature is built since Phase 23 (T138, T142).
+    expect(COMING_SOON).toEqual([]);
     // Addition and subtraction limits work since Phase 16, beginner assistance since Phase 17; they can be changed.
     for (const label of [L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps, L.beginnerAssist]) {
       expect(field(label).disabled, label).toBe(false);
@@ -282,12 +283,9 @@ describe('SettingsPage', () => {
     for (const label of [L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.timeLimit, L.timeLimitSeconds, L.adaptive]) {
       expect(field(label).disabled, label).toBe(false);
     }
-    for (const label of [L.music, L.speech]) {
-      const input = field(label);
-      expect(input.disabled, label).toBe(true);
-      const note = document.getElementById(input.getAttribute('aria-describedby') ?? '');
-      expect(note?.textContent, label).toBe(m.parent.comingSoon);
-    }
+    // Music and spoken instructions work since Phase 23; nothing shows "kommt bald".
+    for (const label of [L.music, L.speech]) expect(field(label).disabled, label).toBe(false);
+    expect(screen.queryByText(m.parent.comingSoon)).toBeNull();
     expect(field(L.rangePreset).disabled).toBe(false);
     expect(field(L.enemyDifficulty).disabled).toBe(false);
     setValue(L.enemyDifficulty, 'normal');

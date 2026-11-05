@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createSfx, landingSounds, MAX_GAIN, type AudioContextLike } from './sfx';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSfx, landingSounds, MAX_GAIN, MUSIC_BAR_MS, type AudioContextLike } from './sfx';
 
 /** Minimal Web Audio stand-in that records started sources and gain values. */
 function fakeContext() {
@@ -94,7 +94,7 @@ describe('sfx', () => {
 
   it('offers no sound for a wrong answer; the only extra voice is the light plopp of a bursting decoy (amendment 10)', () => {
     const sfx = createSfx({ enabled: () => true, createContext: () => fakeContext().ctx });
-    expect(Object.keys(sfx).sort()).toEqual(['boom', 'chime', 'installUnlock', 'plopp', 'shot', 'unlock']);
+    expect(Object.keys(sfx).sort()).toEqual(['boom', 'chime', 'installUnlock', 'plopp', 'shot', 'startMusic', 'stopMusic', 'unlock']);
   });
 
   it('the plopp is quiet, plays only when effects are on, and is lighter than the boom (amendment 10, FR-066)', async () => {
@@ -125,5 +125,50 @@ describe('sfx', () => {
   it('a burst decoy plays only the light plopp, clearly different from the enemy explosion (amendment 10, FR-066)', () => {
     expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: true })).toEqual(['plopp']);
     expect(landingSounds({ outOfBounds: false, destroyedEnemy: false, burstDecoy: false })).toEqual(['boom']);
+  });
+});
+
+describe('music loop (FR-009, research R13, T142)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('plays a quiet generated loop only while settings.sound.music is on, and stops on stopMusic', async () => {
+    vi.useFakeTimers();
+    const f = fakeContext();
+    let music = true;
+    const sfx = createSfx({ enabled: () => false, music: () => music, createContext: () => f.ctx });
+    await sfx.unlock();
+    sfx.startMusic();
+    vi.advanceTimersByTime(MUSIC_BAR_MS * 2);
+    const played = f.started.length;
+    expect(played).toBeGreaterThan(0);
+    // Quieter than the effects: background only.
+    expect(Math.max(...f.gains)).toBeLessThanOrEqual(MAX_GAIN / 4);
+    // Turning music off stops the loop at the next bar.
+    music = false;
+    vi.advanceTimersByTime(MUSIC_BAR_MS * 3);
+    expect(f.started.length).toBe(played);
+    music = true;
+    sfx.stopMusic();
+    vi.advanceTimersByTime(MUSIC_BAR_MS * 3);
+    expect(f.started.length).toBe(played);
+  });
+
+  it('plays nothing with music off (the default) or before the first tap unlocks audio', async () => {
+    vi.useFakeTimers();
+    const off = fakeContext();
+    const quiet = createSfx({ enabled: () => true, music: () => false, createContext: () => off.ctx });
+    await quiet.unlock();
+    quiet.startMusic();
+    vi.advanceTimersByTime(MUSIC_BAR_MS * 3);
+    expect(off.started).toEqual([]);
+
+    const locked = fakeContext();
+    const early = createSfx({ enabled: () => true, music: () => true, createContext: () => locked.ctx });
+    early.startMusic();
+    vi.advanceTimersByTime(MUSIC_BAR_MS * 3);
+    expect(locked.started).toEqual([]);
+    early.stopMusic();
   });
 });

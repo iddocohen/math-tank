@@ -5,6 +5,8 @@
  * - Sounds play only while `enabled()` returns true (wire it to settings.sound.effects).
  * - There is deliberately no sound for a wrong answer.
  * - Every voice peaks at MAX_GAIN or lower.
+ * - The optional music (T142, FR-009) is a quiet generated loop of soft notes, one bar every MUSIC_BAR_MS, played only
+ *   while `music()` returns true (wire it to settings.sound.music, off by default) and never louder than MAX_GAIN / 4.
  * - Browsers start audio suspended; the context is created and resumed on the first user tap
  *   (installUnlock). Until then every sound is skipped silently.
  */
@@ -16,10 +18,22 @@ export type AudioContextLike = Pick<
 >;
 
 export const MAX_GAIN = 0.25;
+/** One bar of the music loop. */
+export const MUSIC_BAR_MS = 2400;
+/** A calm C major pentatonic tune, one bar of four notes per entry (Hz). */
+const MUSIC_BARS: ReadonlyArray<readonly number[]> = [
+  [262, 330, 392, 330],
+  [294, 392, 440, 392],
+  [262, 330, 392, 523],
+  [392, 330, 294, 262],
+];
+const MUSIC_GAIN = 0.05;
 const SILENT = 0.0001;
 
 export interface SfxOptions {
   enabled: () => boolean;
+  /** Whether the music loop plays (settings.sound.music); no music when absent. */
+  music?: () => boolean;
   /** Defaults to `new AudioContext()`. */
   createContext?: () => AudioContextLike;
 }
@@ -30,6 +44,9 @@ export interface Sfx {
   chime(): void;
   /** A light, short pop for a decoy that bursts like a cardboard dummy (amendment 10, FR-066); at most half MAX_GAIN. */
   plopp(): void;
+  /** Starts the music loop; each bar plays only while music is on and audio is unlocked. */
+  startMusic(): void;
+  stopMusic(): void;
   /** Creates and resumes the audio context; call from a user gesture. */
   unlock(): Promise<void>;
   /** Unlocks on the first pointer or key press on `target`; returns a function that removes the listeners. */
@@ -52,6 +69,8 @@ export function createSfx(options: SfxOptions): Sfx {
   const make = options.createContext ?? (() => new AudioContext());
   let ctx: AudioContextLike | null = null;
   let noise: AudioBuffer | null = null;
+  let musicTimer: ReturnType<typeof setInterval> | null = null;
+  let bar = 0;
 
   const ready = (): AudioContextLike | null => {
     if (!options.enabled() || !ctx || ctx.state !== 'running') return null;
@@ -119,7 +138,24 @@ export function createSfx(options: SfxOptions): Sfx {
     }
   };
 
+  const playBar = () => {
+    if (!options.music?.() || !ctx || ctx.state !== 'running') return;
+    const c = ctx;
+    const notes = MUSIC_BARS[bar % MUSIC_BARS.length]!;
+    bar++;
+    const step = MUSIC_BAR_MS / 1000 / notes.length;
+    notes.forEach((f, i) => tone(c, 'sine', f, f, MUSIC_GAIN, 0.04, step * 1.6, i * step));
+  };
+
   return {
+    startMusic() {
+      if (musicTimer !== null) return;
+      musicTimer = setInterval(playBar, MUSIC_BAR_MS);
+    },
+    stopMusic() {
+      if (musicTimer !== null) clearInterval(musicTimer);
+      musicTimer = null;
+    },
     shot() {
       const c = ready();
       if (!c) return;

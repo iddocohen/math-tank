@@ -44,11 +44,8 @@ export const SETTING_FIELDS = [
 
 export type SettingField = (typeof SETTING_FIELDS)[number];
 
-export const COMING_SOON: readonly SettingField[] = [
-  // Phase 23: spoken instructions. Music has no task yet.
-  'sound.speech',
-  'sound.music',
-];
+/** Empty since Phase 23 built spoken instructions and the music loop (T138, T142). */
+export const COMING_SOON: readonly SettingField[] = [];
 
 export function isComingSoon(field: SettingField): boolean {
   return COMING_SOON.includes(field);

@@ -139,5 +139,9 @@ export function afterMiss(s: BattleState, now: number, settings: Settings, near 
   const wrongAnswers = s.help.wrongAnswers + 1;
   const counted: BattleState = { ...s, help: { ...s.help, wrongAnswers, wrongAnswerTimes: [...s.help.wrongAnswerTimes, now] } };
   const message: FeedbackMessage = near ? { key: 'near' } : { key: 'encouragement', index: deriveSeed(s.seed, 7, s.turn, wrongAnswers) };
-  return { ...raiseHelp(counted, settings), message };
+  const raised = raiseHelp(counted, settings);
+  // At the solution step the selection goes back to the solution after every miss, so one tap or Enter fires at it
+  // (FR-031, T183).
+  const selection = raised.help.level >= SOLUTION_HELP_LEVEL && raised.challenge ? raised.challenge.answer : raised.selection;
+  return { ...raised, selection, message };
 }

@@ -27,9 +27,18 @@
  * side) and whether the number pad shows (`data-number-pad`). A phone held upright shows RotateScreen over the start
  * screen, the garage and the battle, with the gear on it; while it shows, keys do nothing and a running round is
  * paused, and turning the phone sideways resumes only what it paused. The settings and progress pages open over it.
+ *
+ * US8 (T138, T139, T141, T142, FR-051a, FR-054, FR-055, FR-009): the "Spielen" tap or the starting Enter resumes Web
+ * Audio and, with "Vorlesen" on, primes speech with a short greeting; each new challenge is then spoken, and the
+ * speaker button repeats it. The music loop plays during a running round only with "Musik" on. A waiting new version
+ * of the game is applied only while the start screen shows (swUpdate). After leaving fullscreen the app root gets the
+ * focus back, so the keys keep working.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
+import { createSpeaker } from '../audio/speaker';
+import { promptText } from '../i18n';
+import { swUpdate } from './swUpdate';
 import { BattleController } from '../core/battle/controller';
 import { createProgressStore } from '../core/storage/progressStore';
 import { createGame } from '../game/createGame';
@@ -74,12 +83,13 @@ function createApp() {
     clock: () => Date.now(),
     seed: seedFromUrl(window.location.search),
   });
-  const sfx = createSfx({ enabled: () => persistence.settings().sound.effects });
-  return { settings, controller, sfx, persistence };
+  const sfx = createSfx({ enabled: () => persistence.settings().sound.effects, music: () => persistence.settings().sound.music });
+  const speaker = createSpeaker();
+  return { settings, controller, sfx, speaker, persistence };
 }
 
 export function App() {
-  const [{ controller, sfx, persistence }] = useState(createApp);
+  const [{ controller, sfx, speaker, persistence }] = useState(createApp);
   const [screen, setScreen] = useState<Screen>('start');
   const [parent, setParent] = useState<ParentView>('closed');
   // True when the parent gate paused the battle, so closing it resumes only what it paused (FR-045, FR-054).
@@ -166,6 +176,31 @@ export function App() {
     }
   }, [destroyed, persistence]);
 
+  // A waiting new version is applied only on the start screen, never during a round (FR-051a).
+  useEffect(() => {
+    swUpdate.setStartScreen(screen === 'start');
+  }, [screen]);
+
+  // Spoken challenges (FR-055): each new challenge is read aloud while "Vorlesen" is on and a German voice exists.
+  const speech = persistence.settings().sound.speech;
+  const challenge = state.challenge;
+  const speakChallenge = useCallback(() => {
+    const c = controller.getState().challenge;
+    if (c) speaker.speak(promptText(c.prompt));
+  }, [controller, speaker]);
+  useEffect(() => {
+    if (screen !== 'battle' || !challenge || !speech) return;
+    speaker.speak(promptText(challenge.prompt));
+  }, [screen, challenge, speech, speaker]);
+
+  // The optional music loop plays only during a running round (FR-009, T142).
+  const musicOn = screen === 'battle' && state.phase !== 'paused' && state.phase !== 'roundOver';
+  useEffect(() => {
+    if (!musicOn) return;
+    sfx.startMusic();
+    return () => sfx.stopMusic();
+  }, [musicOn, sfx]);
+
   // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070).
   const startRound = useCallback(() => {
     roundStartStars.current = persistence.garage().stars;
@@ -173,11 +208,14 @@ export function App() {
   }, [controller, persistence]);
   const play = useCallback(
     (mode: StartMode) => {
+      // Tablet browsers play sound and speak only after a user tap: this tap (or Enter) unlocks both (FR-055).
+      void sfx.unlock();
+      if (persistence.settings().sound.speech) speaker.prime();
       roundStartStars.current = persistence.garage().stars;
       controller.startRound(mode);
       setScreen('battle');
     },
-    [controller, persistence],
+    [controller, persistence, sfx, speaker],
   );
   const equip = useCallback(
     (id: string) => {
@@ -225,6 +263,14 @@ export function App() {
   useEffect(() => {
     root.current?.focus({ preventScroll: true });
   }, [screen, roundOver, parent]);
+  // Leaving fullscreen gives the focus back to the app root (FR-059).
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) root.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
 
   return (
     <div className="app-root" ref={root} tabIndex={-1} data-testid="app-root">
@@ -235,7 +281,13 @@ export function App() {
       ) : (
         <main className="battle" data-testid="battle-main" data-layout={layout === 'rotate' ? 'portrait' : layout} data-number-pad={numberPad}>
           <div className="game-parent" ref={gameParent} />
-          <BattleOverlay controller={controller} state={state} gear={gear} numberPad={numberPad} />
+          <BattleOverlay
+            controller={controller}
+            state={state}
+            gear={gear}
+            numberPad={numberPad}
+            onSpeak={speech && speaker.available ? speakChallenge : undefined}
+          />
           {roundOver && (
             <RoundEnd
               outcome={state.outcome}

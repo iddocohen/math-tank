@@ -15,6 +15,8 @@ export const de = {
     updateReady: 'Eine neue Version ist bereit.',
     /** Amendment 11 (FR-091): the button that opens the tank garage. */
     garage: 'Garage',
+    /** FR-055: spoken once by the "Spielen" start, so tablet browsers allow speech for the session. */
+    greeting: 'Los geht es!',
   },
 
   /** Amendment 11 (FR-089 to FR-095): the tank garage. Short words for a child. */
@@ -59,6 +61,8 @@ export const de = {
     continue: 'Weiter',
     pause: 'Pause',
     resume: 'Weiterspielen',
+    /** FR-055: the speaker button that reads the current challenge aloud again. */
+    speak: 'Aufgabe vorlesen',
     yourNumber: 'Deine Zahl',
     yourTurn: 'Du bist dran.',
     enemyTurn: 'Der Gegner ist dran.',

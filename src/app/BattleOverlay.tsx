@@ -55,6 +55,13 @@
  * Number pad (amendment 12, FR-102, FR-103): with `numberPad` the control bar also holds the on-screen number pad, and
  * the fire button acts like Enter (`confirm('keyboard')`), so the pad counts as keyboard input for "Finde N". Without
  * the pad the fire button counts as pointer input, as before. `data-number-pad` tells the stylesheet and the tests.
+ *
+ * US8 (T138, T140, T141, FR-054, FR-055, FR-106): at the top left the pause button before the tank counter; at the top
+ * right, beside the gear, the speaker button when speech is available (`onSpeak`, which reads the current challenge
+ * again) and the fullscreen button where the browser allows fullscreen (`document.fullscreenEnabled`), which asks for
+ * fullscreen on the app root. Both groups stay narrow, so the banner between them covers none of them (FR-104).
+ * These buttons are for mouse and touch only, like "Neue Landschaft": they never take focus. While the round is
+ * paused the pause screen covers the battle with "Weiterspielen"; Escape, Enter and Space resume it too (useKeyboard).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
@@ -78,9 +85,25 @@ interface Props {
   gear?: ReactNode;
   /** Show the on-screen number pad (amendment 12, FR-102); the app decides from the screen and the setting. */
   numberPad?: boolean;
+  /** Reads the current challenge aloud again; the speaker button shows only when this is given (FR-055). */
+  onSpeak?: () => void;
 }
 
-export function BattleOverlay({ controller, state, gear, numberPad = false }: Props) {
+/** Props of a button that never takes focus, so keys cannot press it (like "Neue Landschaft"). */
+const noFocus = {
+  tabIndex: -1,
+  onMouseDown: (e: { preventDefault(): void }) => e.preventDefault(),
+  onKeyDown: (e: { preventDefault(): void }) => e.preventDefault(),
+} as const;
+
+/** Asks for fullscreen on the app root (FR-054); some browsers refuse, and the game still works. */
+function enterFullscreen(from: HTMLElement): void {
+  const root = from.closest<HTMLElement>('[data-testid="app-root"]') ?? document.documentElement;
+  if (document.fullscreenElement || !root.requestFullscreen) return;
+  root.requestFullscreen().catch(() => {});
+}
+
+export function BattleOverlay({ controller, state, gear, numberPad = false, onSpeak }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
@@ -104,6 +127,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false }: Pr
   const placement = useCardPlacement(state);
   const solution = state.help.level === 3 && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
   useHelpTick(controller, state);
+  const canFullscreen = document.fullscreenEnabled === true;
 
   return (
     <div
@@ -159,6 +183,18 @@ export function BattleOverlay({ controller, state, gear, numberPad = false }: Pr
       </div>
 
       <div className="top-left">
+        <button
+          type="button"
+          className="icon-button pause-button"
+          data-testid="pause-button"
+          aria-label={m.battle.pause}
+          title={m.battle.pause}
+          disabled={state.phase === 'roundOver' || state.phase === 'paused'}
+          {...noFocus}
+          onClick={() => controller.pause()}
+        >
+          <span aria-hidden="true">⏸</span>
+        </button>
         <div className="score" data-testid="score" role="img" aria-label={`${m.battle.score}: ${state.enemiesDestroyed}`}>
           <TankIcon />
           <span aria-hidden="true">{state.enemiesDestroyed}</span>
@@ -166,7 +202,29 @@ export function BattleOverlay({ controller, state, gear, numberPad = false }: Pr
         {showClock && <Clock controller={controller} />}
       </div>
 
-      {gear && <div className="top-right">{gear}</div>}
+      {(gear || canFullscreen || onSpeak) && (
+        <div className="top-right">
+          {gear}
+          {onSpeak && (
+            <button type="button" className="icon-button speaker-button" data-testid="speaker-button" aria-label={m.battle.speak} title={m.battle.speak} {...noFocus} onClick={onSpeak}>
+              <span aria-hidden="true">🔊</span>
+            </button>
+          )}
+          {canFullscreen && (
+            <button
+              type="button"
+              className="icon-button"
+              data-testid="battle-fullscreen"
+              aria-label={m.start.fullscreen}
+              title={m.start.fullscreen}
+              {...noFocus}
+              onClick={(e) => enterFullscreen(e.currentTarget)}
+            >
+              <span aria-hidden="true">⛶</span>
+            </button>
+          )}
+        </div>
+      )}
 
       <button
         type="button"
@@ -229,6 +287,15 @@ export function BattleOverlay({ controller, state, gear, numberPad = false }: Pr
           {solution !== null ? m.battle.fireAt(solution) : m.battle.fire}
         </button>
       </div>
+
+      {state.phase === 'paused' && (
+        <div className="pause-screen" data-testid="pause-screen">
+          <h2 className="pause-title">{m.battle.pause}</h2>
+          <button type="button" className="play-button" {...noFocus} onClick={() => controller.resume()}>
+            {m.battle.resume}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

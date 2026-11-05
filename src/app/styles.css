@@ -1238,3 +1238,71 @@ input:focus-visible {
     transform: rotate(-90deg);
   }
 }
+
+/* US8 (T140, T138, FR-054, FR-055): pause and speaker buttons at the top left, before the tank counter. */
+.top-left .icon-button {
+  pointer-events: auto;
+  background: rgb(20 28 48 / 0.7);
+}
+
+.top-left .icon-button:disabled {
+  opacity: 0.4;
+}
+
+.battle .top-right .icon-button {
+  background: rgb(20 28 48 / 0.7);
+}
+
+/* The pause screen covers the battle until the child continues (FR-054). */
+.pause-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: rgb(14 20 36 / 0.82);
+}
+
+.pause-title {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+}
+
+/* The gear and fullscreen stay usable over the pause screen. */
+.battle .top-right {
+  z-index: 60;
+}
+
+/* The banner keeps clear of the corner groups: pause and counter at the left, gear, speaker and fullscreen at the right. */
+.battle .challenge-banner.placement-top {
+  max-width: min(980px, calc(100% - var(--controls-width) - 440px));
+}
+
+/*
+ * Phone held sideways (side layout): smaller corner buttons and a compact counter, so the pause button and the counter
+ * at the left and the gear, speaker and fullscreen at the right leave the banner room between them (FR-104).
+ */
+.battle[data-layout='side'][data-number-pad='true'] .top-left,
+.battle[data-layout='side'][data-number-pad='true'] .top-right {
+  gap: 8px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .top-left .icon-button,
+.battle[data-layout='side'][data-number-pad='true'] .top-right .icon-button {
+  width: 48px;
+  height: 48px;
+  font-size: 1.4rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .score {
+  padding: 4px 10px;
+  font-size: 1.25rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner.placement-top {
+  max-width: calc(100% - var(--controls-width) - 344px);
+}
