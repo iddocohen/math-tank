@@ -6,17 +6,18 @@ import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings
  * version 2 (decision D13: `aimCorrection` dropped, `labelLevel` turned into `rulerLevelStart` and
  * `rulerLevelMax`), with missing fields filled from the defaults. Version 2 becomes version 3 (amendment 04:
  * `exactHit` added, default false). Version 3 becomes version 4 (amendment 06: `exactHit` dropped, `roundType`,
- * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Older versions go through every
- * later step. Progress: version 0 becomes version 1.
+ * `showClock` and `showRecords` added, `roundLength` clamped to 1 to 20 enemies). Version 4 becomes version 5
+ * (amendment 11: `garage` added, default true). Older versions go through every later step. Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
 export function migrate(raw: unknown, kind: 'settings' | 'progress'): unknown {
   if (!isRecord(raw)) return raw;
   const version = raw.version ?? 0;
   if (kind === 'settings') {
-    if (version === 0 || version === 1) return migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw)));
-    if (version === 2) return migrateSettingsToV4(migrateSettingsToV3(raw));
-    return version === 3 ? migrateSettingsToV4(raw) : raw;
+    if (version === 0 || version === 1) return migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(migrateSettingsToV2(raw))));
+    if (version === 2) return migrateSettingsToV5(migrateSettingsToV4(migrateSettingsToV3(raw)));
+    if (version === 3) return migrateSettingsToV5(migrateSettingsToV4(raw));
+    return version === 4 ? migrateSettingsToV5(raw) : raw;
   }
   return version === 0 ? migrateProgressV0(raw) : raw;
 }
@@ -48,7 +49,7 @@ function migrateSettingsToV2(raw: Record<string, unknown>): Record<string, unkno
   }
   // Fields added by later versions are left to their own migration step (amendment 06: roundType follows noDamage).
   const base = defaultSettings() as unknown as Record<string, unknown>;
-  for (const later of ['roundType', 'showClock', 'showRecords']) delete base[later];
+  for (const later of ['roundType', 'showClock', 'showRecords', 'garage']) delete base[later];
   const merged = mergeDeep(base, over);
   return { ...merged, version: 2 };
 }
@@ -77,6 +78,11 @@ function migrateSettingsToV4(raw: Record<string, unknown>): Record<string, unkno
     showRecords: rest.showRecords ?? true,
     version: 4,
   };
+}
+
+/** Version 4 to 5 (amendment 11): adds "Garage und Sterne", on unless already set. */
+function migrateSettingsToV5(raw: Record<string, unknown>): Record<string, unknown> {
+  return { ...raw, garage: raw.garage ?? true, version: 5 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

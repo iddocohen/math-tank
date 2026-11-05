@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 4 (`mathtanks.settings.v1`, research R11 and R23; amendment 06).
+ * Structural schema for persisted settings, version 5 (`mathtanks.settings.v1`, research R11 and R23; amendments 06 and 11).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -16,7 +16,7 @@ export const rangeSchema = z.object({
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
 export const settingsSchema = z.object({
-  version: z.literal(4),
+  version: z.literal(5),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -63,6 +63,8 @@ export const settingsSchema = z.object({
   /** "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086). */
   showRecords: z.boolean(),
   timeLimitSeconds: z.number().nullable(),
+  /** "Garage und Sterne" (amendment 11, FR-096): the garage, the star total, the unlock line and the chosen look. */
+  garage: z.boolean(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

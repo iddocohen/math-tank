@@ -3,6 +3,7 @@ import { settingsSchema, type Settings } from '../settings/schema';
 import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
+import { emptyGarage, parseGarage, type Garage } from '../rewards/garage';
 import type { KeyValue } from './keyValue';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
@@ -12,6 +13,8 @@ export const SETTINGS_KEY = 'mathtanks.settings.v1';
 export const PROGRESS_KEY = 'mathtanks.progress.v1';
 /** Personal bests (amendment 06, FR-086). */
 export const RECORDS_KEY = 'mathtanks.records.v1';
+/** Stars and the chosen look (amendment 11, FR-097); apart from progress, so a progress reset never touches them. */
+export const GARAGE_KEY = 'mathtanks.garage.v1';
 
 export type ResetReason = 'none' | 'invalid' | 'unavailable';
 
@@ -95,4 +98,22 @@ export function loadRecords(kv: KeyValue): { records: Records; resetReason: Rese
 
 export function saveRecords(kv: KeyValue, r: Records): { ok: boolean } {
   return write(kv, RECORDS_KEY, r);
+}
+
+/**
+ * Loads the stars and the chosen look; damaged, invalid or unreadable data falls back to 0 stars and the standard
+ * look (FR-097). Data without a version is migrated; a locked or unknown look part becomes the standard item.
+ */
+export function loadGarage(kv: KeyValue): { garage: Garage; resetReason: ResetReason } {
+  const r = read(kv, GARAGE_KEY);
+  if (r.kind === 'missing') return { garage: emptyGarage(), resetReason: 'none' };
+  if (r.kind === 'unavailable') return { garage: emptyGarage(), resetReason: 'unavailable' };
+  const json = parseJson(r.text);
+  if (!json.ok) return { garage: emptyGarage(), resetReason: 'invalid' };
+  const garage = parseGarage(json.value);
+  return garage ? { garage, resetReason: 'none' } : { garage: emptyGarage(), resetReason: 'invalid' };
+}
+
+export function saveGarage(kv: KeyValue, g: Garage): { ok: boolean } {
+  return write(kv, GARAGE_KEY, g);
 }

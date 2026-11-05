@@ -3,7 +3,8 @@ import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue, type KeyValue } from '../core/storage/keyValue';
-import { emptyProgress, PROGRESS_KEY, RECORDS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { emptyProgress, GARAGE_KEY, PROGRESS_KEY, RECORDS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { emptyGarage } from '../core/rewards/garage';
 import { emptyRecords } from '../core/records/records';
 import { createPersistence, type StorageManagerLike } from './persistence';
 
@@ -129,6 +130,7 @@ describe('export and import through persistence (FR-048a)', () => {
       settings: changedSettings(),
       progress: emptyProgress(),
       records: { version: 1, best: { '0-20|3|untilHearts': { enemies: 4, ms: 61_000, at: 5 } } },
+      garage: emptyGarage(),
     });
   });
 
@@ -136,12 +138,14 @@ describe('export and import through persistence (FR-048a)', () => {
     const kv = memoryKeyValue();
     const p = createPersistence({ kv, storage: undefined });
     const records = { version: 1 as const, best: { 'k': { enemies: 2, ms: 1000, at: 1 } } };
-    const r = p.importText(exportData(changedSettings(), emptyProgress(), records));
+    const garage = { version: 1 as const, stars: 21, look: { color: 'sky' as const, flag: 'rocket' as const, trail: 'plain' as const, hat: 'none' as const } };
+    const r = p.importText(exportData(changedSettings(), emptyProgress(), records, garage));
     expect(r.ok).toBe(true);
     expect(p.settings()).toEqual(changedSettings());
     expect(p.records()).toEqual(records);
     expect(createPersistence({ kv, storage: undefined }).settings()).toEqual(changedSettings());
     expect(createPersistence({ kv, storage: undefined }).records()).toEqual(records);
+    expect(createPersistence({ kv, storage: undefined }).garage()).toEqual(garage);
   });
 
   it('a failed import changes nothing', () => {
@@ -175,5 +179,68 @@ describe('personal bests through persistence (amendment 06, FR-086)', () => {
     expect(p.submitResult('k', { enemies: 1, ms: 1, at: 1 }).newRecord).toBe(true);
     expect(p.status().saveFailed).toBe(true);
     expect(p.records().best.k).toEqual({ enemies: 1, ms: 1, at: 1 });
+  });
+});
+
+describe('stars and the chosen look through persistence (amendment 11, FR-089, FR-096, FR-097)', () => {
+  it('loads the stored garage', () => {
+    const stored = { version: 1, stars: 33, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'none' } };
+    const p = createPersistence({ kv: memoryKeyValue({ [GARAGE_KEY]: JSON.stringify(stored) }), storage: undefined });
+    expect(p.garage()).toEqual(stored);
+  });
+
+  it('addStars saves at once and returns the unlocked items', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ version: 1, stars: 9, look: emptyGarage().look }) });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(p.addStars(1).map((i) => i.id)).toEqual(['rocket']);
+    expect(p.garage().stars).toBe(10);
+    expect(createPersistence({ kv, storage: undefined }).garage().stars).toBe(10);
+    expect(p.addStars(2)).toEqual([]);
+  });
+
+  it('a progress reset keeps the stars and the look', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    p.addStars(12);
+    p.equip('rocket');
+    p.saveProgress(emptyProgress());
+    const again = createPersistence({ kv, storage: undefined });
+    expect(again.garage()).toEqual({ version: 1, stars: 12, look: { ...emptyGarage().look, flag: 'rocket' } });
+  });
+
+  it('equip saves the look and ignores a locked item', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    p.addStars(10);
+    p.equip('sky');
+    expect(p.garage().look.color).toBe('blue');
+    p.equip('rocket');
+    expect(createPersistence({ kv, storage: undefined }).garage().look.flag).toBe('rocket');
+  });
+
+  it('resetStars saves 0 stars and the standard look', () => {
+    const kv = memoryKeyValue();
+    const p = createPersistence({ kv, storage: undefined });
+    p.addStars(25);
+    p.equip('sky');
+    p.resetStars();
+    expect(p.garage()).toEqual(emptyGarage());
+    expect(createPersistence({ kv, storage: undefined }).garage()).toEqual(emptyGarage());
+  });
+
+  it('importing a file without garage keeps the stars of this browser', () => {
+    const p = createPersistence({ kv: memoryKeyValue(), storage: undefined });
+    p.addStars(14);
+    const file = JSON.parse(exportData(changedSettings(), emptyProgress(), emptyRecords(), emptyGarage())) as Record<string, unknown>;
+    delete file.garage;
+    expect(p.importText(JSON.stringify(file)).ok).toBe(true);
+    expect(p.garage().stars).toBe(14);
+    expect(p.settings()).toEqual(changedSettings());
+  });
+
+  it('a damaged garage key reports invalid and starts at 0 stars', () => {
+    const p = createPersistence({ kv: memoryKeyValue({ [GARAGE_KEY]: '{"stars":' }), storage: undefined });
+    expect(p.status().resetReason).toBe('invalid');
+    expect(p.garage()).toEqual(emptyGarage());
   });
 });

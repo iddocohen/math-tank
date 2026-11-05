@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 4,
+      version: 5,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -42,6 +42,7 @@ describe('defaults', () => {
       showClock: false,
       showRecords: true,
       timeLimitSeconds: null,
+      garage: true,
     });
   });
 
@@ -65,7 +66,17 @@ describe('defaults', () => {
     expect(parsed.data && 'exactHit' in parsed.data).toBe(false);
   });
 
-  it('the schema requires version 4, a known roundType and boolean showClock and showRecords (amendment 06)', () => {
+  it('the schema requires version 5 and a boolean garage (amendment 11, FR-096)', () => {
+    const d = defaultSettings() as unknown as Record<string, unknown>;
+    expect(settingsSchema.safeParse({ ...d, version: 4 }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, garage: false }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...d, garage: 'on' }).success).toBe(false);
+    const without = { ...d };
+    delete without.garage;
+    expect(settingsSchema.safeParse(without).success).toBe(false);
+  });
+
+  it('the schema requires a known roundType and boolean showClock and showRecords (amendment 06)', () => {
     const d = defaultSettings() as unknown as Record<string, unknown>;
     expect(settingsSchema.safeParse({ ...d, version: 3 }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...d, roundType: 'enemyCount' }).success).toBe(true);

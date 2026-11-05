@@ -193,6 +193,7 @@ export const de = {
         invalidSettings: 'Die Einstellungen in dieser Datei sind ungültig. Es wurde nichts geändert.',
         invalidProgress: 'Der Fortschritt in dieser Datei ist ungültig. Es wurde nichts geändert.',
         invalidRecords: 'Die Rekorde in dieser Datei sind ungültig. Es wurde nichts geändert.',
+        invalidGarage: 'Die Sterne in dieser Datei sind ungültig. Es wurde nichts geändert.',
       },
       readFailed: 'Die Datei konnte nicht gelesen werden.',
       /** FR-048a: the Home Screen keeps stored data on Safari. */

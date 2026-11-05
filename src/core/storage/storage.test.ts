@@ -7,13 +7,17 @@ import { memoryKeyValue, type KeyValue } from './keyValue';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
 import { emptyRecords, type Records } from '../records/records';
+import { emptyGarage, type Garage } from '../rewards/garage';
 import {
   emptyProgress,
+  GARAGE_KEY,
+  loadGarage,
   loadProgress,
   loadRecords,
   loadSettings,
   PROGRESS_KEY,
   RECORDS_KEY,
+  saveGarage,
   saveProgress,
   saveRecords,
   saveSettings,
@@ -156,7 +160,7 @@ describe('unavailable storage', () => {
 });
 
 describe('migrate', () => {
-  it('turns a version 0 settings fixture into a valid version 4 object', () => {
+  it('turns a version 0 settings fixture into a valid version 5 object', () => {
     const v0 = {
       version: 0,
       challengeTypes: { numberLine: true, addition: false, subtraction: true, comparison: true },
@@ -170,7 +174,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(4);
+    expect(parsed.data?.version).toBe(5);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -187,11 +191,11 @@ describe('migrate', () => {
     return v1;
   }
 
-  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 4 with level 5 to 5 (decision D13)', () => {
+  it('turns version 1 settings with labelLevel 4 and aimCorrection into version 5 with level 5 to 5 (decision D13)', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(4);
+    expect(parsed.data?.version).toBe(5);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -211,7 +215,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(4);
+    expect(settings.version).toBe(5);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -237,7 +241,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(4);
+    expect(settings.version).toBe(5);
     expect(settings.roundLength).toBe(12);
   });
 
@@ -247,22 +251,23 @@ describe('migrate', () => {
     delete v3.roundType;
     delete v3.showClock;
     delete v3.showRecords;
+    delete v3.garage;
     return v3;
   }
 
-  it('turns version 2 settings into version 4 with every other field unchanged (amendments 04 and 06)', () => {
+  it('turns version 2 settings into version 5 with every other field unchanged (amendments 04 and 06)', () => {
     const v2 = v3Settings({ version: 2, roundLength: 7, rulerLevelStart: 3 });
     delete v2.exactHit;
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
-    expect(migrated).toEqual({ ...v2, version: 4, roundType: 'untilHearts', showClock: false, showRecords: true });
+    expect(migrated).toEqual({ ...v2, version: 5, roundType: 'untilHearts', showClock: false, showRecords: true, garage: true });
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 4, roundType: 'untilHearts' });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 5, roundType: 'untilHearts', garage: true });
   });
 
-  it('turns version 3 settings into version 4: exactHit dropped, roundType, showClock and showRecords added (amendment 06)', () => {
+  it('turns version 3 settings into version 5: exactHit dropped, roundType, showClock, showRecords and garage added (amendments 06 and 11)', () => {
     const v3 = v3Settings({ exactHit: true, rulerLevelStart: 2 });
     const migrated = migrate(v3, 'settings') as Record<string, unknown>;
-    const expected: Record<string, unknown> = { ...v3, version: 4, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true };
+    const expected: Record<string, unknown> = { ...v3, version: 5, roundType: 'untilHearts', roundLength: 10, showClock: false, showRecords: true, garage: true };
     delete expected.exactHit;
     expect(migrated).toEqual(expected);
     const parsed = settingsSchema.safeParse(migrated);
@@ -283,7 +288,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 4, roundType: 'untilHearts', freePlay: true });
+    expect(settings).toMatchObject({ version: 5, roundType: 'untilHearts', freePlay: true });
     expect('exactHit' in settings).toBe(false);
   });
 
@@ -292,11 +297,20 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 4, roundType: 'enemyCount', noDamage: true });
+    expect(settings).toMatchObject({ version: 5, roundType: 'enemyCount', noDamage: true });
   });
 
-  it('leaves version 4 settings unchanged', () => {
-    const s = { ...defaultSettings(), roundType: 'enemyCount' as const, showClock: true };
+  it('turns version 4 settings into version 5 with garage on, and keeps a stored garage value (amendment 11)', () => {
+    const v4: Record<string, unknown> = { ...defaultSettings(), version: 4, roundType: 'enemyCount', showClock: true };
+    delete v4.garage;
+    const migrated = migrate(v4, 'settings');
+    expect(migrated).toEqual({ ...v4, version: 5, garage: true });
+    expect(settingsSchema.safeParse(migrated).success).toBe(true);
+    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 5, garage: false });
+  });
+
+  it('leaves version 5 settings unchanged', () => {
+    const s = { ...defaultSettings(), roundType: 'enemyCount' as const, showClock: true, garage: false };
     expect(migrate(s, 'settings')).toEqual(s);
   });
 
@@ -355,5 +369,49 @@ describe('records storage (amendment 06, FR-086)', () => {
     };
     expect(loadRecords(kv)).toEqual({ records: emptyRecords(), resetReason: 'unavailable' });
     expect(saveRecords(kv, sample())).toEqual({ ok: false });
+  });
+});
+
+describe('garage storage (amendment 11, FR-097)', () => {
+  const sample = (): Garage => ({ version: 1, stars: 23, look: { color: 'sky', flag: 'rocket', trail: 'plain', hat: 'none' } });
+
+  it('uses the key mathtanks.garage.v1 and round trips', () => {
+    expect(GARAGE_KEY).toBe('mathtanks.garage.v1');
+    const kv = memoryKeyValue();
+    expect(saveGarage(kv, sample())).toEqual({ ok: true });
+    expect(loadGarage(kv)).toEqual({ garage: sample(), resetReason: 'none' });
+  });
+
+  it('a missing garage loads 0 stars and the standard look with resetReason none', () => {
+    expect(loadGarage(memoryKeyValue())).toEqual({ garage: emptyGarage(), resetReason: 'none' });
+  });
+
+  it('damaged JSON, negative stars or an unknown version load 0 stars with resetReason invalid', () => {
+    for (const text of ['{"version":1,', JSON.stringify({ ...sample(), stars: -3 }), JSON.stringify({ ...sample(), version: 2 })]) {
+      expect(loadGarage(memoryKeyValue({ [GARAGE_KEY]: text }))).toEqual({ garage: emptyGarage(), resetReason: 'invalid' });
+    }
+  });
+
+  it('migrates data without a version and keeps its stars', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ stars: 15, look: { flag: 'rocket' } }) });
+    expect(loadGarage(kv)).toEqual({ garage: { version: 1, stars: 15, look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } }, resetReason: 'none' });
+  });
+
+  it('replaces a locked or unknown look part with the standard item of its kind', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ version: 1, stars: 12, look: { color: 'navyStripes', flag: 'rocket', trail: 'glitter', hat: 'crown' } }) });
+    expect(loadGarage(kv).garage.look).toEqual({ color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' });
+  });
+
+  it('a throwing KeyValue gives 0 stars with resetReason unavailable, and saving reports ok false', () => {
+    const kv: KeyValue = {
+      get: () => {
+        throw new Error('blocked');
+      },
+      set: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(loadGarage(kv)).toEqual({ garage: emptyGarage(), resetReason: 'unavailable' });
+    expect(saveGarage(kv, sample())).toEqual({ ok: false });
   });
 });

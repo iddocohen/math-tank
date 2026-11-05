@@ -4,18 +4,22 @@ import type { Progress } from '../types';
 import { migrate } from './migrate';
 import { progressSchema } from './progressSchema';
 import { emptyRecords, recordsSchema, type Records } from '../records/records';
+import { parseGarage, type Garage } from '../rewards/garage';
 
 /** Marks an export file as ours (data-model.md "Export file"). */
 export const EXPORT_APP = 'math-tanks';
 
 /** Why an import was refused; the settings page maps each reason to a German message. */
-export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords';
+export type ImportFailure = 'notJson' | 'wrongApp' | 'invalidSettings' | 'invalidProgress' | 'invalidRecords' | 'invalidGarage';
 
-export type ImportResult = { ok: true; settings: Settings; progress: Progress; records: Records } | { ok: false; reason: ImportFailure };
+/** `garage` is null for a file exported before amendment 11; the caller then keeps its own stars (FR-096). */
+export type ImportResult =
+  | { ok: true; settings: Settings; progress: Progress; records: Records; garage: Garage | null }
+  | { ok: false; reason: ImportFailure };
 
-/** JSON text of `{ app, exportedAt, settings, progress, records }` for the "Daten sichern" download (FR-048a, FR-086). */
-export function exportData(settings: Settings, progress: Progress, records: Records, now: Date = new Date()): string {
-  return JSON.stringify({ app: EXPORT_APP, exportedAt: now.toISOString(), settings, progress, records }, null, 2);
+/** JSON text of `{ app, exportedAt, settings, progress, records, garage }` for the "Daten sichern" download (FR-048a, FR-086, FR-096). */
+export function exportData(settings: Settings, progress: Progress, records: Records, garage: Garage, now: Date = new Date()): string {
+  return JSON.stringify({ app: EXPORT_APP, exportedAt: now.toISOString(), settings, progress, records, garage }, null, 2);
 }
 
 /**
@@ -47,5 +51,12 @@ export function importData(text: string): ImportResult {
     records = parsed.data;
   }
 
-  return { ok: true, settings: settings.data, progress: progress.data, records };
+  // A file exported before amendment 11 has no garage; the stars of this browser stay (FR-096).
+  let garage: Garage | null = null;
+  if (file.garage !== undefined) {
+    garage = parseGarage(file.garage);
+    if (garage === null) return { ok: false, reason: 'invalidGarage' };
+  }
+
+  return { ok: true, settings: settings.data, progress: progress.data, records, garage };
 }

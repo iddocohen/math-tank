@@ -5,6 +5,7 @@ import type { Progress } from '../types';
 import { exportData, importData } from './exportImport';
 import { emptyRecords, type Records } from '../records/records';
 import { emptyProgress } from './storage';
+import { emptyGarage, type Garage } from '../rewards/garage';
 
 function sampleSettings(): Settings {
   return {
@@ -18,6 +19,10 @@ function sampleSettings(): Settings {
     roundLength: 12,
     showClock: true,
   };
+}
+
+function sampleGarage(): Garage {
+  return { version: 1, stars: 47, look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
 }
 
 function sampleRecords(): Records {
@@ -63,18 +68,19 @@ function sampleProgress(): Progress {
 
 /** Exports sample data, then lets the caller change the parsed file before it is turned back into text. */
 function exportedFile(change: (file: Record<string, unknown>) => void = () => {}): string {
-  const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords())) as Record<string, unknown>;
+  const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
   change(file);
   return JSON.stringify(file);
 }
 
 describe('exportData (FR-048a)', () => {
-  it('produces { app, exportedAt, settings, progress, records } as JSON text', () => {
+  it('produces { app, exportedAt, settings, progress, records, garage } as JSON text', () => {
     const at = new Date('2026-11-05T10:00:00.000Z');
-    const text = exportData(sampleSettings(), sampleProgress(), sampleRecords(), at);
+    const text = exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage(), at);
     const file = JSON.parse(text) as Record<string, unknown>;
-    expect(Object.keys(file).sort()).toEqual(['app', 'exportedAt', 'progress', 'records', 'settings']);
+    expect(Object.keys(file).sort()).toEqual(['app', 'exportedAt', 'garage', 'progress', 'records', 'settings']);
     expect(file.records).toEqual(sampleRecords());
+    expect(file.garage).toEqual(sampleGarage());
     expect(file.app).toBe('math-tanks');
     expect(file.exportedAt).toBe('2026-11-05T10:00:00.000Z');
     expect(file.settings).toEqual(sampleSettings());
@@ -83,7 +89,7 @@ describe('exportData (FR-048a)', () => {
 
   it('uses the current time when no date is given', () => {
     const before = Date.now();
-    const file = JSON.parse(exportData(defaultSettings(), emptyProgress(), emptyRecords())) as { exportedAt: string };
+    const file = JSON.parse(exportData(defaultSettings(), emptyProgress(), emptyRecords(), emptyGarage())) as { exportedAt: string };
     const at = Date.parse(file.exportedAt);
     expect(at).toBeGreaterThanOrEqual(before);
     expect(at).toBeLessThanOrEqual(Date.now());
@@ -91,19 +97,37 @@ describe('exportData (FR-048a)', () => {
 });
 
 describe('importData (FR-048, FR-048a)', () => {
-  it('returns the same settings, progress and records that were exported', () => {
-    const r = importData(exportData(sampleSettings(), sampleProgress(), sampleRecords()));
-    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords() });
+  it('returns the same settings, progress, records and garage (stars and look) that were exported (amendment 11)', () => {
+    const r = importData(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage()));
+    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords(), garage: sampleGarage() });
   });
 
   it('round-trips the defaults, empty progress and empty records', () => {
-    const r = importData(exportData(defaultSettings(), emptyProgress(), emptyRecords()));
-    expect(r).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords() });
+    const r = importData(exportData(defaultSettings(), emptyProgress(), emptyRecords(), emptyGarage()));
+    expect(r).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() });
   });
 
   it('a file without records (exported before amendment 06) imports with empty records', () => {
     const r = importData(exportedFile((f) => delete f.records));
-    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: emptyRecords() });
+    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: emptyRecords(), garage: sampleGarage() });
+  });
+
+  it('a file without garage (exported before amendment 11) gives garage null, so the caller keeps its own stars', () => {
+    const r = importData(exportedFile((f) => delete f.garage));
+    expect(r).toEqual({ ok: true, settings: sampleSettings(), progress: sampleProgress(), records: sampleRecords(), garage: null });
+  });
+
+  it('a garage without a version is migrated, and a locked look part becomes the standard item', () => {
+    const r = importData(exportedFile((f) => (f.garage = { stars: 12, look: { color: 'navyStripes', flag: 'rocket', trail: 'plain', hat: 'none' } })));
+    expect(r.ok && r.garage).toEqual({ version: 1, stars: 12, look: { color: 'blue', flag: 'rocket', trail: 'plain', hat: 'none' } });
+  });
+
+  it.each([
+    ['negative stars', (f: Record<string, unknown>) => (f.garage = { ...sampleGarage(), stars: -1 })],
+    ['an unknown garage version', (f: Record<string, unknown>) => (f.garage = { ...sampleGarage(), version: 9 })],
+    ['a garage that is not an object', (f: Record<string, unknown>) => (f.garage = 'lots of stars')],
+  ])('rejects an invalid garage: %s', (_name, change) => {
+    expect(importData(exportedFile(change))).toEqual({ ok: false, reason: 'invalidGarage' });
   });
 
   it.each([
@@ -152,14 +176,14 @@ describe('importData (FR-048, FR-048a)', () => {
   it('changes nothing: the exported objects are left as they were', () => {
     const settings = sampleSettings();
     const progress = sampleProgress();
-    const text = exportData(settings, progress, sampleRecords());
+    const text = exportData(settings, progress, sampleRecords(), sampleGarage());
     importData(text);
     importData('{broken');
     expect(settings).toEqual(sampleSettings());
     expect(progress).toEqual(sampleProgress());
   });
 
-  it('migrates a version 1 settings file to version 4 (decision D13)', () => {
+  it('migrates a version 1 settings file to version 5 (decision D13)', () => {
     const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel: 4, aimCorrection: true };
     delete v1.rulerLevelStart;
     delete v1.rulerLevelMax;
@@ -167,7 +191,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(4);
+    expect(r.settings.version).toBe(5);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);
@@ -175,15 +199,16 @@ describe('importData (FR-048, FR-048a)', () => {
     expect('labelLevel' in r.settings).toBe(false);
   });
 
-  it('migrates version 2 and version 3 settings files to version 4 (amendments 04 and 06)', () => {
+  it('migrates version 2 and version 3 settings files to version 5 (amendments 04, 06 and 11)', () => {
     for (const version of [2, 3]) {
       const old: Record<string, unknown> = { ...defaultSettings(), version, roundLength: 7, exactHit: true };
       delete old.roundType;
       delete old.showClock;
       delete old.showRecords;
+      delete old.garage;
       if (version === 2) delete old.exactHit;
       const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: old, progress: emptyProgress() }));
-      expect(r).toEqual({ ok: true, settings: { ...defaultSettings(), roundLength: 7 }, progress: emptyProgress(), records: emptyRecords() });
+      expect(r).toEqual({ ok: true, settings: { ...defaultSettings(), roundLength: 7 }, progress: emptyProgress(), records: emptyRecords(), garage: null });
     }
   });
 
@@ -196,6 +221,6 @@ describe('importData (FR-048, FR-048a)', () => {
     if (r.ok) expect(r.progress.attempts[0]?.exact).toBe(true);
 
     const v0 = importData(JSON.stringify({ app: 'math-tanks', exportedAt: 'x', settings: defaultSettings(), progress: { skills: {} } }));
-    expect(v0).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords() });
+    expect(v0).toEqual({ ok: true, settings: defaultSettings(), progress: emptyProgress(), records: emptyRecords(), garage: null });
   });
 });

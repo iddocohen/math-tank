@@ -307,7 +307,7 @@ describe('SettingsPage data section (FR-048a)', () => {
   it('"Daten laden" reads a chosen file, applies it and shows the result', async () => {
     const { persistence, onSaved } = setup();
     const other = { ...defaultSettings(), enemyDifficulty: 'challenging' as const, range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { maxOperand: 10, maxResult: 20, steps: 1 as const } };
-    const text = exportData(other, persistence.progress(), emptyRecords(), new Date('2026-11-01T00:00:00Z'));
+    const text = exportData(other, persistence.progress(), emptyRecords(), persistence.garage(), new Date('2026-11-01T00:00:00Z'));
     const file = new File([text], 'mathe-panzer.json', { type: 'application/json' });
     await act(async () => {
       fireEvent.change(screen.getByLabelText(m.parent.importData), { target: { files: [file] } });
