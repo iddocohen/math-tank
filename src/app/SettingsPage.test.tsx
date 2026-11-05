@@ -294,7 +294,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.pointAfterFullHelp, L.garage, L.numberPad, L.aimCross,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.pointAfterFullHelp, L.garage, L.numberPad, L.aimCross, L.enemiesAtOnce, L.lineStyle,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }
@@ -390,6 +390,35 @@ describe('SettingsPage', () => {
     fireEvent.click(saveButton());
     // The level is kept, so switching back restores it.
     expect(persistence.settings().aimCross).toEqual({ mode: 'never', level: 4 });
+  });
+
+  it('"Gegner gleichzeitig" offers 1 to 4 with an explanation, starts at 1 and saves (amendment 21, FR-136)', () => {
+    const { persistence } = setup();
+    const select = field(L.enemiesAtOnce);
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['1', '2', '3', '4']);
+    expect(select.value).toBe('1');
+    expect(screen.getByRole('combobox', { name: L.enemiesAtOnce, description: m.settings.explanations.enemiesAtOnce })).toBeTruthy();
+    setValue(L.enemiesAtOnce, '3');
+    fireEvent.click(saveButton());
+    expect(persistence.settings().enemiesAtOnce).toBe(3);
+  });
+
+  it('"Linien" offers "Gebogen und verschlungen" only with 2 or more enemies; 1 enemy switches it to "Gebogen" (amendment 21, FR-144)', () => {
+    const { persistence } = setup();
+    const options = () => Array.from(field(L.lineStyle).options).map((o) => o.textContent);
+    expect(field(L.lineStyle).value).toBe('straight');
+    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved]);
+    expect(screen.getByRole('combobox', { name: L.lineStyle, description: m.settings.explanations.lineStyle })).toBeTruthy();
+    setValue(L.enemiesAtOnce, '2');
+    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved, L.lineStyleTangled]);
+    setValue(L.lineStyle, 'tangled');
+    fireEvent.click(saveButton());
+    expect(persistence.settings()).toMatchObject({ enemiesAtOnce: 2, lineStyle: 'tangled' });
+    setValue(L.enemiesAtOnce, '1');
+    expect(field(L.lineStyle).value).toBe('curved');
+    expect(options()).toEqual([L.lineStyleStraight, L.lineStyleCurved]);
+    fireEvent.click(saveButton());
+    expect(persistence.settings()).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'curved' });
   });
 
   it('"Schließen" calls onClose', () => {

@@ -307,6 +307,29 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
               onChange={(v) => set('aimCross', { ...draft.aimCross, level: Number(v) as RulerLevel })}
             />
           )}
+          {/* Amendment 21 (FR-136, FR-144): enemies at once and the pointer line style; "tangled" needs 2 or more enemies. */}
+          <Select
+            label={L.enemiesAtOnce}
+            description={m.settings.explanations.enemiesAtOnce}
+            value={String(draft.enemiesAtOnce)}
+            options={['1', '2', '3', '4'].map((n) => ({ value: n, label: n }))}
+            onChange={(v) => {
+              const enemiesAtOnce = Number(v) as Settings['enemiesAtOnce'];
+              const lineStyle = enemiesAtOnce < 2 && draft.lineStyle === 'tangled' ? 'curved' : draft.lineStyle;
+              update({ ...draft, enemiesAtOnce, lineStyle });
+            }}
+          />
+          <Select
+            label={L.lineStyle}
+            description={m.settings.explanations.lineStyle}
+            value={draft.lineStyle}
+            options={[
+              { value: 'straight', label: L.lineStyleStraight },
+              { value: 'curved', label: L.lineStyleCurved },
+              ...(draft.enemiesAtOnce >= 2 || draft.lineStyle === 'tangled' ? [{ value: 'tangled', label: L.lineStyleTangled }] : []),
+            ]}
+            onChange={(v) => set('lineStyle', v as Settings['lineStyle'])}
+          />
         </Group>
 
         <Group title={m.settings.groups.help}>
