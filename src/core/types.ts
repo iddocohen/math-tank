@@ -167,16 +167,6 @@ export interface TankState {
   alive: boolean;
 }
 
-/**
- * The enemy as getState() reports it during a guided position search: no number and no coordinates, so nothing
- * outside the controller can show where it hides (FR-010, FR-073).
- */
-export interface HiddenTank {
-  id: string;
-  kind: 'enemy';
-  alive: boolean;
-}
-
 /** How the child chose the last number: keyboard (digits, Enter) or pointer (ruler, fire button); amendment 05. */
 export type InputMethod = 'pointer' | 'keyboard';
 
@@ -189,8 +179,6 @@ export interface RoundState {
   lives: number;
   /** The score: enemies destroyed this round (FR-083). */
   enemiesDestroyed: number;
-  /** The child's shots at the current enemy since it last fired; at ENEMY_FIRE_EVERY it fires (FR-081). */
-  shotsSinceEnemyFire: number;
   /** Time played up to the last pause, final once the round is over (FR-084); controller.elapsedMs() adds the running part. */
   elapsedMs: number;
   /** The latest enemy shell removed a heart. */
@@ -198,14 +186,12 @@ export interface RoundState {
   phase: Phase;
   terrain: Heightmap;
   player: TankState;
-  /** A HiddenTank while enemyFound is false; see BattleState for the controller's own full state. */
-  enemy: TankState | HiddenTank;
+  /** Always visible with its number and coordinates (amendment 07, FR-010). */
+  enemy: TankState;
   /** Comparison turns only. */
   decoys: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
-  /** False during a position search: enemy hidden; true after a hit, for readPosition and in free play. */
-  enemyFound: boolean;
   /** In free play a readPosition challenge whose answer is the enemy's number (amendment 02, FR-067). */
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
@@ -221,7 +207,7 @@ export interface RoundState {
   inputMethod: InputMethod | null;
   /** Ruler detail level for this round (FR-018). */
   rulerLevel: RulerLevel;
-  /** The player's last shot: landed number shown large; distance in steps shown in free play. */
+  /** The player's last shot: landed number shown large; distance in steps shown after every miss, in every mode (amendment 07). */
   lastShot: LastShot | null;
   /** FR-004 trail */
   lastPlayerPath: Point[] | null;
@@ -249,13 +235,10 @@ export interface LastShot {
   nearMiss: boolean;
   /** The destroyed enemy or the destroyed decoy, or null. */
   hitTankId: string | null;
-  /** Steps from the landed number to the enemy's number; null in getState() while the enemy is hidden. */
-  distance: number | null;
-  /**
-   * The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068).
-   * Null in getState() after a miss while a guided search hides the enemy (FR-010, T215).
-   */
-  enemyNumber: number | null;
+  /** Steps from the landed number to the enemy's number. */
+  distance: number;
+  /** The enemy's number when the shell landed; the hit feedback shows it after the enemy has moved (FR-068). */
+  enemyNumber: number;
 }
 
 export interface ShotInFlight {
@@ -269,7 +252,5 @@ export interface ShotInFlight {
   blastRadius: number;
 }
 
-/** The controller's full round state: the enemy always has its number and coordinates. getState() hides them. */
-export interface BattleState extends Omit<RoundState, 'enemy'> {
-  enemy: TankState;
-}
+/** The controller's round state; since amendment 07 getState() reports it unchanged, with the enemy always visible. */
+export type BattleState = RoundState;

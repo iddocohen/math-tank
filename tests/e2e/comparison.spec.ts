@@ -1,7 +1,8 @@
 /**
  * US4 comparison with decoy tanks end to end (T092, AC-06): with only comparison on and the fixture seed, the first
  * search is "Welche Zahl ist größer?" with tanks labeled 47 and 74. Tapping the tank labeled 47 destroys only the
- * decoy, a miss without an enemy turn; typing 74 and Enter destroys the enemy. Game state comes from the overlay's
+ * decoy, a miss after which the enemy fires back with a shell from the top edge (amendment 07); typing 74 and Enter
+ * destroys the enemy. Game state comes from the overlay's
  * and the canvas's data-* attributes (D4); `data-tank-taps` gives each tappable tank's tap point in world units.
  */
 import { expect, test } from './fixtures';
@@ -51,9 +52,10 @@ test('47 vs 74: tapping 47 destroys only the decoy, typing 74 and Enter destroys
   await expect(canvas).toHaveAttribute('data-pointer-lines', '74');
   await expect(canvas).not.toHaveAttribute('data-tank-taps', /47@/);
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
-  // One shot since the enemy last fired: the enemy fires only after the second (FR-081), so no enemyTurn now.
-  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '1');
-  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  // A decoy hit is a miss, so the enemy fires back, then the search goes on (amendment 07, FR-081).
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-help-level', '1');
 
   await page.keyboard.type('74');

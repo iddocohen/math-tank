@@ -3,12 +3,12 @@
  * no number in the readout while pointing, and the fire button counts as pointer input.
  * Amendment 06 (FR-066, FR-072, FR-083, FR-084): the tank counter, the optional clock, the hit and near-miss status,
  * and the data attributes for the end-to-end tests.
+ * Amendment 07 (FR-010, FR-072, FR-073): the enemy is visible in a guided search, and every miss carries the step count.
  */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore } from '../core/battle/ports';
-import { placedEnemy } from '../core/battle/round';
 import type { RoundState, TankState } from '../core/types';
 import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
@@ -16,11 +16,9 @@ import { encouragements, promptText, t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
 import { useRoundState } from './useController';
 
-/** The enemy with its number; free play always places it. */
+/** The enemy with its number; it is always visible (amendment 07). */
 function enemyOf(s: RoundState): TankState {
-  const enemy = placedEnemy(s);
-  if (!enemy) throw new Error('the enemy is hidden');
-  return enemy;
+  return s.enemy;
 }
 
 function Overlay({ controller }: { controller: BattleController }) {
@@ -164,7 +162,7 @@ describe('BattleOverlay (amendment 06)', () => {
   });
 });
 
-/** A guided round whose first search hides the enemy (not readPosition). */
+/** A guided round whose first search is a position search (not readPosition). */
 function setupGuided(over: Partial<Settings> = {}) {
   for (let seed = 1; seed < 200; seed++) {
     let now = 1000;
@@ -177,7 +175,7 @@ function setupGuided(over: Partial<Settings> = {}) {
   throw new Error('no seed found');
 }
 
-describe('BattleOverlay in a guided search (T068, T215)', () => {
+describe('BattleOverlay in a guided search (T068, amendment 07)', () => {
   it('shows the challenge banner at the top with the prompt text', () => {
     const { controller } = setupGuided();
     const banner = screen.getByTestId('challenge-banner');
@@ -204,7 +202,7 @@ describe('BattleOverlay in a guided search (T068, T215)', () => {
     expect(root.getAttribute('data-help-level')).toBe('1');
   });
 
-  it('after a miss shows the landing number and an encouraging phrase, never the enemy number', () => {
+  it('after a miss shows the landing number and an encouraging phrase, with the enemy number and the step count in the data attributes', () => {
     const { controller, advance } = setupGuided();
     const s = controller.getState();
     const miss = Math.round((s.player.position + s.challenge!.answer) / 2);
@@ -216,10 +214,17 @@ describe('BattleOverlay in a guided search (T068, T215)', () => {
     const root = screen.getByTestId('battle-overlay');
     expect(root.textContent).toContain(t().battle.landedAt(miss));
     expect(encouragements).toContain(screen.getByTestId('encouragement').textContent);
-    expect(root.getAttribute('data-enemy-number')).toBeNull();
+    expect(root.getAttribute('data-enemy-number')).toBe(String(s.challenge!.answer));
+    expect(root.getAttribute('data-last-distance')).toBe(String(Math.abs(miss - s.challenge!.answer)));
+    expect(root.hasAttribute('data-shots-since-enemy-fire')).toBe(false);
   });
 
-  it('a near miss on the hidden enemy shows "Ganz knapp!" and the landing number, with no compare text or enemy number', () => {
+  it('sets data-enemy-number from the start of the search: the enemy is visible (amendment 07, FR-010)', () => {
+    const { controller } = setupGuided();
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number')).toBe(String(controller.getState().challenge!.answer));
+  });
+
+  it('a near miss in a guided search shows "Ganz knapp! Triff die Linie." with both numbers and the step count (amendment 07, FR-072)', () => {
     const { controller, advance } = setupGuided();
     const s = controller.getState();
     const answer = s.challenge!.answer;
@@ -231,9 +236,9 @@ describe('BattleOverlay in a guided search (T068, T215)', () => {
     });
     const root = screen.getByTestId('battle-overlay');
     expect(root.getAttribute('data-last-shot')).toBe('near');
-    expect(screen.getByTestId('hit-feedback').textContent).toBe(`${t().battle.nearHidden} ${t().battle.landedAt(near)}`);
-    expect(screen.queryByTestId('compare')).toBeNull();
-    expect(root.textContent).not.toContain(t().battle.near);
+    expect(screen.getByTestId('hit-feedback').textContent).toContain(t().battle.near);
+    expect(screen.getByTestId('compare').textContent).toBe(t().battle.compare(near, answer));
+    expect(t().battle).not.toHaveProperty('nearHidden');
   });
 });
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as damage from '../physics/damage';
 import * as hitRule from './hitRule';
 import type { TankState } from '../types';
-import { bodyHalfWidth, ENEMY_FIRE_EVERY, enemyHitsPlayer, LIVES, shotKind } from './hitRule';
+import { bodyHalfWidth, enemyHitsPlayer, LIVES, shotKind } from './hitRule';
 
 const r = (min: number, max: number) => ({ min, max });
 
@@ -79,9 +79,9 @@ describe('enemyHitsPlayer (amendment 06, FR-006)', () => {
 });
 
 describe('constants and removed damage (amendment 06)', () => {
-  it('the child has 3 lives and the enemy fires after every 2 shots', () => {
+  it('the child has 3 lives; the every-2-shots rhythm is gone (amendment 07)', () => {
     expect(LIVES).toBe(3);
-    expect(ENEMY_FIRE_EVERY).toBe(2);
+    expect('ENEMY_FIRE_EVERY' in hitRule).toBe(false);
   });
 
   it('there is no damage any more', () => {

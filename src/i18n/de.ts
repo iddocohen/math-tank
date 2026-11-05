@@ -32,8 +32,6 @@ export const de = {
     hit: 'Getroffen!',
     /** Amendment 06: on the tank body but not at the number, a miss (FR-066, FR-072). */
     near: 'Ganz knapp! Triff die Linie.',
-    /** T215: a near miss while the enemy is still hidden; there is no line yet and no enemy number (FR-010). */
-    nearHidden: 'Ganz knapp!',
     /** Amendment 06: label of the tank counter at the top, for screen readers only (FR-083). */
     score: 'Getroffene Panzer',
     /** Amendment 06: label of the optional clock, for screen readers only (FR-084). */

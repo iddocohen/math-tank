@@ -28,26 +28,9 @@ export function tankCenter(tank: TankState): Point {
   return { x: tank.x, y: tank.y + TANK_HEIGHT / 2 };
 }
 
-/** The enemy with its number and coordinates, or null while getState() hides them during a guided search. */
-export function placedEnemy(s: RoundState): TankState | null {
-  return 'position' in s.enemy ? s.enemy : null;
-}
-
-/** The enemy when it is drawn: found (or free play, or readPosition), alive and placed; otherwise null (FR-073). */
+/** The enemy while it is alive; it is always visible, in every mode and challenge kind (amendment 07, FR-073). */
 export function visibleEnemy(s: RoundState): TankState | null {
-  return s.enemyFound && s.enemy.alive ? placedEnemy(s) : null;
-}
-
-/**
- * What getState() reports: while the enemy is hidden it has only its id, kind and alive, and the last shot of a miss
- * carries neither the enemy's number nor the distance to it (FR-010, T215). A hit keeps the number of the enemy it
- * destroyed, which the hit has revealed.
- */
-export function publicState(s: BattleState): RoundState {
-  if (s.enemyFound) return s;
-  const { id, alive } = s.enemy;
-  const lastShot = s.lastShot && !s.lastShot.hit ? { ...s.lastShot, enemyNumber: null, distance: null } : s.lastShot;
-  return { ...s, enemy: { id, kind: 'enemy', alive }, lastShot };
+  return s.enemy.alive ? s.enemy : null;
 }
 
 /** Where shells leave the cannon. */
@@ -123,7 +106,6 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     turn: 0,
     lives: LIVES,
     enemiesDestroyed: 0,
-    shotsSinceEnemyFire: 0,
     elapsedMs: 0,
     lastEnemyHit: false,
     stepAnimation: null,
@@ -134,7 +116,6 @@ export function createRound(settings: Settings, seed: number, side: 'left' | 'ri
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
     decoys: [],
     playerSide: side,
-    enemyFound: true,
     challenge,
     answerableAt: null,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [] },

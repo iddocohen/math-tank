@@ -6,37 +6,32 @@
  * Amendment 01: the player aims by choosing a number. The cannon is fixed and solveArcToX computes the arc,
  * so the shell always lands at the chosen number.
  *
- * Guided mode (US2, guided.ts): every fire is an answer to the search's challenge. During a position search the enemy
- * hides: getState() reports it without number or coordinates. A miss raises the help step; the exact number reveals
- * and destroys the enemy, records an Attempt and starts a new search with a new hidden enemy.
+ * Guided mode (US2, guided.ts): every fire is an answer to the search's challenge. The enemy is visible in every
+ * challenge kind (amendment 07). A miss raises the help step; the exact number destroys the enemy, records an Attempt
+ * and starts a new search with a new enemy.
  *
  * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
- * The enemy fires once after every ENEMY_FIRE_EVERY shots of the child at the same enemy; each enemy hit costs one
- * of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
+ * Amendment 07: the enemy fires once right after every shot of the child that does not destroy it; a seeded draw
+ * decides whether its shell hits (ai/enemy.ts). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
  * roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
-import { createRng, deriveSeed, type Rng } from '../rng';
+import { createRng, deriveSeed } from '../rng';
 import type { BattleState, InputMethod, RoundState, Settings, ShotInFlight, TankState } from '../types';
-import { simulateShot } from '../physics/ballistics';
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { enemyShot } from '../ai/enemy';
-import { ENEMY_FIRE_EVERY } from './hitRule';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
 import { buildAttempt } from './attempt';
-import { hiddenShellEntryX, hiddenShellPath } from './hiddenShell';
+import { topShellEntryX, topShellPath } from './topShell';
 import {
   applyImpact,
   createRound,
   freePlayChallenge,
   moveTank,
   muzzle,
-  publicState,
-  tankCenter,
-  TANK_HIT_RADIUS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   type DamageRules,
@@ -62,16 +57,13 @@ export class BattleController {
   private nextSettings: Settings;
   /** Settings snapshot for the current round (FR-049). */
   private settings: Settings;
-  /** The full state; `view` is what getState() and subscribers receive. */
   private state: BattleState;
-  private view: RoundState;
   private readonly sessionId: string;
   /** Clock time of the player's shot in flight, for the attempt's response time. */
   private firedAt = 0;
   private readonly listeners = new Set<Listener>();
   private roundIndex = 0;
   private nextSide: 'left' | 'right';
-  private enemyRng: Rng = createRng(0);
   private enemyShotIndex = 0;
   private phaseBeforePause: RoundState['phase'] | null = null;
   /** The number of the player's shell in flight. */
@@ -87,7 +79,6 @@ export class BattleController {
     this.nextSide = createRng(deriveSeed(this.baseSeed, 0)).next() < 0.5 ? 'left' : 'right';
     // A placeholder round until startRound; it is never shown.
     this.state = { ...createRound(this.settings, this.baseSeed, this.nextSide), phase: 'roundOver' };
-    this.view = publicState(this.state);
     this.sessionId = deps.sessionId ?? `session-${Math.floor(deps.clock())}`;
   }
 
@@ -104,7 +95,7 @@ export class BattleController {
   }
 
   getState(): RoundState {
-    return this.view;
+    return this.state;
   }
 
   /** The settings snapshot of the current round (range and label level for the views). */
@@ -132,7 +123,6 @@ export class BattleController {
     const seed = deriveSeed(this.baseSeed, ++this.roundIndex);
     const side = this.nextSide;
     this.nextSide = side === 'left' ? 'right' : 'left';
-    this.enemyRng = createRng(deriveSeed(seed, 2));
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
     this.firedNumber = null;
@@ -215,7 +205,7 @@ export class BattleController {
   /** The labeled tanks still standing in a comparison search: the enemy and the decoys. */
   private numberedTanks(): TankState[] {
     const s = this.state;
-    return [s.enemy, ...s.decoys].filter((t): t is TankState => 'position' in t && t.alive && t.label !== undefined);
+    return [s.enemy, ...s.decoys].filter((t) => t.alive && t.label !== undefined);
   }
 
   /** order3: the next badge, a reset after a wrong order, or the shot at the enemy after the third (FR-026). */
@@ -269,7 +259,7 @@ export class BattleController {
 
   /**
    * Help button or H (FR-030): the next help step during a guided search. It is not a shot and costs no heart, so
-   * lives, turn and shotsSinceEnemyFire stay (FR-081). Addition and subtraction get the step animation (FR-024);
+   * lives and turn stay and the enemy does not fire (FR-081). Addition and subtraction get the step animation (FR-024);
    * the help steps of the other kinds come with US5 (Phase 19).
    */
   requestHelp(): void {
@@ -288,9 +278,8 @@ export class BattleController {
     const next: BattleState = { ...s, turn: s.turn + 1, lastPlayerPath: shot.path, shot: null };
     const guided = next.mode === 'guided';
     if (next.lastShot?.hit) {
-      // One hit, one destroyed enemy; the count for the enemy's fire starts again for the new enemy (FR-066, FR-081).
-      // In a guided search the hit reveals the enemy where it stood, so the renderer can show it explode.
-      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, shotsSinceEnemyFire: 0, enemyFound: true };
+      // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
+      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1 };
       if (guided) this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
@@ -304,14 +293,9 @@ export class BattleController {
       this.set(this.nextReadPosition(destroyed));
       return;
     }
+    // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081).
     const missed = guided ? afterMiss(next, this.deps.clock()) : next;
-    const shots = missed.shotsSinceEnemyFire + 1;
-    if (shots >= ENEMY_FIRE_EVERY) {
-      const firing: BattleState = { ...missed, shotsSinceEnemyFire: 0 };
-      this.set({ ...firing, phase: 'enemyTurn', shot: this.nextEnemyShot(firing) });
-      return;
-    }
-    this.set({ ...missed, shotsSinceEnemyFire: shots, phase: this.choosingPhase() });
+    this.set({ ...missed, phase: 'enemyTurn', shot: this.nextEnemyShot(missed) });
   }
 
   enemyShotAnimationDone(): void {
@@ -394,29 +378,27 @@ export class BattleController {
     return { ...s, phase: 'aiming', challenge, enemy };
   }
 
-  /** The enemy's shell on the state after the player's impact (enemy aiming, research R18). */
+  /**
+   * The enemy's shell on the state after the player's impact (amendment 07, FR-041 to FR-043a): the seeded draw of
+   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle; in a comparison turn it
+   * falls from the top edge, so it does not show which tank is the enemy.
+   */
   private nextEnemyShot(s: BattleState): ShotInFlight {
-    const origin = muzzle(s.enemy);
     const shotIndex = this.enemyShotIndex++;
-    const aim = enemyShot({
+    const shot = enemyShot({
       difficulty: this.settings.enemyDifficulty,
-      rng: this.enemyRng,
+      roundSeed: s.seed,
       shotIndexInRound: shotIndex,
-      origin,
-      target: tankCenter(s.player),
+      origin: muzzle(s.enemy),
+      playerX: s.player.x,
       terrain: s.terrain,
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
     });
-    // The enemy is not a target: its shell starts inside its own hit circle.
-    const targets = [s.player, ...s.decoys].filter((t) => t.alive).map((t) => ({ id: t.id, ...tankCenter(t), radius: TANK_HIT_RADIUS }));
-    const r = simulateShot({ ...aim, origin, terrain: s.terrain, targets, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
-    // A hidden enemy's shell falls from the top edge, so its path does not show where the enemy is (FR-010, T215).
-    // In a comparison the enemy is visible but looks like its decoys, so its shell falls from the top edge too.
-    const path = s.enemyFound && s.decoys.length === 0
-      ? r.path
-      : hiddenShellPath({ impact: r.impact, entryX: hiddenShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
-    return { shooter: 'enemy', path, impact: r.impact, hitTargetId: r.hitTargetId, outOfBounds: r.outOfBounds, blastRadius: BLAST_RADIUS };
+    const path = s.decoys.length === 0
+      ? shot.path
+      : topShellPath({ impact: shot.impact, entryX: topShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
+    return { shooter: 'enemy', path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
   }
 
   private impact(impact: Impact, blastRadius: number): BattleState {
@@ -426,9 +408,7 @@ export class BattleController {
 
   private set(next: BattleState): void {
     this.state = next;
-    const view = publicState(next);
-    this.view = view;
-    for (const listener of [...this.listeners]) listener(view);
+    for (const listener of [...this.listeners]) listener(next);
   }
 }
 

@@ -18,17 +18,18 @@
  * - The selection gets a vertical guide line, a target marker on the battlefield and a marker on the ruler, and no
  *   number (amendment 05). The canvas carries `data-preview-text`, the typed number's label under the preview marker ('' when
  *   none), for the end-to-end tests only.
- * - After each player shot: a landing marker with the landing number in large digits (FR-004); in free play a
- *   bracket from the landing number to the enemy's number with the step count (FR-014, decision D12).
+ * - After each player shot: a landing marker with the landing number in large digits (FR-004); after a miss, in
+ *   every mode, a bracket from the landing number to the enemy's number with the step count (amendment 07, FR-072).
+ *   In a comparison turn the bracket ends at the tank nearest to the landing number, so it does not show which tank
+ *   is the enemy; a destroyed decoy gets no bracket. The canvas carries `data-steps-label`, the bracket's text ('' when
+ *   none), for the end-to-end tests only.
  * - After a near miss on the tank body (amendment 06), a bracket from the child's number to the enemy's number,
- *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072). Not while a guided search hides the enemy: getState() then has
- *   no enemy number, and the ruler shows only the landing marker (T215, FR-010).
- * - Guided searches (T066, decision D12): nothing on the ruler hints at the hidden enemy; the landing marker of a
- *   miss stays with its number in large digits until the next fire; no free-play bracket; after a hit a short pulse
- *   on the ruler at the destroyed enemy's number. The canvas carries `data-hit-pulse` (the pulsed number, '' when
+ *   with "Du: 30 · Gegner: 31 · 1 Schritt" (FR-072).
+ * - Guided searches (T066, amendment 07): the landing marker of a miss stays with its number in large digits until
+ *   the next fire; after a hit a short pulse on the ruler at the destroyed enemy's number. The canvas carries `data-hit-pulse` (the pulsed number, '' when
  *   none) for the end-to-end tests only.
  * - Pointer lines (amendment 04, FR-073): a thin dashed vertical line from the center of every visible tank (the
- *   enemy once found, and every decoy) down to the ruler, ending in a small triangle on the ruler line
+ *   enemy, always, and every decoy) down to the ruler, ending in a small triangle on the ruler line
  *   (core/view/pointerLine.ts). No number is drawn for it and no ruler label is highlighted: the child reads the
  *   number from the ruler. The canvas carries `data-pointer-lines`, the numbers of those tanks, for the end-to-end
  *   tests only; nothing is drawn from it.
@@ -403,7 +404,7 @@ export class NumberLineView {
     g.clear();
     const inFlight = s.phase === 'playerShot';
 
-    // Landing marker and free-play distance bracket, until the next player shot.
+    // Landing marker and distance bracket, until the next player shot.
     const shot = s.lastShot;
     if (shot && !inFlight) {
       const lx = numberToX(shot.landed, min, max);
@@ -411,18 +412,19 @@ export class NumberLineView {
       g.fillTriangle(lx - 12, RULER_TOP - 6, lx + 12, RULER_TOP - 6, lx, AXIS_Y - 4);
       this.landedText.setText(String(shot.landed)).setPosition(lx, RULER_TOP - 10).setVisible(true);
 
-      const enemy = visibleEnemy(s);
-      if (shot.nearMiss && shot.enemyNumber !== null) {
+      const to = shot.hit || shot.hitTankId !== null ? null : stepTarget(s, shot.landed, shot.enemyNumber);
+      if (shot.nearMiss) {
         // A near miss on the tank body: both numbers and the distance (amendment 06, FR-072).
         this.drawBracket(lx, numberToX(shot.enemyNumber, min, max), t().battle.compare(shot.fired, shot.enemyNumber));
-      } else if (s.mode === 'freePlay' && !shot.hit && enemy && shot.landed !== enemy.position) {
-        this.drawBracket(lx, numberToX(enemy.position, min, max), t().battle.steps(Math.abs(shot.landed - enemy.position)));
+      } else if (to !== null && to !== shot.landed) {
+        // Every miss, in every mode: the steps from the landing number to the enemy (amendment 07, FR-072).
+        this.drawBracket(lx, numberToX(to, min, max), t().battle.steps(Math.abs(shot.landed - to)));
       } else {
-        this.stepsText.setVisible(false);
+        this.hideSteps();
       }
     } else {
       this.landedText.setVisible(false);
-      this.stepsText.setVisible(false);
+      this.hideSteps();
     }
 
     this.drawPointerLines(s);
@@ -452,6 +454,12 @@ export class NumberLineView {
     g.lineBetween(x0, y, x1, y);
     g.lineBetween(x1, y - 10, x1, y);
     this.stepsText.setText(text).setPosition((x0 + x1) / 2, y + 4).setVisible(true);
+    this.scene.game.canvas.dataset.stepsLabel = text;
+  }
+
+  private hideSteps(): void {
+    this.stepsText.setVisible(false);
+    this.scene.game.canvas.dataset.stepsLabel = '';
   }
 
   /** Dashed lines with an end triangle from each visible tank's center to the ruler, with no number (FR-073). */
@@ -495,4 +503,14 @@ export class NumberLineView {
     if (n !== this.controller.getState().selection) this.controller.selectNumber(n);
     else if (this.last) this.update(this.last);
   }
+}
+
+/**
+ * The number a miss counts its steps to: the enemy's number, or in a comparison turn the number of the tank nearest
+ * to the landing number, so the bracket does not show which tank is the enemy (amendment 07, FR-072).
+ */
+function stepTarget(s: RoundState, landed: number, enemyNumber: number): number {
+  if (s.decoys.length === 0) return enemyNumber;
+  const numbers = [s.enemy, ...s.decoys].map((tank) => tank.position);
+  return numbers.reduce((best, n) => (Math.abs(n - landed) < Math.abs(best - landed) ? n : best));
 }

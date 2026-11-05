@@ -1,126 +1,121 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { createRng, type Rng } from '../rng';
-import { simulateShot } from '../physics/ballistics';
-import { BLAST_RADIUS } from '../physics/damage';
 import { generateTerrain, surfaceY } from '../physics/terrain';
-import { enemyShot, type Difficulty, type EnemyShotInput } from './enemy';
-import * as enemyModule from './enemy';
-import { createRound, muzzle, tankCenter, TANK_HIT_RADIUS } from '../battle/round';
+import { TANK_WIDTH } from '../math/gaps';
 import { enemyHitsPlayer } from '../battle/hitRule';
+import { createRound, muzzle } from '../battle/round';
 import { defaultSettings } from '../settings/defaults';
+import {
+  ENEMY_HIT_CHANCE,
+  enemyShot,
+  NEAR_MISS_MAX,
+  NEAR_MISS_MIN,
+  planEnemyShot,
+  type Difficulty,
+  type EnemyPlanInput,
+  type EnemyShotInput,
+} from './enemy';
+import * as enemyModule from './enemy';
 
 const W = 1600;
 const H = 900;
+const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'challenging'];
 
-const scenarios = [11, 12, 13, 14, 15].map((seed) => {
-  const terrain = generateTerrain(seed, W, H);
-  return {
-    terrain,
-    origin: { x: 1350, y: surfaceY(terrain, 1350) + 10 },
-    target: { x: 250, y: surfaceY(terrain, 250) },
-  };
-});
-
-function missOf(s: (typeof scenarios)[number], shot: { angleDeg: number; power: number }): number {
-  const { impact } = simulateShot({ origin: s.origin, ...shot, terrain: s.terrain, targets: [], worldWidth: W, worldHeight: H });
-  return Math.hypot(impact.x - s.target.x, impact.y - s.target.y);
+function plan(difficulty: Difficulty, roundSeed: number, shotIndexInRound: number, playerX = 400) {
+  return planEnemyShot({ difficulty, roundSeed, shotIndexInRound, playerX, worldWidth: W });
 }
 
-function meanMiss(difficulty: Difficulty): number {
-  const rng = createRng(2024);
-  let sum = 0;
-  let n = 0;
-  for (const s of scenarios) {
-    for (let i = 0; i < 100; i++) {
-      const shot = enemyShot({ difficulty, rng, shotIndexInRound: i + 1, worldWidth: W, worldHeight: H, ...s });
-      sum += missOf(s, shot);
-      n++;
-    }
-  }
-  expect(n).toBe(500);
-  return sum / n;
-}
-
-describe('enemyShot', () => {
-  it('misses by less on higher difficulties over 500 seeded shots', () => {
-    const easy = meanMiss('easy');
-    const normal = meanMiss('normal');
-    const challenging = meanMiss('challenging');
-    expect(easy).toBeGreaterThan(normal);
-    expect(normal).toBeGreaterThan(challenging);
+describe('enemy hit draw (amendment 07, FR-041, FR-043)', () => {
+  it('hits at 1/6, 1/4 and 1/3 by difficulty', () => {
+    expect(ENEMY_HIT_CHANCE).toEqual({ easy: 1 / 6, normal: 1 / 4, challenging: 1 / 3 });
   });
 
-  it('is deterministic for the same rng seed', () => {
-    const s = scenarios[0]!;
-    const a = enemyShot({ difficulty: 'normal', rng: createRng(5), shotIndexInRound: 2, worldWidth: W, worldHeight: H, ...s });
-    const b = enemyShot({ difficulty: 'normal', rng: createRng(5), shotIndexInRound: 2, worldWidth: W, worldHeight: H, ...s });
-    expect(a).toEqual(b);
-  });
-
-  it('on easy, always misses the first shot of a round by more than the blast radius', () => {
-    for (let seed = 0; seed < 100; seed++) {
-      const s = scenarios[seed % scenarios.length]!;
-      const shot = enemyShot({ difficulty: 'easy', rng: createRng(seed), shotIndexInRound: 0, worldWidth: W, worldHeight: H, ...s });
-      expect(missOf(s, shot)).toBeGreaterThan(BLAST_RADIUS);
+  it('over 3000 seeded shots the hit share is within 0.03 of the chance for each difficulty', () => {
+    for (const difficulty of DIFFICULTIES) {
+      let hits = 0;
+      const n = 3000;
+      for (let i = 0; i < n; i++) if (plan(difficulty, 1000 + Math.floor(i / 10), 1 + (i % 10)).hits) hits++;
+      expect(Math.abs(hits / n - ENEMY_HIT_CHANCE[difficulty])).toBeLessThan(0.03);
     }
   });
 
-  it('keeps the shot within angle and power limits', () => {
-    const rng = createRng(77);
-    for (const s of scenarios) {
-      for (const difficulty of ['easy', 'normal', 'challenging'] as const) {
-        const shot = enemyShot({ difficulty, rng, shotIndexInRound: 3, worldWidth: W, worldHeight: H, ...s });
-        expect(shot.angleDeg).toBeGreaterThanOrEqual(90);
-        expect(shot.angleDeg).toBeLessThanOrEqual(180);
-        expect(shot.power).toBeGreaterThanOrEqual(0);
-        expect(shot.power).toBeLessThanOrEqual(100);
+  it('the first shot of a round never hits, on any difficulty', () => {
+    for (const difficulty of DIFFICULTIES) {
+      for (let seed = 0; seed < 500; seed++) expect(plan(difficulty, seed, 0).hits).toBe(false);
+    }
+  });
+
+  it('a hit aims at the child tank; a miss lands 40 to 100 units beside it, outside the hit area, on both sides', () => {
+    expect(NEAR_MISS_MIN).toBe(40);
+    expect(NEAR_MISS_MAX).toBe(100);
+    expect(NEAR_MISS_MIN).toBeGreaterThan(TANK_WIDTH / 2);
+    const sides = new Set<number>();
+    for (let seed = 0; seed < 400; seed++) {
+      const p = plan('challenging', seed, 3, 800);
+      if (p.hits) {
+        expect(p.targetX).toBe(800);
+        continue;
       }
+      const d = p.targetX - 800;
+      expect(Math.abs(d)).toBeGreaterThanOrEqual(NEAR_MISS_MIN);
+      expect(Math.abs(d)).toBeLessThanOrEqual(NEAR_MISS_MAX);
+      sides.add(Math.sign(d));
+    }
+    expect(sides).toEqual(new Set([-1, 1]));
+  });
+
+  it('uses the inner side when the child tank stands at an end of the world', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const left = plan('easy', seed, 0, 30);
+      expect(left.targetX).toBeGreaterThan(30);
+      const right = plan('easy', seed, 0, W - 30);
+      expect(right.targetX).toBeLessThan(W - 30);
     }
   });
 
-  it('takes no attempts, help or challenge data as input (FR-042)', () => {
+  it('is deterministic: the same input gives the same plan', () => {
+    for (let seed = 0; seed < 50; seed++) expect(plan('normal', seed, 4)).toEqual(plan('normal', seed, 4));
+  });
+
+  it('takes no answers, help, mistakes or challenge data as input (FR-042)', () => {
+    expectTypeOf<keyof EnemyPlanInput>().toEqualTypeOf<'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'playerX' | 'worldWidth'>();
     expectTypeOf<keyof EnemyShotInput>().toEqualTypeOf<
-      'difficulty' | 'rng' | 'shotIndexInRound' | 'origin' | 'target' | 'terrain' | 'worldWidth' | 'worldHeight'
+      'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'playerX' | 'worldWidth' | 'origin' | 'terrain' | 'worldHeight'
     >();
-    expectTypeOf<EnemyShotInput>().not.toHaveProperty('attempts');
     expectTypeOf<EnemyShotInput>().not.toHaveProperty('help');
     expectTypeOf<EnemyShotInput>().not.toHaveProperty('challenge');
-    expectTypeOf<EnemyShotInput['rng']>().toEqualTypeOf<Rng>();
+    expectTypeOf<EnemyShotInput>().not.toHaveProperty('attempts');
+  });
+
+  it('there is no damage factor and no random aim error any more', () => {
+    expect('enemyDamageFactor' in enemyModule).toBe(false);
   });
 });
 
-describe('easy enemy accuracy (amendment 06, FR-043)', () => {
-  // 200 seeded rounds: 50 seeded terrains with 4 enemy random seeds each. solveAim caches per terrain, so the
-  // rounds on one terrain and both difficulties share the ideal aim, which keeps the test fast.
-  const terrains = Array.from({ length: 50 }, (_, seed) => createRound(defaultSettings(), 5000 + seed, seed % 2 === 0 ? 'left' : 'right'));
-  const rounds = Array.from({ length: 200 }, (_, seed) => terrains[seed % 50]!);
-
-  /** Share of the enemy's shots (not the first of a round) that hit the player's tank. */
-  function hitRate(difficulty: Difficulty): number {
+describe('enemyShot path (amendment 07)', () => {
+  it('flies from the enemy muzzle and lands within 0.5 units of the planned x, so it hits exactly when the draw says so', () => {
     let hits = 0;
-    let shots = 0;
-    rounds.forEach((round, seed) => {
-      const rng = createRng(seed);
-      for (let i = 1; i <= 2; i++) {
-        const origin = muzzle(round.enemy);
-        const aim = enemyShot({ difficulty, rng, shotIndexInRound: i, origin, target: tankCenter(round.player), terrain: round.terrain, worldWidth: W, worldHeight: H });
-        const targets = [{ id: round.player.id, ...tankCenter(round.player), radius: TANK_HIT_RADIUS }];
-        const r = simulateShot({ ...aim, origin, terrain: round.terrain, targets, worldWidth: W, worldHeight: H });
-        if (!r.outOfBounds && enemyHitsPlayer(r.impact, r.hitTargetId, round.player)) hits++;
-        shots++;
+    let misses = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const round = createRound(defaultSettings(), 7000 + seed, seed % 2 === 0 ? 'left' : 'right');
+      const origin = muzzle(round.enemy);
+      for (const shotIndexInRound of [0, 1, 2, 3]) {
+        const shot = enemyShot({ difficulty: 'challenging', roundSeed: round.seed, shotIndexInRound, origin, playerX: round.player.x, terrain: round.terrain, worldWidth: W, worldHeight: H });
+        expect(shot.path[0]).toEqual(origin);
+        expect(Math.abs(shot.impact.x - shot.targetX)).toBeLessThanOrEqual(0.5);
+        expect(shot.impact.y).toBeCloseTo(surfaceY(round.terrain, shot.impact.x), 0);
+        expect(enemyHitsPlayer(shot.impact, null, round.player)).toBe(shot.hits);
+        if (shot.hits) hits++;
+        else misses++;
       }
-    });
-    return hits / shots;
-  }
-
-  it('on easy, fewer than half of the enemy shots hit the player tank, and fewer than on challenging', { timeout: 60_000 }, () => {
-    const easy = hitRate('easy');
-    const challenging = hitRate('challenging');
-    expect(easy).toBeLessThan(0.5);
-    expect(easy).toBeLessThan(challenging);
+    }
+    expect(hits).toBeGreaterThan(0);
+    expect(misses).toBeGreaterThan(0);
   });
 
-  it('there is no damage factor any more: each enemy hit removes one heart', () => {
-    expect('enemyDamageFactor' in enemyModule).toBe(false);
+  it('works on a hilly terrain between the tanks', () => {
+    const terrain = generateTerrain(3, W, H);
+    const origin = { x: 1400, y: surfaceY(terrain, 1400) + 28 };
+    const shot = enemyShot({ difficulty: 'easy', roundSeed: 1, shotIndexInRound: 0, origin, playerX: 100, terrain, worldWidth: W, worldHeight: H });
+    expect(Math.abs(shot.impact.x - shot.targetX)).toBeLessThanOrEqual(0.5);
   });
 });

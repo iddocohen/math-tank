@@ -1,8 +1,8 @@
 /**
- * The enemy's shell while a guided search hides the enemy (FR-010, amendment 06, T215). The enemy still fires after
- * every 2 shots of the child, but a path from its cannon would show where it hides. So the shell enters from the top
- * edge of the world, at an x taken from the round seed, the enemy's shot index and the child's tank only, and falls
- * onto the impact the enemy's aim computed. Once the enemy is visible it fires from its own tank as before.
+ * The enemy's shell in comparison turns (FR-043a, amendment 07). The enemy looks the same as its decoys, so a path
+ * from its cannon would show which tank is the enemy. Its shell enters from the top edge of the world, at an x taken
+ * from the round seed, the enemy's shot index and the child's tank only, and falls onto the impact the enemy's
+ * draw chose. In every other turn the enemy fires from its own tank.
  */
 import { createRng, deriveSeed } from '../rng';
 import type { Heightmap, Point } from '../types';
@@ -11,15 +11,15 @@ import { surfaceY } from '../physics/terrain';
 import { WORLD_WIDTH } from './round';
 
 /** The shell enters at most this far left or right of the child's tank. */
-export const HIDDEN_SHELL_SPREAD = 160;
+export const TOP_SHELL_SPREAD = 160;
 
-/** Where the shell of a hidden enemy enters the top edge; nothing about the enemy goes in. */
-export function hiddenShellEntryX(roundSeed: number, shotIndex: number, playerX: number, worldWidth = WORLD_WIDTH): number {
-  const offset = createRng(deriveSeed(roundSeed, 5, shotIndex)).int(-HIDDEN_SHELL_SPREAD, HIDDEN_SHELL_SPREAD);
+/** Where the shell enters the top edge; nothing about the enemy goes in. */
+export function topShellEntryX(roundSeed: number, shotIndex: number, playerX: number, worldWidth = WORLD_WIDTH): number {
+  const offset = createRng(deriveSeed(roundSeed, 5, shotIndex)).int(-TOP_SHELL_SPREAD, TOP_SHELL_SPREAD);
   return Math.min(worldWidth, Math.max(0, playerX + offset));
 }
 
-export interface HiddenShellInput {
+export interface TopShellInput {
   impact: Point;
   entryX: number;
   terrain: Heightmap;
@@ -30,7 +30,7 @@ export interface HiddenShellInput {
  * A falling path from (entryX, worldHeight) to the impact, one point per physics step, under gravity. When the
  * slanted path would pass below the ground, the shell falls straight down onto the impact instead.
  */
-export function hiddenShellPath({ impact, entryX, terrain, worldHeight }: HiddenShellInput): Point[] {
+export function topShellPath({ impact, entryX, terrain, worldHeight }: TopShellInput): Point[] {
   const slanted = fall(entryX, impact, worldHeight);
   const clear = slanted.slice(0, -1).every((p) => p.y >= surfaceY(terrain, p.x));
   return clear ? slanted : fall(impact.x, impact, worldHeight);

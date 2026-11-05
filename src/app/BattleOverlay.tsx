@@ -8,18 +8,19 @@
  * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
- * `data-enemy-number` is set only while the enemy is visible, so a test cannot read a hidden enemy's number.
+ * `data-enemy-number` is the living enemy's number; the enemy is always visible (amendment 07). `data-last-distance`
+ * is the step count of the last shot, which the ruler shows after every miss.
  * `data-last-shot` names the result of the last player shot (amendment 06): `hit` (the exact number, the enemy was
- * destroyed), `near` (on the tank body but not exact) or `miss`. `data-lives`, `data-enemies-destroyed`,
- * `data-shots-since-enemy-fire` and `data-outcome` replace the health attributes.
+ * destroyed), `near` (on the tank body but not exact) or `miss`. `data-lives`, `data-enemies-destroyed` and
+ * `data-outcome` replace the health attributes.
  *
  * Hit feedback (amendment 06, FR-066, FR-072, contracts/ui-flows.md): a hit shows "Getroffen!" and the number the
  * enemy stood at; a near miss on the body shows "Ganz knapp! Triff die Linie." with both numbers and the distance;
  * a miss shows the landing number.
  *
  * Guided searches (T068, FR-010, FR-019, FR-053): the challenge banner at the top center shows the prompt; after a
- * miss the status line shows the landing number and an encouraging phrase. While the enemy is hidden the overlay never
- * names its number: a near miss shows "Ganz knapp!" and the landing number, without the compare text (T215).
+ * miss the status line shows the landing number and an encouraging phrase; a near miss shows both numbers and the
+ * step count, as in free play (amendment 07).
  * `data-challenge-answerable` turns true once the challenge accepts answers (1 second after it appears), and
  * `data-help-level` is the help step. The fire button stays the only submit control.
  *
@@ -54,8 +55,6 @@ export function BattleOverlay({ controller, state, gear }: Props) {
   const sceneLocked = state.phase === 'playerShot' || state.phase === 'enemyTurn' || state.phase === 'paused';
   const lastShot = state.phase !== 'playerShot' ? state.lastShot : null;
   const showClock = controller.getRoundSettings().showClock;
-  // While the enemy hides, the near-miss feedback has no enemy number (T215).
-  const nearHidden = lastShot?.nearMiss === true && lastShot.enemyNumber === null;
   const encouragement = state.mode === 'guided' && lastShot !== null && !lastShot.hit && state.phase !== 'roundOver' ? encouragements[state.turn % encouragements.length] : null;
 
   return (
@@ -68,12 +67,12 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-player-side={state.playerSide}
       data-lives={state.lives}
       data-enemies-destroyed={state.enemiesDestroyed}
-      data-shots-since-enemy-fire={state.shotsSinceEnemyFire}
       data-outcome={state.outcome ?? undefined}
       data-challenge-answerable={answerable}
       data-help-level={state.help.level}
       data-selection={state.selection ?? undefined}
       data-last-landing={state.lastShot?.landed ?? undefined}
+      data-last-distance={state.lastShot?.distance ?? undefined}
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemy?.position}
     >
@@ -98,13 +97,9 @@ export function BattleOverlay({ controller, state, gear }: Props) {
         ) : lastShot?.hit ? (
           // The hit names the number the destroyed enemy stood at, also after the new one appeared (FR-066, FR-068).
           <span className="landed hit" data-testid="hit-feedback">
-            {m.battle.hit} {lastShot.enemyNumber !== null && m.battle.enemyStoodAt(lastShot.enemyNumber)}
+            {m.battle.hit} {m.battle.enemyStoodAt(lastShot.enemyNumber)}
           </span>
-        ) : nearHidden ? (
-          <span className="landed near" data-testid="hit-feedback">
-            {m.battle.nearHidden} {m.battle.landedAt(lastShot.landed)}
-          </span>
-        ) : lastShot?.nearMiss && lastShot.enemyNumber !== null ? (
+        ) : lastShot?.nearMiss ? (
           // On the tank body but not exact: a miss with both numbers and the distance, never "falsch" (FR-072).
           <span className="landed near" data-testid="hit-feedback">
             {m.battle.near} <span data-testid="compare">{m.battle.compare(lastShot.fired, lastShot.enemyNumber)}</span>

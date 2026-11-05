@@ -12,8 +12,6 @@ export type ShotKind = 'hit' | 'near' | 'miss';
 
 /** The child's hearts at the start of a round (FR-080). */
 export const LIVES = 3;
-/** The enemy fires once after this many shots of the child at the same enemy (FR-081). */
-export const ENEMY_FIRE_EVERY = 2;
 
 /** Half the tank width along the battlefield, in world units. */
 const HALF_BODY = TANK_WIDTH / 2;

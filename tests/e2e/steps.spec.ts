@@ -36,7 +36,7 @@ test('43 − 7: H shows the step animation 43, 40, 36, then 36 and Enter destroy
   // machine is busy (several browsers at once), so the wait is generous; it takes about 4 s at full speed.
   await expect(canvas).toHaveAttribute('data-step-count', '7', { timeout: 40_000 });
   // Help is not a shot and costs no heart (FR-030, FR-081).
-  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '0');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(overlay).toHaveAttribute('data-turn', '0');
   await expect(overlay).toHaveAttribute('data-lives', '3');
 

@@ -2,8 +2,8 @@
  * One tank on screen (FR-007): body, turret rotated by the cannon angle.
  * The player's turret shows the fixed angle (FR-065); `shake` shows a near miss on the body (FR-066).
  * After the terrain changes the tank moves down to the new surface with a short tween.
- * Fade in and out and a fully hidden state are here for the search turns of later phases; `appear` fades a new
- * enemy in after the old one was destroyed (amendment 06).
+ * Fade in and out and a fully hidden state are used for destroyed decoys; `appear` fades a new enemy in after the old
+ * one was destroyed (amendment 06). The enemy is never hidden (amendment 07).
  *
  * Amendment 05 (FR-077): the look comes from tankStyle. The child's tank is blue and rounded with a yellow star flag
  * on its antenna; the enemy and decoys are dark red and angular with a black flag. `showYouMarker` shows a bouncing

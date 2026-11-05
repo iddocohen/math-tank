@@ -11,11 +11,10 @@
  *   exact hit destroys it with a large explosion where it stood, and the new enemy fades in at its new number. The
  *   enemy shows a target ring where the pointer line meets it. The child's hearts sit above the child's tank, and
  *   the tank flashes when an enemy shell costs a heart.
- * - Guided searches (T067, FR-010, FR-073): while the enemy hides nothing is drawn at its position (no tank, shadow,
- *   target ring or pointer line), and a near miss does not shake it. An exact hit shows the enemy at once where it
- *   stood and destroys it with the large explosion; the next hidden enemy fades out with the explosion and stays
- *   hidden. For readPosition the new enemy fades in at its number. The hidden enemy's shell falls from the top edge
- *   (core/battle/hiddenShell.ts), so its turret turn is never seen.
+ * - Guided searches (T067, amendment 07, FR-010, FR-073): the enemy, its target ring and its pointer line are
+ *   visible in every challenge kind, and a near miss shakes it. An exact hit destroys it with the large explosion
+ *   where it stood, and the new enemy fades in at its new number. The enemy turns its turret toward its aim and fires
+ *   from its own tank after every shot of the child that does not destroy it.
  * - At the start of every round, which includes "Neue Landschaft", a bouncing "Du" arrow points at the child's tank
  *   for YOU_MARKER_MS (amendment 05, FR-077). The canvas attribute `data-you-marker` is `on` while it shows and `off`
  *   after, for the end-to-end tests only (tasks.md D4).
@@ -29,7 +28,7 @@
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
-import { placedEnemy, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
+import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
@@ -134,32 +133,18 @@ export class BattleScene extends Phaser.Scene {
     this.player.sync(s.player, newRound);
     this.player.setLives(s.lives, LIVES);
     const destroyed = !newRound && s.lastShot !== prev?.lastShot && s.lastShot?.hit === true;
-    // A hidden enemy (guided search) has no coordinates in the state; its view keeps the last ones, invisible.
-    const placed = placedEnemy(s);
-    const prevPlaced = prev ? placedEnemy(prev) : null;
     // The new search right after a guided hit: the destroyed enemy stays in view during its explosion.
     const searchAfterHit = !newRound && !destroyed && s.mode === 'guided' && prev?.phase === 'playerShot' && s.phase === 'challenge' && s.lastShot?.hit === true;
-    if (placed) this.enemy.sync(placed, newRound || destroyed || searchAfterHit);
-    if (destroyed && s.mode === 'guided') {
-      // The hit reveals the hidden enemy at once where it stood (T067, FR-066).
-      this.enemy.setHidden(false, false);
-    } else if (searchAfterHit && !s.enemyFound) {
-      // The new enemy hides at once; nothing is drawn at its new position (FR-010, FR-073).
-      this.enemy.setHidden(true, true, NEW_ENEMY_DELAY_MS);
-    } else if (searchAfterHit) {
-      // readPosition: the new enemy is visible from the start and fades in at its number (US2 scenario 8).
-      this.enemy.setHidden(false, false);
-      this.enemy.appear(NEW_ENEMY_DELAY_MS);
-    } else {
-      this.enemy.setHidden(!s.enemyFound, !newRound);
-    }
+    this.enemy.sync(s.enemy, newRound || destroyed || searchAfterHit);
+    // The new enemy is visible in every challenge kind and fades in at its number (amendment 07, FR-010).
+    if (searchAfterHit) this.enemy.appear(NEW_ENEMY_DELAY_MS);
     if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
-    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss && s.enemyFound) this.enemy.shake();
+    if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) this.enemy.shake();
     // The large explosion where the destroyed enemy stood. In free play the previous state holds the destroyed enemy
-    // and the new one fades in at its new number; in a guided search the hit state itself reveals the destroyed enemy.
-    const gone = destroyed ? (s.mode === 'guided' ? placed : (prevPlaced ?? placed)) : null;
+    // and the new one fades in at its new number; in a guided search the hit state itself holds the destroyed enemy.
+    const gone = destroyed ? (s.mode === 'guided' ? s.enemy : (prev?.enemy ?? s.enemy)) : null;
     if (gone) {
       const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
@@ -187,10 +172,10 @@ export class BattleScene extends Phaser.Scene {
    * the enemy: same view kind, plate and target ring.
    */
   private drawComparison(s: RoundState, prev: RoundState | null, newRound: boolean): void {
-    const placed = placedEnemy(s);
+    const enemy = s.enemy;
     const badge = (id: string): number | null => (s.orderTaps.includes(id) ? s.orderTaps.indexOf(id) + 1 : null);
     // The destroyed enemy keeps its plate during its explosion; the next one gets its own plate.
-    this.enemy.setLabel(s.enemyFound ? (placed?.label ?? null) : null);
+    this.enemy.setLabel(enemy.label ?? null);
     this.enemy.setBadge(badge(s.enemy.id));
 
     const ids = new Set(s.decoys.map((d) => d.id));
@@ -224,7 +209,7 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
-    const tappable = [...(s.enemyFound && placed?.label !== undefined && placed.alive ? [{ tank: placed, view: this.enemy }] : [])];
+    const tappable = [...(enemy.label !== undefined && enemy.alive ? [{ tank: enemy, view: this.enemy }] : [])];
     for (const decoy of s.decoys) {
       const view = this.decoyViews.get(decoy.id);
       if (view && decoy.alive && decoy.label !== undefined) tappable.push({ tank: decoy, view });

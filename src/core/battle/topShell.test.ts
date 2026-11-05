@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { HIDDEN_SHELL_SPREAD, hiddenShellEntryX, hiddenShellPath } from './hiddenShell';
+import { TOP_SHELL_SPREAD, topShellEntryX, topShellPath } from './topShell';
 import { WORLD_HEIGHT, WORLD_WIDTH } from './round';
 import { generateTerrain, surfaceY } from '../physics/terrain';
 
 const terrain = generateTerrain(7, WORLD_WIDTH, WORLD_HEIGHT);
 
-describe('hidden enemy shell (T215, FR-010)', () => {
+describe('enemy shell from the top edge in comparison turns (FR-043a)', () => {
   it('the entry x comes from the round seed, the shot index and the child tank only', () => {
-    const a = hiddenShellEntryX(42, 0, 300);
-    expect(hiddenShellEntryX(42, 0, 300)).toBe(a);
-    expect(Math.abs(a - 300)).toBeLessThanOrEqual(HIDDEN_SHELL_SPREAD);
-    const xs = new Set([0, 1, 2, 3, 4, 5].map((i) => hiddenShellEntryX(42, i, 300)));
+    const a = topShellEntryX(42, 0, 300);
+    expect(topShellEntryX(42, 0, 300)).toBe(a);
+    expect(Math.abs(a - 300)).toBeLessThanOrEqual(TOP_SHELL_SPREAD);
+    const xs = new Set([0, 1, 2, 3, 4, 5].map((i) => topShellEntryX(42, i, 300)));
     expect(xs.size).toBeGreaterThan(1);
     // Clamped to the world.
-    expect(hiddenShellEntryX(42, 0, 0)).toBeGreaterThanOrEqual(0);
-    expect(hiddenShellEntryX(42, 0, WORLD_WIDTH)).toBeLessThanOrEqual(WORLD_WIDTH);
+    expect(topShellEntryX(42, 0, 0)).toBeGreaterThanOrEqual(0);
+    expect(topShellEntryX(42, 0, WORLD_WIDTH)).toBeLessThanOrEqual(WORLD_WIDTH);
   });
 
   it('enters at the top edge and falls onto the impact without passing below the ground', () => {
     for (let i = 0; i < 20; i++) {
       const impactX = 100 + i * 70;
       const impact = { x: impactX, y: surfaceY(terrain, impactX) };
-      const path = hiddenShellPath({ impact, entryX: hiddenShellEntryX(9, i, impactX + 40), terrain, worldHeight: WORLD_HEIGHT });
+      const path = topShellPath({ impact, entryX: topShellEntryX(9, i, impactX + 40), terrain, worldHeight: WORLD_HEIGHT });
       expect(path[0]!.y).toBe(WORLD_HEIGHT);
       expect(path.at(-1)).toEqual(impact);
       expect(path.length).toBeGreaterThan(10);
@@ -36,7 +36,7 @@ describe('hidden enemy shell (T215, FR-010)', () => {
     const wall = new Float32Array(WORLD_WIDTH + 1).fill(100);
     for (let x = 480; x <= 520; x++) wall[x] = 850;
     const impact = { x: 600, y: 100 };
-    const path = hiddenShellPath({ impact, entryX: 400, terrain: wall, worldHeight: WORLD_HEIGHT });
+    const path = topShellPath({ impact, entryX: 400, terrain: wall, worldHeight: WORLD_HEIGHT });
     expect(path[0]).toEqual({ x: 600, y: WORLD_HEIGHT });
     expect(path.every((p) => p.x === 600)).toBe(true);
   });

@@ -1,10 +1,11 @@
 /**
  * US1 and US8 end to end with the keyboard only (FR-001 to FR-008, FR-059 to FR-062, FR-066, SC-001, AC-01):
- * start a free-play round with Enter, fire two wrong numbers and watch the enemy fire after the second, type the
+ * start a free-play round with Enter, fire two wrong numbers and watch the enemy fire after each, type the
  * enemy's number and fire, play to the round end and start a new round with Enter, all without a page reload.
- * Amendment 06: only the exact number destroys the enemy, the enemy fires after every 2 shots, the round ends after
+ * Amendment 06: only the exact number destroys the enemy, the round ends after
  * the parent's number of enemies ("Gegner pro Runde" 2 here), and the end screen shows the score, the time and the
  * personal best ("Neuer Rekord!" the first time, "Dein Rekord: 2" the second).
+ * Amendment 07: the enemy fires after every shot that does not destroy it, and every miss shows the step count.
  * The first test has no click, tap or mouse call. Game state is read from the overlay's data-* attributes (D4).
  * Amendment 05: the arrow keys do nothing, pointing on the ruler shows no number, there are no −1 and +1 buttons,
  * and a "Du" arrow points at the child's tank for 3 seconds at every round start.
@@ -73,25 +74,27 @@ test('play a free-play round with the keyboard only and start another', async ({
   await expect(page.getByTestId('score')).toHaveText('0');
 
   // A number off the tank body (5 away; the body covers about 2 numbers either side in 0 to 100): the shell lands
-  // there and the enemy stays. It is the first shot, so the enemy does not fire yet (FR-066, FR-081).
+  // there and the enemy stays; the ruler shows "5 Schritte". The enemy fires back at once; its first shot of a
+  // round always misses (amendment 07, FR-043, FR-066, FR-072, FR-081).
   const enemy = await enemyNumber(overlay);
   const wrong = enemy - 5 >= min ? enemy - 5 : enemy + 5;
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-last-landing', String(wrong), { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-last-shot', 'miss');
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
-  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '1');
+  await expect(overlay).toHaveAttribute('data-last-distance', '5');
+  await expect(page.locator('canvas')).toHaveAttribute('data-steps-label', m.battle.steps(5));
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-lives', '3');
   await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
-  // The second shot that does not destroy the enemy: the enemy fires once. On "Leicht" its first shot misses (FR-043).
+  // The second shot that does not destroy the enemy: the enemy fires again.
   await typeNumber(page, overlay, wrong);
   await page.keyboard.press('Enter');
   await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-turn', '2');
-  await expect(overlay).toHaveAttribute('data-shots-since-enemy-fire', '0');
-  await expect(overlay).toHaveAttribute('data-lives', '3');
 
   // The enemy's number destroys it; a new enemy appears and the tank counter shows 1 (FR-066, FR-083).
   await typeNumber(page, overlay, enemy);

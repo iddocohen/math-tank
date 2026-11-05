@@ -73,7 +73,8 @@ test('range 550 to 780: a shot 1 away is a near miss, the exact number destroys 
   await expect(page.getByTestId('compare')).toHaveText(m.battle.compare(near, enemy));
   await expect(page.getByTestId('compare')).toHaveText(`Du: ${near} · Gegner: ${enemy} · 1 Schritt`);
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '0');
-  await expect(overlay).toHaveAttribute('data-phase', 'aiming');
+  // The enemy fires back after the near miss, then the child aims again (amendment 07, FR-081).
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-enemy-number', String(enemy));
 
   // The exact number destroys the enemy; a new enemy stands at a new number with its own pointer line (FR-066).

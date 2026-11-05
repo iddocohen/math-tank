@@ -1,7 +1,7 @@
 /**
  * Guided mode (US2, FR-010, FR-010a, FR-013, FR-076, amendment 06): a search is one challenge whose answer is the
- * enemy's number. The enemy hides during a position search (visible from the start for readPosition). Every fire is
- * an answer: only the exact number destroys the enemy, then a new hidden enemy and a new search follow. A near miss
+ * enemy's number. The enemy and its pointer line are visible in every challenge kind (amendment 07). Every fire is an
+ * answer: only the exact number destroys the enemy, then a new enemy and a new search follow. A near miss
  * on the body and a plain miss both count as a miss for the help steps. Pure functions: each returns a new state.
  */
 import { deriveSeed } from '../rng';
@@ -50,7 +50,7 @@ export function searchChallenge(
 }
 
 /**
- * A new search: a new challenge, the enemy moved to its answer (hidden unless readPosition or a comparison), help and
+ * A new search: a new challenge, the enemy moved to its answer (visible, amendment 07), help and
  * input reset, answers accepted from `now + ANSWER_DELAY_MS`. lastShot stays, so the feedback of the previous shot
  * remains visible.
  *
@@ -73,7 +73,6 @@ export function startSearch(s: BattleState, settings: Settings, now: number, avo
     challenge,
     enemy,
     decoys,
-    enemyFound: challenge.kind === 'readPosition' || options !== undefined,
     notOnTank: false,
     answerableAt: now + ANSWER_DELAY_MS,
     help: { level: 0, wrongAnswers: 0, wrongAnswerTimes: [] },
