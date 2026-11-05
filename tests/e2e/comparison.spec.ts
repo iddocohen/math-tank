@@ -102,3 +102,45 @@ test('tapping the tank at 47 bursts the decoy; help step 3 marks the tank at 74,
   await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
   await expect(overlay).toHaveAttribute('data-last-shot', 'hit');
 });
+
+/** The x of each tank tap point in world units, sorted. */
+async function tankXs(page: Page): Promise<number[]> {
+  const taps = (await page.locator('canvas').getAttribute('data-tank-taps')) ?? '';
+  return taps
+    .split(';')
+    .filter(Boolean)
+    .map((e) => Number(e.split('@')[1]!.split(',')[0]))
+    .sort((a, b) => a - b);
+}
+
+/** The start x of each shell of the latest enemy shot, sorted. */
+async function volleyXs(page: Page): Promise<number[]> {
+  const volley = (await page.locator('canvas').getAttribute('data-enemy-volley')) ?? '';
+  return volley.split(';').filter(Boolean).map(Number);
+}
+
+test('bug report B2: after a miss every standing tank fires from its own barrel; after the decoy bursts only the enemy fires (FR-043a)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await startFixture(page);
+  const overlay = page.getByTestId('battle-overlay');
+  const tanks = await tankXs(page);
+  expect(tanks).toHaveLength(2);
+
+  // A plain miss far from both tanks: both tanks fire together.
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect.poll(() => volleyXs(page).then((xs) => xs.length), { timeout: 5_000 }).toBe(2);
+  const xs = await volleyXs(page);
+  xs.forEach((x, i) => expect(Math.abs(x - tanks[i]!)).toBeLessThanOrEqual(40));
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+
+  // The decoy bursts: the enemy fires alone, from its own tank at 74.
+  await page.keyboard.type('47');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('canvas')).toHaveAttribute('data-decoy-bursts', '1', { timeout: 15_000 });
+  await expect(overlay).toHaveAttribute('data-phase', 'enemyTurn', { timeout: 15_000 });
+  await expect.poll(() => volleyXs(page).then((v) => v.length), { timeout: 5_000 }).toBe(1);
+  expect(Math.abs((await volleyXs(page))[0]! - tanks[1]!)).toBeLessThanOrEqual(40);
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge', { timeout: 15_000 });
+});

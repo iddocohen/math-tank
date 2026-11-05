@@ -298,6 +298,20 @@ export interface ShotInFlight {
   /** True when the shell left the battlefield over a side edge. */
   outOfBounds: boolean;
   blastRadius: number;
+  /**
+   * Comparison turns (bug report B2, FR-043a): the shells every standing decoy fires together with the enemy, each
+   * from its own barrel. They are harmless: they land beside the child's tank, farther away than the enemy's shell,
+   * and change neither the hearts nor the ground. Empty for every other shot.
+   */
+  decoyShells: DecoyShell[];
+}
+
+/** One harmless shell of a decoy in a comparison turn's volley (bug report B2). */
+export interface DecoyShell {
+  /** The id of the decoy that fires it. */
+  shooterId: string;
+  path: Point[];
+  impact: Point;
 }
 
 /** The controller's round state; since amendment 07 getState() reports it unchanged, with the enemy always visible. */

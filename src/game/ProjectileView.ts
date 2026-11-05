@@ -5,6 +5,8 @@
  * update(), so pausing the scene stops the replay.
  * Amendment 11 (FR-093): the child's shells draw the garage trail (`playerTrail`): sparkles, rainbow lines or
  * bubbles along the live path; the enemy's shells keep the plain trail.
+ * Bug report B2 (FR-043a): in a comparison turn the decoys' shells fly together with the enemy's shell; `onDone` runs
+ * once the last shell of the volley has landed, so the timing does not show which shell is the enemy's.
  */
 import Phaser from 'phaser';
 import type { Point, ShotInFlight } from '../core/types';
@@ -18,15 +20,28 @@ export const REPLAY_SPEED = 1.6;
 const TRAIL_SPACING = 18;
 const MARKER_SIZE = 22;
 
+/** One shell of a replay: the enemy's or player's shell, or a decoy's shell in a comparison volley. */
+interface Track {
+  path: readonly Point[];
+  impact: Point;
+  duration: number;
+  image: Phaser.GameObjects.Image;
+  landed: boolean;
+}
+
 interface Replay {
   shot: ShotInFlight;
   elapsed: number;
-  duration: number;
+  /** The shot's own shell first, then the decoys' shells. */
+  tracks: Track[];
   onDone: () => void;
+  onShellLanded: (index: number, impact: Point) => void;
 }
 
 export class ProjectileView {
   private readonly shell: Phaser.GameObjects.Image;
+  /** Shell images for the decoys' shells of a volley, reused between volleys. */
+  private readonly extraShells: Phaser.GameObjects.Image[] = [];
   private readonly live: Phaser.GameObjects.Graphics;
   private readonly trail: Phaser.GameObjects.Graphics;
   private readonly marker: Phaser.GameObjects.Graphics;
@@ -38,7 +53,7 @@ export class ProjectileView {
   private readonly plainStyle = trailStyle('plain');
 
   constructor(
-    scene: Phaser.Scene,
+    private readonly scene: Phaser.Scene,
     private readonly worldWidth: number,
     private readonly worldHeight: number,
     playerTrail: TrailId = 'plain',
@@ -54,20 +69,32 @@ export class ProjectileView {
     return this.replay?.shot ?? null;
   }
 
-  /** Starts replaying `shot`; `onDone` runs once when the shell reaches the impact point. */
-  play(shot: ShotInFlight, onDone: () => void): void {
+  /**
+   * Starts replaying `shot` and the decoys' shells of a comparison volley; `onShellLanded` runs when each shell lands
+   * (index 0 is the shot's own shell) and `onDone` runs once when every shell has reached its impact point.
+   */
+  play(shot: ShotInFlight, onDone: () => void, onShellLanded: (index: number, impact: Point) => void = () => {}): void {
     this.markers.delete(shot.shooter);
     this.drawMarkers();
     this.live.clear();
-    this.replay = { shot, elapsed: 0, duration: pathDuration(shot.path, REPLAY_SPEED), onDone };
-    this.shell.setVisible(true);
+    this.hideShells();
+    const shells = [shot, ...shot.decoyShells];
+    const tracks = shells.map((t, i) => ({
+      path: t.path,
+      impact: t.impact,
+      duration: pathDuration(t.path, REPLAY_SPEED),
+      image: i === 0 ? this.shell : this.extraShell(i - 1),
+      landed: false,
+    }));
+    for (const t of tracks) t.image.setVisible(true);
+    this.replay = { shot, elapsed: 0, tracks, onDone, onShellLanded };
     this.advance(0);
   }
 
   /** Stops a replay without calling its callback (new round). */
   stop(): void {
     this.replay = null;
-    this.shell.setVisible(false);
+    this.hideShells();
     this.live.clear();
     this.markers.clear();
     this.drawMarkers();
@@ -76,13 +103,24 @@ export class ProjectileView {
   advance(deltaMs: number): void {
     const r = this.replay;
     if (!r) return;
-    r.elapsed = Math.min(r.duration, r.elapsed + deltaMs);
-    const s = pathPointAt(r.shot.path, r.elapsed, REPLAY_SPEED);
-    this.shell.setPosition(s.point.x, this.sy(s.point.y));
-    this.drawLive(r.shot.path, s.index, s.point, r.shot.shooter === 'player' ? this.playerStyle : this.plainStyle);
-    if (!s.done && r.elapsed < r.duration) return;
+    const longest = Math.max(...r.tracks.map((t) => t.duration));
+    r.elapsed = Math.min(longest, r.elapsed + deltaMs);
+    const style = r.shot.shooter === 'player' ? this.playerStyle : this.plainStyle;
+    this.live.clear();
+    r.tracks.forEach((t, i) => {
+      if (t.landed) return;
+      const s = pathPointAt(t.path, Math.min(r.elapsed, t.duration), REPLAY_SPEED);
+      if (!s.done && r.elapsed < t.duration) {
+        t.image.setPosition(s.point.x, this.sy(s.point.y));
+        this.drawLive(t.path, s.index, s.point, style);
+        return;
+      }
+      t.landed = true;
+      t.image.setVisible(false);
+      r.onShellLanded(i, t.impact);
+    });
+    if (!r.tracks.every((t) => t.landed)) return;
     this.replay = null;
-    this.shell.setVisible(false);
     this.live.clear();
     const m = edgeMarker(r.shot, this.worldWidth);
     if (m) {
@@ -90,6 +128,20 @@ export class ProjectileView {
       this.drawMarkers();
     }
     r.onDone();
+  }
+
+  private extraShell(i: number): Phaser.GameObjects.Image {
+    let image = this.extraShells[i];
+    if (!image) {
+      image = this.scene.add.image(0, 0, TEX.shell).setVisible(false);
+      this.extraShells[i] = image;
+    }
+    return image;
+  }
+
+  private hideShells(): void {
+    this.shell.setVisible(false);
+    for (const image of this.extraShells) image.setVisible(false);
   }
 
   /** Faint dotted trail of the previous player shot; null removes it. */
@@ -105,7 +157,6 @@ export class ProjectileView {
 
   private drawLive(path: readonly Point[], index: number, head: Point, style: TrailStyle): void {
     const g = this.live;
-    g.clear();
     const from = Math.max(0, index - 40);
     const lines = style.line.length;
     style.line.forEach((color, k) => {

@@ -152,7 +152,8 @@ export function renewTerrain(s: BattleState, settings: Settings): BattleState {
   const terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed);
   const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
   const settle = (tank: TankState): TankState => moveTank(tank, tank.position, settings, terrain);
-  return { ...s, terrainSeed, terrain, player: settle(s.player), enemy: settle(s.enemy), decoys: s.decoys.map(settle) };
+  // The trail of the last shot belongs to the old ground and goes with it (bug report B1, FR-004).
+  return { ...s, terrainSeed, terrain, lastPlayerPath: null, player: settle(s.player), enemy: settle(s.enemy), decoys: s.decoys.map(settle) };
 }
 
 /**

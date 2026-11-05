@@ -23,10 +23,12 @@
  *   are created when a comparison search starts and removed when it ends. Every standing tank takes taps
  *   (controller.tapTank). A burst decoy breaks into cardboard pieces and is gone; when the enemy is destroyed the
  *   remaining decoys fade out. A near miss shakes the tank in lastShot.nearTankId. Help step 3 puts a green ring
- *   around the enemy. The enemy does not turn its turret before a shell from the top edge. For the end-to-end tests
+ *   around the enemy. When the enemy fires, every standing decoy turns its turret and fires with it, each from its own
+ *   barrel (bug report B2). For the end-to-end tests
  *   only, the canvas carries `data-enemy-tanks` (standing tanks that look like the enemy), `data-tank-taps`
  *   (`<number>@<x>,<y>` of each tappable tank, in world units), `data-decoy-bursts` (decoys burst this round) and
- *   `data-help-tanks` (the number of the tank marked by help step 3, or '').
+ *   `data-help-tanks` (the number of the tank marked by help step 3, or ''), `data-enemy-volley` (the start x of each
+ *   shell of the latest enemy shot, in world units, sorted) and `data-trail-points` (points of the trail shown).
  * - While the phase is 'paused' the scene is paused, which stops update(), tweens, timers and particles.
  * - Amendment 11 (FR-093): `options.look` gives the child's tank its garage color, flag and hat and the child's shells
  *   their trail; the enemy and decoys keep their look. The canvas carries `data-player-look` (lookKey) for the
@@ -199,7 +201,10 @@ export class BattleScene extends Phaser.Scene {
     this.drawDecoys(s, prev, newRound, searchAfterHit);
     this.numberLine.update(s);
     // The previous player path stays as a faint trail until the next player shot (FR-004).
-    this.projectile.setTrail(s.phase === 'playerShot' ? null : s.lastPlayerPath);
+    // New ground has no trail: the controller clears it with new hills, "Neue Landschaft" and a new round (bug report B1).
+    const trail = s.phase === 'playerShot' ? null : s.lastPlayerPath;
+    this.projectile.setTrail(trail);
+    this.game.canvas.dataset.trailPoints = String(trail?.length ?? 0);
 
     if (s.shot && s.shot !== this.startedShot && (s.phase === 'playerShot' || s.phase === 'enemyTurn')) {
       this.startShot(s.shot);
@@ -304,9 +309,17 @@ export class BattleScene extends Phaser.Scene {
       this.fireAfter(shot, PLAYER_TURN_MS);
       return;
     }
-    // The enemy turns its turret toward its aim, except before a shell from the top edge in a comparison turn, which
-    // must not show which tank is the enemy (amendment 10, FR-043a).
-    if (angle !== null && this.controller.getState().decoys.length === 0) this.enemy.turnTo(angle, ENEMY_TURN_MS);
+    // The enemy turns its turret toward its aim. In a comparison turn every standing decoy turns toward its own aim at
+    // the same time and fires with it, so the volley does not show which tank is the enemy (bug report B2, FR-043a).
+    if (angle !== null) this.enemy.turnTo(angle, ENEMY_TURN_MS);
+    for (const d of shot.decoyShells) {
+      const a = launchAngle(d.path);
+      if (a !== null) this.decoyViews.get(d.shooterId)?.turnTo(a, ENEMY_TURN_MS);
+    }
+    this.game.canvas.dataset.enemyVolley = [shot.path[0], ...shot.decoyShells.map((d) => d.path[0])]
+      .map((p) => Math.round(p?.x ?? 0))
+      .sort((a, b) => a - b)
+      .join(';');
     this.fireAfter(shot, ENEMY_FIRE_DELAY_MS);
   }
 
@@ -319,7 +332,20 @@ export class BattleScene extends Phaser.Scene {
 
   private fire(shot: ShotInFlight): void {
     this.sounds?.shot();
-    this.projectile.play(shot, () => this.landed(shot));
+    if (shot.decoyShells.length === 0) {
+      this.projectile.play(shot, () => this.landed(shot));
+      return;
+    }
+    // A comparison volley (bug report B2): every shell explodes where it lands, and the controller hears of the
+    // enemy's shell once the last shell is down, so neither the explosions nor the timing show which shell is real.
+    this.projectile.play(
+      shot,
+      () => this.controller.enemyShotAnimationDone(),
+      (_, impact) => {
+        this.effects.explosion(impact.x, toScreenY(impact.y, WORLD_HEIGHT), shot.blastRadius);
+        this.sounds?.boom();
+      },
+    );
   }
 
   private landed(shot: ShotInFlight): void {

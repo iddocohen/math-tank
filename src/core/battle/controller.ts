@@ -21,14 +21,13 @@ import type { BattleState, InputMethod, RoundState, Settings, ShotInFlight, Tank
 import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
-import { enemyShot } from '../ai/enemy';
+import { decoyShot, enemyShot } from '../ai/enemy';
 import { isFastGuess } from '../progress/classify';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
-import { topShellEntryX, topShellPath } from './topShell';
 import {
   applyImpact,
   createRound,
@@ -234,7 +233,7 @@ export class BattleController {
       worldHeight: WORLD_HEIGHT,
       tolerance: 0.25 * ((DEFAULT_LAYOUT.right - DEFAULT_LAYOUT.left) / (max - min)),
     });
-    const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS };
+    const shot: ShotInFlight = { shooter: 'player', path: arc.path, impact: arc.impact, hitTargetId: null, outOfBounds: false, blastRadius: BLAST_RADIUS, decoyShells: [] };
     this.firedNumber = n;
     this.firedAt = this.deps.clock();
     this.set({ ...s, phase: 'playerShot', shot, entry: emptyEntry(), inputMethod });
@@ -415,9 +414,10 @@ export class BattleController {
 
   /**
    * The enemy's shell on the state after the player's impact (amendments 07 and 13, FR-041 to FR-043a, FR-099):
-   * enemyShot decides hit or deliberate near miss from the misses in a row and the difficulty. The shell flies from the enemy's muzzle; in a comparison turn it
-   * enters from the top edge instead, at an x that depends on nothing about the enemy, so it does not show which tank
-   * is the enemy (amendment 10).
+   * enemyShot decides hit or deliberate near miss from the misses in a row and the difficulty. The shell flies from
+   * the enemy's muzzle. In a comparison turn every standing decoy fires at the same time from its own muzzle (bug
+   * report B2), so the volley does not show which tank is the enemy; the decoys' shells land farther from the child's
+   * tank than the enemy's and never hit.
    */
   private nextEnemyShot(s: BattleState): ShotInFlight {
     const shotIndex = this.enemyShotIndex++;
@@ -432,10 +432,23 @@ export class BattleController {
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
     });
-    const path = s.decoys.length === 0
-      ? shot.path
-      : topShellPath({ impact: shot.impact, entryX: topShellEntryX(s.seed, shotIndex, s.player.x), terrain: s.terrain, worldHeight: WORLD_HEIGHT });
-    return { shooter: 'enemy', path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS };
+    const decoyShells = s.decoys
+      .filter((d) => d.alive)
+      .map((d, decoyIndex) => ({
+        shooterId: d.id,
+        ...decoyShot({
+          roundSeed: s.seed,
+          shotIndexInRound: shotIndex,
+          decoyIndex,
+          realImpactX: shot.impact.x,
+          playerX: s.player.x,
+          origin: muzzle(d),
+          terrain: s.terrain,
+          worldWidth: WORLD_WIDTH,
+          worldHeight: WORLD_HEIGHT,
+        }),
+      }));
+    return { shooter: 'enemy', path: shot.path, impact: shot.impact, hitTargetId: shot.hits ? s.player.id : null, outOfBounds: false, blastRadius: BLAST_RADIUS, decoyShells };
   }
 
   private impact(impact: Impact, blastRadius: number): BattleState {

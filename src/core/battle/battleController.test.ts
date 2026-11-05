@@ -313,7 +313,8 @@ describe('BattleController free play (US1, amendment 01)', () => {
     expect(after.lives).toBe(LIVES);
     expect(after.player.y).toBeCloseTo(settleY(after.terrain, after.player.x), 6);
     expect(enemyOf(after).y).toBeCloseTo(settleY(after.terrain, enemyOf(after).x), 6);
-    expect(after.lastPlayerPath).toEqual(before.shot!.path);
+    // The new hills take the trail of the old ground with them (bug report B1).
+    expect(after.lastPlayerPath).toBeNull();
     expect(after.turn).toBe(1);
   });
 
@@ -1464,16 +1465,20 @@ describe('BattleController visible enemy and return fire (amendment 07, T222)', 
     for (const s of seen) if (s.lastShot) expect(s.lastShot.enemyNumber).toBe(s0.challenge!.answer);
   });
 
-  it("in a comparison turn the enemy's shell enters from the top edge, so it does not show which tank is the enemy (FR-043a, amendment 10)", () => {
+  it('in a comparison turn the enemy and every standing decoy fire together, each from its own barrel (FR-043a, bug report B2)', () => {
     const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
     g.controller.startRound('guided');
     const seen = record(g);
     answer(g, 30);
     const firing = seen.find((s) => s.phase === 'enemyTurn')!;
     expect(firing.enemy.position).toBe(74);
-    expect(firing.shot!.path[0]!.y).toBe(WORLD_HEIGHT);
-    expect(firing.shot!.path[0]).not.toEqual(muzzle(firing.enemy));
+    expect(firing.shot!.path[0]).toEqual(muzzle(firing.enemy));
     expect(firing.shot!.path.at(-1)).toEqual(firing.shot!.impact);
+    const decoy = firing.decoys.find((d) => d.position === 47)!;
+    expect(firing.shot!.decoyShells).toHaveLength(1);
+    expect(firing.shot!.decoyShells[0]!.shooterId).toBe(decoy.id);
+    expect(firing.shot!.decoyShells[0]!.path[0]).toEqual(muzzle(decoy));
+    expect(firing.shot!.decoyShells[0]!.path.at(-1)).toEqual(firing.shot!.decoyShells[0]!.impact);
   });
 
   it('a help request is not a shot: no enemy turn follows (FR-081)', () => {
@@ -1649,7 +1654,7 @@ describe('BattleController comparison with decoys without number plates (US4, am
     expect(s.phase).toBe('challenge');
   });
 
-  it('firing at 47 bursts the decoy: a miss with help step 1, no score, and the enemy fires back from the top edge (US4 scenario 2, FR-066, FR-081)', () => {
+  it('firing at 47 bursts the decoy: a miss with help step 1, no score, and the enemy fires back alone (US4 scenario 2, FR-066, FR-081)', () => {
     const g = fixtureRound();
     typeNumber(g.controller, 47);
     g.controller.confirm();
@@ -1663,7 +1668,9 @@ describe('BattleController comparison with decoys without number plates (US4, am
     expect(s.message).toMatchObject({ key: 'encouragement' });
     expect(s.enemiesDestroyed).toBe(0);
     expect(s.phase).toBe('enemyTurn');
-    expect(s.shot!.path[0]!.y).toBe(WORLD_HEIGHT);
+    // The burst decoy does not fire; only the enemy does, from its own barrel (bug report B2).
+    expect(s.shot!.path[0]).toEqual(muzzle(s.enemy));
+    expect(s.shot!.decoyShells).toEqual([]);
     g.controller.enemyShotAnimationDone();
     expect(g.controller.getState().phase).toBe('challenge');
     expect(g.controller.getState().enemy).toMatchObject({ position: 74, alive: true });
@@ -2309,5 +2316,122 @@ describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
     const after = c.controller.getState();
     expect(after.phase).toBe('roundOver');
     expect(after.terrainSeed).toBe(before.terrainSeed);
+  });
+});
+
+describe('bug report B1: the trail of the last shot goes when the ground changes (FR-004)', () => {
+  it('free play: the destroyed enemy that brings new hills also removes the trail', () => {
+    const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    playTurn(c.controller, fireBetween);
+    expect(c.controller.getState().lastPlayerPath).not.toBeNull();
+    c.advance(1_000);
+    fireAtEnemy(c.controller);
+    c.controller.shotAnimationDone();
+    const after = c.controller.getState();
+    expect(after.enemiesDestroyed).toBe(1);
+    expect(after.lastPlayerPath).toBeNull();
+  });
+
+  it('guided: the next search on new ground shows no trail', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const seen = record(g);
+    g.advance(3_000);
+    g.controller.fireAt(g.controller.getState().challenge!.answer);
+    g.controller.shotAnimationDone();
+    const after = g.controller.getState();
+    expect(after.phase).toBe('challenge');
+    expect(after.lastPlayerPath).toBeNull();
+    // Every state with the new ground has no trail.
+    for (const s of seen) if (s.terrainSeed === after.terrainSeed) expect(s.lastPlayerPath).toBeNull();
+  });
+
+  it('"Neue Landschaft" and a new round remove the trail', () => {
+    const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    playTurn(c.controller, fireBetween);
+    expect(c.controller.getState().lastPlayerPath).not.toBeNull();
+    c.controller.newScene();
+    expect(c.controller.getState().lastPlayerPath).toBeNull();
+    c.advance(1_000);
+    playTurn(c.controller, fireBetween);
+    expect(c.controller.getState().lastPlayerPath).not.toBeNull();
+    c.controller.startRound('freePlay');
+    expect(c.controller.getState().lastPlayerPath).toBeNull();
+  });
+});
+
+describe('bug report B2: in comparison turns all option tanks fire a volley (FR-043a)', () => {
+  /** Plays plain misses in comparison searches and returns every state in which the enemy fires. */
+  function volleys(seed: number, difficulty: Settings['enemyDifficulty']): RoundState[] {
+    const g = guidedController({ ...COMPARISON_47_74.settings, noDamage: true, enemyDifficulty: difficulty }, seed);
+    g.controller.startRound('guided');
+    const seen = record(g);
+    for (let i = 0; i < 6; i++) {
+      const s = g.controller.getState();
+      if (s.phase !== 'challenge' || s.decoys.length === 0) break;
+      // Fire at the child's own number: far from every option tank (at least the minimum gap).
+      answer(g, s.player.position);
+    }
+    return seen.filter((s) => s.phase === 'enemyTurn' && s.shot !== null);
+  }
+
+  it('one shell per standing option tank, each starting at its own muzzle; the shells land beside the child, never on it', () => {
+    let hits = 0;
+    let checked = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      for (const difficulty of ['easy', 'normal', 'challenging'] as const) {
+        for (const s of volleys(seed, difficulty)) {
+          const shot = s.shot!;
+          const standing = s.decoys.filter((d) => d.alive);
+          expect(shot.path[0]).toEqual(muzzle(s.enemy));
+          expect(shot.decoyShells.map((d) => d.shooterId).sort()).toEqual(standing.map((d) => d.id).sort());
+          const realDistance = Math.abs(shot.impact.x - s.player.x);
+          for (const d of shot.decoyShells) {
+            const decoy = standing.find((t) => t.id === d.shooterId)!;
+            expect(d.path[0]).toEqual(muzzle(decoy));
+            // Harmless: at least 60 units farther from the child's tank than the enemy's shell, outside the hit area.
+            const distance = Math.abs(d.impact.x - s.player.x);
+            expect(distance).toBeGreaterThanOrEqual(realDistance + 60 - 1);
+            expect(enemyHitsPlayer(d.impact, null, s.player)).toBe(false);
+            expect(d.impact.x).toBeGreaterThanOrEqual(0);
+            expect(d.impact.x).toBeLessThanOrEqual(WORLD_WIDTH);
+            checked++;
+          }
+          if (shot.hitTargetId !== null) hits++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+    // The enemy's own shell still zeroes in and hits (amendment 13).
+    expect(hits).toBeGreaterThan(0);
+  });
+
+  it('only the enemy shell counts: the decoy shells change neither the hearts nor the ground', () => {
+    const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
+    g.controller.startRound('guided');
+    g.advance(1_000);
+    g.controller.fireAt(30);
+    g.controller.shotAnimationDone();
+    const firing = g.controller.getState();
+    expect(firing.shot!.decoyShells).toHaveLength(1);
+    const expected = applyImpact(
+      firing,
+      { point: firing.shot!.impact, hitTargetId: firing.shot!.hitTargetId, outOfBounds: false, shooter: 'enemy' },
+      firing.shot!.blastRadius,
+      { noDamage: false, range: COMPARISON_47_74.settings.range },
+    );
+    g.controller.enemyShotAnimationDone();
+    const after = g.controller.getState();
+    expect(Array.from(after.terrain)).toEqual(Array.from(expected.terrain));
+    expect(after.lives).toBe(expected.lives);
+  });
+
+  it('outside comparison turns the enemy fires alone', () => {
+    const g = guidedRoundWhere(positionSearch, { noDamage: true });
+    const seen = record(g);
+    answer(g, missNumber(g.controller.getState()));
+    const firing = seen.find((s) => s.phase === 'enemyTurn')!;
+    expect(firing.shot!.decoyShells).toEqual([]);
   });
 });

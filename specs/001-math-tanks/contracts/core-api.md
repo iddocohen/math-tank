@@ -109,7 +109,7 @@ Changed by amendment 13: `ENEMY_HIT_CHANCE`, `NEAR_MISS_MIN` and `NEAR_MISS_MAX`
 
 Changed by amendment 07: the enemy no longer aims with `solveAim` plus random error. `planEnemyShot` makes one seeded draw from `deriveSeed(roundSeed, 6, shotIndexInRound)`: `hits` is true with probability `ENEMY_HIT_CHANCE[difficulty]` and always false for `shotIndexInRound === 0` (FR-043). With `hits`, `targetX` is `playerX`; otherwise it is `playerX ± d` with `d` from 40 to 100 on a drawn side, and the other side when the drawn one is outside `[0, worldWidth]`. `enemyShot` adds the arc of `solveArcToX` from `origin` to `targetX`, so `|impact.x - targetX|` is at most 0.5 units. The input type has no field for attempts, help, mistakes or challenge data, so the draw cannot depend on them (FR-042). Over 3000 seeded shots the hit rate is within 0.03 of the chance for each difficulty. `enemyDamageFactor` is removed by amendment 06: each enemy hit removes one heart.
 
-`core/battle/topShell` (`topShellEntryX(roundSeed, shotIndex, playerX)`, `topShellPath({ impact, entryX, terrain, worldHeight })`), removed by amendment 09, is back with amendment 10: in comparison turns the enemy's shell enters from the top edge at an x taken from the round seed, the shot index and the child's tank only, and falls onto the impact of the enemy's draw, so it does not show which tank is the enemy (FR-043a).
+`core/battle/topShell` is removed (product-owner bug report B2). In comparison turns `core/ai/enemy` `decoyShot({ roundSeed, shotIndexInRound, decoyIndex, realImpactX, playerX, origin, terrain, worldWidth, worldHeight })` gives each standing decoy's shell, from the decoy's muzzle to a point at least `DECOY_SHELL_EXTRA` (60) world units farther from the child's tank than the enemy's shell; the controller puts them in `ShotInFlight.decoyShells` (FR-043a).
 
 ## `core/battle` (stateful)
 
@@ -144,7 +144,7 @@ class BattleController {
                                            // enemy's shot gets missStreak and the round's enemyDifficulty. A shot that destroys the enemy sets
                                            // missStreak 0 and, unless the round ends, renews the terrain (renewTerrain in round.ts) before the next enemy
   enemyShotAnimationDone(): void           // a hit on the player's body removes one heart unless noDamage and sets missStreak 0 (amendment 13); 0 hearts -> roundOver 'heartsGone'
-                                           // the shell comes from the enemy's muzzle, except in comparison turns, where it enters from the top edge (FR-043a, amendment 10)
+                                           // the shell comes from the enemy's muzzle; in comparison turns shot.decoyShells holds the standing decoys' harmless shells (FR-043a, bug report B2)
   tick(): void                             // time limit (tasks.md D1)
   pause(): void                            // pause button or Escape
   resume(): void

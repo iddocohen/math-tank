@@ -266,7 +266,7 @@ interface RoundState {
   lastEnemyHit: boolean;           // the latest enemy shell removed a heart (the renderer flashes the tank)
   lastPlayerPath: Point[] | null;  // FR-004 trail
   stepAnimation: number[] | null;  // addition and subtraction after a help request: the marker's stops from the start to the result, e.g. [43, 40, 36] (stepPath, FR-024); null otherwise
-  shot: ShotInFlight | null;       // shell in flight for the renderer to replay
+  shot: ShotInFlight | null;       // shell in flight for the renderer to replay; ShotInFlight.decoyShells holds the harmless shells of the standing decoys in a comparison volley ({ shooterId, path, impact }[], empty otherwise; bug report B2, FR-043a)
   outcome: 'goalReached' | 'heartsGone' | null;   // goalReached: roundLength enemies destroyed with roundType 'enemyCount'
 }
 
@@ -301,7 +301,7 @@ challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot 
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)
 playerShot (guided) --hit (exact number)--> enemy destroyed (enemiesDestroyed + 1, attempt recorded, missStreak 0) --> roundOver (goalReached) | new landscape (renewTerrain: new terrainSeed and terrain, tanks settled at their numbers) and a new search with a new visible enemy; the destroyed enemy does not fire
 playerShot (guided) --miss (near miss on the body, or off it)--> enemyTurn (help.level + 1, missStreak + 1, or + 2 for a fast guess, lastShot with the step count shown)
-playerShot (guided, comparison) --decoy's exact number--> decoy destroyed (alive false, lastShot.decoyHit), a miss --> enemyTurn (help.level + 1; the shell enters from the top edge)
+playerShot (guided, comparison) --decoy's exact number--> decoy destroyed (alive false, lastShot.decoyHit), a miss --> enemyTurn (help.level + 1; the enemy and every standing decoy fire together from their own barrels, bug report B2)
 playerShot (guided, comparison) --hit--> enemy destroyed, every decoy alive false (folded away) --> new search
 challenge (comparison) --tapTank(id) of a standing enemy or decoy--> as confirm at that tank's number
 challenge --help (button or H) or time limit--> challenge (help.level + 1)

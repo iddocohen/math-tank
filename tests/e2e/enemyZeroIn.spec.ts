@@ -89,3 +89,17 @@ test('no-damage mode: the third shell lands on the tank but takes no heart (FR-0
   await expect(overlay).toHaveAttribute('data-miss-streak', '0');
   await expect(overlay).toHaveAttribute('data-lives', '3');
 });
+
+test('bug report B1: the trail of the last shot goes with the old hills', async ({ page }) => {
+  test.setTimeout(90_000);
+  const overlay = await start(page, normal);
+  const canvas = page.locator('canvas');
+  await miss(page, overlay, normal);
+  await expect(canvas).not.toHaveAttribute('data-trail-points', '0');
+  const terrainSeed = (await canvas.getAttribute('data-terrain-seed'))!;
+  await fire(page, overlay, Number(await overlay.getAttribute('data-enemy-number')));
+  await expect(overlay).toHaveAttribute('data-enemies-destroyed', '1', { timeout: 15_000 });
+  await expect(canvas).not.toHaveAttribute('data-terrain-seed', terrainSeed);
+  await expect(overlay).toHaveAttribute('data-phase', 'aiming', { timeout: 15_000 });
+  await expect(canvas).toHaveAttribute('data-trail-points', '0');
+});

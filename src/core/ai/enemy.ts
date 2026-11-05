@@ -83,3 +83,47 @@ export function enemyShot(input: EnemyShotInput): EnemyShot {
   const arc = solveArcToX({ origin, targetX: p.targetX, towardRight: p.targetX >= origin.x, terrain, worldWidth, worldHeight, tolerance: ARC_TOLERANCE });
   return { ...p, path: arc.path, impact: arc.impact };
 }
+
+/** A decoy's shell lands at least this much farther from the child's tank than the enemy's shell (bug report B2). */
+export const DECOY_SHELL_EXTRA = 60;
+/** Each further decoy's shell lands this much farther again, so no two shells land on the same spot. */
+const DECOY_SHELL_STEP = 45;
+
+export interface DecoyShellInput {
+  roundSeed: number;
+  shotIndexInRound: number;
+  /** 0 for the first standing decoy, 1 for the second. */
+  decoyIndex: number;
+  /** Where the enemy's shell lands. */
+  realImpactX: number;
+  playerX: number;
+  worldWidth: number;
+}
+
+/**
+ * Where a decoy's shell lands in a comparison turn's volley (bug report B2, FR-043a): beside the child's tank, at
+ * least DECOY_SHELL_EXTRA world units farther from it than the enemy's shell, so it never hits. A seeded draw picks
+ * the side; a side outside the battlefield gives way to the other side.
+ */
+export function decoyShellTargetX(input: DecoyShellInput): number {
+  const { roundSeed, shotIndexInRound, decoyIndex, realImpactX, playerX, worldWidth } = input;
+  const distance = Math.abs(realImpactX - playerX) + DECOY_SHELL_EXTRA + decoyIndex * DECOY_SHELL_STEP;
+  const side = createRng(deriveSeed(roundSeed, 9, shotIndexInRound, decoyIndex)).next() < 0.5 ? -1 : 1;
+  const x = playerX + side * distance;
+  return x < 0 || x > worldWidth ? playerX - side * distance : x;
+}
+
+export interface DecoyShotInput extends DecoyShellInput {
+  /** The decoy's muzzle. */
+  origin: Point;
+  terrain: Heightmap;
+  worldHeight: number;
+}
+
+/** A decoy's shell with its arc from the decoy's own muzzle. */
+export function decoyShot(input: DecoyShotInput): { path: Point[]; impact: Point } {
+  const targetX = decoyShellTargetX(input);
+  const { origin, terrain, worldWidth, worldHeight } = input;
+  const arc = solveArcToX({ origin, targetX, towardRight: targetX >= origin.x, terrain, worldWidth, worldHeight, tolerance: ARC_TOLERANCE });
+  return { path: arc.path, impact: arc.impact };
+}
