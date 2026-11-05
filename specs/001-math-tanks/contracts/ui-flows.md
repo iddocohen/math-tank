@@ -31,10 +31,18 @@ The battle root (`main.battle`) carries `data-layout` (`wide`, `portrait`, `side
 
 | Layout | Example sizes (CSS px) | Battlefield and ruler | Readout, number pad and "Feuer!" | Help button | Gear and "Neue Landschaft" |
 |--------|------------------------|-----------------------|----------------------------------|-------------|----------------------------|
-| `wide` | 1024 by 768, 1180 by 820, 1366 by 1024, desktop | Top, above the bar | Bar at the bottom: readout, pad keys in two rows (1 to 5 with ⌫, 6 to 0 with minus), "Feuer!" | Left end of the bar | Top right; right side of the battlefield |
-| `portrait` | 768 by 1024, 820 by 1180 | Top, full width (16:9) | The area below: readout and "Feuer!" in a column, the pad in a large grid (1 2 3 / 4 5 6 / 7 8 9 / minus 0 ⌫) | Top left of the area below | Top right; right side of the battlefield |
-| `side` | 844 by 390, 932 by 430 | Left | Column on the right: readout, the pad as a compact grid (same order as `portrait`), "Feuer!" | Top of the pad column, left of the readout (never over the battlefield) | Top right of the battlefield; right side of the battlefield |
+| `wide` | 1024 by 768, 1180 by 820, 1366 by 1024, desktop; Fire HD 10 sideways 1280 by 672; any Fire tablet sideways with only the navigation bar (1024 by 552, 960 by 552, 1280 by 752) | Top, above the bar | Bar at the bottom: readout, pad keys in two rows (1 to 5 with ⌫, 6 to 0 with minus), "Feuer!" | Left end of the bar | Top right; right side of the battlefield |
+| `portrait` | 768 by 1024, 820 by 1180; Fire 7 600 by 896, Fire HD 8 600 by 832, Fire HD 10 800 by 1152 | Top, full width (16:9) | The area below: readout and "Feuer!" in a column, the pad in a large grid (1 2 3 / 4 5 6 / 7 8 9 / minus 0 ⌫) | Top left of the area below | Top right; right side of the battlefield |
+| `side` | 844 by 390, 932 by 430; Fire 7 sideways 1024 by 472, Fire HD 8 sideways 960 by 472 | Left | Column on the right: readout, the pad as a compact grid (same order as `portrait`), "Feuer!" | Top of the pad column, left of the readout (never over the battlefield) | Top right of the battlefield; right side of the battlefield |
 | Turn the phone | 390 by 844 | Not shown | Not shown | Not shown | Gear only |
+
+### Amazon Fire tablets in Silk (amendment 16, FR-125 to FR-128)
+
+- The Fire sizes come from Amazon's screen pixels and density class, minus an estimated 128 px of browser and system bars (spec.md FR-125). A Fire 7 or Fire HD 8 held sideways is at most 500 px tall with all bars, so it gets `side`; with only the navigation bar it gets `wide`. Both are accepted.
+- Held upright, every Fire tablet is at least 600 px wide, so it gets `portrait`, never the "Bitte dreh das Handy" picture.
+- The number pad shows with `'auto'` because the main pointer is touch, also on the Fire HD 10, which is wider than 1100 px when held sideways.
+- Silk's desktop view changes only the user agent the page sees; the layout and the pad do not read the user agent (FR-126).
+- The canvas always draws the 1600 by 900 world at 1600 by 900 pixels, whatever the device pixel ratio (FR-128).
 
 Without the number pad (`numberPad: 'never'`, or `'auto'` on a desktop wider than 1100 px) every size uses the bar at the bottom with the readout and the fire button, as before amendment 12.
 

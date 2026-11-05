@@ -218,3 +218,25 @@ The product owner asked for a mode that plays only on the ruler and a mode that 
 - Decisions of this update that the amendment does not state: the mode identifiers `mixed`, `ruler` and `math`; keys 1, 2 and 3 are fixed per mode and start it at once (a key for a mode that is not offered does nothing); the settings field `playModes` replaces `freePlay` in settings version 8, and stored settings migrate to all three modes unless the parent offered only free play (no challenge type on), which migrates to "Nur Zahlenstrahl" only; the row of correct answers is read from `SkillProgress.recent` instead of a new stored field; personal bests of "Gemischt" keep the key without a mode part, so existing bests stay; in "Nur Rechnen" the number pad shows unless "Zahlenfeld" is "Nie", help step 1 shows no ruler highlight and help step 2 no step count, and comparison help keeps its option markers; the battle overlay carries `data-mode` and `data-skill-step` for the end-to-end tests; `?mode=mixed|ruler|math` replaces `?mode=free`.
 
 The spec (User Story 7 scenarios 1, 2 and 5, new User Story 11, FR-014 replaced, FR-037, FR-040, FR-046, FR-047, FR-062, FR-086, new FR-121 to FR-124, Amendments), the data model (Settings version 8 with `playModes`, the adaptive rule, `RoundState.mode`, the records key, help in "Nur Rechnen"), the contracts (play modes, the start screen, the keyboard map, `generateChallenge`, `nextHelp`, `recordKey`, `summarize`), quickstart (scenario 30) and tasks (Phase 24a) were updated to match.
+
+## Amendment 16
+
+**Date**: 2026-11-05
+
+The product owner asked that the game also work in Amazon Silk, the browser on their son's Fire Kids tablet. The model is not known. This is an intended change, not drift.
+
+- **PRD section 12 (technical requirements)** names desktop and tablet browsers. Silk on Fire tablets is a tablet browser based on Chromium, so FR-050 adds it without new technology (FR-125).
+- **The amendment's sizes are estimates.** Amazon's Fire tablet specifications give the Fire HD 10 the density class hdpi (ratio 1.5), not ratio 2, so its CSS size is 1280 by 800, not 960 by 600. Sources:
+  - [Fire HD models](https://developer.amazon.com/docs/device-specs/ft-device-specifications-firehd-models.html)
+  - [Fire 7 models](https://developer.amazon.com/docs/device-specs/ft-device-specifications-fire-models.html)
+  - [Silk user agent strings](https://docs.aws.amazon.com/silk/latest/developerguide/user-agent.html)
+- **Browser bar height is not published.** The tests subtract an estimated 128 CSS pixels (status bar 24, navigation bar 48, Silk's address bar 56). With all bars, a Fire 7 or Fire HD 8 held sideways is 472 pixels tall, which FR-104 gives the "side" layout; the amendment's estimate of 552 gives "wide". The amendment accepts both, and both are tested.
+- **Speed (amendment item 3).** With the processor slowed 4 times, the check passes with a wide margin: 4.4 ms of main-thread time per frame against a budget of 33 ms. The light-graphics measures are therefore not built (FR-128). The canvas already draws at most 1600 by 900 pixels, whatever the device pixel ratio. A 4 times slower Apple M4 Pro is still faster than the Fire 7's Cortex-A53 cores, so the product owner's check on the child's tablet (quickstart scenario 33) remains the deciding test.
+- **Silk's desktop view.** Silk's desktop view sends a desktop user agent; the game never reads the user agent, so the layout and the number pad stay. Whether desktop view also widens the layout is not documented; the test also checks 980 pixels wide (FR-126).
+- Decisions of this update that the amendment does not state:
+  - The Fire Max 11 has no test of its own, because Amazon lists no density class for it. It is larger than the Fire HD 10 at any likely ratio.
+  - The offline check runs on the Fire 7 size only.
+  - The speed check measures main-thread time per frame in every environment, and the frame rate only with a graphics card.
+  - The example Silk version in the user agent (Silk 130, Android 11 for Fire OS 8) is illustrative.
+
+The spec (FR-050, new FR-125 to FR-128, US8 scenario 13, SC-002, Assumptions, Amendments), the contracts (Fire sizes in the screen layouts), quickstart (scenarios 31 to 33) and tasks (Phase 24b) were updated to match.

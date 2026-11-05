@@ -851,6 +851,20 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - [X] T341 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project), and take muted headless screenshots of the start screen with three buttons, a "Nur Zahlenstrahl" battle and a "Nur Rechnen" battle at help step 2
   - T340 note: every spec now finds the start button with `startButton` and waits before typing an answer with `waitCalmly` (both in `tests/e2e/fixtures.ts`), because every play mode is a search that accepts answers after 1 second and treats a miss within GUESS_RESPONSE_MS as a fast guess. The specs that used free play start "Nur Zahlenstrahl" with `?mode=ruler`.
   - T341 note: the full `pnpm e2e` run passes in every project (174 passed, 17 skipped by their own conditions: phone-only checks in the other device projects, the service worker check where Playwright has none, fullscreen where the browser refuses it, the frame rate without a GPU, and the screenshot test without SCREENSHOT_DIR). Screenshots: `modes-start-screen.png`, `modes-ruler-battle.png`, `modes-math-battle-help-2.png` from `tests/e2e/modes.spec.ts` with SCREENSHOT_DIR set.
+
+## Phase 24b: Amendment 16 Amazon Fire tablets with Silk
+
+**Purpose**: [Amendment 16](./amendment-16-fire-silk.md). The game works in Amazon Silk on Fire 7, Fire HD 8 and Fire HD 10 tablets, held sideways and upright, with the number pad, offline, in Silk's desktop view and on a slow processor (FR-050, FR-125 to FR-128).
+
+**Independent test**: `pnpm e2e --project='fire-*' --no-deps` plays a round with the number pad at every Fire size and checks the layout; `tests/e2e/firePerformance.spec.ts` checks the start time and the main-thread time per frame with the processor slowed 4 times.
+
+- [ ] T342 Move the cut-off and overlap checks of `tests/e2e/devices.spec.ts` into `tests/e2e/layout.ts` (`expectBattleFits`, `expectPadKeys`, `expectNoScroll`) and use them from `devices.spec.ts`, with no change in what it checks (FR-105)
+- [ ] T343 Add `tests/e2e/silk.ts` (Silk tablet and desktop user agents from the Amazon Silk Developer Guide; Fire 7, Fire HD 8 and Fire HD 10 screen sizes and device pixel ratios from Amazon's Fire tablet specifications; the estimated bar height) and the six Fire projects in `playwright.config.ts` (Chromium, Silk user agent, `hasTouch`, `isMobile`, sideways and upright; they run only `tests/e2e/fire.spec.ts`); the chromium, webkit and firefox projects ignore the Fire specs (FR-050, FR-125)
+- [ ] T344 Write `tests/e2e/fire.spec.ts`: at each Fire size, tap "Gemischt" on the start screen, check that the layout is `wide` or `side` sideways and `portrait` upright (no rotate picture), that the number pad shows and that nothing is cut off or overlapping (`expectBattleFits`), save a screenshot with SCREENSHOT_DIR set, then play 2 enemies with the number pad only; sideways also check the size with only the navigation bar; on the Fire 7 size sideways play the round offline; on the Fire HD 10 sizes load with Silk's desktop user agent (upright at 980 px wide) and check the touch layout and the number pad (FR-125, FR-126)
+- [ ] T345 Write `tests/e2e/firePerformance.spec.ts` and the project `fire-performance` (Fire 7 size, after `performance`, alone): `Emulation.setCPUThrottlingRate` 4 through CDP; the battlefield within 3 s of tapping "Gemischt"; during a shot at most 1000/30 ms of main-thread time (CDP `TaskDuration`) per frame; with a graphics card at least 30 frames per second (skipped with software rendering) (FR-127, SC-001, SC-002)
+- [ ] T346 Only if T345 or the product owner's check fails: build the light-graphics measures with tests first (canvas at most device pixel ratio 1.5, fewer particles, cached terrain texture, simpler sky, light mode after 2 s below 30 frames per second) (FR-128)
+- [ ] T347 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` and `pnpm e2e` (every project), and take muted headless screenshots of each Fire size and orientation in the middle of a round (`SCREENSHOT_DIR=<folder> pnpm e2e --project='fire-*' --no-deps`)
+
 ---
 
 ## Dependencies and Execution Order
@@ -890,6 +904,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - Each later phase that builds a feature with a setting removes that setting from `src/app/comingSoon.ts` (FR-079), so the settings page enables it.
 - **Phase 24 Polish**: depends on all earlier phases.
 - **Phase 24a (amendment 17)**: depends on Phase 24. T327 runs before T328, T329 before T330, T331 before T332, T333 before T334, T335 before T336, T337 before T338; T330 and T332 run before T334; T334 before T336 to T339; T340 after T338 and T339; T341 last.
+- **Phase 24b (amendment 16)**: depends on Phases 22h (device projects and layouts), 23 (offline play) and 24a (play-mode buttons on the start screen). T342 runs before T344; T343 before T344 and T345; T346 only if T345 or the product owner's check fails; T347 last.
 
 ### User story dependencies
 
@@ -1005,7 +1020,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-048 | T016, T017, T103, T108, T109, T112, T131, T175, T176, T205, T207, T255, T256, T273, T274 |
 | FR-048a | T103, T104, T114, T205, T207, T210, T211, T255, T256, T257, T258, T295 |
 | FR-049 | T034, T105, T106, T113 |
-| FR-050 | T001, T003, T005, T045, T154, T278, T303, T304 |
+| FR-050 | T001, T003, T005, T045, T154, T278, T303, T304, T343 |
 | FR-051 | T003, T134, T139, T304 |
 | FR-051a | T139 |
 | FR-052 | T006, T135, T142 |
@@ -1061,7 +1076,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-102 | T272, T273, T274, T275, T276, T278 |
 | FR-103 | T275, T276, T278 |
 | FR-104 | T272, T274, T277, T278, T279 |
-| FR-105 | T278, T279, T280 |
+| FR-105 | T278, T279, T280, T342, T344 |
 | FR-106 | T277, T279 |
 | FR-107 | T288, T289, T292, T293, T294 |
 | FR-108 | T288, T289, T292, T293, T294 |
@@ -1081,8 +1096,12 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-122 | T331, T333, T334, T337, T338, T340 |
 | FR-123 | T331, T332, T333, T334, T337, T338, T339, T340 |
 | FR-124 | T333, T334, T340 |
-| SC-001 | T043, T046, T150, T165 |
-| SC-002 | T150, T292, T293 |
+| FR-125 | T343, T344, T347 |
+| FR-126 | T344 |
+| FR-127 | T345 |
+| FR-128 | T345, T346 |
+| SC-001 | T043, T046, T150, T165, T345 |
+| SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
 | SC-004 | T028, T136 |
 | SC-005 | T061, T095, T098, T208, T222 |
