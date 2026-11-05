@@ -20,3 +20,16 @@
 8. **Learning records.** Each destroyed enemy is one `readPosition` attempt; a miss counts as a wrong answer for the attempt of the help target.
 9. **Neue Landschaft** replaces the whole wave (new hills, a new wave of the same size).
 10. **Tests first**: placement (N tanks on lines, gaps, fewer when the range is too small), hit removes only the hit tank, counting per destroyed enemy, enemy fire only after a shot that destroys nothing, help target choice, wave cleared renews terrain, setting 1 behaves exactly as today; e2e: a 3-enemy wave cleared with the keyboard in "Nur Zahlenstrahl".
+
+## Addition: curved pointer lines (same day)
+
+The product owner: "Regarding the multiple tanks that he needs to hit, I would like to have one more difficult level and not have a straight line but a curved line from the ruler to a tank, such that he does not follow just a straight line down and see what ruler it is, but he needs to think where the curved line is actually landing."
+
+11. **Parent setting "Linien"** (pointer line style) with three values:
+    - "Gerade" (straight, default): the dashed vertical pointer line as today.
+    - "Gebogen" (curved): each pointer line is a smooth curve from the tank's center to its number on the ruler; the end on the ruler is offset sideways from the tank by a seeded amount between a few numbers and about one fifth of the range width (the tank stays at its number's battlefield position; only the line bends). The end keeps the small triangle.
+    - "Gebogen und verschlungen" (curved and tangled), offered only when "Gegner gleichzeitig" is 2 or more: curves of different tanks may cross. Each line and a small flag on its tank share one color from a color-blind safe set, so lines stay traceable.
+12. **Fairness rules.** Curves end exactly on a drawn ruler line at the tank's number; ends of different curves never coincide; curves stay inside the battlefield and never pass through the ruler labels at their own end point; they do not pass behind other tanks' bodies.
+13. **Help step 1** lights up the help target's curve from tank to end (a moving highlight along the curve) for about 2 seconds, in addition to today's step 1 hint.
+14. "Zielkreuz" (amendment 19) is independent. The line style applies in every mode that shows pointer lines.
+15. **Tests first**: curve end x equals numberToX(enemy number) within 0.5 units; ends distinct; curves inside bounds; label-avoidance; setting migration (default "Gerade"); tangled option hidden unless 2+ enemies; screenshot check of each style with 3 enemies.
