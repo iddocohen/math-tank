@@ -87,6 +87,15 @@ export const de = {
     rangeHint: (min: number, max: number) => `Zahlen von ${min} bis ${max}`,
     /** Order of three numbers (decision D15): the typed number is on no tank, so no badge was placed. */
     turnsLeft: (n: number) => (n === 1 ? 'Noch 1 Zug' : `Noch ${n} Züge`),
+    /** Amendment 12 (FR-102): the on-screen number pad and its keys, for screen readers. */
+    numberPad: 'Zahlenfeld',
+    backspace: 'Löschen',
+    minus: 'Minus',
+  },
+
+  /** Amendment 12 (FR-104): a phone held upright. */
+  rotate: {
+    turnPhone: 'Bitte dreh das Handy',
   },
 
   /** Challenge banner (T069, FR-056, FR-057): at most about 8 words each. */
@@ -291,6 +300,11 @@ export const de = {
       showClock: 'Uhr beim Spielen zeigen',
       showRecords: 'Rekord zeigen',
       garage: 'Garage und Sterne',
+      /** Amendment 12 (FR-102): the on-screen number pad. */
+      numberPad: 'Zahlenfeld',
+      numberPadAuto: 'Automatisch',
+      numberPadAlways: 'Immer',
+      numberPadNever: 'Nie',
       adaptive: 'Schwierigkeit automatisch anpassen',
       freePlay: 'Freies Spiel erlauben',
       noDamage: 'Ohne Schaden spielen',

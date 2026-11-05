@@ -218,6 +218,20 @@ describe('SettingsPage', () => {
     expect(persistence.settings().garage).toBe(false);
   });
 
+  it('"Zahlenfeld" offers Automatisch, Immer and Nie, starts at Automatisch and saves numberPad (amendment 12, FR-102)', () => {
+    const { persistence } = setup();
+    expect(SETTING_FIELDS).toContain('numberPad');
+    const select = field(L.numberPad);
+    expect(select.value).toBe('auto');
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([L.numberPadAuto, L.numberPadAlways, L.numberPadNever]);
+    setValue(L.numberPad, 'always');
+    fireEvent.click(saveButton());
+    expect(persistence.settings().numberPad).toBe('always');
+    setValue(L.numberPad, 'never');
+    fireEvent.click(saveButton());
+    expect(persistence.settings().numberPad).toBe('never');
+  });
+
   it('lists the amendment 06 fields in SETTING_FIELDS', () => {
     for (const f of ['roundType', 'roundLength', 'showClock', 'showRecords'] as const) expect(SETTING_FIELDS).toContain(f);
   });
@@ -238,7 +252,7 @@ describe('SettingsPage', () => {
       L.helpNearestTen, L.helpCountSteps, L.helpZoom, L.helpStepAnimation, L.beginnerAssist,
       L.enemyDifficulty, L.noDamage,
       L.soundEffects, L.music, L.speech,
-      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.garage,
+      L.roundType, L.roundLength, L.showClock, L.showRecords, L.adaptive, L.timeLimit, L.timeLimitSeconds, L.garage, L.numberPad,
     ]) {
       expect(screen.getByLabelText(label), label).toBeTruthy();
     }

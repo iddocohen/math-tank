@@ -20,7 +20,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 5,
+      version: 6,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { maxOperand: 10, maxResult: 100, steps: 1 },
@@ -43,6 +43,7 @@ describe('defaults', () => {
       showRecords: true,
       timeLimitSeconds: null,
       garage: true,
+      numberPad: 'auto',
     });
   });
 
@@ -66,13 +67,23 @@ describe('defaults', () => {
     expect(parsed.data && 'exactHit' in parsed.data).toBe(false);
   });
 
-  it('the schema requires version 5 and a boolean garage (amendment 11, FR-096)', () => {
+  it('the schema requires version 6 and a boolean garage (amendment 11, FR-096)', () => {
     const d = defaultSettings() as unknown as Record<string, unknown>;
     expect(settingsSchema.safeParse({ ...d, version: 4 }).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, version: 5 }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...d, garage: false }).success).toBe(true);
     expect(settingsSchema.safeParse({ ...d, garage: 'on' }).success).toBe(false);
     const without = { ...d };
     delete without.garage;
+    expect(settingsSchema.safeParse(without).success).toBe(false);
+  });
+
+  it('the schema requires numberPad auto, always or never (amendment 12, FR-102)', () => {
+    const d = defaultSettings() as unknown as Record<string, unknown>;
+    for (const v of ['auto', 'always', 'never']) expect(settingsSchema.safeParse({ ...d, numberPad: v }).success).toBe(true);
+    for (const v of ['on', true, null, 1]) expect(settingsSchema.safeParse({ ...d, numberPad: v }).success).toBe(false);
+    const without = { ...d };
+    delete without.numberPad;
     expect(settingsSchema.safeParse(without).success).toBe(false);
   });
 

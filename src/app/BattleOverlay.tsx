@@ -51,6 +51,10 @@
  *
  * Top left (FR-083, FR-084): a tank symbol with the number of destroyed enemies, and with the parent setting
  * "Uhr beim Spielen zeigen" an up-counting clock, refreshed once a second; it stops while the game is paused.
+ *
+ * Number pad (amendment 12, FR-102, FR-103): with `numberPad` the control bar also holds the on-screen number pad, and
+ * the fire button acts like Enter (`confirm('keyboard')`), so the pad counts as keyboard input for "Finde N". Without
+ * the pad the fire button counts as pointer input, as before. `data-number-pad` tells the stylesheet and the tests.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
@@ -58,6 +62,7 @@ import type { BattleController } from '../core/battle/controller';
 import { visibleEnemy } from '../core/battle/round';
 import type { LastShot, PromptSpec, RoundState } from '../core/types';
 import { comparisonPrompt, helpText, messageText, promptText, t } from '../i18n';
+import { NumberPad } from './NumberPad';
 
 /** The hit text is shown this long after the hit (T233). */
 export const HIT_FEEDBACK_MS = 2000;
@@ -71,9 +76,11 @@ interface Props {
   state: RoundState;
   /** The parent gate's gear, shown at the top right (FR-045, contracts/ui-flows.md battle layout). */
   gear?: ReactNode;
+  /** Show the on-screen number pad (amendment 12, FR-102); the app decides from the screen and the setting. */
+  numberPad?: boolean;
 }
 
-export function BattleOverlay({ controller, state, gear }: Props) {
+export function BattleOverlay({ controller, state, gear, numberPad = false }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
   const choosing = state.phase === 'aiming' || state.phase === 'challenge';
@@ -117,6 +124,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-last-distance={state.lastShot?.distance ?? undefined}
       data-last-shot={state.lastShot ? lastShotKind(state.lastShot) : undefined}
       data-enemy-number={enemy?.position}
+      data-number-pad={numberPad}
     >
       {state.challenge && (
         <div className={`challenge-banner placement-${placement}`} data-testid="challenge-banner" data-placement={placement}>
@@ -200,7 +208,24 @@ export function BattleOverlay({ controller, state, gear }: Props) {
             {readout}
           </span>
         </div>
-        <button type="button" className="fire-button" disabled={!choosing} onClick={() => controller.confirm('pointer')}>
+        {numberPad && (
+          <NumberPad
+            negative={min < 0}
+            disabled={!choosing}
+            onDigit={(d) => controller.typeDigit(d)}
+            onMinus={() => controller.typeMinus()}
+            onBackspace={() => controller.backspace()}
+          />
+        )}
+        <button
+          type="button"
+          className="fire-button"
+          disabled={!choosing}
+          tabIndex={numberPad ? -1 : undefined}
+          onMouseDown={numberPad ? (e) => e.preventDefault() : undefined}
+          // The pad's fire key acts like Enter, so it counts as keyboard input (FR-103).
+          onClick={() => controller.confirm(numberPad ? 'keyboard' : 'pointer')}
+        >
           {solution !== null ? m.battle.fireAt(solution) : m.battle.fire}
         </button>
       </div>

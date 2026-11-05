@@ -525,3 +525,84 @@ describe('BattleOverlay help (US5, T101, FR-030, FR-031, FR-034)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-help-level')).toBe('1');
   });
 });
+
+describe('BattleOverlay number pad (amendment 12, FR-102, FR-103)', () => {
+  function PadOverlay({ controller, numberPad }: { controller: BattleController; numberPad: boolean }) {
+    const state = useRoundState(controller);
+    return <BattleOverlay controller={controller} state={state} numberPad={numberPad} />;
+  }
+
+  function setupPad(numberPad: boolean, over: Partial<Settings> = {}) {
+    let now = 1000;
+    const controller = new BattleController({ settings: { ...defaultSettings(), freePlay: true, ...over }, progress: memoryProgressStore(), clock: () => now, seed: 7 });
+    controller.startRound('freePlay');
+    render(<PadOverlay controller={controller} numberPad={numberPad} />);
+    return { controller, advance: (ms: number) => (now += ms) };
+  }
+
+  const padKey = (k: string) => screen.getByTestId('number-pad').querySelector(`[data-key="${k}"]`) as HTMLButtonElement;
+
+  it('with the pad: one fire button, data-number-pad true, and 3, 7, "Feuer!" fire at 37 as keyboard input', () => {
+    const { controller } = setupPad(true);
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-number-pad')).toBe('true');
+    expect(screen.getAllByRole('button', { name: t().battle.fire })).toHaveLength(1);
+    fireEvent.click(padKey('3'));
+    fireEvent.click(padKey('7'));
+    expect(screen.getByTestId('readout').textContent).toBe('37');
+    fireEvent.click(screen.getByRole('button', { name: t().battle.fire }));
+    expect(controller.getState().phase).toBe('playerShot');
+    expect(controller.getState().selection).toBe(37);
+    expect(controller.getState().inputMethod).toBe('keyboard');
+  });
+
+  it('⌫ deletes the last digit and minus shows only for a range with negative numbers', () => {
+    setupPad(true);
+    fireEvent.click(padKey('4'));
+    fireEvent.click(padKey('2'));
+    fireEvent.click(padKey('backspace'));
+    expect(screen.getByTestId('readout').textContent).toBe('4');
+    expect(screen.getByTestId('number-pad').querySelector('[data-key="minus"]')).toBeNull();
+    cleanup();
+    setupPad(true, { range: { preset: 'custom', min: -20, max: 20 }, negativeResults: true });
+    fireEvent.click(padKey('minus'));
+    fireEvent.click(padKey('5'));
+    expect(screen.getByTestId('readout').textContent).toBe('-5');
+  });
+
+  it('pad keys are disabled while a shell is in flight', () => {
+    const { controller } = setupPad(true);
+    act(() => controller.fireAt(10));
+    expect(padKey('1').disabled).toBe(true);
+  });
+
+  it('without the pad there is no pad, and the fire button still records pointer input', () => {
+    const { controller } = setupPad(false);
+    expect(screen.queryByTestId('number-pad')).toBeNull();
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-number-pad')).toBe('false');
+    act(() => controller.typeDigit(5));
+    fireEvent.click(screen.getByRole('button', { name: t().battle.fire }));
+    expect(controller.getState().inputMethod).toBe('pointer');
+  });
+
+  it('at the solution step the pad\'s fire key reads "Feuer auf N" and fires as keyboard input', () => {
+    for (let seed = 1; seed < 200; seed++) {
+      let now = 1000;
+      const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true }, progress: memoryProgressStore(), clock: () => now, seed });
+      controller.startRound('guided');
+      if (controller.getState().challenge?.kind === 'readPosition') continue;
+      render(<PadOverlay controller={controller} numberPad />);
+      act(() => {
+        controller.requestHelp();
+        controller.requestHelp();
+        controller.requestHelp();
+      });
+      const answer = controller.getState().challenge!.answer;
+      now += 1000; // the challenge accepts answers after 1 second
+      fireEvent.click(screen.getByRole('button', { name: t().battle.fireAt(answer) }));
+      expect(controller.getState().phase).toBe('playerShot');
+      expect(controller.getState().inputMethod).toBe('keyboard');
+      return;
+    }
+    throw new Error('no guided seed');
+  });
+});

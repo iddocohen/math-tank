@@ -183,7 +183,7 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(progress).toEqual(sampleProgress());
   });
 
-  it('migrates a version 1 settings file to version 5 (decision D13)', () => {
+  it('migrates a version 1 settings file to version 6 (decision D13)', () => {
     const v1: Record<string, unknown> = { ...defaultSettings(), version: 1, labelLevel: 4, aimCorrection: true };
     delete v1.rulerLevelStart;
     delete v1.rulerLevelMax;
@@ -191,7 +191,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(5);
+    expect(r.settings.version).toBe(6);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);
@@ -199,13 +199,14 @@ describe('importData (FR-048, FR-048a)', () => {
     expect('labelLevel' in r.settings).toBe(false);
   });
 
-  it('migrates version 2 and version 3 settings files to version 5 (amendments 04, 06 and 11)', () => {
+  it('migrates version 2 and version 3 settings files to version 6 (amendments 04, 06 and 11)', () => {
     for (const version of [2, 3]) {
       const old: Record<string, unknown> = { ...defaultSettings(), version, roundLength: 7, exactHit: true };
       delete old.roundType;
       delete old.showClock;
       delete old.showRecords;
       delete old.garage;
+      delete old.numberPad;
       if (version === 2) delete old.exactHit;
       const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: old, progress: emptyProgress() }));
       expect(r).toEqual({ ok: true, settings: { ...defaultSettings(), roundLength: 7 }, progress: emptyProgress(), records: emptyRecords(), garage: null });
