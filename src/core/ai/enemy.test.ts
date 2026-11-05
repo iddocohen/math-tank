@@ -5,11 +5,11 @@ import { enemyHitsPlayer } from '../battle/hitRule';
 import { createRound, muzzle } from '../battle/round';
 import { defaultSettings } from '../settings/defaults';
 import {
-  ENEMY_HIT_CHANCE,
   enemyShot,
-  NEAR_MISS_MAX,
-  NEAR_MISS_MIN,
+  HIT_STREAK,
+  isWarningStreak,
   planEnemyShot,
+  ZERO_IN_DISTANCE,
   type Difficulty,
   type EnemyPlanInput,
   type EnemyShotInput,
@@ -20,86 +20,113 @@ const W = 1600;
 const H = 900;
 const DIFFICULTIES: Difficulty[] = ['easy', 'normal', 'challenging'];
 
-function plan(difficulty: Difficulty, roundSeed: number, shotIndexInRound: number, playerX = 400) {
-  return planEnemyShot({ difficulty, roundSeed, shotIndexInRound, playerX, worldWidth: W });
+function plan(difficulty: Difficulty, roundSeed: number, shotIndexInRound: number, missStreak: number, playerX = 400) {
+  return planEnemyShot({ difficulty, roundSeed, shotIndexInRound, missStreak, playerX, worldWidth: W });
 }
 
-describe('enemy hit draw (amendment 07, FR-041, FR-043)', () => {
-  it('hits at 1/6, 1/4 and 1/3 by difficulty', () => {
-    expect(ENEMY_HIT_CHANCE).toEqual({ easy: 1 / 6, normal: 1 / 4, challenging: 1 / 3 });
+/** The miss distance for a streak below the limit (FR-099). */
+function expectedDistance(streak: number): number {
+  return ZERO_IN_DISTANCE[Math.min(Math.max(streak, 1), 3) - 1]!;
+}
+
+describe('enemy zeroes in on misses in a row (amendment 13, FR-041, FR-043, FR-099)', () => {
+  it('hits at 4 misses in a row on easy, 3 on normal and 2 on challenging', () => {
+    expect(HIT_STREAK).toEqual({ easy: 4, normal: 3, challenging: 2 });
   });
 
-  it('over 3000 seeded shots the hit share is within 0.03 of the chance for each difficulty', () => {
+  it('lands about 100, 60 and 35 world units away, always outside the hit area', () => {
+    expect([...ZERO_IN_DISTANCE]).toEqual([100, 60, 35]);
+    for (const d of ZERO_IN_DISTANCE) expect(d).toBeGreaterThan(TANK_WIDTH / 2);
+  });
+
+  it('hits exactly when the streak reaches the limit and the shot is not the first of the round', () => {
     for (const difficulty of DIFFICULTIES) {
-      let hits = 0;
-      const n = 3000;
-      for (let i = 0; i < n; i++) if (plan(difficulty, 1000 + Math.floor(i / 10), 1 + (i % 10)).hits) hits++;
-      expect(Math.abs(hits / n - ENEMY_HIT_CHANCE[difficulty])).toBeLessThan(0.03);
-    }
-  });
-
-  it('the first shot of a round never hits, on any difficulty', () => {
-    for (const difficulty of DIFFICULTIES) {
-      for (let seed = 0; seed < 500; seed++) expect(plan(difficulty, seed, 0).hits).toBe(false);
-    }
-  });
-
-  it('a hit aims at the child tank; a miss lands 40 to 100 units beside it, outside the hit area, on both sides', () => {
-    expect(NEAR_MISS_MIN).toBe(40);
-    expect(NEAR_MISS_MAX).toBe(100);
-    expect(NEAR_MISS_MIN).toBeGreaterThan(TANK_WIDTH / 2);
-    const sides = new Set<number>();
-    for (let seed = 0; seed < 400; seed++) {
-      const p = plan('challenging', seed, 3, 800);
-      if (p.hits) {
-        expect(p.targetX).toBe(800);
-        continue;
+      for (let seed = 0; seed < 200; seed++) {
+        for (let streak = 0; streak <= 6; streak++) {
+          const p = plan(difficulty, seed, 1 + (seed % 5), streak, 800);
+          expect(p.hits).toBe(streak >= HIT_STREAK[difficulty]);
+          if (p.hits) expect(p.targetX).toBe(800);
+        }
       }
-      const d = p.targetX - 800;
-      expect(Math.abs(d)).toBeGreaterThanOrEqual(NEAR_MISS_MIN);
-      expect(Math.abs(d)).toBeLessThanOrEqual(NEAR_MISS_MAX);
-      sides.add(Math.sign(d));
     }
-    expect(sides).toEqual(new Set([-1, 1]));
+  });
+
+  it('below the limit the shell comes closer with the streak, on both sides over the seeds', () => {
+    for (const difficulty of DIFFICULTIES) {
+      const sides = new Set<number>();
+      for (let seed = 0; seed < 200; seed++) {
+        let previous = Infinity;
+        for (let streak = 0; streak < HIT_STREAK[difficulty]; streak++) {
+          const p = plan(difficulty, seed, 2, streak, 800);
+          expect(p.hits).toBe(false);
+          const d = Math.abs(p.targetX - 800);
+          expect(d).toBe(expectedDistance(streak));
+          expect(d).toBeLessThanOrEqual(previous);
+          expect(enemyHitsPlayer({ x: p.targetX, y: 0 }, null, { id: 'player', kind: 'player', position: 0, x: 800, y: 0, alive: true })).toBe(false);
+          previous = d;
+          sides.add(Math.sign(p.targetX - 800));
+        }
+      }
+      expect(sides).toEqual(new Set([-1, 1]));
+    }
+  });
+
+  it('the first shot of a round never hits, at any streak and difficulty', () => {
+    for (const difficulty of DIFFICULTIES) {
+      for (let seed = 0; seed < 200; seed++) {
+        for (let streak = 0; streak <= 6; streak++) {
+          const p = plan(difficulty, seed, 0, streak, 800);
+          expect(p.hits).toBe(false);
+          expect(Math.abs(p.targetX - 800)).toBe(expectedDistance(streak));
+        }
+      }
+    }
   });
 
   it('uses the inner side when the child tank stands at an end of the world', () => {
     for (let seed = 0; seed < 200; seed++) {
-      const left = plan('easy', seed, 0, 30);
-      expect(left.targetX).toBeGreaterThan(30);
-      const right = plan('easy', seed, 0, W - 30);
-      expect(right.targetX).toBeLessThan(W - 30);
+      expect(plan('easy', seed, 0, 1, 30).targetX).toBeGreaterThan(30);
+      expect(plan('easy', seed, 0, 1, W - 30).targetX).toBeLessThan(W - 30);
     }
   });
 
   it('is deterministic: the same input gives the same plan', () => {
-    for (let seed = 0; seed < 50; seed++) expect(plan('normal', seed, 4)).toEqual(plan('normal', seed, 4));
+    for (let seed = 0; seed < 50; seed++) expect(plan('normal', seed, 4, 2)).toEqual(plan('normal', seed, 4, 2));
   });
 
-  it('takes no answers, help, mistakes or challenge data as input (FR-042)', () => {
-    expectTypeOf<keyof EnemyPlanInput>().toEqualTypeOf<'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'playerX' | 'worldWidth'>();
+  it('warns one miss before the limit only (FR-100)', () => {
+    for (const difficulty of DIFFICULTIES) {
+      for (let streak = 0; streak <= 6; streak++) expect(isWarningStreak(streak, difficulty)).toBe(streak === HIT_STREAK[difficulty] - 1);
+    }
+  });
+
+  it('takes the miss streak but no answers, help or challenge data as input (FR-042)', () => {
+    expectTypeOf<keyof EnemyPlanInput>().toEqualTypeOf<'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'missStreak' | 'playerX' | 'worldWidth'>();
     expectTypeOf<keyof EnemyShotInput>().toEqualTypeOf<
-      'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'playerX' | 'worldWidth' | 'origin' | 'terrain' | 'worldHeight'
+      'difficulty' | 'roundSeed' | 'shotIndexInRound' | 'missStreak' | 'playerX' | 'worldWidth' | 'origin' | 'terrain' | 'worldHeight'
     >();
     expectTypeOf<EnemyShotInput>().not.toHaveProperty('help');
     expectTypeOf<EnemyShotInput>().not.toHaveProperty('challenge');
     expectTypeOf<EnemyShotInput>().not.toHaveProperty('attempts');
   });
 
-  it('there is no damage factor and no random aim error any more', () => {
+  it('has no random hit chance, no near-miss band and no damage factor any more', () => {
+    expect('ENEMY_HIT_CHANCE' in enemyModule).toBe(false);
+    expect('NEAR_MISS_MIN' in enemyModule).toBe(false);
+    expect('NEAR_MISS_MAX' in enemyModule).toBe(false);
     expect('enemyDamageFactor' in enemyModule).toBe(false);
   });
 });
 
-describe('enemyShot path (amendment 07)', () => {
+describe('enemyShot path (amendments 07 and 13)', () => {
   it('flies from the enemy muzzle and lands within 0.5 units of the planned x, so it hits exactly when the draw says so', () => {
     let hits = 0;
     let misses = 0;
     for (let seed = 0; seed < 40; seed++) {
       const round = createRound(defaultSettings(), 7000 + seed, seed % 2 === 0 ? 'left' : 'right');
       const origin = muzzle(round.enemy);
-      for (const shotIndexInRound of [0, 1, 2, 3]) {
-        const shot = enemyShot({ difficulty: 'challenging', roundSeed: round.seed, shotIndexInRound, origin, playerX: round.player.x, terrain: round.terrain, worldWidth: W, worldHeight: H });
+      for (const [shotIndexInRound, missStreak] of [[0, 2], [1, 1], [2, 2], [3, 3]] as const) {
+        const shot = enemyShot({ difficulty: 'challenging', roundSeed: round.seed, shotIndexInRound, missStreak, origin, playerX: round.player.x, terrain: round.terrain, worldWidth: W, worldHeight: H });
         expect(shot.path[0]).toEqual(origin);
         expect(Math.abs(shot.impact.x - shot.targetX)).toBeLessThanOrEqual(0.5);
         expect(shot.impact.y).toBeCloseTo(surfaceY(round.terrain, shot.impact.x), 0);
@@ -115,7 +142,7 @@ describe('enemyShot path (amendment 07)', () => {
   it('works on a hilly terrain between the tanks', () => {
     const terrain = generateTerrain(3, W, H);
     const origin = { x: 1400, y: surfaceY(terrain, 1400) + 28 };
-    const shot = enemyShot({ difficulty: 'easy', roundSeed: 1, shotIndexInRound: 0, origin, playerX: 100, terrain, worldWidth: W, worldHeight: H });
+    const shot = enemyShot({ difficulty: 'easy', roundSeed: 1, shotIndexInRound: 0, missStreak: 1, origin, playerX: 100, terrain, worldWidth: W, worldHeight: H });
     expect(Math.abs(shot.impact.x - shot.targetX)).toBeLessThanOrEqual(0.5);
   });
 });

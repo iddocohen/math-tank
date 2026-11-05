@@ -23,6 +23,9 @@
  * Amendment 11 (FR-093): the child's tank takes a `look` from the garage: its color (dark blue with stripes adds light
  * stripes on the hull), its flag and a hat on the dome, drawn from the shapes in src/core/rewards/looks.ts. The enemy
  * and decoys never take a look.
+ *
+ * Amendment 13 (FR-100, FR-101): `warn` wobbles the child's tank and pulses its hearts once, with no text, one miss
+ * before the enemy hits. `sync` can wait before the tank settles, so it settles after the new hills faded in.
  */
 import Phaser from 'phaser';
 import type { TankState } from '../core/types';
@@ -52,6 +55,11 @@ const SETTLE_MS = 450;
 const FADE_MS = 500;
 const SHAKE_PX = 6;
 const SHAKE_MS = 50;
+/** The warning wobble (amendment 13, FR-100): the tank tips this many degrees each way; the hearts grow by this factor. */
+const WOBBLE_DEG = 5;
+const WOBBLE_MS = 90;
+const PULSE_SCALE = 1.35;
+const PULSE_MS = 220;
 /** The smallest tap area in CSS pixels (FR-053), and the tap area in world units on a large screen. */
 const TAP_MIN_CSS = 48;
 const TAP_W = 100;
@@ -105,7 +113,8 @@ export class TankView {
     // The hat graphics sit above the body, so they also hold the stripes on the hull.
     if (player && colorStripes(look.color)) drawStripes(this.hat);
     if (player) drawShapes(this.hat, hatShapes(look.hat));
-    this.hearts = scene.add.graphics();
+    // Drawn around their own center, so the warning pulse grows them in place.
+    this.hearts = scene.add.graphics().setY(-BAR_OFFSET + HEART_SIZE / 2);
     this.target = scene.add.graphics().setVisible(false);
     drawTarget(this.target);
     this.you = createYouMarker(scene).setVisible(false);
@@ -145,17 +154,19 @@ export class TankView {
   }
 
   /**
-   * Shows the tank state. `instant` places it without tweening (new round or first draw).
+   * Shows the tank state. `instant` places it without tweening (new round or first draw); otherwise the tank settles
+   * to a new height after `settleDelayMs`.
    */
-  sync(tank: TankState, instant: boolean): void {
+  sync(tank: TankState, instant: boolean, settleDelayMs = 0): void {
     const y = toScreenY(tank.y, this.worldHeight);
     this.container.x = tank.x;
     if (instant || this.lastY === null) {
       this.scene.tweens.killTweensOf(this.container);
+      this.container.setAngle(0);
       this.container.y = y;
       if (!this.hidden) this.container.alpha = 1;
     } else if (y !== this.lastY) {
-      this.scene.tweens.add({ targets: this.container, y, duration: SETTLE_MS, ease: 'Quad.easeIn' });
+      this.scene.tweens.add({ targets: this.container, y, delay: settleDelayMs, duration: SETTLE_MS, ease: 'Quad.easeIn' });
     }
     this.lastY = y;
     this.tint = tank.alive ? this.color : 0x555555;
@@ -187,7 +198,7 @@ export class TankView {
     const width = max * HEART_SIZE + (max - 1) * HEART_GAP;
     for (let i = 0; i < max; i++) {
       const cx = -width / 2 + HEART_SIZE / 2 + i * (HEART_SIZE + HEART_GAP);
-      drawHeart(this.hearts, cx, -BAR_OFFSET + HEART_SIZE / 2, HEART_SIZE, i < lives);
+      drawHeart(this.hearts, cx, 0, HEART_SIZE, i < lives);
     }
   }
 
@@ -238,6 +249,20 @@ export class TankView {
     }
   }
 
+  /** The warning one miss before the enemy hits (amendment 13, FR-100): a short wobble and one heart pulse, no text. */
+  warn(): void {
+    this.scene.tweens.add({
+      targets: this.container,
+      angle: { from: -WOBBLE_DEG, to: WOBBLE_DEG },
+      duration: WOBBLE_MS,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.easeInOut',
+      onComplete: () => this.container.setAngle(0),
+    });
+    this.scene.tweens.add({ targets: this.hearts, scale: PULSE_SCALE, duration: PULSE_MS, yoyo: true, ease: 'Sine.easeOut', onComplete: () => this.hearts.setScale(1) });
+  }
+
   /** Short white flash when the tank is hit and loses a heart (FR-009). */
   flash(): void {
     const parts = [this.body, this.turret];
@@ -251,7 +276,7 @@ export class TankView {
 
   destroy(): void {
     this.youTimer?.remove();
-    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you]);
+    this.scene.tweens.killTweensOf([this.container, this.turret, this.body, this.target, this.flag, this.hat, this.you, this.hearts]);
     this.tapZone.removeAllListeners();
     this.container.destroy();
   }

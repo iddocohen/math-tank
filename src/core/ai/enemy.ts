@@ -1,9 +1,10 @@
 /**
- * Computer opponent (amendment 07, FR-041 to FR-043, research R18). After every shot of the child that does not
- * destroy it, the enemy fires once. A seeded draw decides whether the shell hits the child's tank: 1/6 on easy,
- * 1/4 on normal, 1/3 on challenging, and never on the first shot of a round. Otherwise the shell lands on purpose
- * 40 to 100 world units beside the child's tank, outside its hit area. The draw reads only the round seed, the
- * shot index and the difficulty, so it cannot depend on the child's answers, help or mistakes (FR-042).
+ * Computer opponent (amendments 07 and 13, FR-041 to FR-043, FR-099, FR-100, research R18). After every shot of the
+ * child that does not destroy it, the enemy fires once. It zeroes in on the child's misses in a row: its shell lands
+ * about 100, 60 and 35 world units beside the child's tank at 1, 2 and 3 or more misses in a row, outside the hit area,
+ * and hits once the streak reaches the difficulty's limit (4 on easy, 3 on normal, 2 on challenging), never on the
+ * first shot of a round. There is no random hit chance. A seeded draw from the round seed and the shot index picks
+ * the side. The input holds the streak and the difficulty, never answers, help or challenge data (FR-042).
  */
 import { createRng, deriveSeed } from '../rng';
 import type { Heightmap, Point, Settings } from '../types';
@@ -11,16 +12,18 @@ import { solveArcToX } from '../physics/arc';
 
 export type Difficulty = Settings['enemyDifficulty'];
 
-/** Chance that one enemy shot hits the child's tank (FR-041). */
-export const ENEMY_HIT_CHANCE: Record<Difficulty, number> = {
-  easy: 1 / 6,
-  normal: 1 / 4,
-  challenging: 1 / 3,
+/** Misses in a row at which the enemy's shot hits the child's tank (amendment 13, FR-041, FR-099). */
+export const HIT_STREAK: Record<Difficulty, number> = {
+  easy: 4,
+  normal: 3,
+  challenging: 2,
 };
 
-/** A deliberate near miss lands this far from the child's tank center, in world units (FR-041). */
-export const NEAR_MISS_MIN = 40;
-export const NEAR_MISS_MAX = 100;
+/**
+ * Distance of a near miss from the child's tank center, in world units, at 1, 2 and 3 or more misses in a row
+ * (FR-099). The hit area reaches 30 units from the center (half the tank width), so the closest miss is 35.
+ */
+export const ZERO_IN_DISTANCE = [100, 60, 35] as const;
 
 /** Largest distance between the planned x and the impact, in world units. */
 const ARC_TOLERANCE = 0.5;
@@ -30,6 +33,8 @@ export interface EnemyPlanInput {
   roundSeed: number;
   /** 0 for the enemy's first shot of the round. */
   shotIndexInRound: number;
+  /** The child's misses in a row, this shot's miss included (FR-098). */
+  missStreak: number;
   playerX: number;
   worldWidth: number;
 }
@@ -40,16 +45,18 @@ export interface EnemyPlan {
   targetX: number;
 }
 
-/** The seeded draw for one enemy shot. */
+/** The streak one miss before the hit, when the child's tank wobbles and the hearts pulse (FR-100). */
+export function isWarningStreak(missStreak: number, difficulty: Difficulty): boolean {
+  return missStreak === HIT_STREAK[difficulty] - 1;
+}
+
+/** The enemy's plan for one shot: a hit at the limit, otherwise a near miss that comes closer with the streak. */
 export function planEnemyShot(input: EnemyPlanInput): EnemyPlan {
-  const { difficulty, roundSeed, shotIndexInRound, playerX, worldWidth } = input;
-  const rng = createRng(deriveSeed(roundSeed, 6, shotIndexInRound));
-  // Always three draws, so the side and distance do not shift with the hit decision.
-  const hitDraw = rng.next();
-  const sideDraw = rng.next();
-  const distance = rng.int(NEAR_MISS_MIN, NEAR_MISS_MAX);
-  const hits = shotIndexInRound > 0 && hitDraw < ENEMY_HIT_CHANCE[difficulty];
+  const { difficulty, roundSeed, shotIndexInRound, missStreak, playerX, worldWidth } = input;
+  const hits = shotIndexInRound > 0 && missStreak >= HIT_STREAK[difficulty];
   if (hits) return { hits, targetX: playerX };
+  const sideDraw = createRng(deriveSeed(roundSeed, 6, shotIndexInRound)).next();
+  const distance = ZERO_IN_DISTANCE[Math.min(Math.max(missStreak, 1), ZERO_IN_DISTANCE.length) - 1]!;
   const side = sideDraw < 0.5 ? -1 : 1;
   const x = playerX + side * distance;
   // A side outside the battlefield gives way to the other side.

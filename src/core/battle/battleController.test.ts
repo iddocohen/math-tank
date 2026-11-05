@@ -4,7 +4,6 @@ import { memoryProgressStore } from './ports';
 import type { Digit } from './entry';
 import { enemyHitsPlayer, LIVES } from './hitRule';
 import { applyImpact, createRound, muzzle, tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from './round';
-import { NEAR_MISS_MAX, NEAR_MISS_MIN, planEnemyShot } from '../ai/enemy';
 import { defaultSettings } from '../settings/defaults';
 import type { Progress, RoundState, Settings, Skill, TankState } from '../types';
 import { emptyProgress } from '../storage/storage';
@@ -116,7 +115,7 @@ describe('BattleController free play (US1, amendment 01)', () => {
       [
         'seed', 'mode', 'turn', 'phase', 'terrain', 'player', 'enemy', 'decoys', 'playerSide', 'challenge', 'answerableAt',
         'help', 'selection', 'entry', 'inputMethod', 'rulerLevel', 'lastShot', 'lastPlayerPath', 'shot', 'outcome',
-        'lives', 'enemiesDestroyed', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'message',
+        'lives', 'enemiesDestroyed', 'elapsedMs', 'lastEnemyHit', 'stepAnimation', 'message', 'missStreak', 'terrainSeed',
       ].sort(),
     );
   });
@@ -400,35 +399,6 @@ describe('BattleController free play (US1, amendment 01)', () => {
     fireAtOwnNumber(controller);
     controller.shotAnimationDone();
     expect(controller.getState().phase).toBe('enemyTurn');
-  });
-
-  it('the enemy shell lands where the seeded draw aimed: on the child tank for a hit, 40 to 100 units beside it otherwise (FR-041)', () => {
-    let hits = 0;
-    let misses = 0;
-    for (let seed = 0; seed < 12; seed++) {
-      const { controller } = makeController({ noDamage: true, enemyDifficulty: 'challenging', roundType: 'enemyCount', roundLength: 20 }, seed);
-      controller.startRound('freePlay');
-      for (let i = 0; i < 5; i++) {
-        fireBetween(controller);
-        controller.shotAnimationDone();
-        const s = controller.getState();
-        const plan = planEnemyShot({ difficulty: 'challenging', roundSeed: s.seed, shotIndexInRound: i, playerX: s.player.x, worldWidth: WORLD_WIDTH });
-        expect(Math.abs(s.shot!.impact.x - plan.targetX)).toBeLessThanOrEqual(0.5);
-        const d = Math.abs(s.shot!.impact.x - s.player.x);
-        if (plan.hits) {
-          hits++;
-          expect(enemyHitsPlayer(s.shot!.impact, s.shot!.hitTargetId, s.player)).toBe(true);
-        } else {
-          misses++;
-          expect(d).toBeGreaterThanOrEqual(NEAR_MISS_MIN - 0.5);
-          expect(d).toBeLessThanOrEqual(NEAR_MISS_MAX + 0.5);
-          expect(enemyHitsPlayer(s.shot!.impact, s.shot!.hitTargetId, s.player)).toBe(false);
-        }
-        controller.enemyShotAnimationDone();
-      }
-    }
-    expect(hits).toBeGreaterThan(0);
-    expect(misses).toBeGreaterThan(hits);
   });
 
   it('the first enemy shot of a round never costs a heart, on every difficulty (FR-043)', () => {
@@ -2115,5 +2085,229 @@ describe('BattleController adaptive difficulty (US7, T129)', () => {
     const off = adaptiveController({ adaptive: false, rulerLevelStart: 2, rulerLevelMax: 4 }, progressWithSteps({ positions: 6 }));
     off.controller.startRound('guided');
     expect(off.controller.getState().rulerLevel).toBe(2);
+  });
+});
+
+describe('amendment 13: the enemy zeroes in on misses in a row (FR-098 to FR-100)', () => {
+  const LIMITS = { easy: 4, normal: 3, challenging: 2 } as const;
+  const DISTANCES = [100, 60, 35];
+
+  /** A slow miss in free play: fire between the tanks, then the child's shell lands. */
+  function slowMiss(c: ReturnType<typeof makeController>): RoundState {
+    c.advance(3_000);
+    fireBetween(c.controller);
+    c.controller.shotAnimationDone();
+    return c.controller.getState();
+  }
+
+  it('starts at 0 and adds 1 for each slow miss in free play', () => {
+    const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    expect(c.controller.getState().missStreak).toBe(0);
+    for (let i = 1; i <= 3; i++) {
+      expect(slowMiss(c).missStreak).toBe(i);
+      c.controller.enemyShotAnimationDone();
+    }
+  });
+
+  for (const difficulty of ['easy', 'normal', 'challenging'] as const) {
+    it(`on ${difficulty} the shells come closer and hit exactly at ${LIMITS[difficulty]} misses in a row`, () => {
+      for (let seed = 0; seed < 8; seed++) {
+        const c = makeController({ enemyDifficulty: difficulty, roundType: 'enemyCount', roundLength: 20 }, seed);
+        c.controller.startRound('freePlay');
+        for (let streak = 1; streak <= LIMITS[difficulty]; streak++) {
+          const s = slowMiss(c);
+          const shot = s.shot!;
+          const d = Math.abs(shot.impact.x - s.player.x);
+          if (streak < LIMITS[difficulty]) {
+            expect(shot.hitTargetId).toBeNull();
+            expect(Math.abs(d - DISTANCES[Math.min(streak, 3) - 1]!)).toBeLessThanOrEqual(0.5);
+            expect(enemyHitsPlayer(shot.impact, shot.hitTargetId, s.player)).toBe(false);
+            c.controller.enemyShotAnimationDone();
+            expect(c.controller.getState().lives).toBe(LIVES);
+            expect(c.controller.getState().missStreak).toBe(streak);
+          } else {
+            expect(shot.hitTargetId).toBe(s.player.id);
+            c.controller.enemyShotAnimationDone();
+            expect(c.controller.getState().lives).toBe(LIVES - 1);
+            expect(c.controller.getState().missStreak).toBe(0);
+          }
+        }
+        // After the hit the next miss starts far away again.
+        const s = slowMiss(c);
+        expect(Math.abs(Math.abs(s.shot!.impact.x - s.player.x) - 100)).toBeLessThanOrEqual(0.5);
+      }
+    });
+  }
+
+  it('in no-damage mode the shell lands on the tank at the limit but takes no heart (FR-044)', () => {
+    const c = makeController({ enemyDifficulty: 'normal', noDamage: true, roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    for (let i = 0; i < 2; i++) {
+      slowMiss(c);
+      c.controller.enemyShotAnimationDone();
+    }
+    const s = slowMiss(c);
+    expect(enemyHitsPlayer(s.shot!.impact, s.shot!.hitTargetId, s.player)).toBe(true);
+    c.controller.enemyShotAnimationDone();
+    expect(c.controller.getState().lives).toBe(LIVES);
+    expect(c.controller.getState().missStreak).toBe(0);
+  });
+
+  it('a shot that destroys the enemy sets the streak to 0', () => {
+    const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    slowMiss(c);
+    c.controller.enemyShotAnimationDone();
+    slowMiss(c);
+    c.controller.enemyShotAnimationDone();
+    expect(c.controller.getState().missStreak).toBe(2);
+    fireAtEnemy(c.controller);
+    c.controller.shotAnimationDone();
+    expect(c.controller.getState().missStreak).toBe(0);
+  });
+
+  it('"Neue Landschaft" keeps the streak and a new round starts it at 0', () => {
+    const c = makeController({ enemyDifficulty: 'easy', roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    slowMiss(c);
+    c.controller.enemyShotAnimationDone();
+    slowMiss(c);
+    c.controller.enemyShotAnimationDone();
+    c.controller.newScene();
+    expect(c.controller.getState().missStreak).toBe(2);
+    c.controller.startRound('freePlay');
+    expect(c.controller.getState().missStreak).toBe(0);
+  });
+
+  it('a guided miss right when answers become possible adds 2; a slow one adds 1 (FR-038 rule)', () => {
+    const fast = guidedRoundWhere(positionSearch, { enemyDifficulty: 'easy' });
+    fast.advance(1_000);
+    fast.controller.fireAt(missNumber(fast.controller.getState()));
+    fast.controller.shotAnimationDone();
+    expect(fast.controller.getState().missStreak).toBe(2);
+
+    const slow = guidedRoundWhere(positionSearch, { enemyDifficulty: 'easy' });
+    slow.advance(3_000);
+    slow.controller.fireAt(missNumber(slow.controller.getState()));
+    slow.controller.shotAnimationDone();
+    expect(slow.controller.getState().missStreak).toBe(1);
+  });
+
+  it('the first enemy shot of a round misses even at the limit; the next miss hits (FR-043)', () => {
+    const g = guidedRoundWhere(positionSearch, { enemyDifficulty: 'challenging' });
+    g.advance(1_000);
+    g.controller.fireAt(missNumber(g.controller.getState()));
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().missStreak).toBe(2);
+    expect(g.controller.getState().shot!.hitTargetId).toBeNull();
+    g.controller.enemyShotAnimationDone();
+    expect(g.controller.getState().lives).toBe(LIVES);
+    expect(g.controller.getState().missStreak).toBe(2);
+    g.advance(3_000);
+    g.controller.fireAt(missNumber(g.controller.getState()));
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().shot!.hitTargetId).toBe(g.controller.getState().player.id);
+    g.controller.enemyShotAnimationDone();
+    expect(g.controller.getState().lives).toBe(LIVES - 1);
+    expect(g.controller.getState().missStreak).toBe(0);
+  });
+
+  it('a near miss and a burst decoy count as misses', () => {
+    const near = guidedRoundWhere(positionSearch, { enemyDifficulty: 'easy' });
+    near.advance(3_000);
+    near.controller.fireAt(nearNumber(near.controller.getState()));
+    near.controller.shotAnimationDone();
+    expect(near.controller.getState().lastShot!.nearMiss).toBe(true);
+    expect(near.controller.getState().missStreak).toBe(1);
+
+    const g = guidedController(COMPARISON_47_74.settings, COMPARISON_47_74.seed);
+    g.controller.startRound('guided');
+    const decoy = g.controller.getState().decoys[0]!;
+    g.advance(3_000);
+    g.controller.fireAt(decoy.position);
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().lastShot!.decoyHit).toBe(true);
+    expect(g.controller.getState().missStreak).toBe(1);
+  });
+
+  it('firing at the shown solution at help step 3 sets the streak to 0, and help requests do not change it', () => {
+    const g = guidedRoundWhere(positionSearch, { enemyDifficulty: 'easy' });
+    g.advance(3_000);
+    g.controller.fireAt(missNumber(g.controller.getState()));
+    g.controller.shotAnimationDone();
+    g.controller.enemyShotAnimationDone();
+    expect(g.controller.getState().missStreak).toBe(1);
+    while (g.controller.getState().help.level < 3) g.controller.requestHelp();
+    expect(g.controller.getState().missStreak).toBe(1);
+    g.controller.confirm();
+    g.controller.shotAnimationDone();
+    expect(g.controller.getState().lastShot!.hit).toBe(true);
+    expect(g.controller.getState().missStreak).toBe(0);
+  });
+});
+
+describe('amendment 13: new hills after every destroyed enemy (FR-101)', () => {
+  function expectRenewed(before: RoundState, after: RoundState): void {
+    expect(after.terrainSeed).not.toBe(before.terrainSeed);
+    expect(Array.from(after.terrain)).not.toEqual(Array.from(before.terrain));
+    expect(after.seed).toBe(before.seed);
+    expect(after.playerSide).toBe(before.playerSide);
+    expect(after.player.position).toBe(before.player.position);
+    expect(after.player.x).toBe(before.player.x);
+    expect(after.player.y).toBe(settleY(after.terrain, after.player.x));
+    expect(after.enemy.y).toBe(settleY(after.terrain, after.enemy.x));
+    expect(after.lives).toBe(before.lives);
+    expect(after.enemiesDestroyed).toBe(before.enemiesDestroyed + 1);
+    expect(after.turn).toBe(before.turn + 1);
+    expect(after.rulerLevel).toBe(before.rulerLevel);
+  }
+
+  it('free play: every destroyed enemy brings a new terrain seed and ground; hearts, counter and time continue', () => {
+    const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    const seeds = new Set([c.controller.getState().terrainSeed]);
+    c.advance(5_000);
+    for (let i = 0; i < 4; i++) {
+      const before = c.controller.getState();
+      const time = c.controller.elapsedMs();
+      fireAtEnemy(c.controller);
+      c.controller.shotAnimationDone();
+      const after = c.controller.getState();
+      expectRenewed(before, after);
+      expect(c.controller.elapsedMs()).toBeGreaterThanOrEqual(time);
+      seeds.add(after.terrainSeed);
+    }
+    expect(seeds.size).toBe(5);
+  });
+
+  it('guided: the next search stands on the new ground', () => {
+    const g = guidedRoundWhere(positionSearch);
+    const before = g.controller.getState();
+    g.advance(3_000);
+    g.controller.fireAt(before.challenge!.answer);
+    g.controller.shotAnimationDone();
+    const after = g.controller.getState();
+    expect(after.phase).toBe('challenge');
+    expectRenewed(before, after);
+  });
+
+  it('the destroyed enemy that brings the new ground also resets the misses in a row', () => {
+    const c = makeController({ roundType: 'enemyCount', roundLength: 20 });
+    c.controller.startRound('freePlay');
+    fireAtEnemy(c.controller);
+    c.controller.shotAnimationDone();
+    expect(c.controller.getState().missStreak).toBe(0);
+  });
+
+  it('the last enemy of an enemyCount round ends it with no new ground', () => {
+    const c = makeController({ roundType: 'enemyCount', roundLength: 1 });
+    c.controller.startRound('freePlay');
+    const before = c.controller.getState();
+    fireAtEnemy(c.controller);
+    c.controller.shotAnimationDone();
+    const after = c.controller.getState();
+    expect(after.phase).toBe('roundOver');
+    expect(after.terrainSeed).toBe(before.terrainSeed);
   });
 });

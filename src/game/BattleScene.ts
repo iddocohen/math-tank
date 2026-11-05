@@ -31,6 +31,10 @@
  * - Amendment 11 (FR-093): `options.look` gives the child's tank its garage color, flag and hat and the child's shells
  *   their trail; the enemy and decoys keep their look. The canvas carries `data-player-look` (lookKey) for the
  *   end-to-end tests only (D4).
+ * - Amendment 13 (FR-100, FR-101): when the enemy's shell lands beside the child's tank one miss before the limit, the
+ *   tank wobbles and its hearts pulse once. After a destroyed enemy the new hills fade in once the explosion is over,
+ *   the child's tank settles onto them and the next enemy fades in after that. For the end-to-end tests only, the
+ *   canvas carries `data-terrain-seed` and `data-enemy-warnings` (warnings shown this round).
  */
 import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
@@ -38,6 +42,7 @@ import { tankCenter, WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BLAST_RADIUS } from '../core/physics/damage';
 import { FIXED_ANGLE_DEG } from '../core/physics/arc';
 import { LIVES } from '../core/battle/hitRule';
+import { isWarningStreak } from '../core/ai/enemy';
 import type { RoundState, ShotInFlight, TankState } from '../core/types';
 import { launchAngle, toScreenY } from '../core/view/geometry';
 import { YOU_MARKER_MS } from '../core/view/tankStyle';
@@ -69,6 +74,10 @@ export interface BattleSceneOptions {
 const PLAYER_TURN_MS = 250;
 /** A new enemy fades in after the large explosion of the destroyed one. */
 const NEW_ENEMY_DELAY_MS = 600;
+/** New hills after a destroyed enemy (amendment 13, FR-101): the fade starts after the explosion and takes 0.7 s. */
+const TERRAIN_FADE = { delayMs: 500, durationMs: 700 };
+/** With new hills the child's tank settles and the next enemy appears once they have faded in. */
+const AFTER_TERRAIN_FADE_MS = TERRAIN_FADE.delayMs + TERRAIN_FADE.durationMs;
 /** The enemy turns its cannon, then fires after this pause, so the child can follow. */
 const ENEMY_TURN_MS = 450;
 const ENEMY_FIRE_DELAY_MS = 700;
@@ -86,6 +95,9 @@ export class BattleScene extends Phaser.Scene {
   /** Decoy views by tank id, for the decoys of the current comparison search (amendment 10). */
   private readonly decoyViews = new Map<string, TankView>();
   private decoyBursts = 0;
+  private enemyWarnings = 0;
+  /** Delay before a new enemy or decoy fades in: longer while new hills fade in. */
+  private appearDelay = NEW_ENEMY_DELAY_MS;
   private projectile!: ProjectileView;
   private effects!: Effects;
   private numberLine!: NumberLineView;
@@ -146,18 +158,30 @@ export class BattleScene extends Phaser.Scene {
       this.player.setAim(fixedAngle(s));
       this.enemy.setTarget(true);
       if (s.phase !== 'roundOver') this.showYouMarker();
+      this.enemyWarnings = 0;
     }
 
-    this.terrain.update(s.terrain);
-    this.player.sync(s.player, newRound);
+    // New hills after a destroyed enemy fade in instead of switching at once (amendment 13, FR-101).
+    const newHills = !newRound && prev !== null && s.terrainSeed !== prev.terrainSeed;
+    this.appearDelay = newHills ? AFTER_TERRAIN_FADE_MS : NEW_ENEMY_DELAY_MS;
+    this.terrain.update(s.terrain, newHills ? TERRAIN_FADE : undefined);
+    this.game.canvas.dataset.terrainSeed = String(s.terrainSeed);
+    this.player.sync(s.player, newRound, newHills ? TERRAIN_FADE.delayMs + TERRAIN_FADE.durationMs / 2 : 0);
     this.player.setLives(s.lives, LIVES);
     const destroyed = !newRound && s.lastShot !== prev?.lastShot && s.lastShot?.hit === true;
     // The new search right after a guided hit: the destroyed enemy stays in view during its explosion.
     const searchAfterHit = !newRound && !destroyed && s.mode === 'guided' && prev?.phase === 'playerShot' && s.phase === 'challenge' && s.lastShot?.hit === true;
     this.enemy.sync(s.enemy, newRound || destroyed || searchAfterHit);
     // The new enemy is visible in every challenge kind and fades in at its number (amendment 07, FR-010).
-    if (searchAfterHit) this.enemy.appear(NEW_ENEMY_DELAY_MS);
+    if (searchAfterHit) this.enemy.appear(this.appearDelay);
     if (!newRound && prev && s.lives < prev.lives) this.effects.hitFlash(this.player);
+    // One miss before the enemy hits, its shell lands beside the child's tank: wobble and heart pulse (FR-100).
+    const enemyShellLanded = !newRound && prev?.phase === 'enemyTurn' && s.phase !== 'enemyTurn' && s.phase !== 'paused';
+    if (enemyShellLanded && isWarningStreak(s.missStreak, this.controller.getRoundSettings().enemyDifficulty)) {
+      this.player.warn();
+      this.enemyWarnings++;
+    }
+    this.game.canvas.dataset.enemyWarnings = String(this.enemyWarnings);
     // Back to the fixed angle once a raised or lifted shot has landed.
     if (!newRound && s.phase !== 'playerShot' && prev?.phase === 'playerShot') this.player.turnTo(fixedAngle(s), PLAYER_TURN_MS);
     if (!newRound && s.lastShot !== prev?.lastShot && s.lastShot?.nearMiss) {
@@ -170,7 +194,7 @@ export class BattleScene extends Phaser.Scene {
     if (gone) {
       const c = tankCenter(gone);
       this.effects.destroyed(c.x, toScreenY(c.y, WORLD_HEIGHT), BLAST_RADIUS);
-      if (s.mode !== 'guided') this.enemy.appear(NEW_ENEMY_DELAY_MS);
+      if (s.mode !== 'guided') this.enemy.appear(this.appearDelay);
     }
     this.drawDecoys(s, prev, newRound, searchAfterHit);
     this.numberLine.update(s);
@@ -211,7 +235,7 @@ export class BattleScene extends Phaser.Scene {
         view.setAim(s.playerSide === 'left' ? 150 : 30);
         view.setTarget(true);
         this.decoyViews.set(decoy.id, view);
-        if (searchAfterHit) view.appear(NEW_ENEMY_DELAY_MS);
+        if (searchAfterHit) view.appear(this.appearDelay);
       }
       view.sync({ ...decoy, alive: true }, created);
       const wasAlive = prev?.decoys.find((d) => d.id === decoy.id)?.alive ?? decoy.alive;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyAttempt, type ClassifyInput } from './classify';
+import { classifyAttempt, isFastGuess, type ClassifyInput } from './classify';
 
 function input(extra: Partial<ClassifyInput> = {}): ClassifyInput {
   return {
@@ -71,5 +71,24 @@ describe('classifyAttempt (FR-038, FR-075)', () => {
           for (const wrongAnswers of [0, 1, 4])
             outcomes.add(classifyAttempt(input({ solved, exact, helpLevel, wrongAnswers })).outcome);
     expect([...outcomes].sort()).toEqual(['assisted', 'independent', 'unsolved']);
+  });
+});
+
+describe('isFastGuess (amendment 13, FR-038, FR-098)', () => {
+  it('is true for an answer under 1500 ms after answers became possible, false at 1500 ms', () => {
+    expect(isFastGuess({ responseMs: 1499, wrongAnswerTimes: [], submittedAt: 10_000 })).toBe(true);
+    expect(isFastGuess({ responseMs: 1500, wrongAnswerTimes: [], submittedAt: 10_000 })).toBe(false);
+  });
+
+  it('is true after 3 misses within the 5 seconds before, false when they are spread wider', () => {
+    expect(isFastGuess({ responseMs: 9000, wrongAnswerTimes: [6000, 7000, 9000], submittedAt: 10_000 })).toBe(true);
+    expect(isFastGuess({ responseMs: 9000, wrongAnswerTimes: [4000, 7000, 9000], submittedAt: 10_000 })).toBe(false);
+    expect(isFastGuess({ responseMs: 9000, wrongAnswerTimes: [8000, 9000], submittedAt: 10_000 })).toBe(false);
+  });
+
+  it('classifyAttempt calls a solved fast answer a guess and an unsolved one not', () => {
+    const base = { exact: true, helpLevel: 0, wrongAnswers: 0, responseMs: 900, wrongAnswerTimes: [], submittedAt: 10_000 };
+    expect(classifyAttempt({ ...base, solved: true }).guess).toBe(true);
+    expect(classifyAttempt({ ...base, solved: false }).guess).toBe(false);
   });
 });

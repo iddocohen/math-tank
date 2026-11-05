@@ -9,6 +9,7 @@
  * touch only: it never takes focus and ignores keys, so a keyboard player cannot press it by accident.
  *
  * The root carries the data-* attributes the end-to-end tests read (tasks.md D4); there is no global debug API.
+ * `data-miss-streak` is the child's misses in a row (amendment 13, FR-098).
  * `data-enemy-number` is the living enemy's number; the enemy is always visible (amendment 07). `data-last-distance`
  * is the step count of the last shot, which the ruler shows after every miss.
  * `data-last-shot` names the result of the last player shot (amendment 06): `hit` (the exact number, the enemy was
@@ -107,6 +108,7 @@ export function BattleOverlay({ controller, state, gear }: Props) {
       data-player-side={state.playerSide}
       data-lives={state.lives}
       data-enemies-destroyed={state.enemiesDestroyed}
+      data-miss-streak={state.missStreak}
       data-outcome={state.outcome ?? undefined}
       data-challenge-answerable={answerable}
       data-help-level={state.help.level}

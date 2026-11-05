@@ -183,7 +183,14 @@ export interface RoundState {
   elapsedMs: number;
   /** The latest enemy shell removed a heart. */
   lastEnemyHit: boolean;
+  /**
+   * The child's misses in a row (amendment 13, FR-098): + 1 per shot that does not destroy the enemy, + 2 for a fast
+   * guess; 0 after a destroyed enemy and after an enemy hit; kept by "Neue Landschaft"; 0 at a new round.
+   */
+  missStreak: number;
   phase: Phase;
+  /** The seed of the current ground; new after every destroyed enemy (amendment 13, FR-101). */
+  terrainSeed: number;
   terrain: Heightmap;
   player: TankState;
   /** Always visible with its number and coordinates (amendment 07, FR-010). */

@@ -103,7 +103,8 @@ export function createRound(
   difficulty: Difficulty = parentDifficulty(settings),
 ): BattleState {
   const { min, max } = settings.range;
-  const terrain = generateTerrain(deriveSeed(seed, 0), WORLD_WIDTH, WORLD_HEIGHT);
+  const terrainSeed = deriveSeed(seed, 0);
+  const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
   const playerPosition = side === 'left' ? min : max;
   // The parent's starting level, or with adaptive difficulty the level of the positions skill (FR-018).
   const rulerLevel = difficulty.rulerLevel;
@@ -118,8 +119,10 @@ export function createRound(
     enemiesDestroyed: 0,
     elapsedMs: 0,
     lastEnemyHit: false,
+    missStreak: 0,
     stepAnimation: null,
     phase: 'aiming',
+    terrainSeed,
     terrain,
     player: makeTank(PLAYER_ID, 'player', playerPosition, settings, terrain),
     enemy: makeTank(ENEMY_ID, 'enemy', enemyPosition, settings, terrain),
@@ -138,6 +141,18 @@ export function createRound(
     shot: null,
     outcome: null,
   };
+}
+
+/**
+ * New hills after a destroyed enemy (amendment 13, FR-101): a new terrain seed from the round seed and the number of
+ * destroyed enemies, new ground from it, and every tank moved to its number on the new ground. The round seed and every
+ * other field stay, so the challenges are the same as without the new ground.
+ */
+export function renewTerrain(s: BattleState, settings: Settings): BattleState {
+  const terrainSeed = deriveSeed(s.seed, 8, s.enemiesDestroyed);
+  const terrain = generateTerrain(terrainSeed, WORLD_WIDTH, WORLD_HEIGHT);
+  const settle = (tank: TankState): TankState => moveTank(tank, tank.position, settings, terrain);
+  return { ...s, terrainSeed, terrain, player: settle(s.player), enemy: settle(s.enemy), decoys: s.decoys.map(settle) };
 }
 
 /**

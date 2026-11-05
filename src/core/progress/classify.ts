@@ -33,10 +33,18 @@ export interface Classification {
   outcome: RecentOutcome;
 }
 
+/**
+ * The FR-038 guess rule for one answer, right or wrong: confirmed less than 1.5 s after answers became possible, or
+ * after 3 or more misses within the 5 seconds before it. Amendment 13 (FR-098) applies it to misses too.
+ */
+export function isFastGuess(a: Pick<ClassifyInput, 'responseMs' | 'wrongAnswerTimes' | 'submittedAt'>): boolean {
+  const quickMisses = a.wrongAnswerTimes.filter((t) => t <= a.submittedAt && a.submittedAt - t <= GUESS_MISS_WINDOW_MS).length;
+  return a.responseMs < GUESS_RESPONSE_MS || quickMisses >= GUESS_MISS_COUNT;
+}
+
 export function classifyAttempt(a: ClassifyInput): Classification {
   const independent = a.solved && a.exact && a.helpLevel === 0 && a.wrongAnswers === 0;
-  const quickMisses = a.wrongAnswerTimes.filter((t) => t <= a.submittedAt && a.submittedAt - t <= GUESS_MISS_WINDOW_MS).length;
-  const guess = a.solved && (a.responseMs < GUESS_RESPONSE_MS || quickMisses >= GUESS_MISS_COUNT);
+  const guess = a.solved && isFastGuess(a);
   const outcome: RecentOutcome = !a.solved ? 'unsolved' : independent ? 'independent' : 'assisted';
   return { independent, guess, outcome };
 }

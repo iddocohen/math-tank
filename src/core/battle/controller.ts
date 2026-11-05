@@ -12,7 +12,8 @@
  *
  * Amendment 06: only the exact number destroys the enemy; then a new enemy appears and the round's score goes up.
  * Amendment 07: the enemy fires once right after every shot of the child that does not destroy it; a seeded draw
- * decides whether its shell hits (ai/enemy.ts). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
+ * decides whether its shell hits (ai/enemy.ts). Amendment 13: the enemy zeroes in on the child's misses in a row
+ * (RoundState.missStreak, FR-098, FR-099) and every destroyed enemy brings new hills (renewTerrain, FR-101). Each enemy hit costs one of the child's LIVES hearts. The round ends when the hearts are gone, or with roundType 'enemyCount' after
  * roundLength destroyed enemies. The controller measures the time played; it stops while paused and at the end.
  */
 import { createRng, deriveSeed } from '../rng';
@@ -21,6 +22,7 @@ import { solveArcToX } from '../physics/arc';
 import { BLAST_RADIUS } from '../physics/damage';
 import { DEFAULT_LAYOUT, numberToX, xToNumber } from '../numberline/mapping';
 import { enemyShot } from '../ai/enemy';
+import { isFastGuess } from '../progress/classify';
 import type { ProgressStore, Speaker } from './ports';
 import { applyKey, emptyEntry, type Digit, type EntryKey } from './entry';
 import { afterHelpRequest, afterMiss, SOLUTION_HELP_LEVEL, startSearch } from './guided';
@@ -34,6 +36,7 @@ import {
   freePlayChallenge,
   moveTank,
   muzzle,
+  renewTerrain,
   WORLD_HEIGHT,
   WORLD_WIDTH,
   type DamageRules,
@@ -156,6 +159,8 @@ export class BattleController {
       turn: prev.turn,
       lives: prev.lives,
       enemiesDestroyed: prev.enemiesDestroyed,
+      // A new landscape is no way around the misses in a row (amendment 13, FR-098).
+      missStreak: prev.missStreak,
       elapsedMs: prev.elapsedMs,
       inputMethod: prev.inputMethod,
     };
@@ -283,7 +288,8 @@ export class BattleController {
     if (next.lastShot?.hit) {
       // One hit, one destroyed enemy; the destroyed enemy does not fire and the child shoots next (FR-066, FR-081).
       // The remaining decoys fold away with it (amendment 10).
-      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
+      // A shot that destroys the enemy, the shot at the shown solution included, resets the misses in a row (FR-098).
+      const destroyed: BattleState = { ...next, enemiesDestroyed: next.enemiesDestroyed + 1, missStreak: 0, decoys: next.decoys.map((d) => ({ ...d, alive: false })) };
       if (guided) this.recordAttempt(destroyed);
       if (this.settings.roundType === 'enemyCount' && destroyed.enemiesDestroyed >= this.settings.roundLength) {
         this.endRound(destroyed, 'goalReached');
@@ -292,26 +298,41 @@ export class BattleController {
       if (guided) {
         this.set(destroyed);
         // The difficulty is read after the attempt was recorded, so a step change applies to this next search.
-        this.set(startSearch(destroyed, this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
+        // New hills before the next enemy is placed on them (amendment 13, FR-101).
+        this.set(startSearch(renewTerrain(destroyed, this.settings), this.settings, this.deps.clock(), destroyed.enemy.position, this.difficulty()));
         return;
       }
-      this.set(this.nextReadPosition(destroyed));
+      this.set(this.nextReadPosition(renewTerrain(destroyed, this.settings)));
       return;
     }
-    // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081).
+    // Every shot that does not destroy the enemy is answered at once (amendment 07, FR-081) and adds to the misses in
+    // a row, 2 for a fast guess (amendment 13, FR-098). The guess rule reads the misses before this one.
+    const step = guided && this.isFastGuessMiss(next) ? 2 : 1;
     const missed = guided ? afterMiss(next, this.deps.clock(), this.settings, next.lastShot?.nearMiss === true) : next;
-    this.set({ ...missed, phase: 'enemyTurn', shot: this.nextEnemyShot(missed) });
+    const streaked: BattleState = { ...missed, missStreak: missed.missStreak + step };
+    this.set({ ...streaked, phase: 'enemyTurn', shot: this.nextEnemyShot(streaked) });
   }
 
   enemyShotAnimationDone(): void {
     if (this.state.phase !== 'enemyTurn' || !this.state.shot) return;
     const shot = this.state.shot;
-    const s = { ...this.impact({ point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: 'enemy' }, shot.blastRadius), shot: null };
+    const landed = this.impact({ point: shot.impact, hitTargetId: shot.hitTargetId, outOfBounds: shot.outOfBounds, shooter: 'enemy' }, shot.blastRadius);
+    // After the enemy's hit the misses in a row start again, in no-damage mode too (amendment 13, FR-099).
+    const s = { ...landed, shot: null, missStreak: shot.hitTargetId === null ? landed.missStreak : 0 };
     if (s.lives <= 0) {
       this.endRound(s, 'heartsGone');
       return;
     }
     this.set({ ...s, phase: this.choosingPhase() });
+  }
+
+  /**
+   * The FR-038 guess rule for the guided miss that just landed (amendment 13, FR-098): fired less than 1.5 s after
+   * answers became possible, or after 3 misses within the 5 seconds before it. Free play has no answer timing.
+   */
+  private isFastGuessMiss(s: BattleState): boolean {
+    if (s.answerableAt === null) return false;
+    return isFastGuess({ responseMs: Math.max(0, this.firedAt - s.answerableAt), wrongAnswerTimes: s.help.wrongAnswerTimes, submittedAt: this.firedAt });
   }
 
   /** The phase in which the child chooses a number: a guided search or free-play aiming. */
@@ -393,8 +414,8 @@ export class BattleController {
   }
 
   /**
-   * The enemy's shell on the state after the player's impact (amendment 07, FR-041 to FR-043a): the seeded draw of
-   * enemyShot decides hit or deliberate near miss. The shell flies from the enemy's muzzle; in a comparison turn it
+   * The enemy's shell on the state after the player's impact (amendments 07 and 13, FR-041 to FR-043a, FR-099):
+   * enemyShot decides hit or deliberate near miss from the misses in a row and the difficulty. The shell flies from the enemy's muzzle; in a comparison turn it
    * enters from the top edge instead, at an x that depends on nothing about the enemy, so it does not show which tank
    * is the enemy (amendment 10).
    */
@@ -404,6 +425,7 @@ export class BattleController {
       difficulty: this.settings.enemyDifficulty,
       roundSeed: s.seed,
       shotIndexInRound: shotIndex,
+      missStreak: s.missStreak,
       origin: muzzle(s.enemy),
       playerX: s.player.x,
       terrain: s.terrain,
