@@ -437,3 +437,8 @@ The product owner asked to remove `.specify/` and `.claude/` from the history. T
    - the skipped /simplify items A7 and E5;
    - the frame-rate check that never runs in CI;
    - the 100 ms frame stall on the first shot of a battle, recorded in chunk 24.
+
+## Addendum: CI after the report
+
+- The GitHub Actions run for the report commit 6a99206 failed: the property test "range 0-1000, player left: 10000 challenges all validate" in src/core/math/generator.property.test.ts exceeded the default 5 s test limit on the shared runner (20.7 s on the last of 3 attempts). The code was unchanged since e899393, whose CI run passed.
+- Fix 3166576 allows 60 s per test in that file; the checks are unchanged. Locally: "Tests 96 passed (96)". CI on 3166576: success, and GitHub Pages serves that build.
