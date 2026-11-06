@@ -268,7 +268,8 @@ export const de = {
   settings: {
     title: 'Einstellungen',
     save: 'Speichern',
-    saved: 'Gespeichert. Die Einstellungen gelten ab der nächsten Runde.',
+    /** Amendment 25: saved settings reach a running round when this page closes. */
+    saved: 'Gespeichert. Die Einstellungen gelten, sobald diese Seite geschlossen ist.',
     saveFailed: 'Speichern hat nicht geklappt. Die Einstellungen gelten nur, bis der Browser geschlossen wird.',
     checkFields: 'Bitte die markierten Felder prüfen.',
     /** Bug "iPhone rotation in Chrome" (Phase 24): which build runs, the short git commit and the build day. */
@@ -288,7 +289,7 @@ export const de = {
     data: {
       title: 'Daten',
       exportHint: 'Speichert Einstellungen, Fortschritt und Rekorde in einer Datei.',
-      imported: 'Daten geladen. Die Einstellungen gelten ab der nächsten Runde.',
+      imported: 'Daten geladen. Die Einstellungen gelten, sobald diese Seite geschlossen ist.',
       importFailed: {
         notJson: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',
         wrongApp: 'Diese Datei ist keine Sicherung von Mathe-Panzer.',

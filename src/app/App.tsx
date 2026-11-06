@@ -49,6 +49,9 @@
  *
  * Review fixes: useAutoPause holds every pause the app makes (parent screens, hidden tab, transfer dialog) in one
  * flag. A waiting service worker update reloads only on the start screen with nothing open over it (R2).
+ *
+ * Amendment 25: settings saved during a battle reach the running round once, when the settings page closes
+ * (BattleController.applySettingsNow); on the start screen and the garage only the next round uses them.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -65,7 +68,7 @@ import { recordKey } from '../core/records/records';
 import { SettingsPage } from './SettingsPage';
 import { ProgressPage } from './ProgressPage';
 import { keyStartMode, offeredModes, StartScreen } from './StartScreen';
-import type { PlayMode } from '../core/settings/schema';
+import type { PlayMode, Settings } from '../core/settings/schema';
 import { createPersistence } from './persistence';
 import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
@@ -328,12 +331,30 @@ export function App() {
     gameHandle.current?.setLook(battleLook(persistence));
   }, [persistence]);
 
+  // Amendment 25: the latest settings saved while the settings page is open; they reach the running round once, when
+  // the page closes. Several saves count as one change.
+  const savedSettings = useRef<Settings | null>(null);
+  const settingsSaved = useCallback(
+    (s: Settings) => {
+      controller.updateSettings(s);
+      savedSettings.current = s;
+    },
+    [controller],
+  );
   const openParent = useCallback(() => setParent('menu'), []);
   const closeParent = useCallback(() => {
     setParent('closed');
     // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendments 11 and 19).
     setGarage(persistence.garage());
-  }, [persistence]);
+    const saved = savedSettings.current;
+    savedSettings.current = null;
+    if (saved !== null && screen === 'battle') {
+      // The round is still paused by the settings page here, so a new scene waits for useAutoPause to resume it; a
+      // round the child paused stays paused. The garage switch may have changed the child's look (FR-096).
+      controller.applySettingsNow(saved);
+      gameHandle.current?.setLook(battleLook(persistence));
+    }
+  }, [controller, persistence, screen]);
   const gear = (
     <ParentGate
       open={parent === 'menu'}
@@ -427,7 +448,7 @@ export function App() {
       )}
       {debugScreen && <ScreenDebug layout={layout} lastEvent={lastEvent} />}
       {parent === 'settings' && (
-        <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
+        <SettingsPage persistence={persistence} onSaved={settingsSaved} onClose={closeParent} />
       )}
       {parent === 'progress' && <ProgressPage persistence={persistence} onClose={closeParent} />}
       {transfer !== null && transfer.kind !== 'reading' && (

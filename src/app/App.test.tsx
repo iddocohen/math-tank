@@ -13,6 +13,8 @@ import { emptyGarage } from '../core/rewards/garage';
 import { GARAGE_KEY, SETTINGS_KEY } from '../core/storage/storage';
 import { t } from '../i18n';
 import { App } from './App';
+import { BattleController } from '../core/battle/controller';
+import { HOLD_MS } from './ParentGate';
 
 const game = vi.hoisted(() => ({ created: 0, destroyed: 0, setLook: [] as unknown[] }));
 
@@ -145,5 +147,100 @@ describe('the garage from the battle (amendment 23)', () => {
     fireEvent.click(screen.getByTestId('garage-item-rocket'));
     fireEvent.click(screen.getByRole('button', { name: m.garage.back }));
     expect(game.setLook.at(-1)).toEqual({ ...emptyGarage().look, flag: 'rocket' });
+  });
+});
+
+/** Opens the settings page through the parent gate: a 2-second press on the gear, then "Einstellungen". */
+function openSettings(): void {
+  vi.useFakeTimers();
+  const gear = screen.getByTestId('parent-gate');
+  fireEvent.pointerDown(gear, { pointerId: 1, button: 0 });
+  act(() => {
+    vi.advanceTimersByTime(HOLD_MS + 100);
+  });
+  fireEvent.pointerUp(gear);
+  vi.useRealTimers();
+  fireEvent.click(screen.getByRole('button', { name: m.parent.settings }));
+  expect(screen.getByTestId('settings-page')).toBeTruthy();
+}
+
+const saveSettings = () => fireEvent.click(screen.getByRole('button', { name: m.settings.save }));
+const closeSettings = () => fireEvent.click(screen.getByRole('button', { name: m.parent.close }));
+const chooseRange = (preset: string) => fireEvent.change(screen.getByLabelText(m.settings.labels.rangePreset), { target: { value: preset } });
+
+describe('saved settings reach the running round when the settings page closes (amendment 25)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('gives the round a new scene with the new range when the page closes after a save; the round continues', async () => {
+    const apply = vi.spyOn(BattleController.prototype, 'applySettingsNow');
+    const overlay = await startBattle();
+    openSettings();
+    expect(overlay.getAttribute('data-phase')).toBe('paused');
+    chooseRange('0-20');
+    saveSettings();
+    // Nothing changes while the page is open.
+    expect(apply).not.toHaveBeenCalled();
+    closeSettings();
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![0].range).toEqual({ preset: '0-20', min: 0, max: 20 });
+    expect(overlay.getAttribute('data-phase')).toBe('challenge');
+    expect(Number(overlay.getAttribute('data-enemy-number'))).toBeLessThanOrEqual(20);
+    expect(overlay.getAttribute('data-lives')).toBe('3');
+    expect(overlay.getAttribute('data-enemies-destroyed')).toBe('0');
+  });
+
+  it('applies several saves once, with the latest settings', async () => {
+    const apply = vi.spyOn(BattleController.prototype, 'applySettingsNow');
+    await startBattle();
+    openSettings();
+    chooseRange('0-50');
+    saveSettings();
+    chooseRange('0-20');
+    saveSettings();
+    closeSettings();
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![0].range).toEqual({ preset: '0-20', min: 0, max: 20 });
+  });
+
+  it('changes nothing when the page closes without a save', async () => {
+    const apply = vi.spyOn(BattleController.prototype, 'applySettingsNow');
+    const overlay = await startBattle();
+    const enemy = overlay.getAttribute('data-enemy-number');
+    openSettings();
+    chooseRange('0-20');
+    closeSettings();
+    expect(apply).not.toHaveBeenCalled();
+    expect(overlay.getAttribute('data-enemy-number')).toBe(enemy);
+    expect(overlay.getAttribute('data-phase')).toBe('challenge');
+  });
+
+  it('keeps a round the child paused paused, with the new scene', async () => {
+    const apply = vi.spyOn(BattleController.prototype, 'applySettingsNow');
+    const overlay = await startBattle();
+    fireEvent.click(screen.getByRole('button', { name: m.battle.pause }));
+    expect(overlay.getAttribute('data-phase')).toBe('paused');
+    openSettings();
+    chooseRange('0-20');
+    saveSettings();
+    closeSettings();
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(overlay.getAttribute('data-phase')).toBe('paused');
+    expect(Number(overlay.getAttribute('data-enemy-number'))).toBeLessThanOrEqual(20);
+  });
+
+  it('does not touch a round from the start screen; the next round uses the saved settings', async () => {
+    const apply = vi.spyOn(BattleController.prototype, 'applySettingsNow');
+    window.history.replaceState(null, '', '/?seed=3&mode=ruler');
+    render(<App />);
+    openSettings();
+    chooseRange('0-20');
+    saveSettings();
+    closeSettings();
+    expect(apply).not.toHaveBeenCalled();
+    press('Enter');
+    await waitFor(() => expect(game.created).toBe(1));
+    expect(Number(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number'))).toBeLessThanOrEqual(20);
   });
 });

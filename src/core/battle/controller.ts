@@ -55,6 +55,20 @@ export interface BattleDeps {
 
 type Listener = (s: RoundState) => void;
 
+/** Amendment 25: settings that shape the whole round keep their round-start values until the next round. */
+const ROUND_KEYS = ['roundType', 'roundLength', 'timeLimitSeconds', 'noDamage'] as const satisfies ReadonlyArray<keyof Settings>;
+/**
+ * Amendment 25: settings that change no task. They apply to the running round without a new scene: sound, music and
+ * speech, "Zahlenfeld", "Zielkreuz", the garage, the clock, the records, the start screen's modes, the enemy's aim and
+ * "Punkt nach voller Hilfe". Every other setting shapes the tasks and gives the round a new scene.
+ */
+const LIVE_KEYS = new Set<keyof Settings>(['sound', 'numberPad', 'aimCross', 'garage', 'showClock', 'showRecords', 'playModes', 'enemyDifficulty', 'pointAfterFullHelp']);
+
+/** Whether a setting that shapes the tasks differs between the two settings (amendment 25). */
+function changesTasks(a: Settings, b: Settings): boolean {
+  return (Object.keys(b) as Array<keyof Settings>).some((k) => !LIVE_KEYS.has(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+}
+
 export class BattleController {
   private readonly deps: BattleDeps;
   private readonly baseSeed: number;
@@ -69,6 +83,8 @@ export class BattleController {
   private nextSide: 'left' | 'right';
   private enemyShotIndex = 0;
   private phaseBeforePause: RoundState['phase'] | null = null;
+  /** Settings saved during the round wait for it to be back in 'challenge' (amendment 25). */
+  private applyPending = false;
   /** The number of the player's shell in flight. */
   private firedNumber: number | null = null;
   /** Clock time since which the round's time is running, or null while it is stopped (FR-084). */
@@ -123,7 +139,53 @@ export class BattleController {
     this.nextSettings = structuredClone(settings);
   }
 
+  /**
+   * Amendment 25 (FR-049): the settings saved while the settings page was open reach the running round when the page
+   * closes. They also become the pending settings of the next round. The round keeps its round type and length, the
+   * time limit and "Keine Treffer" (ROUND_KEYS). When a setting that shapes the tasks changed, the round gets a new
+   * scene as with "Neue Landschaft": hearts, destroyed enemies, turn, time and the enemy's shot count stay and the
+   * unfinished search is dropped without an attempt. Settings that change no task (LIVE_KEYS) apply without a new scene.
+   * A paused round stays paused with the new scene. While a shell flies, the change waits until the round is back in
+   * 'challenge'. Once the round is over nothing changes; the next round uses the settings.
+   */
+  applySettingsNow(settings: Settings): void {
+    this.updateSettings(settings);
+    if (this.state.phase === 'roundOver') return;
+    this.applyPending = true;
+    this.applyPendingSettings();
+  }
+
+  /** Applies the pending settings to the round once it waits for an answer (or is paused while it does). */
+  private applyPendingSettings(): void {
+    if (!this.applyPending) return;
+    const paused = this.state.phase === 'paused';
+    const phase = paused ? this.phaseBeforePause : this.state.phase;
+    if (phase !== 'challenge') {
+      // The round ended under the flying shell: the next round takes the settings anyway.
+      if (this.state.phase === 'roundOver') this.applyPending = false;
+      return;
+    }
+    this.applyPending = false;
+    const merged: Settings = structuredClone(this.nextSettings);
+    for (const key of ROUND_KEYS) (merged as Record<string, unknown>)[key] = structuredClone(this.settings[key]);
+    const rebuild = changesTasks(this.settings, merged);
+    this.settings = merged;
+    if (!rebuild) {
+      // A new state object, so the views read the new settings (aim cross, clock).
+      this.set({ ...this.state });
+      return;
+    }
+    const scene = this.sceneKeepingScore(this.state);
+    if (paused) {
+      this.phaseBeforePause = scene.phase;
+      this.set({ ...scene, phase: 'paused' });
+    } else {
+      this.set(scene);
+    }
+  }
+
   startRound(mode: PlayMode): void {
+    this.applyPending = false;
     this.settings = structuredClone(this.nextSettings);
     this.enemyShotIndex = 0;
     this.phaseBeforePause = null;
@@ -145,6 +207,11 @@ export class BattleController {
   newScene(): void {
     const prev = this.state;
     if (!acceptsInput(prev.phase)) return;
+    this.set(this.sceneKeepingScore(prev));
+  }
+
+  /** A new scene in the same round with this.settings, keeping the score, the hearts, the turn and the time. */
+  private sceneKeepingScore(prev: RoundState): RoundState {
     const { fresh, difficulty } = this.nextScene(prev.mode);
     const scene: RoundState = {
       ...fresh,
@@ -157,7 +224,7 @@ export class BattleController {
       elapsedMs: prev.elapsedMs,
       inputMethod: prev.inputMethod,
     };
-    this.set(startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true));
+    return startSearch(scene, this.settings, this.deps.clock(), null, difficulty, true);
   }
 
   /** New ground and tanks from the next seed, the child's tank on the other side; no shell in flight. */
@@ -280,6 +347,11 @@ export class BattleController {
   }
 
   shotAnimationDone(): void {
+    this.landPlayerShot();
+    this.applyPendingSettings();
+  }
+
+  private landPlayerShot(): void {
     if (this.state.phase !== 'playerShot' || !this.state.shot) return;
     const shot = this.state.shot;
     const { min, max } = this.settings.range;
@@ -338,6 +410,11 @@ export class BattleController {
   }
 
   enemyShotAnimationDone(): void {
+    this.landEnemyShot();
+    this.applyPendingSettings();
+  }
+
+  private landEnemyShot(): void {
     if (this.state.phase !== 'enemyTurn' || !this.state.shot) return;
     const shot = this.state.shot;
     const landed = this.impact({ point: shot.impact, shooter: 'enemy', hits: shot.hits });

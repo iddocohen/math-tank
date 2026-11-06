@@ -1071,6 +1071,146 @@ describe('BattleController updateSettings (US6, FR-049, T105)', () => {
   });
 });
 
+describe('BattleController applySettingsNow (amendment 25, FR-049)', () => {
+  const RANGE_20 = { preset: '0-20', min: 0, max: 20 } as const;
+
+  it('gives a running round a new scene with the new range and ruler level; hearts, destroyed enemies, turn and time stay', () => {
+    const { controller, progress, advance } = makeController({ noDamage: false });
+    controller.startRound('ruler');
+    playTurn(controller, fireBetween);
+    playTurn(controller, fireAtEnemy);
+    advance(5_000);
+    const before = controller.getState();
+    const elapsedBefore = controller.elapsedMs();
+    const attemptsBefore = progress.getProgress().attempts.length;
+    expect(before.enemiesDestroyed).toBe(1);
+
+    controller.applySettingsNow(rulerSettings({ noDamage: false, range: { ...RANGE_20 }, rulerLevelStart: 3, rulerLevelMax: 3 }));
+    const after = controller.getState();
+    expect(after.phase).toBe('challenge');
+    expect(after.seed).not.toBe(before.seed);
+    expect(controller.getRoundSettings().range).toEqual(RANGE_20);
+    expect(after.rulerLevel).toBe(3);
+    expect(after.challenge!.answer).toBeLessThanOrEqual(20);
+    expect(enemyOf(after).position).toBeGreaterThanOrEqual(0);
+    expect(enemyOf(after).position).toBeLessThanOrEqual(20);
+    expect(after.player.position).toBeLessThanOrEqual(20);
+    expect(after).toMatchObject({ lives: before.lives, enemiesDestroyed: 1, turn: before.turn, mode: 'ruler' });
+    expect(controller.elapsedMs()).toBe(elapsedBefore);
+    // The unfinished search is dropped without an attempt, as with "Neue Landschaft".
+    expect(progress.getProgress().attempts).toHaveLength(attemptsBefore);
+    // The new range holds for the shots that follow.
+    playTurn(controller, fireAtEnemy);
+    expect(controller.getState().enemiesDestroyed).toBe(2);
+    expect(enemyOf(controller.getState()).position).toBeLessThanOrEqual(20);
+  });
+
+  it('keeps the round type, its length, the time limit and "Keine Treffer" at their round-start values until the next round', () => {
+    const { controller } = makeController({ roundType: 'enemyCount', roundLength: 5, timeLimitSeconds: null, noDamage: false });
+    controller.startRound('ruler');
+    controller.applySettingsNow(rulerSettings({ range: { ...RANGE_20 }, roundType: 'untilHearts', roundLength: 2, timeLimitSeconds: 30, noDamage: true }));
+    const round = controller.getRoundSettings();
+    expect(round.range).toEqual(RANGE_20);
+    expect(round).toMatchObject({ roundType: 'enemyCount', roundLength: 5, timeLimitSeconds: null, noDamage: false });
+    expect(controller.helpTimeLeftMs()).toBeNull();
+
+    controller.startRound('ruler');
+    expect(controller.getRoundSettings()).toMatchObject({ roundType: 'untilHearts', roundLength: 2, timeLimitSeconds: 30, noDamage: true, range: RANGE_20 });
+  });
+
+  it('applies settings that change no task without a new scene, and tells the views', () => {
+    const { controller } = makeController();
+    controller.startRound('ruler');
+    const before = controller.getState();
+    const seen: RoundState[] = [];
+    controller.subscribe((s) => seen.push(s));
+    const next = rulerSettings({
+      sound: { effects: false, music: false, speech: false },
+      numberPad: 'always',
+      aimCross: { mode: 'never', level: 2 },
+      garage: false,
+      showClock: true,
+    });
+    controller.applySettingsNow(next);
+    const after = controller.getState();
+    expect(after.seed).toBe(before.seed);
+    expect(after.challenge).toBe(before.challenge);
+    expect(after.enemy).toBe(before.enemy);
+    expect(controller.getRoundSettings()).toMatchObject({ aimCross: { mode: 'never', level: 2 }, showClock: true, numberPad: 'always', garage: false });
+    expect(seen.length).toBeGreaterThan(0);
+  });
+
+  it('builds the new scene for a paused round and keeps it paused; resume continues with the new scene', () => {
+    const { controller, advance } = makeController();
+    controller.startRound('ruler');
+    controller.pause();
+    const before = controller.getState();
+    controller.applySettingsNow(rulerSettings({ range: { ...RANGE_20 } }));
+    const paused = controller.getState();
+    expect(paused.phase).toBe('paused');
+    expect(paused.seed).not.toBe(before.seed);
+    expect(enemyOf(paused).position).toBeLessThanOrEqual(20);
+    // The time stays stopped while paused.
+    const elapsed = controller.elapsedMs();
+    advance(3_000);
+    expect(controller.elapsedMs()).toBe(elapsed);
+
+    controller.resume();
+    const resumed = controller.getState();
+    expect(resumed.phase).toBe('challenge');
+    expect(resumed.seed).toBe(paused.seed);
+    expect(resumed.challenge).toBe(paused.challenge);
+  });
+
+  it('waits for a shell in flight to land, then builds the new scene', () => {
+    const { controller } = makeController({ noDamage: false });
+    controller.startRound('ruler');
+    fireBetween(controller);
+    expect(controller.getState().phase).toBe('playerShot');
+    const flying = controller.getState();
+    controller.applySettingsNow(rulerSettings({ noDamage: false, range: { ...RANGE_20 } }));
+    // Nothing changes under the flying shell.
+    expect(controller.getState()).toBe(flying);
+    expect(controller.getRoundSettings().range).toEqual({ preset: '0-100', min: 0, max: 100 });
+
+    controller.shotAnimationDone();
+    expect(controller.getState().phase).toBe('enemyTurn');
+    expect(controller.getState().seed).toBe(flying.seed);
+    controller.enemyShotAnimationDone();
+    const after = controller.getState();
+    expect(after.phase).toBe('challenge');
+    expect(after.seed).not.toBe(flying.seed);
+    expect(controller.getRoundSettings().range).toEqual(RANGE_20);
+    expect(enemyOf(after).position).toBeLessThanOrEqual(20);
+  });
+
+  it('waits for a shell that was in flight when the round paused, until it lands after resume', () => {
+    const { controller } = makeController({ noDamage: false });
+    controller.startRound('ruler');
+    fireBetween(controller);
+    controller.pause();
+    const seed = controller.getState().seed;
+    controller.applySettingsNow(rulerSettings({ noDamage: false, range: { ...RANGE_20 } }));
+    expect(controller.getState().seed).toBe(seed);
+    controller.resume();
+    expect(controller.getState().phase).toBe('playerShot');
+    controller.shotAnimationDone();
+    controller.enemyShotAnimationDone();
+    expect(controller.getState().seed).not.toBe(seed);
+    expect(controller.getRoundSettings().range).toEqual(RANGE_20);
+  });
+
+  it('changes nothing once the round is over; the next round uses the settings', () => {
+    const { controller } = makeController();
+    // Before the first round the state is a placeholder in 'roundOver'.
+    const placeholder = controller.getState();
+    controller.applySettingsNow(rulerSettings({ range: { ...RANGE_20 } }));
+    expect(controller.getState()).toBe(placeholder);
+    controller.startRound('ruler');
+    expect(controller.getRoundSettings().range).toEqual(RANGE_20);
+  });
+});
+
 function guidedController(overrides: Partial<Settings> = {}, seed = 1234) {
   let now = 1_000;
   const clock = () => now;

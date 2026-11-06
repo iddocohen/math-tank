@@ -4,8 +4,8 @@ import { FIRE_BARS_HEIGHT, FIRE_DEVICES, silkUserAgent } from './tests/e2e/silk'
 
 /** Specs that run only in the device projects (amendment 12, T136, T306). */
 const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
-/** Amendment 23: the garage from the battle runs in the desktop projects and in the device projects too. */
-const DEVICE_AND_DESKTOP_SPECS = /garageBattle\.spec\.ts$/;
+/** Amendments 23 and 25: the garage from the battle and settings applied mid-round run in the desktop and device projects. */
+const DEVICE_AND_DESKTOP_SPECS = /(garageBattle|settingsApply)\.spec\.ts$/;
 /** The smoke test of the build for GitHub Pages runs only in the `base-path` project (P11, T304). */
 const BASE_PATH_SPEC = /basePath\.spec\.ts$/;
 /** The frame rate test runs alone, after every other project (T150). */
