@@ -224,7 +224,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
           {showGarage && (
             <button
               type="button"
-              className="icon-button garage-icon"
+              className="icon-button battle-garage-button"
               data-testid="battle-garage"
               aria-label={m.battle.garage}
               title={m.battle.garage}

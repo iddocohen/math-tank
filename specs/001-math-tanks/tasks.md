@@ -1003,6 +1003,34 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24j: Amendment 24 keeping the child's progress
+
+**Purpose**: [Amendment 24](./amendment-24-keeping-progress.md). Kept copies of unreadable saves can be restored, "Alles zurücksetzen" clears all play data and keeps the settings, and the README explains how progress is kept and lost.
+
+**Independent test**: `tests/e2e/persistence.spec.ts` writes a readable garage copy under `<key>.unreadable`, restores it from the settings page, and the start screen then shows its stars.
+
+- [X] T398 [US7] Write the tests first: `src/app/persistence.test.ts` (`backups`, `restoreBackups`, `resetAll`), `src/app/SettingsPage.test.tsx` (notice, "Kopie wiederherstellen", failure notice, reload callback), `src/app/ProgressPage.test.tsx` ("Alles zurücksetzen" with confirmation), `tests/e2e/persistence.spec.ts` (restore from the settings page) (FR-048, FR-048a)
+  - T398 note: the 11 new unit tests failed before the code (2026-11-06T14:04:20Z and 14:05:53Z).
+- [X] T399 [US7] Implement until T398 passes: `keptCopies` in `src/core/storage/storage.ts`; `backups`, `restoreBackups` and `resetAll` in `src/app/persistence.ts`; the notice and button in `src/app/SettingsPage.tsx`; "Alles zurücksetzen" in `src/app/ProgressPage.tsx`; texts in `src/i18n/de.ts` (FR-048, FR-048a)
+- [X] T400 README: section "Keeping the child's progress", the Home Screen advice for Safari's 7-day rule, the three reset buttons, and "save first" before clearing browser data
+
+**Checkpoint**: Updates never touch saves, a kept copy can be brought back, and a parent can start over completely.
+
+---
+
+## Phase 24k: Amendment 25 saved settings apply to the running round at once
+
+**Purpose**: [Amendment 25](./amendment-25-settings-apply-at-once.md). "Speichern" during a running round gives the round a new scene with the new settings when the settings page closes; hearts, destroyed tanks and time stay; round goal, timer and "Keine Treffer" wait for the next round.
+
+**Independent test**: an e2e changes the range from 0 to 100 to 0 to 20 during a round; after closing the settings, the ruler and the enemy use 0 to 20 and the hearts and destroyed count are unchanged.
+
+- [ ] T401 [US6] Write the tests first: controller unit tests (`applySettingsNow` or equivalent: new scene with the new range and ruler level; lives, destroyed count, time, turn kept; round goal, timer and noDamage keep the round-start values; display-only changes keep the scene), App unit tests (applied on close after a save, once for several saves, not without a save, not outside a running round), e2e in desktop and device projects (amendment 25)
+- [ ] T402 [US6] Implement until T401 passes: `src/core/battle/controller.ts`, `src/app/App.tsx`, `src/app/SettingsPage.tsx` (the `onSaved` flow), and any Phaser view that must redraw the ruler for a new range within a round (`src/game/BattleScene.ts`, `src/game/NumberLineView.ts`); update FR-049 in spec.md (amendment 25)
+
+**Checkpoint**: A parent's change shows in the running round as soon as the settings close.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies
