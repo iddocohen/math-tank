@@ -1,10 +1,10 @@
 name: Build and publish to GitHub Pages
 
 # Publishes the latest version of the game to https://iddocohen.github.io/math-tank/
-# on every push to main or to the feature branch while the first release is built.
+# on every push to main.
 on:
   push:
-    branches: [main, 001-math-tanks]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
