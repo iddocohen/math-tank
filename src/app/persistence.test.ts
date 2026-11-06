@@ -454,3 +454,71 @@ describe('import and transfer are all or nothing (review M4, P2)', () => {
     expect(kv.get(SETTINGS_KEY)).toBeNull();
   });
 });
+
+// Amendment 24: a copy kept under `<key>.unreadable` that this version of the game can read is offered back.
+describe('restoring kept copies (amendment 24)', () => {
+  const COPY = `${GARAGE_KEY}.unreadable`;
+  const richGarage = () => ({ ...emptyGarage(), balance: 40, totalEarned: 40 });
+
+  it('offers a readable copy and restores it, then removes the copy', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify(emptyGarage()), [COPY]: JSON.stringify(richGarage()) });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(p.backups()).toEqual(['garage']);
+    expect(p.restoreBackups()).toEqual({ ok: true });
+    expect(p.garage().balance).toBe(40);
+    expect(JSON.parse(kv.get(GARAGE_KEY)!)).toMatchObject({ balance: 40 });
+    expect(kv.get(COPY)).toBeNull();
+    expect(p.backups()).toEqual([]);
+  });
+
+  it('offers progress, records and settings copies the same way, in the usual order', () => {
+    const kv = memoryKeyValue({
+      [`${PROGRESS_KEY}.unreadable`]: JSON.stringify(emptyProgress()),
+      [`${SETTINGS_KEY}.unreadable`]: JSON.stringify(defaultSettings()),
+      [`${RECORDS_KEY}.unreadable`]: JSON.stringify(emptyRecords()),
+    });
+    expect(createPersistence({ kv, storage: undefined }).backups()).toEqual(['settings', 'progress', 'records']);
+  });
+
+  it('does not offer a copy this version cannot read, nor one from a newer version', () => {
+    const kv = memoryKeyValue({ [COPY]: '{"stars":', [`${PROGRESS_KEY}.unreadable`]: JSON.stringify({ ...emptyProgress(), version: 9 }) });
+    const p = createPersistence({ kv, storage: undefined });
+    expect(p.backups()).toEqual([]);
+    expect(p.restoreBackups()).toEqual({ ok: false });
+  });
+
+  it('does not offer the copy of data that was damaged when this session loaded', () => {
+    const kv = memoryKeyValue({ [GARAGE_KEY]: '{"stars":' });
+    expect(createPersistence({ kv, storage: undefined }).backups()).toEqual([]);
+  });
+
+  it('keeps the copy and the current data when the restore cannot be saved', () => {
+    const inner = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify(emptyGarage()), [COPY]: JSON.stringify(richGarage()) });
+    const p = createPersistence({ kv: failingKeys(inner, new Set([GARAGE_KEY])), storage: undefined });
+    expect(p.restoreBackups()).toEqual({ ok: false });
+    expect(p.garage().balance).toBe(0);
+    expect(inner.get(COPY)).not.toBeNull();
+  });
+});
+
+describe('resetAll (amendment 24)', () => {
+  it('saves empty progress, records and garage together and keeps the settings', () => {
+    const settings = JSON.stringify({ ...defaultSettings(), roundLength: 7 });
+    const kv = memoryKeyValue({ [SETTINGS_KEY]: settings, [GARAGE_KEY]: JSON.stringify({ ...emptyGarage(), balance: 5, totalEarned: 9 }) });
+    const p = createPersistence({ kv, storage: undefined });
+    p.submitResult('k', { enemies: 2, ms: 1, at: 1 });
+    expect(p.resetAll()).toEqual({ ok: true });
+    expect(p.garage()).toEqual(emptyGarage());
+    expect(p.records()).toEqual(emptyRecords());
+    expect(p.progress()).toEqual(emptyProgress());
+    expect(kv.get(SETTINGS_KEY)).toBe(settings);
+  });
+
+  it('changes nothing when one of the writes fails', () => {
+    const inner = memoryKeyValue({ [GARAGE_KEY]: JSON.stringify({ ...emptyGarage(), balance: 5, totalEarned: 9 }) });
+    const p = createPersistence({ kv: failingKeys(inner, new Set([RECORDS_KEY])), storage: undefined });
+    expect(p.resetAll()).toEqual({ ok: false });
+    expect(p.garage().balance).toBe(5);
+    expect(JSON.parse(inner.get(GARAGE_KEY)!).balance).toBe(5);
+  });
+});

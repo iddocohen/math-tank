@@ -18,6 +18,8 @@
  * Amendment 14 (FR-114): a line at the end credits the ground texture and links its OpenGameArt page.
  * Amendment 15 (FR-115, FR-118): "Spielstand übertragen" shows a QR code and "Link kopieren" for the saved data of
  * this browser; the link is built again after "Speichern" and after "Daten laden".
+ * Amendment 24: when the browser holds a copy of data an earlier version could not read and this version can,
+ * a notice names it and "Kopie wiederherstellen" puts it back, then the page reloads.
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { qrMatrix, qrPath, type QrMatrix } from '../core/transfer/qr';
@@ -39,6 +41,8 @@ interface Props {
   onSaved: (settings: Settings) => void;
   onClose: () => void;
   now?: () => Date;
+  /** After "Kopie wiederherstellen" (amendment 24): the page reloads, so every screen uses the restored data. */
+  onRestored?: () => void;
 }
 
 /** The limits the parent last chose; range changes clamp from these (FR-047). */
@@ -94,7 +98,7 @@ const REVOKE_AFTER_MS = 60_000;
 /** The OpenGameArt page of the bundled dirt texture (amendment 14, FR-114). */
 const TEXTURE_PAGE = 'https://opengameart.org/node/84103';
 
-export function SettingsPage({ persistence, onSaved, onClose, now = () => new Date() }: Props) {
+export function SettingsPage({ persistence, onSaved, onClose, now = () => new Date(), onRestored = () => window.location.reload() }: Props) {
   const m = t();
   const L = m.settings.labels;
   const [draft, setDraft] = useState<Settings>(() => structuredClone(persistence.settings()));
@@ -104,6 +108,13 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   // Counts saves and imports, so the transfer link is built again from the saved data (FR-115).
   const [savedCount, setSavedCount] = useState(0);
   const status = persistence.status();
+  // Amendment 24: data kept as a copy that this version can read again.
+  const [backups] = useState(() => persistence.backups());
+  const [restoreFailed, setRestoreFailed] = useState(false);
+  const restore = () => {
+    if (persistence.restoreBackups().ok) onRestored();
+    else setRestoreFailed(true);
+  };
 
   const errors = collectErrors(draft);
   const valid = errors.size === 0;
@@ -211,6 +222,15 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           status.resetData.length > 0 && <p className="notice warn">{m.parent.storageReset(names(status.resetData))}</p>
         )}
         {status.newerData.length > 0 && <p className="notice warn">{m.parent.storageNewer(names(status.newerData))}</p>}
+        {backups.length > 0 && (
+          <div className="notice" data-testid="backup-notice">
+            <p>{m.parent.backupFound(names(backups))}</p>
+            <button type="button" className="secondary-button" onClick={restore}>
+              {m.parent.restoreBackup}
+            </button>
+          </div>
+        )}
+        {restoreFailed && <p className="notice warn">{m.parent.restoreFailed}</p>}
         {status.saveFailed && <p className="notice warn">{m.parent.saveFailedData(names(status.failedData))}</p>}
         {status.persistent === 'denied' && <p className="notice">{m.settings.persistDenied}</p>}
         {!valid && <p className="notice warn">{m.settings.checkFields}</p>}

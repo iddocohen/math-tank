@@ -14,7 +14,8 @@ import { enemyNumber, expect, LONG_PRESS_MS, openSettings, pressGear, silentPage
 import { defaultSettings } from '../../src/core/settings/defaults';
 import type { Settings } from '../../src/core/settings/schema';
 import { validateSettings, withRange } from '../../src/core/settings/validate';
-import { SETTINGS_KEY } from '../../src/core/storage/storage';
+import { GARAGE_KEY, SETTINGS_KEY } from '../../src/core/storage/storage';
+import { emptyGarage } from '../../src/core/rewards/garage';
 import { t } from '../../src/i18n';
 
 const m = t();
@@ -148,4 +149,18 @@ test.describe('parent gate (FR-045, US6 scenario 1)', () => {
     await openProgress();
     await expect(sessionAttempts).toHaveText(['1']);
   });
+});
+
+// Amendment 24: a kept copy that this version can read is offered on the settings page; restoring it reloads the page.
+test('a kept copy of the garage is restored from the settings page and the start screen shows its stars', async ({ page }) => {
+  await page.goto('/');
+  await writeStorage(page, { [`${GARAGE_KEY}.unreadable`]: { ...emptyGarage(), balance: 40, totalEarned: 40 } });
+  await page.reload();
+  await expect(page.getByTestId('star-total')).toHaveAttribute('aria-label', m.garage.stars(0));
+  await openSettings(page);
+  const notice = page.getByTestId('backup-notice');
+  await expect(notice).toContainText(m.parent.backupFound(m.parent.dataNames.garage));
+  await notice.getByRole('button', { name: m.parent.restoreBackup }).click();
+  await expect(page.getByTestId('star-total')).toHaveAttribute('aria-label', m.garage.stars(40));
+  expect(await page.evaluate((key) => window.localStorage.getItem(key), `${GARAGE_KEY}.unreadable`)).toBeNull();
 });

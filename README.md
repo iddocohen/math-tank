@@ -41,7 +41,17 @@ Mouse and touch work too: tap the ruler to choose a number, then tap **Feuer!**.
 - **Tasks:** turn on or off reading the ruler, before and after, steps, plus, minus and comparing numbers, and set their limits (largest number, crossing tens, negative results).
 - **Adaptive difficulty** (on by default) makes tasks a little harder after repeated success without help, and easier when the child struggles, never beyond your limits.
 - **Progress ("Fortschritt")** shows, per skill, how many tasks were solved alone and how many with help, which skills are mastered, and the personal bests.
-- **Back up your data:** "Daten sichern" downloads settings and progress as a file. "Daten laden" restores them. On an iPad, add the game to the Home Screen so Safari keeps the data.
+- **Back up your data:** "Daten sichern" downloads settings and progress as a file. "Daten laden" restores them. "Spielstand übertragen" moves them to another browser with a QR code or a link.
+- **Start over:** the progress page has "Fortschritt zurücksetzen" (keeps personal bests and stars), "Sterne zurücksetzen" (stars and garage only) and "Alles zurücksetzen" (progress, personal bests, stars and garage; the settings stay). Each asks first.
+
+### Keeping the child's progress
+
+The progress lives in the browser's own storage on that device, not on a server.
+
+- **Updates do not touch it.** A new version replaces only the game's files. When the save format changes, the new version converts older saves when it loads them.
+- **If a version cannot read a save,** the game keeps a copy of it before saving anything new. When a later version can read the copy, the settings page offers "Kopie wiederherstellen".
+- **iPhone and iPad:** Safari deletes the data of a website that was not opened during 7 days of Safari use ([WebKit blog](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/)). Add the game to the Home Screen (Share, then "Zum Home-Bildschirm") and play it from there: that copy counts only the days it is used itself, so a break does not delete the progress.
+- **Clearing browser data deletes the progress.** Save it first with "Daten sichern" or "Spielstand übertragen".
 
 ## Status
 
@@ -104,6 +114,8 @@ In the repository settings, Pages uses "GitHub Actions" as its source.
 The game plays with the phone upright or sideways. Sideways gives a larger battlefield. If the page does not turn when the phone turns, the portrait orientation lock is probably on: open Control Center and tap the lock icon to turn it off. A web page cannot detect or change this lock.
 
 Each browser on an iPhone keeps its own data. Clearing Safari's data does not clear Chrome's, and the reverse.
+
+Clearing a browser's data also deletes the child's progress in that browser. Updates arrive by themselves (see above), so this is rarely needed. If you do it, first save the progress with "Daten sichern" or "Spielstand übertragen" in the settings, and load it again afterwards.
 
 - Safari: Settings app, then Apps, then Safari, then "Clear History and Website Data" (older iOS: Settings, then Safari). To clear only this game: Safari, then Advanced, then Website Data, then remove `iddocohen.github.io`.
 - Chrome: in Chrome, the three dots, then "Delete browsing data", choose "All time", and tick "Cookies, site data" and "Cached images and files".

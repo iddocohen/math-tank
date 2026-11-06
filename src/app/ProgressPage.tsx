@@ -10,6 +10,8 @@
  * Amendment 11 (FR-096): the star total of the tank garage and a separate "Sterne zurücksetzen" with its own
  * confirmation, which sets the balance to 0, keeps only the basic items and equips the basic look (amendment 19: the
  * balance and the total stars ever earned show, and the total stays after the reset, FR-132).
+ * Amendment 24: "Alles zurücksetzen" asks first, then clears progress, personal bests, stars and the garage; the
+ * settings stay.
  */
 import { useMemo, useState } from 'react';
 import { formatTime } from '../core/records/records';
@@ -19,7 +21,7 @@ import { t } from '../i18n';
 import type { Persistence } from './persistence';
 
 interface Props {
-  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress' | 'garage' | 'resetStars' | 'settings'>;
+  persistence: Pick<Persistence, 'progress' | 'records' | 'saveProgress' | 'garage' | 'resetStars' | 'resetAll' | 'settings'>;
   onClose: () => void;
 }
 
@@ -36,6 +38,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
   const [done, setDone] = useState(false);
   const [garage, setGarage] = useState(() => persistence.garage());
   const [starsDone, setStarsDone] = useState(false);
+  const [allDone, setAllDone] = useState<'ok' | 'failed' | null>(null);
   const records = persistence.records();
   const settings = persistence.settings();
   const summary = useMemo(() => summarize(progress, records, settings), [progress, records, settings]);
@@ -58,6 +61,13 @@ export function ProgressPage({ persistence, onClose }: Props) {
     setStarsDone(true);
   };
 
+  const resetAll = () => {
+    const ok = persistence.resetAll().ok;
+    setProgress(persistence.progress());
+    setGarage(persistence.garage());
+    setAllDone(ok ? 'ok' : 'failed');
+  };
+
   return (
     <div className="settings-page progress-page" role="dialog" aria-modal="true" aria-label={P.title} data-testid="progress-page">
       <header className="settings-header">
@@ -72,6 +82,8 @@ export function ProgressPage({ persistence, onClose }: Props) {
       <div className="settings-notices" role="status" aria-live="polite">
         {done && <p className="notice ok">{P.resetDone}</p>}
         {starsDone && <p className="notice ok">{P.starsResetDone}</p>}
+        {allDone === 'ok' && <p className="notice ok">{P.resetAllDone}</p>}
+        {allDone === 'failed' && <p className="notice warn">{P.resetAllFailed}</p>}
       </div>
 
       <section className="settings-group">
@@ -199,6 +211,10 @@ export function ProgressPage({ persistence, onClose }: Props) {
         <p data-testid="progress-stars">{P.stars(garage.balance)}</p>
         <p data-testid="progress-stars-total">{P.starsTotal(garage.totalEarned)}</p>
         <ConfirmReset label={P.starsReset} question={P.starsResetConfirm} yes={P.starsResetYes} no={P.resetNo} onAsk={() => setStarsDone(false)} onConfirm={resetStars} />
+      </section>
+
+      <section className="settings-group">
+        <ConfirmReset label={P.resetAll} question={P.resetAllConfirm} yes={P.resetAllYes} no={P.resetNo} onAsk={() => setAllDone(null)} onConfirm={resetAll} />
       </section>
     </div>
   );

@@ -188,6 +188,11 @@ export const de = {
     storageNewer: (names: string) =>
       `Gespeicherte Daten stammen aus einer neueren Version des Spiels (${names}). Sie werden nicht überschrieben. Bitte die Seite neu laden.`,
     storageUnavailable: 'Speichern ist in diesem Browser nicht möglich.',
+    /** Amendment 24: a kept copy of data that an earlier version could not read, and this version can. */
+    backupFound: (names: string) =>
+      `Im Browser liegt eine Kopie älterer Daten (${names}). Wiederherstellen ersetzt die aktuellen Daten durch diese Kopie.`,
+    restoreBackup: 'Kopie wiederherstellen',
+    restoreFailed: 'Die Kopie konnte nicht gespeichert werden. Es wurde nichts geändert.',
     /** The four kinds of stored data, for the notices on the settings page (review H1, M3). */
     dataNames: { settings: 'Einstellungen', progress: 'Fortschritt', records: 'Rekorde', garage: 'Sterne und Garage' },
     /** Review H1: shown while the latest save of these data failed, also when it happened during play. */
@@ -249,6 +254,13 @@ export const de = {
     starsResetConfirm: 'Alle Sterne und gekauften Teile löschen? Die Garage ist dann wieder leer.',
     starsResetYes: 'Ja, Sterne zurücksetzen',
     starsResetDone: 'Die Sterne wurden zurückgesetzt.',
+    /** Amendment 24: clears progress, personal bests, stars and garage; the settings stay. */
+    resetAll: 'Alles zurücksetzen',
+    resetAllConfirm:
+      'Fortschritt, Rekorde, Sterne und Garage löschen? Die Einstellungen bleiben. Wer den Spielstand behalten will, sichert ihn vorher in den Einstellungen.',
+    resetAllYes: 'Ja, alles löschen',
+    resetAllDone: 'Alles wurde zurückgesetzt.',
+    resetAllFailed: 'Zurücksetzen hat nicht geklappt. Es wurde nichts geändert.',
   },
 
   settings: {
