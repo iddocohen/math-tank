@@ -26,6 +26,17 @@ export function unreadableKey(key: string): string {
   return `${key}.unreadable`;
 }
 
+/**
+ * The copies under `<key>.unreadable`, seen under the usual keys, so the usual loaders read them (amendment 24). A
+ * later version of the game may read a copy that an earlier one could not. Writing through this view is refused.
+ */
+export function keptCopies(kv: KeyValue): KeyValue {
+  const refuse = () => {
+    throw new Error('kept copies are read only');
+  };
+  return { get: (key) => kv.get(unreadableKey(key)), set: refuse, remove: refuse };
+}
+
 /** True when `value` carries a version number above the one this game writes. */
 function isNewer(value: unknown, current: number): boolean {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;

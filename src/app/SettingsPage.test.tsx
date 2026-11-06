@@ -9,7 +9,8 @@ import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue } from '../core/storage/keyValue';
-import { PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { GARAGE_KEY, PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
+import { emptyGarage } from '../core/rewards/garage';
 import { decodeTransfer } from '../core/transfer/transfer';
 import { t } from '../i18n';
 import { emptyRecords } from '../core/records/records';
@@ -653,4 +654,36 @@ describe('SettingsPage "Spielstand übertragen" (amendment 15, FR-115, FR-118)',
 it('shows the build version and date', () => {
   setup();
   expect(screen.getByTestId('build-version').textContent).toBe(m.settings.version(BUILD_VERSION, BUILD_DATE));
+});
+
+// Amendment 24: the parent can bring back data the game kept as a copy, once this version can read it.
+describe('restoring kept copies (amendment 24)', () => {
+  const copy = { [`${GARAGE_KEY}.unreadable`]: JSON.stringify({ ...emptyGarage(), balance: 40, totalEarned: 40 }) };
+
+  it('shows nothing without a readable copy', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: m.parent.restoreBackup })).toBeNull();
+  });
+
+  it('names the kept data and restores it with one button, then reloads', () => {
+    const kv = memoryKeyValue(copy);
+    const persistence = createPersistence({ kv, storage: undefined });
+    const onRestored = vi.fn();
+    render(<SettingsPage persistence={persistence} onSaved={vi.fn()} onClose={vi.fn()} onRestored={onRestored} />);
+    expect(screen.getByText(m.parent.backupFound(m.parent.dataNames.garage))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: m.parent.restoreBackup }));
+    expect(persistence.garage().balance).toBe(40);
+    expect(onRestored).toHaveBeenCalledOnce();
+  });
+
+  it('says so when the restore cannot be saved, and does not reload', () => {
+    const inner = memoryKeyValue(copy);
+    const kv = { ...inner, set: (key: string, value: string) => { if (key === GARAGE_KEY) throw new Error('quota'); inner.set(key, value); } };
+    const persistence = createPersistence({ kv, storage: undefined });
+    const onRestored = vi.fn();
+    render(<SettingsPage persistence={persistence} onSaved={vi.fn()} onClose={vi.fn()} onRestored={onRestored} />);
+    fireEvent.click(screen.getByRole('button', { name: m.parent.restoreBackup }));
+    expect(screen.getByText(m.parent.restoreFailed)).toBeTruthy();
+    expect(onRestored).not.toHaveBeenCalled();
+  });
 });

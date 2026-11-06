@@ -15,6 +15,7 @@ import type { Settings } from '../core/settings/schema';
 import { exportData, importData, type ImportResult } from '../core/storage/exportImport';
 import { localStorageKeyValue, type KeyValue } from '../core/storage/keyValue';
 import {
+  emptyProgress,
   GARAGE_KEY,
   loadGarage,
   loadProgress,
@@ -23,11 +24,12 @@ import {
   PROGRESS_KEY,
   RECORDS_KEY,
   SETTINGS_KEY,
+  keptCopies,
   unreadableKey,
   type ResetReason,
 } from '../core/storage/storage';
-import { addStars, buy, equip, resetStars, returnItem, type Garage } from '../core/rewards/garage';
-import { submitResult, type BestResult, type Records } from '../core/records/records';
+import { addStars, buy, emptyGarage, equip, resetStars, returnItem, type Garage } from '../core/rewards/garage';
+import { emptyRecords, submitResult, type BestResult, type Records } from '../core/records/records';
 import type { Progress } from '../core/types';
 import type { SaveData } from '../core/transfer/transfer';
 
@@ -85,6 +87,21 @@ export interface Persistence {
   equip(id: string): void;
   /** "Sterne zurücksetzen": balance 0, only the basic items and the basic look; the total ever earned stays (FR-096). */
   resetStars(): void;
+  /**
+   * Amendment 24, "Alles zurücksetzen": saves empty progress, records and garage (balance, items, look and the total
+   * ever earned), all or none; the settings stay.
+   */
+  resetAll(): { ok: boolean };
+  /**
+   * Amendment 24: the kinds of data with a copy under `<key>.unreadable` that this version of the game can read, in
+   * the order settings, progress, records, garage. Such a copy holds data an earlier version could not read.
+   */
+  backups(): DataKind[];
+  /**
+   * Amendment 24: replaces and saves the data of `backups()` with their copies, all or none, and removes the copies
+   * after a successful save. `ok: false` when there is nothing to restore or the save fails; then nothing changes.
+   */
+  restoreBackups(): { ok: boolean };
   /** Calls `persist()` at most once per instance; later calls return the first result. */
   requestPersistentStorage(): Promise<Exclude<PersistOutcome, 'notAsked'>>;
   /** "Daten sichern": the export file text for the current settings, progress, records and garage. */
@@ -212,6 +229,42 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
     return r;
   }
 
+  /** The copies under `<key>.unreadable` that this version can read (amendment 24). */
+  function readableCopies(): Partial<Values> {
+    const copies = keptCopies(kv);
+    const loaders: { [K in DataKind]: () => { value: Values[K]; resetReason: ResetReason } } = {
+      settings: () => {
+        const r = loadSettings(copies);
+        return { value: r.settings, resetReason: r.resetReason };
+      },
+      progress: () => {
+        const r = loadProgress(copies);
+        return { value: r.progress, resetReason: r.resetReason };
+      },
+      records: () => {
+        const r = loadRecords(copies);
+        return { value: r.records, resetReason: r.resetReason };
+      },
+      garage: () => {
+        const r = loadGarage(copies);
+        return { value: r.garage, resetReason: r.resetReason };
+      },
+    };
+    const found: Partial<Values> = {};
+    for (const kind of DATA_ORDER) {
+      let raw: string | null;
+      try {
+        raw = kv.get(unreadableKey(KEYS[kind]));
+      } catch {
+        continue;
+      }
+      if (raw === null) continue;
+      const r = loaders[kind]();
+      if (r.resetReason === 'none') (found as Record<DataKind, unknown>)[kind] = r.value;
+    }
+    return found;
+  }
+
   async function ask(): Promise<Exclude<PersistOutcome, 'notAsked'>> {
     if (!storage?.persist) return 'unsupported';
     try {
@@ -265,6 +318,23 @@ export function createPersistence(deps: PersistenceDeps = {}): Persistence {
     },
     resetStars() {
       saveOne('garage', resetStars(values.garage));
+    },
+    resetAll: () => save({ progress: emptyProgress(), records: emptyRecords(), garage: emptyGarage() }),
+    backups: () => DATA_ORDER.filter((kind) => readableCopies()[kind] !== undefined),
+    restoreBackups() {
+      const copies = readableCopies();
+      const kinds = DATA_ORDER.filter((kind) => copies[kind] !== undefined);
+      if (kinds.length === 0) return { ok: false };
+      const r = save(copies);
+      if (!r.ok) return r;
+      for (const kind of kinds) {
+        try {
+          kv.remove(unreadableKey(KEYS[kind]));
+        } catch {
+          // The data is restored; a copy left behind is offered again and restoring it twice changes nothing.
+        }
+      }
+      return r;
     },
     requestPersistentStorage() {
       request ??= ask().then((outcome) => {

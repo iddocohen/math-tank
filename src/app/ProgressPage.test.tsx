@@ -196,5 +196,27 @@ describe('ProgressPage stars (amendments 11 and 19, FR-040, FR-096, FR-132)', ()
     // The learning progress stays.
     expect(persistence.progress().sessions).toHaveLength(1);
   });
+
+  // Amendment 24: one button that clears progress, personal bests, stars and garage; the settings stay.
+  it('"Alles zurücksetzen" asks first, then clears progress, records, stars and the garage, and keeps the settings', () => {
+    const { persistence, kv } = setup();
+    kv.set('mathtanks.settings.v1', JSON.stringify({ ...persistence.settings(), roundLength: 7 }));
+    fireEvent.click(screen.getByRole('button', { name: P.resetAll }));
+    expect(screen.getByText(P.resetAllConfirm)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: P.resetNo }));
+    expect(persistence.garage().balance).toBe(23);
+
+    fireEvent.click(screen.getByRole('button', { name: P.resetAll }));
+    fireEvent.click(screen.getByRole('button', { name: P.resetAllYes }));
+    expect(persistence.progress()).toEqual({ version: 1, attempts: [], skills: {}, sessions: [] });
+    expect(Object.keys(persistence.records().best)).toHaveLength(0);
+    expect(persistence.garage()).toEqual(emptyGarage());
+    expect(JSON.parse(kv.get(GARAGE_KEY)!)).toEqual(emptyGarage());
+    expect(JSON.parse(kv.get(RECORDS_KEY)!).best).toEqual({});
+    expect(JSON.parse(kv.get('mathtanks.settings.v1')!).roundLength).toBe(7);
+    expect(screen.getByTestId('progress-stars').textContent).toBe(P.stars(0));
+    expect(screen.getByTestId('progress-stars-total').textContent).toBe(P.starsTotal(0));
+    expect(screen.getByText(P.resetAllDone)).toBeTruthy();
+  });
 });
 
