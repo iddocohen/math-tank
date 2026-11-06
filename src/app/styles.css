@@ -1224,6 +1224,67 @@ input:focus-visible {
   top: calc(56.25vw * 0.4);
 }
 
+/*
+ * Amendment 22: a phone held upright (narrower than 600 px) uses the portrait layout with a narrower control area.
+ * The question sits just below the battlefield at full width; below it, the pad (3 keys wide), then the readout and
+ * "Feuer!" side by side; the help button at the bottom left.
+ */
+@media (max-width: 599.98px) {
+  .battle[data-layout='portrait'][data-number-pad='true'] .controls {
+    grid-template-columns: 64px auto auto;
+    grid-template-areas:
+      'pad pad pad'
+      '. readout fire';
+    align-content: end;
+    column-gap: 12px;
+    row-gap: 10px;
+    padding-top: 52px;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .number-pad {
+    justify-self: center;
+    gap: 8px;
+    grid-template-columns: repeat(3, 76px);
+    grid-auto-rows: clamp(48px, calc((100dvh - 56.25vw - 180px) / 4), 60px);
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .pad-key {
+    font-size: 1.75rem;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .readout {
+    min-width: 96px;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .readout-value {
+    font-size: 2rem;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .fire-button {
+    min-width: 140px;
+    min-height: 56px;
+    font-size: 1.6rem;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .help-button {
+    top: auto;
+    left: max(12px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: 56px;
+    height: 56px;
+    font-size: 1.75rem;
+  }
+
+  .battle[data-layout='portrait'][data-number-pad='true'] .challenge-banner,
+  .battle[data-layout='portrait'][data-number-pad='true'] .challenge-banner.placement-center {
+    top: calc(56.25vw + 6px);
+    transform: translate(-50%, 0);
+    max-width: calc(100% - 24px);
+    padding: 4px 12px;
+    font-size: 1.3rem;
+  }
+}
+
 /* Side: the battlefield on the left, a compact pad column on the right (a phone held sideways). */
 .battle[data-layout='side'][data-number-pad='true'] {
   --controls-height: 0px;
@@ -1317,73 +1378,6 @@ input:focus-visible {
 .battle[data-layout='side'][data-number-pad='true'] .range-hint,
 .battle[data-layout='side'][data-number-pad='true'] .landed {
   font-size: 1rem;
-}
-
-/* "Bitte dreh das Handy" (FR-104): over the child's screens, below the parent menu and pages. */
-.rotate-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 24px;
-  text-align: center;
-  background: #1f2a44;
-}
-
-/*
- * Bug "iPhone rotation in Chrome" (Phase 24): the browser's own layout decides. The picture never shows on a screen held
- * sideways or at least 600 pixels wide, with the same media queries as SCREEN_QUERIES in src/core/view/screen.ts, also
- * when the app's script has not caught up with a turn yet.
- */
-@media (orientation: landscape) {
-  .rotate-screen {
-    display: none;
-  }
-}
-
-@media (min-width: 600px) {
-  .rotate-screen {
-    display: none;
-  }
-}
-
-.rotate-phone {
-  width: 160px;
-  height: 160px;
-  animation: rotate-phone 2400ms ease-in-out infinite;
-}
-
-.rotate-text {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 800;
-}
-
-@keyframes rotate-phone {
-  0%,
-  20% {
-    transform: rotate(0deg);
-  }
-
-  50%,
-  80% {
-    transform: rotate(-90deg);
-  }
-
-  100% {
-    transform: rotate(0deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rotate-phone {
-    animation: none;
-    transform: rotate(-90deg);
-  }
 }
 
 /* US8 (T140, T138, FR-054, FR-055): pause and speaker buttons at the top left, before the tank counter. */

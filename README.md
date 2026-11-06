@@ -45,7 +45,7 @@ Mouse and touch work too: tap the ruler to choose a number, then tap **Feuer!**.
 
 ## Status
 
-The first release is built. All 15 amendments made during playtesting are implemented ([amendments 01 to 15](specs/001-math-tanks/)). The game now has:
+The first release is built. All 22 amendments made during playtesting are implemented ([amendments 01 to 22](specs/001-math-tanks/)). The game now has:
 
 - Aiming by number on a fixed cannon, with any number range and 5 ruler levels.
 - Tasks: reading the ruler, before and after, steps, plus and minus with a step animation, and comparing numbers with decoy tanks.
@@ -100,6 +100,8 @@ In the repository settings, Pages uses "GitHub Actions" as its source.
 - The new version removes the files of the old one from the offline cache.
 
 ### Troubleshooting on an iPhone or iPad
+
+The game plays with the phone upright or sideways. Sideways gives a larger battlefield. If the page does not turn when the phone turns, the portrait orientation lock is probably on: open Control Center and tap the lock icon to turn it off. A web page cannot detect or change this lock.
 
 Each browser on an iPhone keeps its own data. Clearing Safari's data does not clear Chrome's, and the reverse.
 

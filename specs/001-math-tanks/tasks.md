@@ -977,6 +977,19 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24h: Amendment 22 a phone held upright plays upright
+
+**Purpose**: [Amendment 22](./amendment-22-phone-upright.md). On a real iPhone, Safari and Chrome did not turn the page (the `?debug=screen` values stayed the same), which matches the portrait orientation lock; a web page cannot detect or override it on iPhone. The picture "Bitte dreh das Handy" is removed, and a phone held upright plays in a narrow portrait layout.
+
+**Independent test**: `tests/e2e/devices.spec.ts` in the new `iphone-portrait` project (iPhone 13, 390 by 664 in WebKit with touch) plays a round with taps and finds nothing cut off or overlapping; `tests/e2e/rotation.spec.ts` turns the phone during a round (also with the Chrome-on-iOS stub) and the round goes on in the portrait and side layouts without a pause.
+
+- [X] T395 [US8] Remove the layout `rotate`, `PHONE_WIDTH_LIMIT` and the `phoneWidth` media query (`src/core/view/screen.ts`), `src/app/RotateScreen.tsx` and its test, the pause and the gear handling for it in `src/app/App.tsx`, its CSS and the text `rotate.turnPhone`; add the narrow portrait layout below 600 pixels to `src/app/styles.css`; add the Playwright project `iphone-portrait`; update `src/core/view/screen.test.ts`, `src/app/useScreen.test.ts`, `src/app/useAutoPause.test.ts`, `tests/e2e/devices.spec.ts`, `tests/e2e/rotation.spec.ts` and `tests/e2e/fire.spec.ts`; README troubleshooting note on the orientation lock (FR-104)
+  - T395 note: the new `iphone-portrait` device test failed before the narrow layout ("fire inside 390 by 664": the fire key started at x -81) and passes after it. The tests changed here were updated together with the code, not written first.
+
+**Checkpoint**: A phone plays upright and sideways; nothing asks the child to turn the phone.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies

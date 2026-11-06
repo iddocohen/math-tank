@@ -3,10 +3,12 @@
  * viewport size in CSS pixels and whether the main pointer is fine (mouse or trackpad).
  *
  * - `wide`: wider than tall and more than SIDE_HEIGHT_LIMIT tall: an iPad held sideways or a desktop.
- * - `portrait`: taller than wide (or square) and at least PHONE_WIDTH_LIMIT wide: an iPad held upright.
+ * - `portrait`: taller than wide (or square): an iPad or a phone held upright.
  * - `side`: wider than tall and at most SIDE_HEIGHT_LIMIT tall: a phone held sideways.
- * - `rotate`: taller than wide (or square) and narrower than PHONE_WIDTH_LIMIT: a phone held upright ("Bitte dreh das
- *   Handy").
+ *
+ * Amendment 22: a phone held upright plays in the `portrait` layout. It used to show "Bitte dreh das Handy" and wait
+ * for a turn, but with the iPhone's portrait orientation lock on, Safari and Chrome never turn the page, and a web
+ * page can neither detect the lock nor turn the page itself (iOS has no `screen.orientation.lock`).
  *
  * Bug "iPhone rotation in Chrome" (Phase 24): the app decides with the CSS media queries of SCREEN_QUERIES, not with
  * `window.innerWidth` and `window.innerHeight`, because Chrome on iOS can report the size from before a turn and send
@@ -14,13 +16,11 @@
  */
 import type { Settings } from '../settings/schema';
 
-export type ScreenLayout = 'wide' | 'portrait' | 'side' | 'rotate';
+export type ScreenLayout = 'wide' | 'portrait' | 'side';
 export type NumberPadSetting = Settings['numberPad'];
 
 /** Below this width the number pad shows with the setting "Automatisch" (FR-102). */
 export const PAD_WIDTH_LIMIT = 1100;
-/** A screen held upright and narrower than this is a phone held upright (FR-104). */
-export const PHONE_WIDTH_LIMIT = 600;
 /** A screen held sideways and at most this tall is a phone held sideways (FR-104). */
 export const SIDE_HEIGHT_LIMIT = 500;
 
@@ -30,8 +30,6 @@ export const SIDE_HEIGHT_LIMIT = 500;
 export interface ScreenMedia {
   /** Taller than wide, or square. */
   portrait: boolean;
-  /** Narrower than PHONE_WIDTH_LIMIT. */
-  phoneWidth: boolean;
   /** At most SIDE_HEIGHT_LIMIT tall. */
   sideHeight: boolean;
   /** Narrower than PAD_WIDTH_LIMIT. */
@@ -42,20 +40,18 @@ export interface ScreenMedia {
 
 /**
  * The CSS media queries for ScreenMedia. "Narrower than" ends 0.02 px below the limit, so a width with a fraction of a
- * pixel (zoom) still counts. src/app/styles.css shows the rotate picture with the same `portrait` and `phoneWidth`
- * queries.
+ * pixel (zoom) still counts.
  */
 export const SCREEN_QUERIES: Readonly<Record<keyof ScreenMedia, string>> = {
   portrait: '(orientation: portrait)',
-  phoneWidth: `(max-width: ${PHONE_WIDTH_LIMIT - 0.02}px)`,
   sideHeight: `(max-height: ${SIDE_HEIGHT_LIMIT}px)`,
   padWidth: `(max-width: ${PAD_WIDTH_LIMIT - 0.02}px)`,
   finePointer: '(pointer: fine)',
 };
 
 /** The layout from the media query results. */
-export function layoutFromMedia(media: Pick<ScreenMedia, 'portrait' | 'phoneWidth' | 'sideHeight'>): ScreenLayout {
-  if (media.portrait) return media.phoneWidth ? 'rotate' : 'portrait';
+export function layoutFromMedia(media: Pick<ScreenMedia, 'portrait' | 'sideHeight'>): ScreenLayout {
+  if (media.portrait) return 'portrait';
   return media.sideHeight ? 'side' : 'wide';
 }
 
@@ -63,7 +59,6 @@ export function layoutFromMedia(media: Pick<ScreenMedia, 'portrait' | 'phoneWidt
 export function mediaFromSize(width: number, height: number, finePointer: boolean): ScreenMedia {
   return {
     portrait: height >= width,
-    phoneWidth: width < PHONE_WIDTH_LIMIT,
     sideHeight: height <= SIDE_HEIGHT_LIMIT,
     padWidth: width < PAD_WIDTH_LIMIT,
     finePointer,

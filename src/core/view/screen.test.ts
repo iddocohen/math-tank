@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutFromMedia, mediaFromSize, numberPadShown, PAD_WIDTH_LIMIT, PHONE_WIDTH_LIMIT, SCREEN_QUERIES, screenLayout, SIDE_HEIGHT_LIMIT } from './screen';
+import { layoutFromMedia, mediaFromSize, numberPadShown, PAD_WIDTH_LIMIT, SCREEN_QUERIES, screenLayout, SIDE_HEIGHT_LIMIT } from './screen';
 
 // Amendment 12 (FR-102, FR-104): the battle layout from the screen size, and when the number pad shows.
 describe('screenLayout', () => {
@@ -33,32 +33,31 @@ describe('screenLayout', () => {
     [390, 844],
     [430, 932],
     [375, 667],
-  ])('%i by %i is rotate (phone held upright)', (w, h) => {
-    expect(screenLayout(w, h)).toBe('rotate');
+  ])('%i by %i is portrait (phone held upright, amendment 22)', (w, h) => {
+    expect(screenLayout(w, h)).toBe('portrait');
   });
 
   it('counts a square screen as upright, as the CSS media feature orientation does (bug: iPhone rotation in Chrome)', () => {
     expect(screenLayout(800, 800)).toBe('portrait');
-    expect(screenLayout(450, 450)).toBe('rotate');
+    expect(screenLayout(450, 450)).toBe('portrait');
   });
 
   it('uses the limits of data-model.md', () => {
     expect(PAD_WIDTH_LIMIT).toBe(1100);
-    expect(PHONE_WIDTH_LIMIT).toBe(600);
     expect(SIDE_HEIGHT_LIMIT).toBe(500);
     expect(screenLayout(1000, SIDE_HEIGHT_LIMIT)).toBe('side');
     expect(screenLayout(1000, SIDE_HEIGHT_LIMIT + 1)).toBe('wide');
-    expect(screenLayout(PHONE_WIDTH_LIMIT - 1, 900)).toBe('rotate');
+    expect(screenLayout(599, 900)).toBe('portrait');
   });
 });
 
 // Bug "iPhone rotation in Chrome" (Phase 24): the layout follows the CSS media queries, not innerWidth and innerHeight.
 describe('layoutFromMedia', () => {
-  it('upright and narrow is rotate, upright and wide is portrait, sideways and low is side, otherwise wide', () => {
-    expect(layoutFromMedia({ portrait: true, phoneWidth: true, sideHeight: false })).toBe('rotate');
-    expect(layoutFromMedia({ portrait: true, phoneWidth: false, sideHeight: false })).toBe('portrait');
-    expect(layoutFromMedia({ portrait: false, phoneWidth: false, sideHeight: true })).toBe('side');
-    expect(layoutFromMedia({ portrait: false, phoneWidth: false, sideHeight: false })).toBe('wide');
+  it('upright is portrait, sideways and low is side, otherwise wide', () => {
+    expect(layoutFromMedia({ portrait: true, sideHeight: false })).toBe('portrait');
+    expect(layoutFromMedia({ portrait: true, sideHeight: true })).toBe('portrait');
+    expect(layoutFromMedia({ portrait: false, sideHeight: true })).toBe('side');
+    expect(layoutFromMedia({ portrait: false, sideHeight: false })).toBe('wide');
   });
 
   it('gives the same layout as the size rule for every example size', () => {
@@ -70,7 +69,6 @@ describe('layoutFromMedia', () => {
   it('uses media queries at the limits of data-model.md', () => {
     expect(SCREEN_QUERIES).toEqual({
       portrait: '(orientation: portrait)',
-      phoneWidth: '(max-width: 599.98px)',
       sideHeight: '(max-height: 500px)',
       padWidth: '(max-width: 1099.98px)',
       finePointer: '(pointer: fine)',

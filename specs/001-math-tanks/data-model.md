@@ -292,12 +292,12 @@ type TransferV2 = [
 
 `src/core/view/screen.ts`, pure, no DOM:
 
-- `ScreenLayout = 'wide' | 'portrait' | 'side' | 'rotate'` (FR-104).
-- `ScreenMedia { portrait, phoneWidth, sideHeight, padWidth, finePointer }`: the results of the CSS media queries `SCREEN_QUERIES` = `(orientation: portrait)`, `(max-width: 599.98px)`, `(max-height: 500px)`, `(max-width: 1099.98px)`, `(pointer: fine)`.
-- `layoutFromMedia(media): ScreenLayout`: `'rotate'` when `portrait` and `phoneWidth`; `'portrait'` when `portrait` otherwise; `'side'` when `sideHeight`; else `'wide'`.
+- `ScreenLayout = 'wide' | 'portrait' | 'side'` (FR-104; `'rotate'` removed by [amendment 22](./amendment-22-phone-upright.md)).
+- `ScreenMedia { portrait, sideHeight, padWidth, finePointer }`: the results of the CSS media queries `SCREEN_QUERIES` = `(orientation: portrait)`, `(max-height: 500px)`, `(max-width: 1099.98px)`, `(pointer: fine)`.
+- `layoutFromMedia(media): ScreenLayout`: `'portrait'` when `portrait`; `'side'` when `sideHeight`; else `'wide'`.
 - `mediaFromSize(width, height, finePointer)`: the same results from a size (`portrait` is `height >= width`, as in CSS); `screenLayout(width, height)` is `layoutFromMedia(mediaFromSize(...))`. A square screen counts as upright (changed by the Phase 24 bug "iPhone rotation in Chrome"; before, it counted as sideways).
 - `numberPadShown(setting, { finePointer, padWidth }): boolean` (FR-102): `'always'` gives `true`, `'never'` gives `false`, `'auto'` gives `true` when `finePointer` is `false` or `padWidth` is `true`.
-- Constants `PAD_WIDTH_LIMIT = 1100`, `PHONE_WIDTH_LIMIT = 600`, `SIDE_HEIGHT_LIMIT = 500`.
+- Constants `PAD_WIDTH_LIMIT = 1100`, `SIDE_HEIGHT_LIMIT = 500`.
 
 The app (`src/app/useScreen.ts`) reads `SCREEN_QUERIES` with `matchMedia` and updates on their `change` events, and as a backup on `resize`, `orientationchange`, `visualViewport` resize, `pageshow` and `visibilitychange` and after short waits. Only without `matchMedia` does it read `window.innerWidth` and `window.innerHeight` (and counts the pointer as fine). `src/app/styles.css` hides the rotate picture with the same media queries.
 

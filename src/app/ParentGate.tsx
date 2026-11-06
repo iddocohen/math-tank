@@ -18,9 +18,7 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 interface Props {
   /**
-   * Whether the menu shows, when the app keeps that state (review R1): the app shows one gear at a time (on the
-   * rotate picture or on the screen below it), so a menu opened on one gear stays open when the phone turns. Without
-   * it, the gate keeps its own state.
+   * Whether the menu shows, when the app keeps that state (review R1). Without it, the gate keeps its own state.
    */
   open?: boolean;
   onOpen: () => void;

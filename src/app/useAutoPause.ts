@@ -1,7 +1,7 @@
 /**
  * Pauses a running round while it cannot be played, and resumes only what it paused (FR-045, FR-084, FR-104, FR-119;
- * review P3, R1, R4). The app passes one flag: true while a parent screen is open, the tab is hidden, the phone is
- * held upright or the transfer dialog shows, during a battle. One flag instead of one pause per reason means that
+ * review P3, R1, R4). The app passes one flag: true while a parent screen is open, the tab is hidden or the transfer
+ * dialog shows, during a battle. One flag instead of one pause per reason means that
  * the round resumes only when the last reason ends, whatever order they come and go in.
  *
  * The phase is a dependency, so a round that could not pause at once is paused when its phase changes. A round the

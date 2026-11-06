@@ -39,7 +39,6 @@ async function expectTouchLayout(page: Page, isLandscape: boolean): Promise<void
   const { width, height } = page.viewportSize()!;
   const expected = screenLayout(width, height);
   expect(isLandscape ? ['wide', 'side'] : ['portrait'], `layout for ${width} by ${height}`).toContain(expected);
-  await expect(page.getByTestId('rotate-screen')).toHaveCount(0);
   await expect(page.getByTestId('battle-main')).toHaveAttribute('data-layout', expected);
   await expect(page.getByTestId('battle-overlay')).toHaveAttribute('data-number-pad', 'true');
 }

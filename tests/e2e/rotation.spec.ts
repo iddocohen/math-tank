@@ -5,6 +5,9 @@
  * WebKit updates the size before the events, so each test runs twice: once as Playwright's WebKit behaves, and once
  * with `iosLateSize`, which keeps reporting the old size for 250 ms after every change of the window size.
  *
+ * Amendment 22: a phone held upright plays in the portrait layout (no "Bitte dreh das Handy" picture), so each turn
+ * changes the layout and the round goes on without a pause.
+ *
  * Runs in the `iphone-landscape` project only (WebKit, touch, iPhone 13). Every action is a tap.
  */
 import type { Locator, Page } from '@playwright/test';
@@ -84,8 +87,12 @@ async function turn(page: Page, size: { width: number; height: number }): Promis
   await page.setViewportSize(size);
 }
 
-async function expectSide(page: Page): Promise<void> {
-  await expect(page.getByTestId('rotate-screen')).toHaveCount(0);
+/** The battle shows the upright layout with the number pad, and the round runs. */
+async function expectUpright(page: Page): Promise<void> {
+  const main = page.getByTestId('battle-main');
+  await expect(main).toHaveAttribute('data-layout', 'portrait', { timeout: 2000 });
+  await expect(main).toHaveAttribute('data-number-pad', 'true');
+  await expect(page.getByTestId('battle-overlay')).not.toHaveAttribute('data-phase', 'paused');
 }
 
 /** The canvas lies inside the screen and to the left of the number pad (nothing cut off). */
@@ -129,28 +136,22 @@ test.describe('turning an iPhone in Chrome (size reported 3 s late, no resize ev
     await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } }, { once: true });
   });
 
-  test('the rotate picture goes when the phone turns sideways and comes back when it turns upright', async ({ page }) => {
+  test('the layout follows each turn and the round goes on', async ({ page }) => {
     await turn(page, PORTRAIT);
     await page.goto('/?seed=5');
-    const rotate = page.getByTestId('rotate-screen');
-    await expect(rotate).toBeVisible();
+    await startButton(page).tap();
+    const overlay = page.getByTestId('battle-overlay');
+    await expectUpright(page);
+    await fireWithPad(page, overlay);
 
     // Within the 3 seconds in which the old size is still reported.
     await turn(page, LANDSCAPE);
-    await expect(rotate).toBeHidden({ timeout: 2000 });
-    await startButton(page).tap();
-    const overlay = page.getByTestId('battle-overlay');
-    await expect(overlay).toHaveAttribute('data-phase', 'challenge');
     await expect(page.getByTestId('battle-main')).toHaveAttribute('data-layout', 'side', { timeout: 2000 });
+    await expectBattleFits(page);
+    await fireWithPad(page, overlay);
 
     await turn(page, PORTRAIT);
-    await expect(rotate).toBeVisible({ timeout: 2000 });
-    await expect(overlay).toHaveAttribute('data-phase', 'paused', { timeout: 2000 });
-
-    await turn(page, LANDSCAPE);
-    await expect(rotate).toBeHidden({ timeout: 2000 });
-    await expect(overlay).not.toHaveAttribute('data-phase', 'paused', { timeout: 2000 });
-    await expectBattleFits(page);
+    await expectUpright(page);
     await fireWithPad(page, overlay);
   });
 });
@@ -166,60 +167,46 @@ for (const ios of [false, true]) {
       await seedStorage(page, { [SETTINGS_KEY]: { ...defaultSettings(), noDamage: true, challengeTypes: { ...defaultSettings().challengeTypes, comparison: false } } }, { once: true });
     });
 
-    test('load upright, turn sideways, play a shot with the number pad, turn upright and sideways again', async ({ page }) => {
+    test('load upright and play, turn sideways and play, turn upright and play', async ({ page }) => {
       await turn(page, PORTRAIT);
       await page.goto('/?seed=5');
-      const rotate = page.getByTestId('rotate-screen');
-      await expect(rotate).toBeVisible();
-
-      await turn(page, LANDSCAPE);
-      await expectSide(page);
       await startButton(page).tap();
       const overlay = page.getByTestId('battle-overlay');
+      await expectUpright(page);
+      await fireWithPad(page, overlay);
+
+      await turn(page, LANDSCAPE);
       await expectBattleFits(page);
       await fireWithPad(page, overlay);
 
       await turn(page, PORTRAIT);
-      await expect(rotate).toBeVisible();
-      await expect(overlay).toHaveAttribute('data-phase', 'paused');
-
-      await turn(page, LANDSCAPE);
-      await expectSide(page);
-      await expect(overlay).not.toHaveAttribute('data-phase', 'paused');
-      await expectBattleFits(page);
+      await expectUpright(page);
       await fireWithPad(page, overlay);
     });
 
-    test('the parent menu opened on the rotate picture stays open and the round stays paused after turning sideways (review R1)', async ({ page }) => {
+    test('the parent menu opened sideways stays open and the round stays paused after turning upright', async ({ page }) => {
       await turn(page, LANDSCAPE);
       await page.goto('/?seed=5');
       await startButton(page).tap();
       const overlay = page.getByTestId('battle-overlay');
       await expect(overlay).toHaveAttribute('data-phase', 'challenge');
-
-      await turn(page, PORTRAIT);
-      const rotate = page.getByTestId('rotate-screen');
-      await expect(rotate).toBeVisible();
-      const gear = rotate.getByTestId('parent-gate');
-      await touchHold(gear);
+      await touchHold(page.getByTestId('parent-gate'));
       const menu = page.getByRole('dialog', { name: m.parent.menu });
       await expect(menu).toBeVisible();
 
-      await turn(page, LANDSCAPE);
-      await expectSide(page);
+      await turn(page, PORTRAIT);
       await expect(menu).toBeVisible();
       await expect(overlay).toHaveAttribute('data-phase', 'paused');
       await menu.getByRole('button', { name: m.parent.close }).tap();
       await expect(menu).toHaveCount(0);
-      await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+      await expectUpright(page);
       await fireWithPad(page, overlay);
     });
 
-    test('load sideways: the game shows without the rotate picture', async ({ page }) => {
+    test('load sideways: the battle shows in the side layout', async ({ page }) => {
       await turn(page, LANDSCAPE);
       await page.goto('/?seed=5');
       await expect(startButton(page)).toBeVisible();
-      await expectSide(page);
       await startButton(page).tap();
       await expectBattleFits(page);
     });

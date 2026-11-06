@@ -1,7 +1,7 @@
 /**
  * Amendment 12 (FR-050, FR-053, FR-058, FR-102 to FR-105, US8 scenarios 2, 5, 11 and 12, T278): the game on an iPad
- * held sideways (1024 by 768) and upright (768 by 1024) and on a phone held sideways (844 by 390), in WebKit with
- * touch, and the "Bitte dreh das Handy" picture on a phone held upright (390 by 844).
+ * held sideways (1024 by 768) and upright (768 by 1024) and on a phone held sideways (844 by 390) and upright (390 by
+ * 844, amendment 22), in WebKit with touch.
  *
  * Runs only in the device projects of playwright.config.ts. Every action is a tap (or, for the parent gate, a touch
  * pointer held for 2 seconds); no keyboard call is made. The canvas is scaled with Phaser Scale FIT, so the whole world
@@ -21,6 +21,7 @@ const EXPECTED_LAYOUT: Record<string, string> = {
   'ipad-landscape': 'wide',
   'ipad-portrait': 'portrait',
   'iphone-landscape': 'side',
+  'iphone-portrait': 'portrait',
 };
 
 async function screenshot(page: Page, name: string): Promise<void> {
@@ -107,30 +108,18 @@ test('the parent gate opens by touch and the settings page fits the screen', asy
   await expectNoScroll(page);
 });
 
-test('a phone held upright shows "Bitte dreh das Handy" and pauses; the settings work; turning back continues', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'iphone-landscape', 'the rotate check runs on the phone only');
+test('a phone turned upright during a round keeps playing in the portrait layout (amendment 22)', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-landscape', 'the turn check runs on the phone only');
   const overlay = await startBattle(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  const rotate = page.getByTestId('rotate-screen');
-  await expect(rotate).toBeVisible();
-  await expect(rotate).toContainText(m.rotate.turnPhone);
-  await expect(overlay).toHaveAttribute('data-phase', 'paused');
-  await page.waitForTimeout(400);
-  await screenshot(page, 'rotate-iphone-portrait');
+  const main = page.getByTestId('battle-main');
+  await expect(main).toHaveAttribute('data-layout', 'portrait');
+  await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expectBattleFits(page);
   await expectNoScroll(page);
 
-  // The parent can still open the settings upright (FR-104).
-  await touchHold(rotate.getByTestId('parent-gate'));
-  await page.getByRole('dialog', { name: m.parent.menu }).getByRole('button', { name: m.parent.settings }).tap();
-  const settings = page.getByTestId('settings-page');
-  await expect(settings).toBeVisible();
-  await expectNoSideScroll(settings);
-  await screenshot(page, 'settings-iphone-portrait');
-  await settings.getByRole('button', { name: m.parent.close }).first().tap();
-  await expect(settings).toHaveCount(0);
-  await expect(overlay).toHaveAttribute('data-phase', 'paused');
-
   await page.setViewportSize({ width: 844, height: 390 });
-  await expect(rotate).toHaveCount(0);
+  await expect(main).toHaveAttribute('data-layout', 'side');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
+  await expectBattleFits(page);
 });

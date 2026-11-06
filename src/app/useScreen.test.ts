@@ -16,9 +16,9 @@ type Listener = (event: { matches: boolean }) => void;
 const listeners = new Map<string, Set<Listener>>();
 let media: ScreenMedia;
 
-const UPRIGHT_PHONE: ScreenMedia = { portrait: true, phoneWidth: true, sideHeight: false, padWidth: true, finePointer: false };
-const SIDEWAYS_PHONE: ScreenMedia = { portrait: false, phoneWidth: false, sideHeight: true, padWidth: true, finePointer: false };
-const DESKTOP: ScreenMedia = { portrait: false, phoneWidth: false, sideHeight: false, padWidth: false, finePointer: true };
+const UPRIGHT_PHONE: ScreenMedia = { portrait: true, sideHeight: false, padWidth: true, finePointer: false };
+const SIDEWAYS_PHONE: ScreenMedia = { portrait: false, sideHeight: true, padWidth: true, finePointer: false };
+const DESKTOP: ScreenMedia = { portrait: false, sideHeight: false, padWidth: false, finePointer: true };
 
 function setSize(width: number, height: number): void {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
@@ -74,7 +74,7 @@ afterEach(() => {
 describe('useScreen (bug: iPhone rotation in Chrome)', () => {
   it('follows a turn reported only by the media queries, while innerWidth and innerHeight keep the old size', () => {
     const { result } = renderHook(() => useScreen('auto'));
-    expect(result.current.layout).toBe('rotate');
+    expect(result.current.layout).toBe('portrait');
 
     // The phone turns sideways: no resize event, the window size stays 390 by 844, only the media queries change.
     act(() => setMedia(SIDEWAYS_PHONE));
@@ -83,7 +83,7 @@ describe('useScreen (bug: iPhone rotation in Chrome)', () => {
     expect(result.current.lastEvent).toBe('media (orientation: portrait)');
 
     act(() => setMedia(UPRIGHT_PHONE));
-    expect(result.current.layout).toBe('rotate');
+    expect(result.current.layout).toBe('portrait');
   });
 
   it('reads the media queries on mounting, not the window size', () => {
@@ -105,7 +105,7 @@ describe('useScreen (bug: iPhone rotation in Chrome)', () => {
     act(() => {
       vi.advanceTimersByTime(1500);
     });
-    expect(result.current.layout).toBe('rotate');
+    expect(result.current.layout).toBe('portrait');
     expect(result.current.lastEvent).toBe('orientationchange');
   });
 
@@ -120,7 +120,7 @@ describe('useScreen (bug: iPhone rotation in Chrome)', () => {
     act(() => {
       window.dispatchEvent(new Event('pageshow'));
     });
-    expect(result.current.layout).toBe('rotate');
+    expect(result.current.layout).toBe('portrait');
   });
 
   it('shows the number pad from the pointer and width media queries (FR-102)', () => {

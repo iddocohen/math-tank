@@ -3,8 +3,8 @@
  * SCREEN_QUERIES (src/core/view/screen.ts) and the parent's "Zahlenfeld" setting. The rule itself is pure, in
  * src/core/view/screen.ts.
  *
- * Bug "iPhone rotation in Chrome" (Phase 24): on an iPhone in Chrome the "Bitte dreh das Handy" picture stayed when the
- * phone was held sideways. Chrome on iOS can keep reporting `window.innerWidth` and `window.innerHeight` from before a
+ * Bug "iPhone rotation in Chrome" (Phase 24): on an iPhone in Chrome the layout stayed upright when the phone was held
+ * sideways. Chrome on iOS can keep reporting `window.innerWidth` and `window.innerHeight` from before a
  * turn, and send no `resize` or `orientationchange` afterwards, so a comparison of the window width and height kept
  * the upright layout. The media queries follow the browser's own layout, and their `change` events fire on every turn,
  * so the hook reads them (`matchMedia`) and listens to their `change` events. The window size is read only when no

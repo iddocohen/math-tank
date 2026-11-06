@@ -65,7 +65,7 @@ export default defineConfig({
     { name: 'chromium', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Chrome'], launchOptions: { args: ['--mute-audio'] } } },
     { name: 'webkit', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Safari'] } },
     { name: 'firefox', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'media.volume_scale': '0.0' } } } },
-    // Amendment 12 (T278): iPad held sideways and upright, and a phone held sideways, in WebKit with touch. They run
+    // Amendment 12 (T278): iPad and a phone, each held sideways and upright, in WebKit with touch. They run
     // only the device specs, which keeps the e2e run short.
     { name: 'ipad-landscape', testMatch: DEVICE_SPECS, use: { ...devices['iPad Mini landscape'] } },
     { name: 'ipad-portrait', testMatch: DEVICE_SPECS, use: { ...devices['iPad Mini'] } },
@@ -74,6 +74,8 @@ export default defineConfig({
       testMatch: DEVICE_SPECS,
       use: { ...devices['iPhone 13 landscape'], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
     },
+    // Amendment 22: a phone held upright plays in the portrait layout.
+    { name: 'iphone-portrait', testMatch: DEVICE_SPECS, use: { ...devices['iPhone 13'] } },
     // Amendment 16: Fire 7, Fire HD 8 and Fire HD 10 held sideways and upright, in Chromium with Silk's user agent and
     // touch. They run only tests/e2e/fire.spec.ts.
     ...FIRE_PROJECTS,

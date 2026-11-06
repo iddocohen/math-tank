@@ -72,7 +72,7 @@ describe('de table', () => {
   it('every child-facing text has at most about 8 words: at most 9, apart from a short allowlist (T152, FR-057)', () => {
     // Sections the child reads or hears: start screen, garage, battle (banner, feedback, range hint), phone hint,
     // challenge banner, help steps, round end and the encouraging phrases.
-    const CHILD_SECTIONS = ['start', 'garage', 'battle', 'rotate', 'challenge', 'helpSteps', 'roundEnd', 'encouragements'] as const;
+    const CHILD_SECTIONS = ['start', 'garage', 'battle', 'challenge', 'helpSteps', 'roundEnd', 'encouragements'] as const;
     const ALLOWED_LONGER: Record<string, string> = ALLOWED_LONGER_TEXTS;
     const child: Array<{ path: string; text: string }> = [];
     for (const section of CHILD_SECTIONS) collectStrings(de[section], section, child);

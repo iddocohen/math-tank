@@ -1,6 +1,6 @@
 /**
  * Pausing a running round while the game cannot be played (review P3, R1, R4; FR-045, FR-084, FR-104, FR-119): a
- * parent screen, a hidden tab, a phone held upright or the transfer dialog. The round resumes only when none of them
+ * parent screen, a hidden tab, or the transfer dialog. The round resumes only when none of them
  * is left, and only when the app paused it, never after the child's own pause.
  */
 import { act, renderHook } from '@testing-library/react';
@@ -34,7 +34,6 @@ function fakeController(phase = 'challenge') {
 interface Reasons {
   gate?: boolean;
   hidden?: boolean;
-  rotate?: boolean;
   transfer?: boolean;
 }
 
@@ -73,16 +72,6 @@ describe('useAutoPause', () => {
     set({ gate: false });
     expect(c.phase).toBe('challenge');
     expect(c.pauses).toBe(1);
-  });
-
-  it('turning the phone sideways while the parent menu is open keeps the round paused (review R1)', () => {
-    const { c, set } = setup();
-    set({ rotate: true });
-    set({ gate: true });
-    set({ rotate: false });
-    expect(c.phase).toBe('paused');
-    set({ gate: false });
-    expect(c.phase).toBe('challenge');
   });
 
   it('the transfer dialog pauses the round and closing it resumes it (review R4)', () => {

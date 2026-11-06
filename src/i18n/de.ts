@@ -114,11 +114,6 @@ export const de = {
     minus: 'Minus',
   },
 
-  /** Amendment 12 (FR-104): a phone held upright. */
-  rotate: {
-    turnPhone: 'Bitte dreh das Handy',
-  },
-
   /** Challenge banner (T069, FR-056, FR-057): at most about 8 words each. */
   challenge: {
     findNumber: (n: number) => `Finde ${n}`,

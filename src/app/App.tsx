@@ -28,9 +28,8 @@
  * of the round, the balance and, from `newlyAffordable`, at most one item the balance reached during the round.
  *
  * Amendment 12 (FR-102, FR-104): useScreen picks the battle layout (`data-layout` on the battle: wide, portrait or
- * side) and whether the number pad shows (`data-number-pad`). A phone held upright shows RotateScreen over the start
- * screen, the garage and the battle, with the gear on it; while it shows, keys do nothing and a running round is
- * paused, and turning the phone sideways resumes only what it paused. The settings and progress pages open over it.
+ * side) and whether the number pad shows (`data-number-pad`). Amendment 22: a phone held upright plays in the portrait
+ * layout; the "Bitte dreh das Handy" picture is gone.
  *
  * US8 (T138, T139, T141, T142, FR-051a, FR-054, FR-055, FR-009): the "Spielen" tap or the starting Enter resumes Web
  * Audio and, with "Vorlesen" on, primes speech with a short greeting; each new challenge is then spoken, and the
@@ -44,9 +43,8 @@
  * While the dialog shows, keys do nothing in the game and a running round is paused (review R4). When storing the save
  * fails, the dialog says so and the fragment stays (review M1).
  *
- * Review fixes: useAutoPause holds every pause the app makes (parent screens, hidden tab, phone upright, transfer
- * dialog) in one flag, and the app keeps the parent menu's state, so turning the phone with the menu open keeps it
- * open (R1). A waiting service worker update reloads only on the start screen with nothing open over it (R2).
+ * Review fixes: useAutoPause holds every pause the app makes (parent screens, hidden tab, transfer dialog) in one
+ * flag. A waiting service worker update reloads only on the start screen with nothing open over it (R2).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSfx } from '../audio/sfx';
@@ -71,7 +69,6 @@ import { Garage } from './Garage';
 import { newlyAffordable, newlyDestroyed } from '../core/rewards/garage';
 import { STANDARD_LOOK } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
-import { RotateScreen } from './RotateScreen';
 import { debugScreenRequested, ScreenDebug } from './ScreenDebug';
 import { useScreen } from './useScreen';
 import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
@@ -145,8 +142,6 @@ export function App() {
   const { layout, numberPad, lastEvent } = useScreen(persistence.settings().numberPad, screen === 'battle' && MODE_TRAITS[state.mode].forcesPad);
   // Bug "iPhone rotation in Chrome" (Phase 24): `?debug=screen` shows what the app measured.
   const [debugScreen] = useState(() => debugScreenRequested(window.location.search));
-  // The picture shows over the child's screens; the settings and progress pages open over it (FR-104).
-  const rotate = layout === 'rotate' && parent !== 'settings' && parent !== 'progress';
 
   useEffect(() => sfx.installUnlock(document), [sfx]);
 
@@ -176,10 +171,9 @@ export function App() {
   }, [screen, controller, sfx, persistence]);
 
   // A running round pauses while a parent screen or the transfer dialog is open, the tab is hidden (the time stops,
-  // FR-084) or the phone is held upright (FR-104), and resumes only when none of them is left (review P3, R1, R4).
+  // FR-084), and resumes only when none of them is left (review P3, R4).
   const hidden = useDocumentHidden();
-  const upright = layout === 'rotate';
-  useAutoPause(controller, state.phase, screen === 'battle' && (parent !== 'closed' || hidden || upright || transfer !== null));
+  useAutoPause(controller, state.phase, screen === 'battle' && (parent !== 'closed' || hidden || transfer !== null));
 
   // Compare a finished round with the personal best once (FR-086).
   const roundOverSeed = state.phase === 'roundOver' && state.outcome !== null ? state.seed : null;
@@ -322,8 +316,6 @@ export function App() {
     // An import or "Sterne zurücksetzen" may have changed the stars and the look (amendments 11 and 19).
     setGarage(persistence.garage());
   }, [persistence]);
-  // One gear shows at a time: on the rotate picture while it shows, otherwise on the screen below. The app keeps the
-  // menu's state, so a menu opened on the rotate picture stays open after the phone turns sideways (review R1).
   const gear = (
     <ParentGate
       open={parent === 'menu'}
@@ -333,10 +325,9 @@ export function App() {
       onProgress={() => setParent('progress')}
     />
   );
-  const screenGear = rotate ? undefined : gear;
 
   // While a parent screen is open, keys do nothing in the game (FR-045, T115).
-  const keyScreen = parent === 'closed' && !rotate && transfer === null ? keyScreenFor(screen, state.phase) : null;
+  const keyScreen = parent === 'closed' && transfer === null ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
       if (action.type === 'start') play(action.mode ?? keyStartMode(window.location.search, offeredModes(persistence.settings().playModes)));
@@ -371,7 +362,7 @@ export function App() {
         <StartScreen
           onPlay={play}
           modes={modes}
-          gear={screenGear}
+          gear={gear}
           garage={garageOn ? garage : null}
           onGarage={() => setScreen('garage')}
           saveFailed={persistence.status().saveFailed}
@@ -379,12 +370,12 @@ export function App() {
       ) : screen === 'garage' ? (
         <Garage garage={garage} onEquip={equip} onBuy={buy} onReturn={returnItem} onBack={() => setScreen('start')} />
       ) : (
-        <main className="battle" data-testid="battle-main" data-layout={layout === 'rotate' ? 'portrait' : layout} data-number-pad={numberPad}>
+        <main className="battle" data-testid="battle-main" data-layout={layout} data-number-pad={numberPad}>
           <div className="game-parent" ref={gameParent} />
           <BattleOverlay
             controller={controller}
             state={state}
-            gear={screenGear}
+            gear={gear}
             numberPad={numberPad}
             onSpeak={speech && speaker.available ? speakChallenge : undefined}
           />
@@ -409,7 +400,6 @@ export function App() {
           )}
         </main>
       )}
-      {rotate && <RotateScreen gear={gear} />}
       {debugScreen && <ScreenDebug layout={layout} lastEvent={lastEvent} />}
       {parent === 'settings' && (
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
