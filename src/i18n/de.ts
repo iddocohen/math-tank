@@ -80,6 +80,8 @@ export const de = {
     resume: 'Weiterspielen',
     /** FR-055: the speaker button that reads the current challenge aloud again. */
     speak: 'Aufgabe vorlesen',
+    /** Amendment 23: the icon beside the gear that opens the garage over the battle. */
+    garage: 'Garage',
     yourNumber: 'Deine Zahl',
     yourTurn: 'Du bist dran.',
     enemyTurn: 'Der Gegner ist dran.',

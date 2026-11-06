@@ -783,3 +783,52 @@ describe('BattleOverlay enemy waves (amendment 21, FR-139, FR-141)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number')).toBe(String(found!.getState().enemy.position));
   });
 });
+
+describe('BattleOverlay garage icon (amendment 23)', () => {
+  const m = t();
+
+  function GarageOverlay({ controller, onGarage }: { controller: BattleController; onGarage?: () => void }) {
+    const state = useRoundState(controller);
+    return <BattleOverlay controller={controller} state={state} gear={<span data-testid="gear" />} onGarage={onGarage} />;
+  }
+
+  function start(onGarage?: () => void) {
+    let now = 1000;
+    const controller = new BattleController({
+      settings: { ...defaultSettings(), roundType: 'enemyCount', roundLength: 1 },
+      progress: memoryProgressStore(),
+      clock: () => now,
+      seed: 7,
+    });
+    controller.startRound('ruler');
+    // Answers count 1 second after the challenge appears; 2 seconds is calm.
+    now += 2000;
+    render(<GarageOverlay controller={controller} onGarage={onGarage} />);
+    return controller;
+  }
+
+  it('shows no garage icon without onGarage (the garage is off)', () => {
+    start();
+    expect(screen.queryByRole('button', { name: m.battle.garage })).toBeNull();
+  });
+
+  it('shows the garage icon beside the gear; one click opens the garage, and it never takes focus', () => {
+    const onGarage = vi.fn();
+    start(onGarage);
+    const icon = screen.getByRole('button', { name: m.battle.garage });
+    expect(icon.closest('.top-right')).toBe(screen.getByTestId('gear').closest('.top-right'));
+    expect(icon.getAttribute('tabindex')).toBe('-1');
+    fireEvent.click(icon);
+    expect(onGarage).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no garage icon once the round is over (no icon on the round end screen)', () => {
+    const controller = start(vi.fn());
+    act(() => {
+      controller.fireAt(controller.getState().enemy.position);
+      controller.shotAnimationDone();
+    });
+    expect(controller.getState().phase).toBe('roundOver');
+    expect(screen.queryByRole('button', { name: m.battle.garage })).toBeNull();
+  });
+});

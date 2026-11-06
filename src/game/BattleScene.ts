@@ -34,7 +34,7 @@
  *   keeps the last state it asked for (`pauseAsked`): a pause and a resume within one frame then end resumed
  *   (bug "iPhone rotation in Chrome", Phase 24; before, the scene stayed paused and the round hung).
  * - Amendment 11 (FR-093): `options.look` gives the child's tank its garage color, flag and hat and the child's shells
- *   their trail; the enemy and decoys keep their look. The canvas carries `data-player-look` (lookKey) for the
+ *   their trail; the enemy and decoys keep their look (amendment 23: `setLook` changes it during a round). The canvas carries `data-player-look` (lookKey) for the
  *   end-to-end tests only (D4).
  * - Amendment 13 (FR-100, FR-101): when the enemy's shell lands beside the child's tank one miss before the limit, the
  *   tank wobbles and its hearts pulse once. After a destroyed enemy the new hills fade in once the explosion is over,
@@ -108,10 +108,12 @@ const FOLD_REMOVE_MS = 800;
 export class BattleScene extends Phaser.Scene {
   private readonly controller: BattleController;
   private readonly sounds: BattleSounds | undefined;
-  private readonly look: Look;
+  private look: Look;
   private unsubscribe: (() => void) | null = null;
   private terrain!: TerrainView;
   private player!: TankView;
+  /** True between `create` and teardown, while the views exist. */
+  private drawn = false;
   private enemy!: TankView;
   /** Decoy views by tank id, for the decoys of the current comparison search (amendment 10). */
   private readonly decoyViews = new Map<string, TankView>();
@@ -144,6 +146,18 @@ export class BattleScene extends Phaser.Scene {
     this.look = options.look ?? STANDARD_LOOK;
   }
 
+  /**
+   * Changes the child's tank and shell trail to `look` during the round (amendment 23), after the garage closes.
+   * Before `create` ran, the scene only keeps the look and draws it when it is created.
+   */
+  setLook(look: Look): void {
+    this.look = look;
+    if (!this.drawn) return;
+    this.player.setLook(look);
+    this.projectile.setPlayerTrail(look.trail);
+    this.game.canvas.dataset.playerLook = lookKey(look);
+  }
+
   /** The CC0 dirt texture (amendment 14, FR-107); when it fails to load, TerrainView uses the generated pattern. */
   preload(): void {
     if (!this.textures.exists(TEX.dirt)) this.load.image(TEX.dirt, dirtUrl);
@@ -168,6 +182,7 @@ export class BattleScene extends Phaser.Scene {
     this.prev = null;
     this.startedShot = null;
 
+    this.drawn = true;
     this.unsubscribe = this.controller.subscribe((s) => this.draw(s));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.teardown, this);
@@ -187,6 +202,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private teardown(): void {
+    this.drawn = false;
     this.unsubscribe?.();
     this.unsubscribe = null;
     for (const view of this.decoyViews.values()) view.destroy();

@@ -63,6 +63,9 @@
  * fullscreen on the app root. Both groups stay narrow, so the banner between them covers none of them (FR-104).
  * These buttons are for mouse and touch only, like "Neue Landschaft": they never take focus. While the round is
  * paused the pause screen covers the battle with "Weiterspielen"; Escape, Enter and Space resume it too (useKeyboard).
+ *
+ * Amendment 23: with `onGarage` (the garage is on) a garage icon sits beside the gear; one tap opens the garage over
+ * the battle. It never takes focus and does not show on the round end screen.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
@@ -92,6 +95,8 @@ interface Props {
   numberPad?: boolean;
   /** Reads the current challenge aloud again; the speaker button shows only when this is given (FR-055). */
   onSpeak?: () => void;
+  /** Opens the garage over the battle (amendment 23); the garage icon shows only when this is given. */
+  onGarage?: () => void;
 }
 
 /** Props of a button that never takes focus, so keys cannot press it (like "Neue Landschaft"). */
@@ -108,7 +113,7 @@ function enterFullscreen(from: HTMLElement): void {
   root.requestFullscreen().catch(() => {});
 }
 
-export function BattleOverlay({ controller, state, gear, numberPad = false, onSpeak }: Props) {
+export function BattleOverlay({ controller, state, gear, numberPad = false, onSpeak, onGarage }: Props) {
   const m = t();
   const { min, max } = controller.getRoundSettings().range;
   const choosing = acceptsInput(state.phase);
@@ -133,6 +138,8 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
   const solution = state.help.level === SOLUTION_HELP_LEVEL && state.challenge !== null && state.selection === state.challenge.answer && state.entry.typed === '' ? state.selection : null;
   useHelpTick(controller, state);
   const canFullscreen = document.fullscreenEnabled === true;
+  // Amendment 23: no garage icon on the round end screen.
+  const showGarage = onGarage !== undefined && state.phase !== 'roundOver';
 
   return (
     <div
@@ -212,8 +219,21 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
         {showClock && <Clock controller={controller} running={state.phase !== 'paused'} />}
       </div>
 
-      {(gear || canFullscreen || onSpeak) && (
+      {(gear || canFullscreen || onSpeak || showGarage) && (
         <div className="top-right">
+          {showGarage && (
+            <button
+              type="button"
+              className="icon-button garage-icon"
+              data-testid="battle-garage"
+              aria-label={m.battle.garage}
+              title={m.battle.garage}
+              {...noFocus}
+              onClick={onGarage}
+            >
+              <GarageIcon />
+            </button>
+          )}
           {gear}
           {onSpeak && (
             <button type="button" className="icon-button speaker-button" data-testid="speaker-button" aria-label={m.battle.speak} title={m.battle.speak} {...noFocus} onClick={onSpeak}>
@@ -479,5 +499,16 @@ function TensDigit({ n }: { n: number }) {
       </span>
       {digits.slice(at + 1)}
     </>
+  );
+}
+
+/** A small garage: a roof over a wide door with slats (amendment 23). */
+function GarageIcon() {
+  return (
+    <svg className="garage-icon-svg" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false">
+      <path d="M3 14 L16 4 L29 14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 13 V28 H25 V13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M10 17 H22 M10 21 H22 M10 25 H22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }

@@ -4,6 +4,8 @@ import { FIRE_BARS_HEIGHT, FIRE_DEVICES, silkUserAgent } from './tests/e2e/silk'
 
 /** Specs that run only in the device projects (amendment 12, T136, T306). */
 const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
+/** Amendment 23: the garage from the battle runs in the desktop projects and in the device projects too. */
+const DEVICE_AND_DESKTOP_SPECS = /garageBattle\.spec\.ts$/;
 /** The smoke test of the build for GitHub Pages runs only in the `base-path` project (P11, T304). */
 const BASE_PATH_SPEC = /basePath\.spec\.ts$/;
 /** The frame rate test runs alone, after every other project (T150). */
@@ -67,15 +69,15 @@ export default defineConfig({
     { name: 'firefox', testIgnore: [DEVICE_SPECS, BASE_PATH_SPEC, PERFORMANCE_SPEC, FIRE_SPEC, FIRE_PERFORMANCE_SPEC], use: { ...devices['Desktop Firefox'], launchOptions: { firefoxUserPrefs: { 'media.volume_scale': '0.0' } } } },
     // Amendment 12 (T278): iPad and a phone, each held sideways and upright, in WebKit with touch. They run
     // only the device specs, which keeps the e2e run short.
-    { name: 'ipad-landscape', testMatch: DEVICE_SPECS, use: { ...devices['iPad Mini landscape'] } },
-    { name: 'ipad-portrait', testMatch: DEVICE_SPECS, use: { ...devices['iPad Mini'] } },
+    { name: 'ipad-landscape', testMatch: [DEVICE_SPECS, DEVICE_AND_DESKTOP_SPECS], use: { ...devices['iPad Mini landscape'] } },
+    { name: 'ipad-portrait', testMatch: [DEVICE_SPECS, DEVICE_AND_DESKTOP_SPECS], use: { ...devices['iPad Mini'] } },
     {
       name: 'iphone-landscape',
-      testMatch: DEVICE_SPECS,
+      testMatch: [DEVICE_SPECS, DEVICE_AND_DESKTOP_SPECS],
       use: { ...devices['iPhone 13 landscape'], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
     },
     // Amendment 22: a phone held upright plays in the portrait layout.
-    { name: 'iphone-portrait', testMatch: DEVICE_SPECS, use: { ...devices['iPhone 13'] } },
+    { name: 'iphone-portrait', testMatch: [DEVICE_SPECS, DEVICE_AND_DESKTOP_SPECS], use: { ...devices['iPhone 13'] } },
     // Amendment 16: Fire 7, Fire HD 8 and Fire HD 10 held sideways and upright, in Chromium with Silk's user agent and
     // touch. They run only tests/e2e/fire.spec.ts.
     ...FIRE_PROJECTS,

@@ -22,7 +22,7 @@
  *
  * Amendment 11 (FR-093): the child's tank takes a `look` from the garage: its color (dark blue with stripes adds light
  * stripes on the hull), its flag and a hat on the dome, drawn from the shapes in src/core/rewards/looks.ts. The enemy
- * and decoys never take a look.
+ * and decoys never take a look. Amendment 23: `setLook` changes the look during a round, after the garage closes.
  *
  * Amendment 13 (FR-100, FR-101): `warn` wobbles the child's tank and pulses its hearts once, with no text, one miss
  * before the enemy hits. `sync` can wait before the tank settles, so it settles after the new hills faded in.
@@ -90,7 +90,9 @@ export class TankView {
   private readonly body: Phaser.GameObjects.Graphics;
   private readonly turret: Phaser.GameObjects.Graphics;
   private readonly bodyKind: 'rounded' | 'angular';
-  private readonly stripes: boolean;
+  private stripes: boolean;
+  /** The child's tank: only it takes a garage look. */
+  private readonly player: boolean;
   private wheelAngle = 0;
   private bodyColor: number;
   /** The drawn body's lines (spokes and stripes), the only shapes that change while the wheels turn. */
@@ -103,7 +105,7 @@ export class TankView {
   private readonly you: Phaser.GameObjects.Container;
   private youTimer: Phaser.Time.TimerEvent | null = null;
   private readonly style: TankStyle;
-  private readonly color: number;
+  private color: number;
   private tint: number;
   private turretAngle = 0;
   private lastY: number | null = null;
@@ -124,6 +126,7 @@ export class TankView {
   ) {
     this.style = tankStyle(kind);
     const player = kind === 'player';
+    this.player = player;
     this.color = player ? tankColor(look.color) : this.style.color;
     this.tint = this.color;
     this.bodyKind = this.style.body;
@@ -134,14 +137,9 @@ export class TankView {
     this.body = scene.add.graphics();
     this.drawTank(this.color);
     this.flag = scene.add.graphics();
-    if (player) {
-      drawShapes(this.flag, antennaShapes());
-      drawShapes(this.flag, flagShapes(look.flag));
-    } else {
-      drawFlag(this.flag, this.style.flag);
-    }
     this.hat = scene.add.graphics();
-    if (player) drawShapes(this.hat, hatShapes(look.hat));
+    if (player) this.drawLookParts(look);
+    else drawFlag(this.flag, this.style.flag);
     // Drawn around their own center, so the warning pulse grows them in place.
     this.hearts = scene.add.graphics().setY(-BAR_OFFSET + HEART_SIZE / 2);
     this.target = scene.add.graphics().setVisible(false);
@@ -154,6 +152,32 @@ export class TankView {
     this.tapZone = scene.add.zone(0, 0, TAP_W, TAP_H);
     if (onTap) this.tapZone.on('pointerdown', onTap);
     this.container = scene.add.container(0, 0, [this.mark, this.flag, this.turret, this.body, this.hat, this.target, this.hearts, this.you, this.tapZone]);
+  }
+
+  /**
+   * Changes the child's tank to `look` while the round goes on (amendment 23): its color, stripes, flag and hat. A
+   * destroyed tank keeps its dark color until the next sync. The enemy and decoys never take a look.
+   */
+  setLook(look: Look): void {
+    if (!this.player) return;
+    const dead = this.tint === DEAD_COLOR;
+    this.color = tankColor(look.color);
+    this.stripes = colorStripes(look.color);
+    this.tint = dead ? DEAD_COLOR : this.color;
+    // Draw body and turret again even when the color stays (the stripes may have changed).
+    this.bodyColor = -1;
+    this.turretColor = -1;
+    this.drawTank(this.tint);
+    this.drawLookParts(look);
+  }
+
+  /** The child's antenna with the garage flag, and the garage hat. */
+  private drawLookParts(look: Look): void {
+    this.flag.clear();
+    drawShapes(this.flag, antennaShapes());
+    drawShapes(this.flag, flagShapes(look.flag));
+    this.hat.clear();
+    drawShapes(this.hat, hatShapes(look.hat));
   }
 
   /** Comparison turns (amendment 10): a tap on the tank fires at its number; off outside comparison searches. */

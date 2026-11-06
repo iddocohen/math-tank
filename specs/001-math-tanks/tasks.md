@@ -990,6 +990,19 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24i: Amendment 23 open the garage from the battle
+
+**Purpose**: [Amendment 23](./amendment-23-garage-from-battle.md). A garage icon beside the gear in the battle opens the garage over the paused round; closing it continues the round with the chosen look.
+
+**Independent test**: `tests/e2e/garage.spec.ts` opens the garage from a running round by tap, equips a look, closes it, and the round continues with the new `data-player-look`; it runs in the desktop and device projects.
+
+- [X] T396 [US7] Write the tests first: `src/app/App` or BattleOverlay unit tests (icon only with the garage on; accessible name from `src/i18n/de.ts`), `src/app/useAutoPause.test.ts` or an App-level test (opening pauses a running round, closing resumes it, a child's own pause stays), keys do nothing in the battle while the garage is open, and `tests/e2e/garage.spec.ts` (open from a running round, equip, close, round continues, `data-player-look` changed; desktop and device projects) (amendment 23). Done: `src/app/App.test.tsx` (new, App with a stand-in game), `src/app/BattleOverlay.test.tsx` (icon, no icon after the round), and `tests/e2e/garageBattle.spec.ts` (new, runs in the desktop and the four device projects through `DEVICE_AND_DESKTOP_SPECS` in playwright.config.ts; `tests/e2e/layout.ts` checks the icon for overlaps)
+- [X] T397 [US7] Implement until T396 passes: the garage icon beside the gear in `src/app/BattleOverlay.tsx` (all layouts, `src/app/styles.css`), the garage as an overlay over the battle in `src/app/App.tsx` (battle stays mounted; pause through `useAutoPause`; keys go to the garage, not the battle), and a live look change in `src/game/BattleScene.ts`, `src/game/TankView.ts` and `src/game/ProjectileView.ts` (amendment 23). Done: `GameHandle.setLook` calls `BattleScene.setLook`, which redraws the tank (`TankView.setLook`), changes the trail (`ProjectileView.setPlayerTrail`) and sets `data-player-look`; the app calls it when the garage closes. The icon is a drawn garage (SVG) left of the gear, hidden on the round end screen
+
+**Checkpoint**: The child opens the garage from a running round and comes back to the same round.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies

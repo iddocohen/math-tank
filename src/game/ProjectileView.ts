@@ -50,7 +50,7 @@ export class ProjectileView {
   private readonly trail: Phaser.GameObjects.Graphics;
   private replay: Replay | null = null;
   private trailPath: readonly Point[] | null = null;
-  private readonly playerStyle: TrailStyle;
+  private playerStyle: TrailStyle;
   private readonly plainStyle = trailStyle('plain');
 
   constructor(
@@ -62,6 +62,11 @@ export class ProjectileView {
     this.trail = scene.add.graphics();
     this.live = scene.add.graphics();
     this.shell = scene.add.image(0, 0, TEX.shell).setVisible(false);
+  }
+
+  /** The child's trail from the garage changes during a round (amendment 23); a shell in flight keeps drawing on. */
+  setPlayerTrail(trail: TrailId): void {
+    this.playerStyle = trailStyle(trail);
   }
 
   get playing(): ShotInFlight | null {

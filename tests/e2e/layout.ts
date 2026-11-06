@@ -75,6 +75,8 @@ export async function expectBattleFits(page: Page): Promise<void> {
     // Pause and fullscreen in the battle (T140, T141); fullscreen only where the browser allows it (FR-106).
     ['pause', page.getByTestId('pause-button')],
     ...((await page.getByTestId('battle-fullscreen').count()) > 0 ? [['fullscreen', page.getByTestId('battle-fullscreen')] as [string, Locator]] : []),
+    // Amendment 23: the garage icon beside the gear, with the garage on.
+    ...((await page.getByTestId('battle-garage').count()) > 0 ? [['garage', page.getByTestId('battle-garage')] as [string, Locator]] : []),
     ...((await page.getByTestId('speaker-button').count()) > 0 ? [['speaker', page.getByTestId('speaker-button')] as [string, Locator]] : []),
     ['fire', page.locator('.fire-button')],
     ['readout', page.getByTestId('readout')],

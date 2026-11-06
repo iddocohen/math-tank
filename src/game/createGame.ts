@@ -14,13 +14,17 @@ import Phaser from 'phaser';
 import type { BattleController } from '../core/battle/controller';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../core/battle/round';
 import { BattleScene, type BattleSceneOptions } from './BattleScene';
+import type { Look } from '../core/rewards/items';
 
 export interface GameHandle {
   game: Phaser.Game;
+  /** Changes the child's tank and shell look during the round (amendment 23). */
+  setLook(look: Look): void;
   destroy(): void;
 }
 
 export function createGame(parent: HTMLElement, controller: BattleController, options: BattleSceneOptions = {}): GameHandle {
+  const scene = new BattleScene(controller, options);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -33,12 +37,13 @@ export function createGame(parent: HTMLElement, controller: BattleController, op
       width: WORLD_WIDTH,
       height: WORLD_HEIGHT,
     },
-    scene: new BattleScene(controller, options),
+    scene,
   });
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fit(game)) : null;
   observer?.observe(parent);
   return {
     game,
+    setLook: (look) => scene.setLook(look),
     destroy: () => {
       observer?.disconnect();
       game.destroy(true);

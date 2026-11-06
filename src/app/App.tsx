@@ -27,6 +27,10 @@
  * Amendment 19 (FR-094, FR-130, FR-131): the garage is a star shop (buy and return), and the end screen shows the stars
  * of the round, the balance and, from `newlyAffordable`, at most one item the balance reached during the round.
  *
+ * Amendment 23: with the garage on, a garage icon beside the gear in the battle opens the garage over the battle, which
+ * stays loaded. A running round pauses through useAutoPause while it is open, the battle's keys do nothing (the garage
+ * has its own listener), and closing it ("Zurück" or Escape) continues the round with the chosen look (`setLook`).
+ *
  * Amendment 12 (FR-102, FR-104): useScreen picks the battle layout (`data-layout` on the battle: wide, portrait or
  * side) and whether the number pad shows (`data-number-pad`). Amendment 22: a phone held upright plays in the portrait
  * layout; the "Bitte dreh das Handy" picture is gone.
@@ -67,7 +71,7 @@ import type { KeyAction, KeyScreen } from './keyboard';
 import { useRoundState } from './useController';
 import { Garage } from './Garage';
 import { newlyAffordable, newlyDestroyed } from '../core/rewards/garage';
-import { STANDARD_LOOK } from '../core/rewards/items';
+import { STANDARD_LOOK, type Look } from '../core/rewards/items';
 import { applyBattleAction, useKeyboard } from './useKeyboard';
 import { debugScreenRequested, ScreenDebug } from './ScreenDebug';
 import { useScreen } from './useScreen';
@@ -128,6 +132,10 @@ export function App() {
   const [{ controller, sfx, speaker, persistence }] = useState(createApp);
   const [screen, setScreen] = useState<Screen>('start');
   const [parent, setParent] = useState<ParentView>('closed');
+  // The garage opened from the battle, over the running round (amendment 23).
+  const [garageOpen, setGarageOpen] = useState(false);
+  const battleGarage = screen === 'battle' && garageOpen;
+  const gameHandle = useRef<GameHandle | null>(null);
   // The personal best after the latest finished round, by round seed, so each round is compared only once (FR-086).
   const [roundRecord, setRoundRecord] = useState<{ seed: number; record: RoundRecord } | null>(null);
   const state = useRoundState(controller);
@@ -152,12 +160,13 @@ export function App() {
   useEffect(() => {
     const parent = gameParent.current;
     if (screen !== 'battle' || !parent) return;
-    const look = persistence.settings().garage ? persistence.garage().look : STANDARD_LOOK;
     let handle: GameHandle | null = null;
     let left = false;
     loadGame().then(
       ({ createGame }) => {
-        if (!left) handle = createGame(parent, controller, { sounds: sfx, look });
+        if (left) return;
+        handle = createGame(parent, controller, { sounds: sfx, look: battleLook(persistence) });
+        gameHandle.current = handle;
       },
       // Without the game chunk no shell can land, so the round could never go on: back to the start screen.
       () => {
@@ -166,14 +175,16 @@ export function App() {
     );
     return () => {
       left = true;
+      if (gameHandle.current === handle) gameHandle.current = null;
       handle?.destroy();
+      setGarageOpen(false);
     };
   }, [screen, controller, sfx, persistence]);
 
   // A running round pauses while a parent screen or the transfer dialog is open, the tab is hidden (the time stops,
   // FR-084), and resumes only when none of them is left (review P3, R4).
   const hidden = useDocumentHidden();
-  useAutoPause(controller, state.phase, screen === 'battle' && (parent !== 'closed' || hidden || transfer !== null));
+  useAutoPause(controller, state.phase, screen === 'battle' && (parent !== 'closed' || hidden || transfer !== null || garageOpen));
 
   // Compare a finished round with the personal best once (FR-086).
   const roundOverSeed = state.phase === 'roundOver' && state.outcome !== null ? state.seed : null;
@@ -310,6 +321,13 @@ export function App() {
     [persistence],
   );
 
+  // Amendment 23: the garage over the battle. Closing it gives the battle the look chosen there, at once.
+  const openGarage = useCallback(() => setGarageOpen(true), []);
+  const closeGarage = useCallback(() => {
+    setGarageOpen(false);
+    gameHandle.current?.setLook(battleLook(persistence));
+  }, [persistence]);
+
   const openParent = useCallback(() => setParent('menu'), []);
   const closeParent = useCallback(() => {
     setParent('closed');
@@ -326,8 +344,9 @@ export function App() {
     />
   );
 
-  // While a parent screen is open, keys do nothing in the game (FR-045, T115).
-  const keyScreen = parent === 'closed' && transfer === null ? keyScreenFor(screen, state.phase) : null;
+  // While a parent screen is open, keys do nothing in the game (FR-045, T115). While the garage is open over the
+  // battle, the garage's own listener takes the keys (amendment 23).
+  const keyScreen = parent === 'closed' && transfer === null && !battleGarage ? keyScreenFor(screen, state.phase) : null;
   const onAction = useCallback(
     (action: KeyAction) => {
       if (action.type === 'start') play(action.mode ?? keyStartMode(window.location.search, offeredModes(persistence.settings().playModes)));
@@ -346,7 +365,7 @@ export function App() {
   const roundOver = state.phase === 'roundOver';
   useEffect(() => {
     root.current?.focus({ preventScroll: true });
-  }, [screen, roundOver, parent]);
+  }, [screen, roundOver, parent, battleGarage]);
   // Leaving fullscreen gives the focus back to the app root (FR-059).
   useEffect(() => {
     const onChange = () => {
@@ -378,6 +397,7 @@ export function App() {
             gear={gear}
             numberPad={numberPad}
             onSpeak={speech && speaker.available ? speakChallenge : undefined}
+            onGarage={garageOn ? openGarage : undefined}
           />
           {roundOver && (
             <RoundEnd
@@ -400,6 +420,11 @@ export function App() {
           )}
         </main>
       )}
+      {battleGarage && (
+        <div className="garage-overlay" data-testid="garage-overlay">
+          <Garage garage={garage} onEquip={equip} onBuy={buy} onReturn={returnItem} onBack={closeGarage} />
+        </div>
+      )}
       {debugScreen && <ScreenDebug layout={layout} lastEvent={lastEvent} />}
       {parent === 'settings' && (
         <SettingsPage persistence={persistence} onSaved={(s) => controller.updateSettings(s)} onClose={closeParent} />
@@ -410,6 +435,11 @@ export function App() {
       )}
     </div>
   );
+}
+
+/** The child's look in the battle: the garage look, or the standard look while the garage is off (FR-096). */
+function battleLook(persistence: ReturnType<typeof createPersistence>): Look {
+  return persistence.settings().garage ? persistence.garage().look : STANDARD_LOOK;
 }
 
 /** Which keyboard map applies; null while a shell is in flight, so keys do nothing (FR-061). */
