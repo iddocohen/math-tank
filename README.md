@@ -45,9 +45,18 @@ Mouse and touch work too: tap the ruler to choose a number, then tap **Feuer!**.
 
 ## Status
 
-This is the first release and is still being built. Working now: number aiming, all ruler levels, any number range, reading the ruler, before and after, steps, plus and minus with a step animation, comparison, help steps, hearts and personal bests, adaptive difficulty, the progress page, settings with export and import, and keyboard-only play.
+The first release is built. All 15 amendments made during playtesting are implemented ([amendments 01 to 15](specs/001-math-tanks/)). The game now has:
 
-In progress: comparison turns with decoy tanks, a tank garage with looks earned by playing, layout fixes, and offline play, pause, fullscreen and spoken tasks. The full task list is in [tasks.md](specs/001-math-tanks/tasks.md).
+- Aiming by number on a fixed cannon, with any number range and 5 ruler levels.
+- Tasks: reading the ruler, before and after, steps, plus and minus with a step animation, and comparing numbers with decoy tanks.
+- Help in steps, hearts, personal bests, adaptive difficulty and the progress page.
+- An enemy that fires back and aims closer after repeated misses, and new hills after every destroyed enemy.
+- A tank garage with looks earned with stars.
+- Play on iPad and phone with an on-screen number pad, keyboard-only play, offline play, pause, fullscreen and spoken tasks.
+- Drawn tanks, a ground texture and effects.
+- Moving a save to another browser with a QR code or a link, and a file export.
+
+One check is still open: a walk through every [validation scenario](specs/001-math-tanks/quickstart.md) on a real iPad and iPhone, including offline play in Safari (task T155 in [tasks.md](specs/001-math-tanks/tasks.md)). The browser tests cover iPad and phone screen sizes with Playwright's device emulation, not real devices.
 
 ## Run it locally
 
@@ -60,9 +69,44 @@ pnpm test         # unit tests (Vitest)
 pnpm build        # production build in dist/
 pnpm preview      # serve the production build
 pnpm exec playwright install chromium webkit firefox
-pnpm e2e          # browser tests in Chromium, WebKit and Firefox
+pnpm e2e          # browser tests in Chromium, WebKit and Firefox, on iPad and phone sizes, and under /math-tank/
 pnpm lint && pnpm typecheck
 ```
+
+About the browser tests:
+
+- They build the game and serve it on port 4173, and a second build for GitHub Pages under `/math-tank/` on port 4174. A server already running on one of these ports is used as it is, so stop it first to test fresh code.
+- They run in 4 parallel browsers. Several browsers that draw the battlefield at once slow down the game, so more workers can make waits time out. `PW_WORKERS=2 pnpm e2e` changes the number for one run.
+- The frame rate test (`tests/e2e/performance.spec.ts`) runs last, alone. It needs a graphics card and is skipped where the browser draws in software. `pnpm e2e --project=performance --no-deps` runs it on its own.
+
+## Deployment
+
+Every push to `main` (and, while the first release is built, to the branch `001-math-tanks`) publishes the game to https://iddocohen.github.io/math-tank/ with the workflow [.github/workflows/pages.yml](.github/workflows/pages.yml):
+
+1. Install the packages with `pnpm install --frozen-lockfile`.
+2. Run `pnpm lint`, `pnpm typecheck` and `pnpm test`.
+3. Build with `vite build --base=/math-tank/`, because GitHub Pages serves the game under `/math-tank/`, not at the root.
+4. Upload `dist/` and publish it with [actions/deploy-pages](https://github.com/actions/deploy-pages).
+
+The browser tests do not run in the workflow. Locally, the Playwright project `base-path` builds the game the same way and checks that it loads, plays a round and requests nothing outside `/math-tank/` ([tests/e2e/basePath.spec.ts](tests/e2e/basePath.spec.ts)).
+
+In the repository settings, Pages uses "GitHub Actions" as its source.
+
+### How updates reach a device
+
+- Each build carries its version: the short git commit (`GITHUB_SHA` in the workflow) and the build day. The settings page shows it at the top, for example "Version 1a2b3c4 vom 2026-11-05".
+- The game asks for a new version when it opens, every 30 minutes while it is open, and when it comes back to the front.
+- A new version found while the start screen shows is applied at once: the page reloads one time by itself. During a round, or while a parent screen or the transfer dialog is open, it waits for the start screen (FR-051a). A tab reloads by itself at most once per version, so a failed update cannot cause a reload loop.
+- The new version removes the files of the old one from the offline cache.
+
+### Troubleshooting on an iPhone or iPad
+
+Each browser on an iPhone keeps its own data. Clearing Safari's data does not clear Chrome's, and the reverse.
+
+- Safari: Settings app, then Apps, then Safari, then "Clear History and Website Data" (older iOS: Settings, then Safari). To clear only this game: Safari, then Advanced, then Website Data, then remove `iddocohen.github.io`.
+- Chrome: in Chrome, the three dots, then "Delete browsing data", choose "All time", and tick "Cookies, site data" and "Cached images and files".
+
+Then open the game again and check the version on the settings page. To see what the game measures on the screen, open https://iddocohen.github.io/math-tank/?debug=screen: a small box in the bottom left corner shows the version, the window size, the viewport size, the orientation, the media query results, the chosen layout and the last event.
 
 ## How it is built
 
@@ -71,6 +115,13 @@ pnpm lint && pnpm typecheck
 - Settings and progress are stored in the browser's local storage. Nothing is sent anywhere.
 
 The game was specified and built with [GitHub spec-kit](https://github.com/github/spec-kit) and the [OpsMill spec-kit workflow](https://github.com/opsmill/opsmill-speckit). The specification, plan and design decisions are in [specs/001-math-tanks/](specs/001-math-tanks/). Changes made while playtesting are recorded as numbered amendments in the same folder.
+
+## Credits
+
+- Ground texture: "dirt" from [4 hand-painted ground textures](https://opengameart.org/node/84103) by Drummyfish, released under [CC0](http://creativecommons.org/publicdomain/zero/1.0/). CC0 does not require credit; it is given anyway. The file is `src/assets/textures/dirt.png`.
+- QR code of "Spielstand übertragen": [uqr](https://github.com/unjs/uqr) 0.1.3 by Anthony Fu, based on the QR code generator by Project Nayuki, under the MIT license. It is bundled with the game.
+- The tests decode QR codes with [jsQR](https://github.com/cozmo/jsQR) 1.4.0 (Apache License 2.0), a development dependency that is not bundled.
+- Everything else (tanks, effects, sky, sounds) is drawn or generated by the game's own code.
 
 ## License
 

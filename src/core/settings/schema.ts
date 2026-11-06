@@ -1,0 +1,111 @@
+import { z } from 'zod';
+
+/**
+ * Structural schema for persisted settings, version 12 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18).
+ * Cross-field rules (range order, linked limits) live in validate.ts.
+ */
+export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
+
+export const rangeSchema = z.object({
+  preset: rangePresetSchema,
+  min: z.number().int(),
+  max: z.number().int(),
+});
+
+/** Ruler detail level (FR-017). */
+export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
+
+export const settingsSchema = z.object({
+  version: z.literal(12),
+  challengeTypes: z.object({
+    numberLine: z.boolean(),
+    addition: z.boolean(),
+    subtraction: z.boolean(),
+    comparison: z.boolean(),
+  }),
+  range: rangeSchema,
+  addition: z.object({
+    maxOperand: z.number().int(),
+    maxResult: z.number().int(),
+    steps: z.union([z.literal(1), z.literal(2)]),
+  }),
+  subtraction: z.object({
+    maxOperand: z.number().int(),
+    steps: z.union([z.literal(1), z.literal(2)]),
+  }),
+  crossTens: z.boolean(),
+  crossHundreds: z.boolean(),
+  negativeResults: z.boolean(),
+  rulerLevelStart: rulerLevelSchema,
+  rulerLevelMax: rulerLevelSchema,
+  enemyDifficulty: z.enum(['easy', 'normal', 'challenging']),
+  help: z.object({
+    nearestTen: z.boolean(),
+    countSteps: z.boolean(),
+    zoom: z.boolean(),
+    stepAnimation: z.boolean(),
+  }),
+  beginnerAssist: z.boolean(),
+  sound: z.object({
+    effects: z.boolean(),
+    music: z.boolean(),
+    speech: z.boolean(),
+  }),
+  /** How a round ends (amendment 06, FR-082): until the 3 hearts are gone, or after `roundLength` destroyed enemies. */
+  roundType: z.enum(['untilHearts', 'enemyCount']),
+  /** Enemies per round for `roundType: 'enemyCount'`, 1 to 20. */
+  roundLength: z.number().int(),
+  adaptive: z.boolean(),
+  /** The play modes the start screen offers (amendment 17, FR-121): "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen". */
+  playModes: z.object({
+    mixed: z.boolean(),
+    ruler: z.boolean(),
+    math: z.boolean(),
+  }),
+  noDamage: z.boolean(),
+  /** An up-counting clock at the top during play (FR-084). */
+  showClock: z.boolean(),
+  /** "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086). */
+  showRecords: z.boolean(),
+  timeLimitSeconds: z.number().int().nullable(),
+  /**
+   * "Punkt nach voller Hilfe" (amendment 18, FR-129): whether an enemy destroyed after help step 3 counts toward the
+   * tank counter, the stars, "Gegner pro Runde" and the personal best. The attempt is recorded as with help either way.
+   */
+  pointAfterFullHelp: z.boolean(),
+  /** "Garage und Sterne" (amendment 11, FR-096): the garage, the star total, the unlock line and the chosen look. */
+  garage: z.boolean(),
+  /** "Zahlenfeld" (amendment 12, FR-102): the on-screen number pad in battle, automatic, always or never. */
+  numberPad: z.enum(['auto', 'always', 'never']),
+  /**
+   * "Zielkreuz" (amendment 19, FR-134): the yellow aiming cross and its guide line. `'always'` shows it, `'never'`
+   * hides it, `'upToLevel'` shows it while the round's ruler level is at most `level` (src/core/battle/aimCross.ts).
+   */
+  aimCross: z.object({
+    mode: z.enum(['always', 'upToLevel', 'never']),
+    level: rulerLevelSchema,
+  }),
+  /**
+   * "Gegner gleichzeitig" (amendment 21, FR-136): the size of an enemy wave in "Nur Zahlenstrahl" and in the
+   * "read the ruler" searches of "Gemischt" (src/core/battle/wave.ts). 1 keeps one enemy.
+   */
+  enemiesAtOnce: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  /**
+   * "Linien" (amendment 21, FR-144): "Gerade" ('straight', the dashed vertical pointer lines) or "Keine Linien"
+   * ('none': no pointer line; help step 1 shows the help target's straight line briefly). The curved styles were
+   * removed by the product owner (amendment 21 item 18); settings version 12 turns a stored one into 'straight'.
+   */
+  lineStyle: z.enum(['straight', 'none']),
+});
+
+export type Settings = z.infer<typeof settingsSchema>;
+export type RoundType = Settings['roundType'];
+export type AimCross = Settings['aimCross'];
+export type LineStyle = Settings['lineStyle'];
+/** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
+export type PlayMode = keyof Settings['playModes'];
+/** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */
+export const PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'math'];
+export type RangePreset = z.infer<typeof rangePresetSchema>;
+export type SettingsRange = z.infer<typeof rangeSchema>;

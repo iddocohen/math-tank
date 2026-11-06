@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-base/
 dev-dist/
 build/
 coverage/
@@ -16,10 +17,6 @@ Thumbs.db
 .vscode/
 .idea/
 .vitest/
-
-# spec-kit tooling stays local
-.specify/
-.claude/
 
 # spec-kit tooling stays local
 .specify/

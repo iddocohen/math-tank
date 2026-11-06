@@ -1,0 +1,57 @@
+/**
+ * The dialog when the game opens with a save link (amendment 15, FR-119, FR-120, contracts/ui-flows.md "Take over a
+ * save"). It is for the parent: "Übernehmen" needs a 2-second press and hold like the parent gate, so a child who opens
+ * the link cannot take over a save by accident; a short tap and keys do nothing. "Abbrechen" changes nothing. A code
+ * that cannot be read shows "Dieser Code passt nicht" with "Schließen". When storing the save fails, the dialog says that
+ * nothing was changed (review M1); the app then keeps `#save=` in the address, so a reload asks again.
+ */
+import type { TransferSummary } from '../core/transfer/transfer';
+import { t } from '../i18n';
+import { useHold } from './useHold';
+
+const RING_RADIUS = 30;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+/** 'failed': "Übernehmen" could not store the save, and nothing was changed (review M1). */
+export type TransferDialogState = { kind: 'ready'; summary: TransferSummary } | { kind: 'invalid' } | { kind: 'failed' };
+
+interface Props {
+  state: TransferDialogState;
+  onAccept: () => void;
+  onCancel: () => void;
+}
+
+export function TransferDialog({ state, onAccept, onCancel }: Props) {
+  const m = t().transfer;
+  const { progress, handlers } = useHold(onAccept, state.kind === 'ready');
+  return (
+    <div className="parent-menu-backdrop transfer-backdrop">
+      <div className="parent-menu transfer-dialog" role="dialog" aria-modal="true" aria-label={state.kind === 'ready' ? m.title : state.kind === 'failed' ? m.saveFailed : m.invalid} data-testid="transfer-dialog">
+        {state.kind === 'ready' ? (
+          <>
+            <h2>{m.title}</h2>
+            <p className="transfer-summary">{m.summary(state.summary.stars, state.summary.record, state.summary.min, state.summary.max)}</p>
+            <p className="hint">{m.replaces}</p>
+            <p className="hint">{m.holdHint}</p>
+            <button type="button" className="primary-button hold-button" tabIndex={-1} {...handlers}>
+              <svg className="hold-ring" data-testid="transfer-accept-ring" data-progress={progress} viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r={RING_RADIUS} strokeDasharray={RING_LENGTH} strokeDashoffset={RING_LENGTH * (1 - progress)} />
+              </svg>
+              <span>{m.accept}</span>
+            </button>
+            <button type="button" className="secondary-button" onClick={onCancel}>
+              {m.cancel}
+            </button>
+          </>
+        ) : (
+          <>
+            <h2>{state.kind === 'failed' ? m.saveFailed : m.invalid}</h2>
+            <button type="button" className="secondary-button" onClick={onCancel}>
+              {m.close}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

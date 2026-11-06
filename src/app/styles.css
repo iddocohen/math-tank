@@ -1,0 +1,1566 @@
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #f4f6fb;
+  background: #1f2a44;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: #1f2a44;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Shared targets (FR-053): at least 48 by 48 CSS pixels, at least 8 px apart. */
+button {
+  min-width: 48px;
+  min-height: 48px;
+  border: none;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #ffd54a;
+  outline-offset: 2px;
+}
+
+/* Start screen */
+.start-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+}
+
+/* Review H1: a small note for the parent when saving failed; at the bottom, so it never covers a button. */
+.save-failed-hint {
+  position: absolute;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+  opacity: 0.85;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 4rem);
+}
+
+.play-button,
+.primary-button {
+  min-width: 220px;
+  min-height: 88px;
+  padding: 0 40px;
+  font-size: 2rem;
+  background: #3fae5a;
+  box-shadow: 0 6px 0 #2a7a3e;
+}
+
+.play-button {
+  min-width: 280px;
+  min-height: 112px;
+  font-size: 2.5rem;
+}
+
+.play-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: center;
+}
+
+/* Play mode picture buttons (amendment 17, FR-121): icon above the label, the start key in the corner. */
+.mode-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 220px;
+  min-height: 180px;
+  padding: 16px 24px;
+  font-size: 1.75rem;
+}
+
+.mode-ruler {
+  background: #4a5a80;
+  box-shadow: 0 6px 0 #313d58;
+}
+
+.mode-math {
+  background: #b5651d;
+  box-shadow: 0 6px 0 #7a4210;
+}
+
+.mode-key {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 1.25rem;
+  opacity: 0.85;
+}
+
+@media (max-height: 500px) {
+  .mode-button {
+    min-width: 160px;
+    min-height: 120px;
+    font-size: 1.3rem;
+  }
+
+  .mode-icon {
+    width: 64px;
+    height: 52px;
+  }
+}
+
+.secondary-button {
+  min-height: 64px;
+  padding: 0 28px;
+  font-size: 1.25rem;
+  background: #4a5a80;
+}
+
+.top-right {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  gap: 12px;
+}
+
+.icon-button {
+  width: 56px;
+  height: 56px;
+  font-size: 1.75rem;
+  line-height: 1;
+  background: rgb(255 255 255 / 0.15);
+}
+
+/* Battle: Phaser canvas below, React overlay on top (ui-flows.md battle layout). */
+.battle {
+  --controls-height: 112px;
+  /* The pad column at the right in the side layout (amendment 12); 0 elsewhere. */
+  --controls-width: 0px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/*
+ * The canvas fills the space above the control bar, so no control covers the ruler. PO2: it keeps out of the left and
+ * right safe-area insets (the notch and rounded corners of a phone held sideways), so the player's tank is never under
+ * the notch; the pad column's width already holds the right inset.
+ */
+.game-parent {
+  position: absolute;
+  inset: 0 max(var(--controls-width), env(safe-area-inset-right)) var(--controls-height) env(safe-area-inset-left);
+}
+
+.app-root {
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.battle-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.battle-overlay > * {
+  pointer-events: auto;
+}
+
+/* "Neue Landschaft" at the right side, vertically centered over the battlefield (amendment 03). */
+.new-scene-button {
+  position: absolute;
+  right: calc(var(--controls-width) + max(12px, env(safe-area-inset-right)));
+  top: calc((100% - var(--controls-height)) / 2);
+  transform: translateY(-50%);
+  background: rgb(20 28 48 / 0.7);
+}
+
+.new-scene-button:disabled {
+  opacity: 0.4;
+}
+
+/* Control bar below the battlefield: readout of typed digits and the fire button (FR-019, FR-053; no −1 and +1, amendment 05). */
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--controls-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgb(20 28 48 / 0.9);
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+}
+
+.readout-label {
+  /* T153 (FR-057): no text below 18 px on child screens. */
+  font-size: 1.125rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* Large, clear digits (FR-053). */
+.readout-value {
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffd54a;
+}
+
+.fire-button {
+  min-width: 140px;
+  min-height: 80px;
+  padding: 0 24px;
+  font-size: 1.75rem;
+  background: #e53935;
+  box-shadow: 0 6px 0 #9e2522;
+}
+
+/*
+ * Challenge card (T068, T234, FR-088): a new challenge first stands large in the middle of the sky, then moves to the
+ * top center and stays large there; the status line sits below it. It never takes pointer input.
+ */
+.challenge-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(max(8px, env(safe-area-inset-top)) + 8px);
+  transform: translate(-50%, 0);
+  width: max-content;
+  max-width: min(980px, calc(100% - 240px));
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: 2.2rem;
+  line-height: 1.2;
+  font-weight: 800;
+  text-align: center;
+  color: #fff;
+  background: rgb(20 28 48 / 0.9);
+  pointer-events: none;
+  transition:
+    top 450ms ease-in-out,
+    transform 450ms ease-in-out,
+    font-size 450ms ease-in-out,
+    padding 450ms ease-in-out;
+}
+
+.challenge-banner.placement-center {
+  top: 30%;
+  transform: translate(-50%, -50%);
+  padding: 20px 36px;
+  font-size: 3rem;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .challenge-banner {
+    transition: none;
+  }
+}
+
+/* Comparison options in the banner (amendment 09); help step 1 highlights each tens digit (FR-031). */
+.banner-option {
+  white-space: nowrap;
+}
+
+.tens-digit {
+  padding: 0 3px;
+  border-radius: 6px;
+  color: #14203a;
+  background: #ffd54a;
+}
+
+@media (max-width: 720px) {
+  .challenge-banner {
+    max-width: calc(100% - 32px);
+    top: calc(max(8px, env(safe-area-inset-top)) + 64px);
+    font-size: 1.5rem;
+  }
+
+  .challenge-banner.placement-center {
+    font-size: 2rem;
+  }
+}
+
+/* One message line (T230, FR-057): range hint, hit text, phrase or help text, at the top center below the banner. */
+.status-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(max(8px, env(safe-area-inset-top)) + 84px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .status-line {
+    top: calc(max(8px, env(safe-area-inset-top)) + 124px);
+  }
+}
+
+.encouragement {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgb(20 28 48 / 0.8);
+}
+
+/* The hit text fades out over HIT_FEEDBACK_MS (T233). */
+.fade-out {
+  animation: fade-out 2000ms ease-in forwards;
+}
+
+@keyframes fade-out {
+  0%,
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* US5 help step text (FR-031): the message line after the phrase (T230). */
+.help-text {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #9be89f;
+  background: rgb(20 28 48 / 0.8);
+}
+
+/* US5 help button (FR-030, FR-053): at the left of the control bar, 72 by 72 (at least 48 by 48), mouse and touch only. */
+.help-button {
+  position: absolute;
+  z-index: 1;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc((var(--controls-height) - 72px) / 2);
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #14203a;
+  background: #ffd54a;
+  box-shadow: 0 4px 0 #b8952a;
+}
+
+.help-button:disabled {
+  opacity: 0.4;
+}
+
+/* FR-034: a thin, calm bar above the control bar that shrinks until the next help step; no number, no warning colour. */
+.help-timer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--controls-height) + 6px);
+  transform: translateX(-50%);
+  width: min(320px, 50%);
+  height: 8px;
+  border-radius: 4px;
+  background: rgb(20 28 48 / 0.6);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.help-timer-fill {
+  height: 100%;
+  background: #7ec8ff;
+  transition: width 1s linear;
+}
+
+.range-hint,
+.landed {
+  padding: 6px 16px;
+  border-radius: 12px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  background: rgb(20 28 48 / 0.8);
+}
+
+.range-hint {
+  color: #ffd54a;
+}
+
+.landed.hit {
+  color: #9be89f;
+}
+
+.landed.near {
+  color: #ffd54a;
+}
+
+/* Amendment 06: tank counter and optional clock at the top left (FR-083, FR-084). No text, only a symbol and numbers. */
+.top-left {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.score,
+.clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 14px;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgb(20 28 48 / 0.8);
+}
+
+.score svg {
+  width: 40px;
+  height: 26px;
+}
+
+@media (max-width: 560px) {
+  .battle {
+    --controls-height: 96px;
+  }
+
+  .controls {
+    gap: 8px;
+  }
+
+  .readout {
+    min-width: 88px;
+  }
+
+  .readout-value {
+    font-size: 2.25rem;
+  }
+
+  .help-button {
+    width: 56px;
+    height: 56px;
+    bottom: calc((var(--controls-height) - 56px) / 2);
+    font-size: 1.75rem;
+  }
+
+  .fire-button {
+    min-width: 96px;
+    min-height: 64px;
+    padding: 0 12px;
+    font-size: 1.25rem;
+  }
+}
+
+/* Round end */
+.round-end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  padding: 24px;
+  background: rgb(15 20 36 / 0.7);
+  text-align: center;
+}
+
+.round-end-message {
+  margin: 0;
+  max-width: 640px;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 800;
+}
+
+.round-result {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Neuer Rekord!" pops in with two sparkles (FR-086); without motion when the system asks for less. */
+.new-record {
+  margin: 0;
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 900;
+  color: #1b1f27;
+  background: #ffd54a;
+  animation: record-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.new-record::before,
+.new-record::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 12px;
+  color: #fff7d1;
+  animation: record-sparkle 900ms ease-in-out 3;
+}
+
+/* The record when it is not beaten: small and neutral, no comparison. */
+.record {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+@keyframes record-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes record-sparkle {
+  50% {
+    transform: scale(1.5) rotate(45deg);
+  }
+}
+
+/* "Neu freigeschaltet: ..." (amendment 11, FR-094): the same pop and sparkles as a new record, in blue. */
+.unlocked {
+  margin: 0;
+  max-width: 720px;
+  padding: 8px 24px;
+  border-radius: 16px;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 900;
+  color: #10213f;
+  background: #9fd8ff;
+  animation: record-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.unlocked::before,
+.unlocked::after {
+  content: '✦';
+  display: inline-block;
+  margin: 0 12px;
+  color: #ffffff;
+  animation: record-sparkle 900ms ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-record,
+  .new-record::before,
+  .new-record::after,
+  .unlocked,
+  .unlocked::before,
+  .unlocked::after {
+    animation: none;
+  }
+}
+
+.round-end-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Parent gate (FR-045): the ring around the gear fills during the 2-second press. */
+.parent-gate {
+  position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.parent-gate-ring {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.parent-gate-ring circle {
+  fill: none;
+  stroke: #ffd54a;
+  stroke-width: 4;
+}
+
+.parent-gate-ring[data-progress='0'] circle {
+  stroke: transparent;
+}
+
+.parent-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(15 20 36 / 0.75);
+}
+
+.parent-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 280px;
+  padding: 24px;
+  border-radius: 16px;
+  background: #2b3a5e;
+}
+
+.parent-menu h2 {
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+/* Settings page (FR-046, contracts/ui-flows.md "Settings"): parents only, so it may scroll and select text. */
+.settings-page {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+  background: #1f2a44;
+  user-select: text;
+  touch-action: auto;
+}
+
+.settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  background: #1f2a44;
+}
+
+.settings-header h2 {
+  margin: 0;
+}
+
+.settings-actions,
+.data-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-actions .primary-button {
+  min-width: 160px;
+  min-height: 56px;
+  font-size: 1.25rem;
+}
+
+.settings-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 12px;
+}
+
+.settings-group legend {
+  padding: 0 8px;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.field > label {
+  flex: 1 1 160px;
+}
+
+.check-field > label {
+  flex: 1 1 auto;
+}
+
+.field input[type='number'],
+.field select {
+  min-height: 44px;
+  min-width: 120px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  font: inherit;
+  color: #1f2a44;
+  background: #f4f6fb;
+}
+
+.field input[type='checkbox'] {
+  width: 28px;
+  height: 28px;
+}
+
+.field :disabled {
+  opacity: 0.5;
+}
+
+.field-errors {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #ffb4a8;
+  font-weight: 700;
+}
+
+.notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.notice.ok {
+  background: rgb(60 160 90 / 0.35);
+}
+
+.notice.warn {
+  background: rgb(200 90 60 / 0.35);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.file-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* The ruler group spans every column, so both previews are as wide as the settings page (T218). */
+.settings-group-wide {
+  grid-column: 1 / -1;
+}
+
+.ruler-preview-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.ruler-preview-figure figcaption {
+  font-weight: 700;
+}
+
+.ruler-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #14203a;
+}
+
+/* Stroke widths and font sizes come from the SVG attributes, scaled like the game ruler. */
+.ruler-preview line {
+  stroke: #f4f6fb;
+}
+
+.ruler-preview text {
+  fill: #f4f6fb;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-weight: 700;
+}
+
+/* Progress page (FR-040): the settings page frame with tables that scroll sideways on a narrow screen. */
+.progress-page .settings-group {
+  margin-bottom: 16px;
+}
+
+.progress-page h3 {
+  margin: 0;
+}
+
+.progress-table-wrap {
+  overflow-x: auto;
+}
+
+.progress-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-table th,
+.progress-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgb(255 255 255 / 0.15);
+  white-space: nowrap;
+}
+
+.progress-table thead th {
+  font-weight: 700;
+}
+
+.progress-table tbody th {
+  font-weight: 600;
+}
+
+/* Star total (amendment 11, FR-095): start screen, end screen and garage only. */
+.star-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.star-symbol {
+  color: #ffd54a;
+  text-shadow: 0 2px 0 #8a5a00;
+}
+
+.garage-button {
+  background: #2f7be8;
+  box-shadow: 0 6px 0 #1d4f9b;
+}
+
+/* Tank garage (amendment 11, FR-091) */
+.garage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.garage-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.tank-preview {
+  width: min(360px, 80vw);
+  height: auto;
+  flex-shrink: 0;
+  background: linear-gradient(#8fd0ff, #cfeaff 70%, #6fae5a 70%);
+  border-radius: 16px;
+}
+
+.garage-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(960px, 100%);
+}
+
+.garage-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.garage-group h2 {
+  flex: 0 0 96px;
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.garage-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.garage-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 112px;
+  min-height: 96px;
+  padding: 8px 10px;
+  border: 3px solid transparent;
+  border-radius: 14px;
+  /* T153 (FR-057): no text below 18 px on child screens. */
+  font-size: 1.125rem;
+  background: #34446a;
+  box-shadow: none;
+}
+
+.garage-item[data-locked='true'] {
+  color: #c4cad6;
+  background: #2a3550;
+  cursor: default;
+}
+
+.garage-item[data-chosen='true'] {
+  border-color: #ffd54a;
+}
+
+.garage-item[data-selected='true'] {
+  outline: 3px dashed #ffffff;
+  outline-offset: 2px;
+}
+
+.garage-number {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.garage-icon {
+  width: 56px;
+  height: 40px;
+}
+
+.garage-chosen {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+/* Amendment 19 (FR-130, FR-131): the star shop. Price, "Zurückgeben" and the buy and return question. */
+.garage-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.garage-price {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+.garage-item[data-locked='true'] .garage-price {
+  color: #c4cad6;
+}
+
+/* FR-053: at least 48 by 48 CSS pixels. */
+.garage-return {
+  min-width: 112px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 2px solid #c4cad6;
+  border-radius: 12px;
+  font-size: 1.125rem;
+  color: #ffffff;
+  background: transparent;
+}
+
+.garage-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(10 16 32 / 70%);
+}
+
+.garage-dialog {
+  max-width: 480px;
+  padding: 24px;
+  border-radius: 18px;
+  text-align: center;
+  background: #24304d;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 50%);
+}
+
+.garage-dialog-text {
+  margin: 0 0 20px;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.garage-dialog-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Large "Ja" and "Nein" (FR-053, FR-130). */
+.dialog-button {
+  min-width: 120px;
+  min-height: 64px;
+  font-size: 1.5rem;
+}
+
+.round-stars {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #ffd54a;
+}
+
+
+/*
+ * Amendment 12 (FR-102 to FR-105, contracts/ui-flows.md "Screen layouts and the number pad"): the on-screen number pad
+ * and the layouts `wide` (pad in the bottom bar), `portrait` (battlefield at full width on top, a large pad below) and
+ * `side` (battlefield on the left, a compact pad column on the right). `data-layout` and `data-number-pad` sit on the
+ * battle root; without the pad every size keeps the bottom bar above. Each key gets its grid area from NumberPad.tsx.
+ */
+.battle .top-right {
+  right: calc(var(--controls-width) + max(12px, env(safe-area-inset-right)));
+}
+
+.battle .challenge-banner {
+  left: calc((100% - var(--controls-width)) / 2);
+}
+
+.battle .status-line {
+  right: var(--controls-width);
+}
+
+.battle .help-timer {
+  left: calc((100% - var(--controls-width)) / 2);
+}
+
+.number-pad {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(6, 56px);
+  grid-auto-rows: 56px;
+  grid-template-areas:
+    'd1 d2 d3 d4 d5 bs'
+    'd6 d7 d8 d9 d0 mi';
+}
+
+/* At least 48 by 48 CSS pixels, 56 by 56 where the layout has room (FR-053). */
+.pad-key {
+  min-width: 48px;
+  min-height: 48px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: #3a4a70;
+  box-shadow: 0 4px 0 #26324d;
+}
+
+.pad-key:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #26324d;
+}
+
+.pad-key-backspace,
+.pad-key-minus {
+  background: #4a5a80;
+}
+
+/* Wide: readout, the pad in two rows and "Feuer!" in a taller bottom bar (iPad held sideways, desktop with "Immer"). */
+.battle[data-number-pad='true'] {
+  --controls-height: 144px;
+}
+
+.battle[data-number-pad='true'] .readout {
+  min-width: 120px;
+}
+
+/* Portrait: the battlefield at full width (16:9) on top; below, the readout over "Feuer!" and a large pad. */
+.battle[data-layout='portrait'][data-number-pad='true'] {
+  --controls-height: calc(100% - 56.25vw);
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'readout pad'
+    'fire pad';
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  column-gap: 40px;
+  row-gap: 24px;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .readout {
+  grid-area: readout;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .fire-button {
+  grid-area: fire;
+  min-width: 200px;
+  min-height: 96px;
+  font-size: 2rem;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .number-pad {
+  grid-area: pad;
+  gap: 12px;
+  grid-template-columns: repeat(3, 96px);
+  grid-auto-rows: 80px;
+  grid-template-areas:
+    'd1 d2 d3'
+    'd4 d5 d6'
+    'd7 d8 d9'
+    'mi d0 bs';
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .pad-key {
+  font-size: 2.25rem;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .help-button {
+  top: calc(56.25vw + 16px);
+  bottom: auto;
+}
+
+.battle[data-layout='portrait'][data-number-pad='true'] .challenge-banner.placement-center {
+  top: calc(56.25vw * 0.4);
+}
+
+/* Side: the battlefield on the left, a compact pad column on the right (a phone held sideways). */
+.battle[data-layout='side'][data-number-pad='true'] {
+  --controls-height: 0px;
+  --controls-width: calc(204px + env(safe-area-inset-right));
+}
+
+/* PO2: with no bottom bar, the battlefield keeps out of the home bar at the bottom. */
+.battle[data-layout='side'][data-number-pad='true'] .game-parent {
+  bottom: env(safe-area-inset-bottom);
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .controls {
+  top: 0;
+  left: auto;
+  height: auto;
+  width: var(--controls-width);
+  display: grid;
+  grid-template-areas:
+    'readout'
+    'pad'
+    'fire';
+  align-content: start;
+  justify-items: center;
+  gap: 6px;
+  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) 8px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .readout {
+  grid-area: readout;
+  flex-direction: row;
+  gap: 8px;
+  min-width: 0;
+  min-height: 56px;
+  justify-self: end;
+  padding-right: 4px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .readout-value {
+  font-size: 1.75rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .number-pad {
+  grid-area: pad;
+  gap: 6px;
+  grid-template-columns: repeat(3, 56px);
+  grid-auto-rows: 56px;
+  grid-template-areas:
+    'd1 d2 d3'
+    'd4 d5 d6'
+    'd7 d8 d9'
+    'mi d0 bs';
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .fire-button {
+  grid-area: fire;
+  width: 180px;
+  min-width: 0;
+  min-height: 52px;
+  font-size: 1.4rem;
+  box-shadow: 0 4px 0 #9e2522;
+}
+
+/* The help button sits at the top left of the pad column, beside the readout, so it covers no tank or arrow. */
+.battle[data-layout='side'][data-number-pad='true'] .help-button {
+  top: max(6px, env(safe-area-inset-top));
+  bottom: auto;
+  left: calc(100% - var(--controls-width) + 12px);
+  width: 56px;
+  height: 56px;
+  font-size: 1.75rem;
+}
+
+/* The banner stays readable, at least 16 px (FR-104), and keeps clear of the counter, the help button and the gear. */
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner {
+  max-width: calc(100% - var(--controls-width) - 220px);
+  padding: 6px 16px;
+  font-size: 1.1rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner.placement-center {
+  padding: 12px 20px;
+  font-size: 1.4rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .status-line {
+  top: calc(max(8px, env(safe-area-inset-top)) + 72px);
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .encouragement,
+.battle[data-layout='side'][data-number-pad='true'] .help-text,
+.battle[data-layout='side'][data-number-pad='true'] .range-hint,
+.battle[data-layout='side'][data-number-pad='true'] .landed {
+  font-size: 1rem;
+}
+
+/* "Bitte dreh das Handy" (FR-104): over the child's screens, below the parent menu and pages. */
+.rotate-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px;
+  text-align: center;
+  background: #1f2a44;
+}
+
+/*
+ * Bug "iPhone rotation in Chrome" (Phase 24): the browser's own layout decides. The picture never shows on a screen held
+ * sideways or at least 600 pixels wide, with the same media queries as SCREEN_QUERIES in src/core/view/screen.ts, also
+ * when the app's script has not caught up with a turn yet.
+ */
+@media (orientation: landscape) {
+  .rotate-screen {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  .rotate-screen {
+    display: none;
+  }
+}
+
+.rotate-phone {
+  width: 160px;
+  height: 160px;
+  animation: rotate-phone 2400ms ease-in-out infinite;
+}
+
+.rotate-text {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+@keyframes rotate-phone {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+
+  50%,
+  80% {
+    transform: rotate(-90deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}
+
+/* US8 (T140, T138, FR-054, FR-055): pause and speaker buttons at the top left, before the tank counter. */
+.top-left .icon-button {
+  pointer-events: auto;
+  background: rgb(20 28 48 / 0.7);
+}
+
+.top-left .icon-button:disabled {
+  opacity: 0.4;
+}
+
+.battle .top-right .icon-button {
+  background: rgb(20 28 48 / 0.7);
+}
+
+/* The pause screen covers the battle until the child continues (FR-054). */
+.pause-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: rgb(14 20 36 / 0.82);
+}
+
+.pause-title {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+}
+
+/* The gear and fullscreen stay usable over the pause screen. */
+.battle .top-right {
+  z-index: 60;
+}
+
+/* The banner keeps clear of the corner groups: pause and counter at the left, gear, speaker and fullscreen at the right. */
+.battle .challenge-banner.placement-top {
+  max-width: min(980px, calc(100% - var(--controls-width) - 440px));
+}
+
+/*
+ * Phone held sideways (side layout): smaller corner buttons and a compact counter, so the pause button and the counter
+ * at the left and the gear, speaker and fullscreen at the right leave the banner room between them (FR-104).
+ */
+.battle[data-layout='side'][data-number-pad='true'] .top-left,
+.battle[data-layout='side'][data-number-pad='true'] .top-right {
+  gap: 8px;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .top-left .icon-button,
+.battle[data-layout='side'][data-number-pad='true'] .top-right .icon-button {
+  width: 48px;
+  height: 48px;
+  font-size: 1.4rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .score {
+  padding: 4px 10px;
+  font-size: 1.25rem;
+}
+
+.battle[data-layout='side'][data-number-pad='true'] .challenge-banner.placement-top {
+  max-width: calc(100% - var(--controls-width) - 344px);
+}
+
+/* Amendment 15 (FR-115, FR-118): "Spielstand übertragen" on the settings page. */
+.transfer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.transfer-qr {
+  width: min(320px, 100%);
+  min-width: 240px;
+  height: auto;
+  aspect-ratio: 1;
+  border: 1px solid #ccc;
+  background: #fff;
+}
+
+.transfer-link-text {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: monospace;
+  font-size: 14px;
+  user-select: all;
+}
+
+/* T305: "QR groß anzeigen", the QR code as large as the screen allows on white; the code carries its quiet zone. */
+.qr-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  background: #fff;
+}
+
+.qr-fullscreen-code {
+  width: min(100vw - 32px, 100vh - 120px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
+/* Amendment 15 (FR-119): the dialog for a save link, over every screen. */
+.transfer-backdrop {
+  z-index: 200;
+}
+
+.transfer-dialog {
+  max-width: min(480px, calc(100vw - 32px));
+  text-align: center;
+}
+
+.transfer-summary {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.hold-button {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.hold-ring {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%) rotate(-90deg);
+  pointer-events: none;
+}
+
+.hold-ring circle {
+  fill: none;
+  stroke: #ffd54a;
+  stroke-width: 6;
+}
+
+.hold-ring[data-progress='0'] circle {
+  stroke: transparent;
+}
+
+/* The `?debug=screen` overlay (bug "iPhone rotation in Chrome"): above everything, never in the way of a tap. */
+.screen-debug {
+  position: fixed;
+  left: max(4px, env(safe-area-inset-left));
+  bottom: max(4px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  margin: 0;
+  padding: 4px 6px;
+  font: 11px/1.3 ui-monospace, monospace;
+  color: #fff;
+  background: rgb(0 0 0 / 70%);
+  pointer-events: none;
+  white-space: pre;
+}
+
+.build-version {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
