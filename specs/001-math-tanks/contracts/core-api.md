@@ -307,3 +307,34 @@ t(): Messages
 encouragements: readonly string[]          // FR-033
 forbiddenWords: readonly string[]          // 'falsch', 'verloren', 'Fehler', 'versagt', 'schlecht', 'dumm'
 ```
+
+## `core/math/twoNumbers` (pure, amendment 26)
+
+```ts
+carries(a: number, b: number): boolean            // some column of a + b sums to 10 or more (missing digits count as 0)
+borrows(a: number, b: number): boolean            // some digit of a is smaller than the digit of b in the same column
+twoNumberRules(kind: ArithmeticKind, settings: Settings, step?: DifficultyStep): TwoNumberRules
+  // { kind, first: {min,max}, second: {min,max} narrowed by step.secondFraction, carry: settings.<kind>.carry && (step?.allowCarry ?? true), lowest, highest }
+twoNumberPairs(answer: number, rules: TwoNumberRules, settings: Settings): Array<[number, number]>
+twoNumberAnswers(rules: TwoNumberRules, settings: Settings): number[]   // sorted, memoized on the fields it reads
+twoNumberFit(kind, settings): { any: boolean; all: boolean; extreme: number | null }  // for the settings checks and notes
+```
+
+Guarantees: every pair `[a, b]` has `a` in `first`, `b` in `second`, `a` and the answer inside the battlefield range, the answer within `[lowest, highest]` (`highest` is `min(maxResult, range.max)` for addition), `a > b` for subtraction, and `!carries(a, b)` / `!borrows(a, b)` when `carry` is false. `twoNumberAnswers` is exactly the answers with at least one pair. The addition and subtraction builders and `CANDIDATES` call these when `settings.<kind>.size === 'twoNumbers'` and return drafts with `operands: [a, b]`, `steps: [a, answer]`, `twoNumbers: true`. `arithmeticErrors` checks such a challenge against FR-149 and FR-150 instead of `maxOperand`, `steps` and the global crossing switches.
+
+## `core/math/placeValue` (pure, amendment 26)
+
+```ts
+type PlaceName = 'hundreds' | 'tens' | 'ones';
+type PlaceValueHelp =
+  | { form: 'columns'; sign: 1 | -1; lines: Array<{ place: PlaceName; a: number; b: number; result: number }>; parts: number[]; answer: number }
+  | { form: 'jumps'; lines: Array<{ place: PlaceName; from: number; by: number; to: number }> };
+placeValueHelp(kind: ArithmeticKind, a: number, b: number): PlaceValueHelp
+placeValuePath(kind: ArithmeticKind, a: number, b: number, beginnerAssist: boolean): number[]
+```
+
+Guarantees: `'columns'` for addition and for subtraction without a borrow, `'jumps'` for subtraction with a borrow. Column lines exist for the places where `b` has a digit other than 0, highest place first; `parts` are the line results plus the place values of `a` at the other places, and add up to the answer (35 + 12: lines tens 30 + 10 = 40, ones 5 + 2 = 7, parts [40, 7]; 45 + 6: line ones 5 + 6 = 11, parts [40, 11]). `placeValuePath` starts at `a`, ends at the answer, and jumps the hundreds, tens and ones of `b` in that order; with `beginnerAssist` one hundred or one ten per jump, and the ones jump stops at each ten it crosses (34 + 19: [34, 44, 50, 53]); without it one stop per place ([34, 44, 53]).
+
+`core/math/stepPath.stepPath(c, beginnerAssist)` returns `placeValuePath` for a challenge with `twoNumbers`. `HelpContent` gains `placeValue: PlaceValueHelp | null`, set at help step 2 with `help.stepAnimation` for such a challenge, with or without a ruler (FR-154, FR-155). `i18n.helpLines(h)` returns the banner lines ("Zehner: 30 + 10 = 40", …, "40 + 7 = 47"; "Erst die Zehner: 42 − 10 = 32", "Dann die Einer: 32 − 7 = 25"); `BattleOverlay` shows them under the help hint.
+
+`core/progress/ladders`: `twoNumberLadders` and `clampStep` as in data-model.md. `core/settings/validate`: the new error keys and `settingsNotices(s)`.
