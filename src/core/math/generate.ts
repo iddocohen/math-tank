@@ -4,6 +4,7 @@
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
+import { isTwoNumbers } from './arithmetic';
 import { COMPARISON_KINDS, comparisonAnswers, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, PlayMode, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
@@ -148,7 +149,10 @@ function tryKind(
   if (!build) return null;
   const step = stepFor(kind, input);
   const candidates = CANDIDATES[kind];
-  const inStep = wholeRange ? answers : withinStep(answers, input.settings, step);
+  // "Zwei Zahlen" (amendment 26) narrows by its own ladder fields (allowCarry, secondFraction); "smaller numbers first"
+  // would hide answers that only come from large first numbers, so it uses every allowed answer.
+  const twoNumbers = (kind === 'addition' || kind === 'subtraction') && isTwoNumbers(kind, input.settings);
+  const inStep = wholeRange || twoNumbers ? answers : withinStep(answers, input.settings, step);
   const allowed = new Set(inStep);
   const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
   if (pool.length === 0) return null;

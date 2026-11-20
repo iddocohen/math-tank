@@ -8,6 +8,7 @@ import type { Rng } from '../rng';
 import { lowestResult } from '../settings/validate';
 import type { DifficultyStep, Settings } from '../types';
 import { movementAllowed, type ChallengeDraft } from './numberLine';
+import { twoNumberAnswers, twoNumberPairErrors, twoNumberPairs, twoNumberRules } from './twoNumbers';
 
 export type ArithmeticKind = 'addition' | 'subtraction';
 
@@ -110,11 +111,66 @@ export function arithmeticAnswers(rules: ArithmeticRules, settings: Settings): n
   return out;
 }
 
+/** Whether `kind` uses "Zwei Zahlen" (amendment 26, FR-148). */
+export function isTwoNumbers(kind: ArithmeticKind, settings: Settings): boolean {
+  return settings[kind].size === 'twoNumbers';
+}
+
+/** "Zwei Zahlen" builder (FR-149, FR-150): a pair [a, b] with the answer, picked with the rng from every valid pair. */
+export function twoNumberDraft(kind: ArithmeticKind, answer: number, settings: Settings, step: DifficultyStep, rng: Rng): ChallengeDraft | null {
+  const pairs = twoNumberPairs(answer, twoNumberRules(kind, settings, step), settings);
+  if (pairs.length === 0) return null;
+  return { ...arithmeticDraft(kind, rng.pick(pairs)), twoNumbers: true };
+}
+
+/** "Zwei Zahlen" answers at this step: exactly the answers with at least one pair (research R24). */
+export function twoNumberCandidates(kind: ArithmeticKind, settings: Settings, step: DifficultyStep): number[] {
+  return twoNumberAnswers(twoNumberRules(kind, settings, step), settings);
+}
+
+type ArithmeticChallenge = {
+  kind: ArithmeticKind;
+  operands: number[];
+  answer: number;
+  steps?: number[];
+  twoNumbers?: true;
+  prompt: { params: Record<string, number> };
+};
+
+/** Shared checks of the answer, the steps and the prompt numbers. */
+function chainErrors(c: ArithmeticChallenge, chain: number[], errors: string[]): void {
+  if (chain[chain.length - 1] !== c.answer) errors.push(`${c.kind}: answer does not follow from the operands`);
+  if (c.steps && c.steps.join() !== chain.join()) errors.push(`${c.kind}: steps do not follow from the operands`);
+  const names = ['a', 'b', 'c'];
+  const params = c.prompt.params;
+  if (Object.keys(params).length !== c.operands.length || c.operands.some((n, i) => params[names[i]!] !== n)) {
+    errors.push(`${c.kind}: prompt numbers differ from the operands`);
+  }
+}
+
+/**
+ * "Zwei Zahlen" checks (FR-149, FR-150) against the parent's settings, not a ladder step: the ranges, the battlefield,
+ * the order for minus and the carry switch, instead of maxOperand, steps and the global crossing switches.
+ */
+function twoNumberErrors(c: ArithmeticChallenge, settings: Settings): string[] {
+  const errors: string[] = [];
+  if (c.operands.length !== 2) {
+    errors.push(`${c.kind}: ${c.operands.length} numbers, "Zwei Zahlen" needs 2`);
+    return errors;
+  }
+  const [a, b] = c.operands as [number, number];
+  errors.push(...twoNumberPairErrors(a, b, twoNumberRules(c.kind, settings), settings));
+  if (errors.length === 0) chainErrors(c, chainOf(c.operands, c.kind === 'addition' ? 1 : -1), errors);
+  return errors;
+}
+
 /** Rule checks for an addition or subtraction challenge against the parent settings (FR-029). */
-export function arithmeticErrors(
-  c: { kind: ArithmeticKind; operands: number[]; answer: number; steps?: number[]; prompt: { params: Record<string, number> } },
-  settings: Settings,
-): string[] {
+export function arithmeticErrors(c: ArithmeticChallenge, settings: Settings): string[] {
+  const twoNumbers = isTwoNumbers(c.kind, settings);
+  if (Boolean(c.twoNumbers) !== twoNumbers) {
+    return [`${c.kind}: the challenge ${c.twoNumbers ? 'uses' : 'does not use'} "Zwei Zahlen", the settings ${twoNumbers ? 'do' : 'do not'}`];
+  }
+  if (twoNumbers) return twoNumberErrors(c, settings);
   const errors: string[] = [];
   const rules = arithmeticRules(c.kind, settings);
   const { operands } = c;
@@ -136,12 +192,6 @@ export function arithmeticErrors(
       errors.push(`${c.kind}: ${chain[i - 1]} to ${chain[i]} crosses a ten or hundred that the settings forbid`);
     }
   }
-  if (chain[chain.length - 1] !== c.answer) errors.push(`${c.kind}: answer does not follow from the operands`);
-  if (c.steps && c.steps.join() !== chain.join()) errors.push(`${c.kind}: steps do not follow from the operands`);
-  const names = ['a', 'b', 'c'];
-  const params = c.prompt.params;
-  if (Object.keys(params).length !== operands.length || operands.some((n, i) => params[names[i]!] !== n)) {
-    errors.push(`${c.kind}: prompt numbers differ from the operands`);
-  }
+  chainErrors(c, chain, errors);
   return errors;
 }

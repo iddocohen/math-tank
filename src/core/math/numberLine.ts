@@ -21,7 +21,7 @@ export type NumberLineKind = (typeof NUMBER_LINE_KINDS)[number];
 
 /** The parts of a challenge a builder decides; the generator adds id, seed and skills. */
 export type ChallengeDraft = Pick<Challenge, 'kind' | 'prompt' | 'operands' | 'answer'> &
-  Partial<Pick<Challenge, 'options' | 'steps' | 'rulerLevel'>>;
+  Partial<Pick<Challenge, 'options' | 'steps' | 'rulerLevel' | 'twoNumbers'>>;
 
 /** `playerPosition` is passed to every builder; the generator already keeps the answer minEnemyGap from the player. */
 export type Builder = (answer: number, settings: Settings, step: DifficultyStep, rng: Rng, playerPosition?: number) => ChallengeDraft | null;

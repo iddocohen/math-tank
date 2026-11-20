@@ -47,11 +47,26 @@ function path(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps'>): num
   return start === undefined ? [] : [start, c.answer];
 }
 
+/**
+ * "Zwei Zahlen" (amendment 26) crosses a ten when the ones column carries (plus) or borrows (minus): 34 + 19 and
+ * 42 − 17 do, 35 + 12 does not, although 35 → 47 passes 40, because the tens are added as tens.
+ */
+function onesCross(c: Pick<Challenge, 'kind' | 'operands'>): boolean {
+  const [a = 0, b = 0] = c.operands;
+  return c.kind === 'addition' ? (a % 10) + (b % 10) >= 10 : a % 10 < b % 10;
+}
+
+type SkillSource = Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps' | 'twoNumbers'>;
+
 /** Further skills a challenge counts toward: `tens` for multiples of ten, `crossTens` for a crossed ten boundary. */
-export function secondarySkills(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps'>): Skill[] {
+export function secondarySkills(c: SkillSource): Skill[] {
   const out: Skill[] = [];
   const numbers = MOVING_KINDS.has(c.kind) ? [c.operands[0] ?? c.answer, c.answer] : [...c.operands, c.answer];
   if (numbers.some((n) => n !== 0 && n % 10 === 0)) out.push('tens');
+  if (c.twoNumbers) {
+    if (onesCross(c)) out.push('crossTens');
+    return out;
+  }
   const p = path(c);
   for (let i = 1; i < p.length; i++) {
     if (crossesMultiple(p[i - 1]!, p[i]!, 10)) {
@@ -63,7 +78,7 @@ export function secondarySkills(c: Pick<Challenge, 'kind' | 'operands' | 'answer
 }
 
 /** Main skill first, then the further skills (without duplicates). */
-export function skillsOf(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps'>): Skill[] {
+export function skillsOf(c: SkillSource): Skill[] {
   const main = mainSkillOf(c.kind);
   return [main, ...secondarySkills(c).filter((s) => s !== main)];
 }

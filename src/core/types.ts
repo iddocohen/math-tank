@@ -69,6 +69,8 @@ export interface Challenge {
   steps?: number[];
   /** readPosition only: the ruler level the challenge was built for. */
   rulerLevel?: RulerLevel;
+  /** Addition and subtraction built from "Zwei Zahlen" (amendment 26): operands [a, b], steps [a, answer]. */
+  twoNumbers?: true;
 }
 
 /**
@@ -142,6 +144,10 @@ export interface DifficultyStep {
   maxOperand?: number;
   /** Positions ladder only; clamped to [rulerLevelStart, rulerLevelMax] (FR-018). */
   rulerLevel?: RulerLevel;
+  /** "Zwei Zahlen" ladders only (amendment 26): carrying or borrowing allowed; ANDed with settings.<kind>.carry. */
+  allowCarry?: boolean;
+  /** "Zwei Zahlen" ladders only (amendment 26): the second number comes from min + fraction * (max - min) and below. */
+  secondFraction?: number;
 }
 
 export type Phase = 'challenge' | 'playerShot' | 'enemyTurn' | 'roundOver' | 'paused';
