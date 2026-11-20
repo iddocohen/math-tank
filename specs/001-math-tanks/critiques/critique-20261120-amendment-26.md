@@ -116,5 +116,6 @@ The project constitution is an unfilled template, so no principle applies.
 
 - E2 is added to FR-153, to amendment 26 item 6 and to data-model.md.
 - P4, P5, E3, E5, E7 and E8 are added to amendment 26 item 11 (tests) and item 7 (speech and layout).
+- P5 was later overruled by the product owner ("No reading out loud needed"): the lines are not spoken.
 - P3 is deferred.
 - P2 is resolved by the orchestrator's reading and reported in the run summary.

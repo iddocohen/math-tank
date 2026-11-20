@@ -54,7 +54,7 @@
    - The ruler marker starts at the first number and jumps the second number's hundreds, then its tens, then its ones: 35 + 12 goes 35 → 45 → 47, 46 − 12 goes 46 → 36 → 34. With beginner assistance it jumps one ten (or one hundred) at a time and stops at each ten it crosses in the ones jump, as today: 35 + 32 goes 35 → 45 → 55 → 65 → 67, and 34 + 19 goes 34 → 44 → 50 → 53. Without beginner assistance it makes one jump per place: 35 → 65 → 67.
    - In "Nur Rechnen", which draws no ruler, the banner lines show and the zoomed ten around the answer shows as today.
    - The lines fit the banner in every layout, including a phone held upright, by wrapping.
-   - With "Vorlesen" on, the lines are read aloud the same way the help hint is read today.
+   - The lines are not read aloud, also with "Vorlesen" on (product owner, 2026-11-20: "No reading out loud needed").
    - Help steps 1 and 3 do not change.
 8. **"Kleine Schritte" does not change.** Its exercises, help, ladder and settings work as before this amendment.
 9. **Old saves load.** Settings version 13 adds, for plus and for minus, "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and the carry switch off. Export files and transfer codes from older versions read with these defaults.
