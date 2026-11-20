@@ -11,7 +11,7 @@ function sampleSettings(): Settings {
   return {
     ...defaultSettings(),
     range: { preset: 'custom', min: 550, max: 780 },
-    addition: { maxOperand: 10, maxResult: 780, steps: 1 },
+    addition: { ...defaultSettings().addition, maxOperand: 10, maxResult: 780 },
     enemyDifficulty: 'challenging',
     rulerLevelStart: 2,
     rulerLevelMax: 4,
@@ -117,6 +117,27 @@ describe('importData (FR-048, FR-048a)', () => {
     const wave: Settings = { ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'none' };
     const r = importData(exportData(wave, sampleProgress(), sampleRecords(), sampleGarage()));
     expect(r.ok && r.settings).toMatchObject({ enemiesAtOnce: 3, lineStyle: 'none' });
+  });
+
+  it('keeps the "Zwei Zahlen" settings (amendment 26, FR-148)', () => {
+    const two: Settings = { ...sampleSettings(), subtraction: { ...sampleSettings().subtraction, size: 'twoNumbers', first: { min: 600, max: 700 }, second: { min: 1, max: 9 }, carry: true } };
+    const r = importData(exportData(two, sampleProgress(), sampleRecords(), sampleGarage()));
+    expect(r.ok && r.settings).toEqual(two);
+  });
+
+  it('a version 12 settings file (exported before amendment 26) imports with "Kleine Schritte", ranges 10 to 99 and no carrying (FR-156)', () => {
+    const strip = (k: Record<string, unknown>) => {
+      const { size: _size, first: _first, second: _second, carry: _carry, ...rest } = k;
+      void _size;
+      void _first;
+      void _second;
+      void _carry;
+      return rest;
+    };
+    const v12 = { ...sampleSettings(), version: 12, addition: strip(sampleSettings().addition), subtraction: strip(sampleSettings().subtraction) };
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const r = importData(JSON.stringify({ ...file, settings: v12 }));
+    expect(r.ok && r.settings).toEqual(sampleSettings());
   });
 
   it('a version 11 settings file with a removed curved line style imports with straight lines (amendment 21 item 18)', () => {
@@ -253,7 +274,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(12);
+    expect(r.settings.version).toBe(13);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

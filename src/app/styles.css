@@ -394,6 +394,38 @@ input:focus-visible {
   background: rgb(20 28 48 / 0.8);
 }
 
+/*
+ * Amendment 26 (FR-154): the place-value lines under the help hint, one per row. The box never gets wider than the
+ * message line and long lines wrap, so they fit on a desktop, an iPad and a phone held either way.
+ */
+.status-line .help-text {
+  box-sizing: border-box;
+  max-width: calc(100% - 16px);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.help-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 4px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.help-line {
+  display: block;
+  max-width: 100%;
+}
+
+/* Phone portrait and phone landscape: the lines are a little smaller, so three or four of them leave the ruler free. */
+@media (max-width: 599.98px), (max-height: 500px) {
+  .help-lines {
+    font-size: 1.05rem;
+  }
+}
+
 /* US5 help button (FR-030, FR-053): at the left of the control bar, 72 by 72 (at least 48 by 48), mouse and touch only. */
 .help-button {
   position: absolute;
@@ -757,6 +789,32 @@ input:focus-visible {
 
 .field > label {
   flex: 1 1 160px;
+}
+
+/* Amendment 26 (FR-148): the plus and the minus part of "Plus und Minus", each with its "Zahlengröße". */
+.settings-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 10px;
+}
+
+.settings-subgroup legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+/* "Erste Zahl von [ ] bis [ ]": both boxes in one row when there is room, below each other on a phone. */
+.span-field input[type='number'] {
+  flex: 1 1 80px;
+  min-width: 80px;
+}
+
+.span-field > .span-to {
+  flex: 0 0 auto;
 }
 
 .check-field > label {

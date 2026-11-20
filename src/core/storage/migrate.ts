@@ -1,4 +1,4 @@
-import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../settings/defaults';
+import { defaultSettings, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN, twoNumberDefaults } from '../settings/defaults';
 import { settingsSchema, type Settings } from '../settings/schema';
 import { clamp, isRecord, mergeDeep } from '../util';
 import { validateSettings } from '../settings/validate';
@@ -22,7 +22,7 @@ export function parseSettings(raw: unknown): Settings | null {
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
  * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
  * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Version 9 becomes version 10
- * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Version 11 becomes version 12 (amendment 21 item 18: the removed `lineStyle` values 'curved' and 'tangled' become 'straight'). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Version 11 becomes version 12 (amendment 21 item 18: the removed `lineStyle` values 'curved' and 'tangled' become 'straight'). Version 12 becomes version 13 (amendment 26: plus and minus get "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and no carrying). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -46,6 +46,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV10,
   migrateSettingsToV11,
   migrateSettingsToV12,
+  migrateSettingsToV13,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -169,6 +170,19 @@ function migrateSettingsToV11(raw: Record<string, unknown>): Record<string, unkn
 function migrateSettingsToV12(raw: Record<string, unknown>): Record<string, unknown> {
   const removed = raw.lineStyle === 'curved' || raw.lineStyle === 'tangled';
   return { ...raw, ...(removed ? { lineStyle: 'straight' } : {}), version: 12 };
+}
+
+/**
+ * Version 12 to 13 (amendment 26, FR-156): plus and minus each get "Zahlengröße" "Kleine Schritte", both ranges 10 to 99
+ * and the carry switch off, field by field unless already set. A kind that is not an object is kept so validation rejects it.
+ */
+function migrateSettingsToV13(raw: Record<string, unknown>): Record<string, unknown> {
+  const withDefaults = (k: unknown) => {
+    if (!isRecord(k)) return k;
+    const d = twoNumberDefaults();
+    return { ...k, size: k.size ?? d.size, first: k.first ?? d.first, second: k.second ?? d.second, carry: k.carry ?? d.carry };
+  };
+  return { ...raw, addition: withDefaults(raw.addition), subtraction: withDefaults(raw.subtraction), version: 13 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

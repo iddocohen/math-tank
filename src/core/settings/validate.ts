@@ -8,9 +8,13 @@ import {
   ROUND_LENGTH_MIN,
   TIME_LIMIT_MAX,
   TIME_LIMIT_MIN,
+  TWO_NUMBER_MAX,
+  TWO_NUMBER_MIN,
 } from './defaults';
+import { twoNumberFit, type TwoNumberFit } from '../math/twoNumbers';
 import { clamp } from '../util';
-import type { Settings, SettingsRange } from './schema';
+import { highestResult, isTwoNumbers, lowestResult } from './limits';
+import type { NumberSpan, Settings, SettingsRange } from './schema';
 
 /** Keys of `settingsErrors` in the translation table (src/i18n/de.ts). */
 export const SETTINGS_ERROR_KEYS = [
@@ -30,6 +34,14 @@ export const SETTINGS_ERROR_KEYS = [
   'additionNoExercise',
   'subtractionMaxOperand',
   'subtractionNoExercise',
+  // Amendment 26 (FR-151, FR-152), only for "Zahlengröße" "Zwei Zahlen".
+  'additionFirstRange',
+  'additionSecondRange',
+  'additionNoPair',
+  'subtractionFirstRange',
+  'subtractionSecondRange',
+  'subtractionOrder',
+  'subtractionNoPair',
 ] as const;
 
 export type SettingsErrorKey = (typeof SETTINGS_ERROR_KEYS)[number];
@@ -41,11 +53,6 @@ export interface SettingsError {
 }
 
 export type SettingsValidation = { ok: true } | { ok: false; errors: SettingsError[] };
-
-/** Smallest result an exercise may have: range.min, or 0 when negative results are off. */
-export function lowestResult(s: Pick<Settings, 'negativeResults'>, range: SettingsRange): number {
-  return s.negativeResults ? range.min : Math.max(range.min, 0);
-}
 
 /** Checks every rule in data-model.md (FR-047). */
 export function validateSettings(s: Settings): SettingsValidation {
@@ -82,25 +89,87 @@ export function validateSettings(s: Settings): SettingsValidation {
   }
 
   const lo = lowestResult(s, range);
+  // The largest operand and the steps apply to "Kleine Schritte" only; with "Zwei Zahlen" they are hidden (review).
+  const addSteps = !isTwoNumbers('addition', s);
+  const subSteps = !isTwoNumbers('subtraction', s);
 
   // Like subtraction, at most the range width, so generating an exercise stays fast (review R5).
-  if (s.addition.maxOperand < 1 || s.addition.maxOperand > span) add('additionMaxOperand', 'addition.maxOperand');
+  if (addSteps && (s.addition.maxOperand < 1 || s.addition.maxOperand > span)) add('additionMaxOperand', 'addition.maxOperand');
   if (s.addition.maxResult > range.max) add('additionMaxResult', 'addition.maxResult');
-  else if (s.challengeTypes.addition && lo + 1 > Math.min(s.addition.maxResult, range.max)) {
+  else if (s.challengeTypes.addition && lo + 1 > highestResult('addition', s)) {
     // The smallest sum is lo + 1 (lo plus an operand of 1).
     add('additionNoExercise', 'addition.maxResult');
   }
 
-  if (s.subtraction.maxOperand < 1 || s.subtraction.maxOperand > span) {
+  if (subSteps && (s.subtraction.maxOperand < 1 || s.subtraction.maxOperand > span)) {
     add('subtractionMaxOperand', 'subtraction.maxOperand');
-  } else if (s.challengeTypes.subtraction && lo + 1 > range.max) {
+  } else if (subSteps && s.challengeTypes.subtraction && lo + 1 > range.max) {
     // a - b >= lo with b >= 1 needs a >= lo + 1 inside the range.
     add('subtractionNoExercise', 'subtraction.maxOperand');
   }
 
+  for (const kind of ['addition', 'subtraction'] as const) errors.push(...twoNumberStatus(kind, s).errors);
+
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
+/** A "Zwei Zahlen" range of whole numbers from 1 to 999, smallest first (FR-151). */
+function spanOk(r: NumberSpan): boolean {
+  return Number.isInteger(r.min) && Number.isInteger(r.max) && r.min >= TWO_NUMBER_MIN && r.max <= TWO_NUMBER_MAX && r.min <= r.max;
+}
+
+/**
+ * The "Zwei Zahlen" checks of one kind (amendment 26, FR-149 to FR-152), shared by validateSettings and
+ * settingsNotices: the errors of its fields, and how its pairs fit the battlefield when the fields have no error
+ * and the kind is on (else `fit` is null). Each size also checks that the fields it hides hold whole numbers, so the
+ * saved settings pass the schema (review); that error shows at "Zahlengröße". No fit for "Kleine Schritte".
+ */
+function twoNumberStatus(kind: 'addition' | 'subtraction', s: Settings): { errors: SettingsError[]; fit: TwoNumberFit | null } {
+  const errors: SettingsError[] = [];
+  const k = s[kind];
+  if (!isTwoNumbers(kind, s)) {
+    // The hidden ranges are saved too, and the schema takes whole numbers only (review). The page resets them when
+    // "Zahlengröße" changes, so this error shows at "Zahlengröße" only for settings made elsewhere.
+    const whole = [k.first.min, k.first.max, k.second.min, k.second.max].every(Number.isInteger);
+    if (!whole) errors.push({ key: 'rangeNotInteger', path: `${kind}.size` });
+    return { errors, fit: null };
+  }
+  if (!spanOk(k.first)) errors.push({ key: `${kind}FirstRange`, path: `${kind}.first` });
+  if (!spanOk(k.second)) errors.push({ key: `${kind}SecondRange`, path: `${kind}.second` });
+  // Minus: some first number must be larger than some second number (FR-149).
+  if (errors.length === 0 && kind === 'subtraction' && k.first.max <= k.second.min) errors.push({ key: 'subtractionOrder', path: 'subtraction.first' });
+  const fit = errors.length === 0 && s.challengeTypes[kind] ? twoNumberFit(kind, s) : null;
+  if (fit && !fit.any) errors.push({ key: `${kind}NoPair`, path: `${kind}.size` });
+  // The same for the hidden largest operand of "Kleine Schritte".
+  if (!Number.isInteger(k.maxOperand)) errors.push({ key: 'rangeNotInteger', path: `${kind}.size` });
+  return { errors, fit };
+}
+
+/** Keys of `settingsNotes` in the translation table (src/i18n/de.ts). */
+export type SettingsNoticeKey = 'additionSomeOff' | 'subtractionSomeOff';
+
+/**
+ * A note on the settings page that does not block saving (amendment 26, FR-152): only some "Zwei Zahlen" exercises
+ * fit the battlefield. `value` is the largest plus answer or the smallest minus answer that can come.
+ */
+export interface SettingsNotice {
+  key: SettingsNoticeKey;
+  path: string;
+  value: number;
+}
+
+/**
+ * The non-blocking notes for settings without errors in the kind's fields: for each kind that is on with "Zwei Zahlen",
+ * when some pairs of its ranges fit and some do not.
+ */
+export function settingsNotices(s: Settings): SettingsNotice[] {
+  const notices: SettingsNotice[] = [];
+  for (const kind of ['addition', 'subtraction'] as const) {
+    const { fit } = twoNumberStatus(kind, s);
+    if (fit && fit.any && !fit.all && fit.extreme !== null) notices.push({ key: `${kind}SomeOff`, path: `${kind}.size`, value: fit.extreme });
+  }
+  return notices;
+}
 
 /**
  * Returns settings with the new range and the linked limits clamped to fit it,

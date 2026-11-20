@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../rng';
-import { defaultSettings } from '../settings/defaults';
+import { defaultSettings, twoNumberDefaults } from '../settings/defaults';
 import type { Settings } from '../settings/schema';
 import { validateSettings, withRange } from '../settings/validate';
 import { migrate } from '../storage/migrate';
@@ -27,7 +27,7 @@ function settings(): Settings {
   return {
     ...defaultSettings(),
     range: { preset: 'custom', min: 550, max: 780 },
-    addition: { maxOperand: 10, maxResult: 780, steps: 1 },
+    addition: { ...defaultSettings().addition, maxOperand: 10, maxResult: 780 },
     enemyDifficulty: 'normal',
     roundType: 'enemyCount',
     roundLength: 12,
@@ -210,6 +210,42 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     expect('enemiesAtOnce' in defJson[0] || 'lineStyle' in defJson[0]).toBe(false);
   });
 
+  it('a code made with settings version 12 reads with "Kleine Schritte", ranges 10 to 99 and no carrying (amendment 26, FR-156)', async () => {
+    const strip = (k: Record<string, unknown>) => {
+      const { size: _size, first: _first, second: _second, carry: _carry, ...rest } = k;
+      void _size;
+      void _first;
+      void _second;
+      void _carry;
+      return rest;
+    };
+    const old = { ...data(), settings: { ...settings(), version: 12, addition: strip(settings().addition), subtraction: strip(settings().subtraction) } } as unknown as ReturnType<typeof data>;
+    for (const codec of [null, undefined]) {
+      const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
+      const dec = await decodeTransfer(codeOf(enc.link));
+      expect(dec.ok && dec.data.settings).toEqual(settings());
+    }
+  });
+
+  it('carries every "Zwei Zahlen" field, leaves the defaults out and stays under 2300 bytes (amendment 26, FR-148)', async () => {
+    const s = withRange(settings(), { preset: '0-1000', min: 0, max: 1000 });
+    s.addition = { ...s.addition, size: 'twoNumbers', first: { min: 101, max: 998 }, second: { min: 2, max: 9 }, carry: true };
+    s.subtraction = { ...s.subtraction, size: 'twoNumbers', first: { min: 102, max: 997 }, second: { min: 3, max: 98 }, carry: true };
+    expect(validateSettings(s)).toEqual({ ok: true });
+    const two: ReturnType<typeof data> = { ...data(200), settings: s };
+    const r = await encodeTransfer(two, PAGE);
+    expect(r.fits).toBe(true);
+    expect(new TextEncoder().encode(r.link).length).toBeLessThanOrEqual(2300);
+    const dec = await decodeTransfer(codeOf(r.link));
+    expect(dec.ok && dec.data.settings).toEqual(s);
+    const plain = await encodeTransfer({ ...data(), settings: s }, PAGE, { codec: null });
+    const json = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(plain.link).slice(3)))) as [Record<string, Record<string, unknown>>];
+    expect(json[0].subtraction).toMatchObject({ size: 'twoNumbers', first: { min: 102, max: 997 }, second: { min: 3, max: 98 }, carry: true });
+    const def = await encodeTransfer(data(), PAGE, { codec: null });
+    const defJson = JSON.parse(new TextDecoder().decode(fromB64url(codeOf(def.link).slice(3)))) as [Record<string, Record<string, unknown> | undefined>];
+    for (const key of ['size', 'first', 'second', 'carry']) expect(key in (defJson[0].subtraction ?? {}), key).toBe(false);
+  });
+
   it('the compressed link is shorter than the uncompressed one', async () => {
     const zipped = await encodeTransfer(data(), PAGE, { codec: browserCodec() });
     const plain = await encodeTransfer(data(), PAGE, { codec: null });
@@ -316,7 +352,7 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(12);
+    expect(dec.data.settings.version).toBe(13);
     expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
     expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
     expect(dec.data.settings.pointAfterFullHelp).toBe(true);
@@ -435,8 +471,8 @@ const V6_DEFAULTS = {
   version: 6,
   challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
   range: { preset: '0-100', min: 0, max: 100 },
-  addition: { maxOperand: 10, maxResult: 100, steps: 1 },
-  subtraction: { maxOperand: 10, steps: 1 },
+  addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 1 },
+  subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 1 },
   crossTens: true,
   crossHundreds: false,
   negativeResults: false,
@@ -462,7 +498,17 @@ describe('frozen version 2 codes (review T1, P4)', () => {
   it('the settings differences of version 2 codes are laid over the frozen version 6 defaults, a point after the full help and the aiming cross', () => {
     // Amendment 18 adds pointAfterFullHelp: true and amendment 19 aimCross "Immer", the values the version 8 to 9 and
     // 9 to 10 steps give, so no existing code changes meaning.
-    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({ ...V6_DEFAULTS, pointAfterFullHelp: true, aimCross: { mode: 'always', level: 2 }, enemiesAtOnce: 1, lineStyle: 'straight' });
+    // Amendment 26 adds "Kleine Schritte", both ranges 10 to 99 and no carrying, the values the version 12 to 13 step gives.
+    const twoNumberDefaults = { size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false };
+    expect(TRANSFER_V2_SETTINGS_BASE).toEqual({
+      ...V6_DEFAULTS,
+      addition: { ...V6_DEFAULTS.addition, ...twoNumberDefaults },
+      subtraction: { ...V6_DEFAULTS.subtraction, ...twoNumberDefaults },
+      pointAfterFullHelp: true,
+      aimCross: { mode: 'always', level: 2 },
+      enemiesAtOnce: 1,
+      lineStyle: 'straight',
+    });
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.aimCross)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE)).toBe(true);
     expect(Object.isFrozen(TRANSFER_V2_SETTINGS_BASE.sound)).toBe(true);
@@ -479,7 +525,7 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       const v6 = {
         ...V6_DEFAULTS,
         range: { preset: 'custom', min: 550, max: 780 },
-        addition: { maxOperand: 10, maxResult: 780, steps: 1 },
+        addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 780, steps: 1 },
         enemyDifficulty: 'normal',
         showClock: true,
       };
@@ -492,7 +538,11 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
       // Made before amendment 21: one enemy at once and straight lines.
       expect(dec.data.settings).toMatchObject({ enemiesAtOnce: 1, lineStyle: 'straight' });
-      expect(dec.data.settings.version).toBe(12);
+      // Made before amendment 26: "Kleine Schritte", both ranges 10 to 99 and no carrying.
+      for (const kind of ['addition', 'subtraction'] as const) {
+        expect(dec.data.settings[kind]).toMatchObject({ size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false });
+      }
+      expect(dec.data.settings.version).toBe(13);
       expect(dec.data.garage).toEqual({
         version: 2,
         balance: 0,
@@ -582,8 +632,8 @@ function randomSettings(seed: number): Settings {
   const fitted = withRange(base, range);
   const span = range.max - range.min;
   const lo = negativeResults ? range.min : Math.max(range.min, 0);
-  fitted.addition = { maxOperand: r.int(1, span), maxResult: r.int(Math.min(lo + 1, range.max), range.max), steps: r.pick([1, 2] as const) };
-  fitted.subtraction = { maxOperand: r.int(1, span), steps: r.pick([1, 2] as const) };
+  fitted.addition = { ...fitted.addition, maxOperand: r.int(1, span), maxResult: r.int(Math.min(lo + 1, range.max), range.max), steps: r.pick([1, 2] as const) };
+  fitted.subtraction = { ...fitted.subtraction, maxOperand: r.int(1, span), steps: r.pick([1, 2] as const) };
   return fitted;
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
 import type { Challenge, Settings } from '../types';
+import { arithmeticErrors } from './arithmetic';
 import { validateChallenge } from './validate';
 
 const settings: Settings = defaultSettings(); // range 0 to 100, minEnemyGap 15
@@ -192,5 +193,60 @@ describe('validateChallenge comparison rules (T086, FR-027, amendment 09)', () =
   it('reports an order answer, which no kind has since amendment 09', () => {
     const c = { ...greater([47, 74], 74), orderAnswer: [47, 74] } as Challenge;
     expect(validateChallenge(c, settings, 100).some((e) => e.includes('order'))).toBe(true);
+  });
+});
+
+describe('arithmeticErrors for "Zwei Zahlen" (amendment 26, FR-149, FR-150)', () => {
+  function two(kind: 'addition' | 'subtraction', own: Partial<Settings['addition']> = {}): Settings {
+    const s = defaultSettings();
+    if (kind === 'addition') s.addition = { ...s.addition, size: 'twoNumbers', ...own };
+    else s.subtraction = { ...s.subtraction, size: 'twoNumbers', ...own };
+    return s;
+  }
+  function pair(kind: 'addition' | 'subtraction', a: number, b: number) {
+    const answer = kind === 'addition' ? a + b : a - b;
+    return { kind, operands: [a, b], answer, steps: [a, answer], twoNumbers: true as const, prompt: { params: { a, b } } };
+  }
+
+  it('accepts valid two-number challenges', () => {
+    expect(arithmeticErrors(pair('addition', 35, 12), two('addition'))).toEqual([]);
+    expect(arithmeticErrors(pair('addition', 34, 19), two('addition', { carry: true }))).toEqual([]);
+    expect(arithmeticErrors(pair('subtraction', 46, 12), two('subtraction'))).toEqual([]);
+    expect(arithmeticErrors(pair('subtraction', 42, 17), two('subtraction', { carry: true }))).toEqual([]);
+    // 45 + 6 with a one-digit second number and carrying; the global crossing switches do not apply.
+    const s = two('addition', { carry: true, second: { min: 1, max: 9 } });
+    s.crossTens = false;
+    expect(arithmeticErrors(pair('addition', 45, 6), s)).toEqual([]);
+  });
+
+  it('rejects a carry or borrow with the switch off', () => {
+    expect(arithmeticErrors(pair('addition', 34, 19), two('addition')).join()).toMatch(/carries/);
+    expect(arithmeticErrors(pair('subtraction', 42, 17), two('subtraction')).join()).toMatch(/borrows/);
+  });
+
+  it('rejects a number outside its range', () => {
+    expect(arithmeticErrors(pair('addition', 35, 5), two('addition')).join()).toMatch(/second number 5/);
+    expect(arithmeticErrors(pair('addition', 5, 12), two('addition', { first: { min: 10, max: 99 } })).join()).toMatch(/first number 5/);
+  });
+
+  it('rejects a minus first number that is not larger', () => {
+    const s = two('subtraction', { carry: true, first: { min: 10, max: 99 }, second: { min: 10, max: 99 } });
+    s.negativeResults = true;
+    s.range = { preset: 'custom', min: -50, max: 100 };
+    expect(arithmeticErrors(pair('subtraction', 23, 23), s).join()).toMatch(/not larger/);
+    expect(arithmeticErrors(pair('subtraction', 12, 46), s).join()).toMatch(/not larger/);
+  });
+
+  it('rejects a first number off the battlefield', () => {
+    const s = two('addition', { first: { min: 10, max: 99 }, second: { min: 1, max: 9 } });
+    s.range = { preset: 'custom', min: 50, max: 150 };
+    s.addition.maxResult = 150;
+    expect(arithmeticErrors(pair('addition', 41, 8), s).join()).toMatch(/outside the battlefield/);
+    expect(arithmeticErrors(pair('addition', 51, 8), s)).toEqual([]);
+  });
+
+  it('rejects a two-number challenge under "Kleine Schritte" and steps that do not follow', () => {
+    expect(arithmeticErrors(pair('addition', 35, 12), defaultSettings()).length).toBeGreaterThan(0);
+    expect(arithmeticErrors({ ...pair('addition', 35, 12), steps: [35, 45, 47] }, two('addition')).join()).toMatch(/steps/);
   });
 });

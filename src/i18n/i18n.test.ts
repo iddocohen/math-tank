@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_ERROR_KEYS } from '../core/settings/validate';
 import { de } from './de';
-import { comparisonPrompt, encouragements, forbiddenWords, helpText, messageText, promptText, t } from './index';
+import { comparisonPrompt, encouragements, forbiddenWords, helpLines, helpText, messageText, promptText, t } from './index';
+import { placeValueHelp } from '../core/math/placeValue';
+import type { HelpContent } from '../core/types';
 import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore, type Speaker } from '../core/battle/ports';
 import { nextHelp } from '../core/battle/help';
@@ -267,5 +269,42 @@ describe('amendment 21 settings texts (FR-136, FR-144)', () => {
     expect('lineStyleCurved' in L || 'lineStyleTangled' in L).toBe(false);
     expect(t().settings.explanations.enemiesAtOnce.length).toBeGreaterThan(0);
     expect(t().settings.explanations.lineStyle.length).toBeGreaterThan(0);
+  });
+});
+
+describe('helpLines (amendment 26 item 7, FR-154, FR-155)', () => {
+  const base: HelpContent = { step: 2, direction: null, nearestMajor: null, zoom: null, count: null, stepPath: null, placeValue: null, tensDigits: false, optionMarkers: null, solution: null };
+  const lines = (kind: 'addition' | 'subtraction', a: number, b: number) => helpLines({ ...base, placeValue: placeValueHelp(kind, a, b) });
+
+  it('gives one line per place, then the sum of the parts', () => {
+    expect(lines('addition', 35, 12)).toEqual(['Zehner: 30 + 10 = 40', 'Einer: 5 + 2 = 7', '40 + 7 = 47']);
+    expect(lines('addition', 34, 19)).toEqual(['Zehner: 30 + 10 = 40', 'Einer: 4 + 9 = 13', '40 + 13 = 53']);
+    expect(lines('addition', 45, 6)).toEqual(['Einer: 5 + 6 = 11', '40 + 11 = 51']);
+    expect(lines('subtraction', 46, 12)).toEqual(['Zehner: 40 − 10 = 30', 'Einer: 6 − 2 = 4', '30 + 4 = 34']);
+    expect(lines('subtraction', 46, 2)).toEqual(['Einer: 6 − 2 = 4', '40 + 4 = 44']);
+    expect(lines('addition', 234, 152)).toEqual(['Hunderter: 200 + 100 = 300', 'Zehner: 30 + 50 = 80', 'Einer: 4 + 2 = 6', '300 + 80 + 6 = 386']);
+    expect(lines('addition', 40, 7)).toEqual(['Einer: 0 + 7 = 7', '40 + 7 = 47']);
+  });
+
+  it('leaves out the sum line when there is only one part, which the place line already shows', () => {
+    expect(lines('addition', 7, 2)).toEqual(['Einer: 7 + 2 = 9']);
+    expect(lines('addition', 40, 20)).toEqual(['Zehner: 40 + 20 = 60']);
+  });
+
+  it('shows the jumps for minus with borrowing', () => {
+    expect(lines('subtraction', 42, 17)).toEqual(['Erst die Zehner: 42 − 10 = 32', 'Dann die Einer: 32 − 7 = 25']);
+    expect(lines('subtraction', 432, 157)).toEqual(['Erst die Hunderter: 432 − 100 = 332', 'Dann die Zehner: 332 − 50 = 282', 'Dann die Einer: 282 − 7 = 275']);
+  });
+
+  it('is empty without place values, and the help hint stays the step animation hint', () => {
+    expect(helpLines({ ...base, stepPath: [43, 40, 36] })).toEqual([]);
+    expect(helpText({ ...base, stepPath: [35, 45, 47], placeValue: placeValueHelp('addition', 35, 12) })).toBe(de.helpSteps.stepAnimation);
+  });
+
+  it('the place-value lines have no forbidden word and at most 9 words', () => {
+    for (const text of [...lines('addition', 234, 152), ...lines('subtraction', 432, 157)]) {
+      expect(hasForbiddenWord(text), text).toBe(false);
+      expect(wordCount(text), text).toBeLessThanOrEqual(9);
+    }
   });
 });

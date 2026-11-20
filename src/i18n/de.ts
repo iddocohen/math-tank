@@ -159,6 +159,18 @@ export const de = {
     tensDigits: 'Vergleiche zuerst die Zehner.',
     optionMarkers: 'Weiter rechts steht die größere Zahl.',
     solution: (n: number) => `Hier ist die ${n}.`,
+    /** Step 2 of a "Zwei Zahlen" exercise (amendment 26, FR-154): the place names and the banner lines. */
+    places: { hundreds: 'Hunderter', tens: 'Zehner', ones: 'Einer' },
+    /** One calculation, for example "30 + 10 = 40" or "42 − 10 = 32" (any value of `minus` but 0 gives "−"). */
+    equation: (a: number, b: number, result: number, minus = 0) => `${a} ${minus ? '−' : '+'} ${b} = ${result}`,
+    /** A column line: "Zehner: 30 + 10 = 40". */
+    placeLine: (place: string, equation: string) => `${place}: ${equation}`,
+    /** The sum of the parts: "40 + 7 = 47". */
+    partsSum: (answer: number, ...parts: number[]) => `${parts.join(' + ')} = ${answer}`,
+    /** Minus with borrowing, the first jump: "Erst die Zehner: 42 − 10 = 32". */
+    firstJump: (place: string, equation: string) => `Erst die ${place}: ${equation}`,
+    /** The following jumps: "Dann die Einer: 32 − 7 = 25". */
+    nextJump: (place: string, equation: string) => `Dann die ${place}: ${equation}`,
   },
 
   /** Amendment 06 (FR-085, FR-086): result, time and the personal best, never a comparison. */
@@ -331,6 +343,9 @@ export const de = {
       playModes: 'Spielarten',
       range: 'Zahlenraum',
       arithmetic: 'Plus und Minus',
+      /** The plus and the minus part of "Plus und Minus" (amendment 26, FR-148). */
+      addition: 'Plus',
+      subtraction: 'Minus',
       numberLine: 'Zahlenstrahl',
       help: 'Hilfe',
       enemy: 'Gegner',
@@ -354,6 +369,17 @@ export const de = {
       subtractionSteps: 'Rechenschritte beim Minus',
       crossTens: 'Über den Zehner',
       crossHundreds: 'Über den Hunderter',
+      /** "Zahlengröße" of plus and of minus (amendment 26, FR-148). The "bis" fields are named in full for screen readers. */
+      numberSize: 'Zahlengröße',
+      numberSizeSteps: 'Kleine Schritte',
+      numberSizeTwoNumbers: 'Zwei Zahlen',
+      firstFrom: 'Erste Zahl von',
+      firstTo: 'Erste Zahl bis',
+      secondFrom: 'Zweite Zahl von',
+      secondTo: 'Zweite Zahl bis',
+      to: 'bis',
+      additionCarry: 'Plus mit Übertrag',
+      subtractionCarry: 'Minus mit Übertrag',
       negativeResults: 'Ergebnisse unter null',
       rulerLevelStart: 'Zahlenstrahl am Anfang',
       rulerLevelMax: 'Schwerste Stufe des Zahlenstrahls',
@@ -404,6 +430,8 @@ export const de = {
     /** Amendment 18 (FR-129): one line under each switch of the time limit and the point after the full help. */
     explanations: {
       aimCross: 'Das gelbe Kreuz mit der Linie zum Zahlenstrahl.',
+      /** Under the crossing switches when plus or minus uses "Zwei Zahlen" (amendment 26). */
+      crossingSmallSteps: 'Gilt nur für „Kleine Schritte“.',
       enemiesAtOnce: 'So viele Gegner stehen beim Zahlenstrahl auf einmal da.',
       lineStyle: 'Ohne Linien liest das Kind die Zahl genau unter dem Panzer ab.',
       timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
@@ -443,6 +471,19 @@ export const de = {
     additionNoExercise: 'Mit diesen Grenzen gibt es keine Plus-Aufgabe.',
     subtractionMaxOperand: 'Die größte Zahl beim Minus muss zwischen 1 und der Größe des Zahlenraums liegen.',
     subtractionNoExercise: 'Mit diesen Grenzen gibt es keine Minus-Aufgabe.',
+    additionFirstRange: 'Die erste Zahl beim Plus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    additionSecondRange: 'Die zweite Zahl beim Plus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    additionNoPair: 'Mit diesen Zahlen gibt es keine Plus-Aufgabe, die auf das Feld passt.',
+    subtractionFirstRange: 'Die erste Zahl beim Minus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    subtractionSecondRange: 'Die zweite Zahl beim Minus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    subtractionOrder: 'Beim Minus muss die erste Zahl größer sein können als die zweite.',
+    subtractionNoPair: 'Mit diesen Zahlen gibt es keine Minus-Aufgabe, die auf das Feld passt.',
+  },
+
+  /** Notes on the settings page that do not block saving (amendment 26, FR-152). */
+  settingsNotes: {
+    additionSomeOff: (n: number) => `Nicht alle Aufgaben passen auf das Feld. Es kommen nur Aufgaben mit Ergebnis bis ${n}.`,
+    subtractionSomeOff: (n: number) => `Nicht alle Aufgaben passen auf das Feld. Es kommen nur Aufgaben mit Ergebnis ab ${n}.`,
   },
 
   /** Encouraging feedback after a wrong answer (FR-033, FR-057): at most 8 words each. */

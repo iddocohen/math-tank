@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings, RANGE_PRESETS } from './defaults';
+import { defaultSettings, RANGE_PRESETS, twoNumberDefaults } from './defaults';
 import { settingsSchema, type Settings } from './schema';
-import { validateSettings, withRange, type SettingsError } from './validate';
+import { settingsNotices, validateSettings, withRange, type SettingsError } from './validate';
 import { parseSettings } from '../storage/migrate';
 
 function clone(s: Settings): Settings {
@@ -21,11 +21,11 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 12,
+      version: 13,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
-      addition: { maxOperand: 10, maxResult: 100, steps: 1 },
-      subtraction: { maxOperand: 10, steps: 1 },
+      addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 1, size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
+      subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 1, size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
       crossTens: true,
       crossHundreds: false,
       negativeResults: false,
@@ -302,7 +302,7 @@ describe('validateSettings', () => {
 
 describe('addition.maxOperand limit (review R5)', () => {
   it('an addition operand larger than the range width is refused, like subtraction', () => {
-    const s = { ...defaultSettings(), range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { maxOperand: 21, maxResult: 20, steps: 1 as const } };
+    const s = { ...defaultSettings(), range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { ...twoNumberDefaults(), maxOperand: 21, maxResult: 20, steps: 1 as const } };
     const r = validateSettings(s);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors).toContainEqual({ key: 'additionMaxOperand', path: 'addition.maxOperand' });
@@ -352,7 +352,7 @@ describe('whole numbers and one parse function (review T4)', () => {
     const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
     void _modes;
-    expect(parseSettings(v5)).toMatchObject({ version: 12, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
+    expect(parseSettings(v5)).toMatchObject({ version: 13, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });
@@ -406,5 +406,140 @@ describe('withRange', () => {
     const s = withRange(defaultSettings(), { preset: 'custom', min: 15, max: 45 });
     expect(validateSettings(s)).toEqual({ ok: true });
     expect(s.range).toEqual({ preset: 'custom', min: 15, max: 45 });
+  });
+});
+
+describe('"Zwei Zahlen" settings (amendment 26, FR-148, FR-151, FR-152)', () => {
+  /** Defaults with "Zwei Zahlen" for one or both kinds; `patch` changes the kind's fields. */
+  function twoNumbers(patch: { addition?: Partial<Settings['addition']>; subtraction?: Partial<Settings['subtraction']> } = {}): Settings {
+    const s = defaultSettings();
+    s.addition = { ...s.addition, size: 'twoNumbers', ...patch.addition };
+    s.subtraction = { ...s.subtraction, size: 'twoNumbers', ...patch.subtraction };
+    return s;
+  }
+
+  function keys(s: Settings): string[] {
+    return errorsOf(s).map((e) => e.key);
+  }
+
+  it('the defaults are "Kleine Schritte", both ranges 10 to 99 and no carrying, for plus and for minus', () => {
+    for (const kind of ['addition', 'subtraction'] as const) {
+      expect(defaultSettings()[kind]).toMatchObject({ size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false });
+    }
+    expect(validateSettings(twoNumbers())).toEqual({ ok: true });
+  });
+
+  it('the schema accepts the new fields and rejects wrong values', () => {
+    expect(settingsSchema.safeParse(twoNumbers({ addition: { carry: true, first: { min: 100, max: 999 }, second: { min: 1, max: 9 } } })).success).toBe(true);
+    const bad: unknown[] = [
+      { size: 'big' },
+      { first: { min: 10 } },
+      { second: { min: 1.5, max: 9 } },
+      { first: '10-99' },
+      { carry: 'yes' },
+    ];
+    for (const kind of ['addition', 'subtraction'] as const) {
+      for (const patch of bad) {
+        const s = { ...defaultSettings(), [kind]: { ...defaultSettings()[kind], ...(patch as object) } };
+        expect(settingsSchema.safeParse(s).success, `${kind} ${JSON.stringify(patch)}`).toBe(false);
+      }
+      const { size: _size, ...without } = defaultSettings()[kind];
+      void _size;
+      expect(settingsSchema.safeParse({ ...defaultSettings(), [kind]: without }).success).toBe(false);
+    }
+  });
+
+  it('a range below 1, above 999 or with the smallest number above the largest is an error', () => {
+    for (const r of [{ min: 0, max: 99 }, { min: 10, max: 1000 }, { min: 50, max: 40 }]) {
+      expect(errorsOf(twoNumbers({ addition: { first: r } }))).toContainEqual({ key: 'additionFirstRange', path: 'addition.first' });
+      expect(errorsOf(twoNumbers({ addition: { second: r } }))).toContainEqual({ key: 'additionSecondRange', path: 'addition.second' });
+      expect(errorsOf(twoNumbers({ subtraction: { first: r } }))).toContainEqual({ key: 'subtractionFirstRange', path: 'subtraction.first' });
+      expect(errorsOf(twoNumbers({ subtraction: { second: r } }))).toContainEqual({ key: 'subtractionSecondRange', path: 'subtraction.second' });
+    }
+    // 1 to 999 is allowed (with a battlefield where pairs fit).
+    const wide = withRange(twoNumbers({ addition: { first: { min: 1, max: 999 }, second: { min: 1, max: 999 }, carry: true } }), { preset: '0-1000', min: 0, max: 1000 });
+    wide.subtraction = { ...wide.subtraction, first: { min: 1, max: 999 }, second: { min: 1, max: 999 }, carry: true };
+    expect(validateSettings(wide)).toEqual({ ok: true });
+  });
+
+  it('minus needs a first number that can be larger than the second', () => {
+    const s = twoNumbers({ subtraction: { first: { min: 10, max: 20 }, second: { min: 20, max: 30 } } });
+    expect(errorsOf(s)).toContainEqual({ key: 'subtractionOrder', path: 'subtraction.first' });
+    expect(keys(s)).not.toContain('subtractionNoPair');
+    expect(keys(twoNumbers({ subtraction: { first: { min: 10, max: 21 }, second: { min: 20, max: 30 }, carry: true } }))).not.toContain('subtractionOrder');
+  });
+
+  it('no exercise that fits the battlefield is an error for each kind that is on', () => {
+    // Battlefield 550 to 780: no first number from 10 to 99 lies on it.
+    const s = withRange(twoNumbers(), { preset: 'custom', min: 550, max: 780 });
+    expect(errorsOf(s)).toEqual([
+      { key: 'additionNoPair', path: 'addition.size' },
+      { key: 'subtractionNoPair', path: 'subtraction.size' },
+    ]);
+    s.challengeTypes = { ...s.challengeTypes, addition: false, subtraction: false };
+    expect(validateSettings(s)).toEqual({ ok: true });
+    // Without carrying, first numbers 90 to 99 and second numbers 10 to 99 always carry.
+    expect(keys(twoNumbers({ addition: { first: { min: 90, max: 99 } } }))).toContain('additionNoPair');
+    expect(keys(twoNumbers({ addition: { first: { min: 90, max: 99 }, carry: true } }))).not.toContain('additionNoPair');
+    // "Größtes Ergebnis" applies: sums of 10 to 99 and 10 to 99 are at least 20.
+    const low = twoNumbers();
+    low.addition.maxResult = 19;
+    expect(keys(low)).toContain('additionNoPair');
+  });
+
+  it('the new checks apply only to "Zwei Zahlen"', () => {
+    const s = defaultSettings();
+    s.addition = { ...s.addition, first: { min: 0, max: 1000 }, second: { min: 50, max: 40 } };
+    s.subtraction = { ...s.subtraction, first: { min: 10, max: 20 }, second: { min: 20, max: 30 } };
+    expect(validateSettings(s)).toEqual({ ok: true });
+    expect(validateSettings(withRange(defaultSettings(), { preset: 'custom', min: 550, max: 780 }))).toEqual({ ok: true });
+    expect(settingsNotices(s)).toEqual([]);
+  });
+
+  it('settingsNotices names the largest plus answer when only some exercises fit', () => {
+    // Both numbers 10 to 99 with carrying on the battlefield 0 to 100: sums above 100 do not come.
+    expect(settingsNotices(twoNumbers({ addition: { carry: true } }))).toEqual([{ key: 'additionSomeOff', path: 'addition.size', value: 100 }]);
+    // Without carrying every sum of two-digit numbers is at most 99, so all fit.
+    expect(settingsNotices(twoNumbers())).toEqual([]);
+    const low = twoNumbers();
+    low.addition.maxResult = 50;
+    expect(settingsNotices(low)).toEqual([{ key: 'additionSomeOff', path: 'addition.size', value: 50 }]);
+  });
+
+  it('settingsNotices names the smallest minus answer when only some exercises fit', () => {
+    // Battlefield 50 to 150: answers below 50 and first numbers below 50 do not come.
+    const s = withRange(twoNumbers({ subtraction: { carry: true } }), { preset: 'custom', min: 50, max: 150 });
+    s.addition.size = 'steps';
+    expect(validateSettings(s)).toEqual({ ok: true });
+    expect(settingsNotices(s)).toEqual([{ key: 'subtractionSomeOff', path: 'subtraction.size', value: 50 }]);
+  });
+
+  it('settingsNotices is empty for a kind that is off or has no exercise at all', () => {
+    const off = twoNumbers({ addition: { carry: true } });
+    off.challengeTypes = { ...off.challengeTypes, addition: false };
+    expect(settingsNotices(off)).toEqual([]);
+    expect(settingsNotices(withRange(twoNumbers({ addition: { carry: true } }), { preset: 'custom', min: 550, max: 780 }))).toEqual([]);
+  });
+
+  it('the hidden "Zwei Zahlen" ranges must hold whole numbers with "Kleine Schritte", shown at "Zahlengröße" (review)', () => {
+    const s = defaultSettings();
+    s.addition.first = { min: Number.NaN, max: 99 };
+    s.subtraction.second = { min: 10, max: 1.5 };
+    expect(errorsOf(s)).toEqual([
+      { key: 'rangeNotInteger', path: 'addition.size' },
+      { key: 'rangeNotInteger', path: 'subtraction.size' },
+    ]);
+    // Whole numbers outside 1 to 999 or in the wrong order are only checked once "Zwei Zahlen" is chosen.
+    const loose = defaultSettings();
+    loose.addition.first = { min: 50, max: 20 };
+    loose.subtraction.second = { min: 0, max: 1000 };
+    expect(validateSettings(loose)).toEqual({ ok: true });
+  });
+
+  it('with "Zwei Zahlen" the hidden largest operand is not checked, but must be a whole number (review)', () => {
+    const s = twoNumbers({ addition: { maxOperand: 0 }, subtraction: { maxOperand: 5000 } });
+    expect(validateSettings(s)).toEqual({ ok: true });
+    const nan = twoNumbers({ addition: { maxOperand: Number.NaN } });
+    expect(errorsOf(nan)).toEqual([{ key: 'rangeNotInteger', path: 'addition.size' }]);
   });
 });

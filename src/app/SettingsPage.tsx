@@ -20,14 +20,18 @@
  * this browser; the link is built again after "Speichern" and after "Daten laden".
  * Amendment 24: when the browser holds a copy of data an earlier version could not read and this version can,
  * a notice names it and "Kopie wiederherstellen" puts it back, then the page reloads.
+ * Amendment 26 (FR-148, FR-152): plus and minus each have "Zahlengröße" (KindSettings). "Zwei Zahlen" shows both number
+ * ranges and the carry switch and hides the largest operand and the steps; errors show at their field, and the note
+ * that only some exercises fit shows under "Zahlengröße" without blocking "Speichern".
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { qrMatrix, qrPath, type QrMatrix } from '../core/transfer/qr';
 import { encodeTransfer, type EncodedTransfer } from '../core/transfer/transfer';
 import type { RulerLevel } from '../core/numberline/ticks';
-import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/settings/defaults';
-import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
-import { validateSettings, withRange } from '../core/settings/validate';
+import { defaultSettings, RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN, TWO_NUMBER_MAX, TWO_NUMBER_MIN, twoNumberDefaults } from '../core/settings/defaults';
+import type { NumberSpan, RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
+import { isTwoNumbers } from '../core/settings/limits';
+import { settingsNotices, validateSettings, withRange, type SettingsNotice } from '../core/settings/validate';
 import { t } from '../i18n';
 import { BUILD_DATE, BUILD_VERSION } from './buildInfo';
 import type { DataKind, Persistence } from './persistence';
@@ -72,12 +76,14 @@ function collectErrors(s: Settings): Map<string, string[]> {
   if (!r.ok) {
     for (const e of r.errors) add(e.path, m.settingsErrors[e.key]);
   }
+  // The largest operand shows with "Kleine Schritte" only; with "Zwei Zahlen" validateSettings checks it (review).
   const wholeNumbers: Array<[string, number]> = [
-    ['addition.maxOperand', s.addition.maxOperand],
     ['addition.maxResult', s.addition.maxResult],
-    ['subtraction.maxOperand', s.subtraction.maxOperand],
     ['timeLimitSeconds', s.timeLimitSeconds ?? 0],
   ];
+  for (const kind of ['addition', 'subtraction'] as const) {
+    if (!isTwoNumbers(kind, s)) wholeNumbers.push([`${kind}.maxOperand`, s[kind].maxOperand]);
+  }
   for (const [path, value] of wholeNumbers) if (!Number.isInteger(value)) add(path, m.settingsErrors.rangeNotInteger);
   return out;
 }
@@ -116,7 +122,9 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     else setRestoreFailed(true);
   };
 
-  const errors = collectErrors(draft);
+  // Checked once per draft: the rules include the "Zwei Zahlen" pair search (amendment 26).
+  const errors = useMemo(() => collectErrors(draft), [draft]);
+  const notices = useMemo(() => settingsNotices(draft), [draft]);
   const valid = errors.size === 0;
   const errorsAt = (path: string) => errors.get(path) ?? [];
 
@@ -197,6 +205,9 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   const custom = draft.range.preset === 'custom';
   const rangeOk = errorsAt('range').length === 0;
   const allTypesOff = !Object.values(draft.challengeTypes).some(Boolean);
+  // The crossing switches apply to "Kleine Schritte" only; the page says so once a kind uses "Zwei Zahlen" (amendment 26).
+  const twoNumbersUsed = isTwoNumbers('addition', draft) || isTwoNumbers('subtraction', draft);
+  const crossingNote = twoNumbersUsed ? m.settings.explanations.crossingSmallSteps : undefined;
 
   return (
     <div className="settings-page" role="dialog" aria-modal="true" aria-label={m.settings.title} data-testid="settings-page">
@@ -281,13 +292,11 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
         </Group>
 
         <Group title={m.settings.groups.arithmetic}>
-          <NumberInput label={L.additionMaxOperand} value={draft.addition.maxOperand} errors={errorsAt('addition.maxOperand')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxOperand: n } })} />
-          <NumberInput label={L.additionMaxResult} value={draft.addition.maxResult} errors={errorsAt('addition.maxResult')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxResult: n } })} />
-          <Select label={L.additionSteps} value={String(draft.addition.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, addition: { ...draft.addition, steps: v === '2' ? 2 : 1 } })} />
-          <NumberInput label={L.subtractionMaxOperand} value={draft.subtraction.maxOperand} errors={errorsAt('subtraction.maxOperand')} onChange={(n) => setLimit({ ...draft, subtraction: { ...draft.subtraction, maxOperand: n } })} />
-          <Select label={L.subtractionSteps} value={String(draft.subtraction.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, subtraction: { ...draft.subtraction, steps: v === '2' ? 2 : 1 } })} />
+          {/* Amendment 26 (FR-148, FR-152): "Zahlengröße" per kind; "Zwei Zahlen" replaces the largest operand and the steps. */}
+          <KindSettings kind="addition" settings={draft} errorsAt={errorsAt} notices={notices} onChange={setLimit} />
+          <KindSettings kind="subtraction" settings={draft} errorsAt={errorsAt} notices={notices} onChange={setLimit} />
           <Check label={L.crossTens} {...bind('crossTens')} />
-          <Check label={L.crossHundreds} {...bind('crossHundreds')} />
+          <Check label={L.crossHundreds} description={crossingNote} {...bind('crossHundreds')} />
         </Group>
 
         <Group title={m.settings.groups.numberLine} errors={errorsAt('rulerLevelStart')} wide>
@@ -586,6 +595,94 @@ function LargeQr({ qr, onClose }: { qr: QrMatrix; onClose: () => void }) {
   );
 }
 
+/** The fields plus and minus both have (amendment 26, FR-148, FR-152). */
+type KindFields = Pick<Settings['subtraction'], 'size' | 'first' | 'second' | 'carry' | 'maxOperand' | 'steps'>;
+
+/**
+ * The plus or the minus part of "Plus und Minus" (amendment 26): "Zahlengröße", then with "Kleine Schritte" the
+ * largest operand and the steps, with "Zwei Zahlen" both ranges and the carry switch instead; plus also shows
+ * "Größtes Ergebnis" with both. Each error shows at its field, and the note that only some exercises fit
+ * (`notices`, from settingsNotices) shows under "Zahlengröße" without blocking "Speichern".
+ */
+function KindSettings({
+  kind,
+  settings,
+  errorsAt,
+  notices,
+  onChange,
+}: {
+  kind: 'addition' | 'subtraction';
+  settings: Settings;
+  errorsAt: (path: string) => string[];
+  notices: SettingsNotice[];
+  onChange: (next: Settings) => void;
+}) {
+  const m = t();
+  const L = m.settings.labels;
+  const k = settings[kind];
+  const change = (next: Partial<KindFields>) => onChange({ ...settings, [kind]: { ...k, ...next } });
+  const notes = notices.filter((n) => n.path === `${kind}.size`);
+  return (
+    <fieldset className="settings-subgroup">
+      <legend>{m.settings.groups[kind]}</legend>
+      <Select
+        label={L.numberSize}
+        value={k.size}
+        options={[
+          { value: 'steps', label: L.numberSizeSteps },
+          { value: 'twoNumbers', label: L.numberSizeTwoNumbers },
+        ]}
+        errors={errorsAt(`${kind}.size`)}
+        onChange={(v) => change(withSize(k, v === 'twoNumbers' ? 'twoNumbers' : 'steps', settings))}
+      />
+      {notes.map((n) => (
+        <p key={n.key} className="notice" role="note">
+          {m.settingsNotes[n.key](n.value)}
+        </p>
+      ))}
+      {k.size === 'steps' ? (
+        <>
+          <NumberInput label={L[`${kind}MaxOperand`]} value={k.maxOperand} errors={errorsAt(`${kind}.maxOperand`)} onChange={(maxOperand) => change({ maxOperand })} />
+          <Select label={L[`${kind}Steps`]} value={String(k.steps)} options={stepOptions()} onChange={(v) => change({ steps: v === '2' ? 2 : 1 })} />
+        </>
+      ) : (
+        <>
+          <SpanInput fromLabel={L.firstFrom} toLabel={L.firstTo} value={k.first} errors={errorsAt(`${kind}.first`)} onChange={(first) => change({ first })} />
+          <SpanInput fromLabel={L.secondFrom} toLabel={L.secondTo} value={k.second} errors={errorsAt(`${kind}.second`)} onChange={(second) => change({ second })} />
+          <Check label={L[`${kind}Carry`]} checked={k.carry} onChange={(carry) => change({ carry })} />
+        </>
+      )}
+      {kind === 'addition' && (
+        <NumberInput
+          label={L.additionMaxResult}
+          value={settings.addition.maxResult}
+          errors={errorsAt('addition.maxResult')}
+          onChange={(maxResult) => onChange({ ...settings, addition: { ...settings.addition, maxResult } })}
+        />
+      )}
+    </fieldset>
+  );
+}
+
+/**
+ * The fields of a kind after "Zahlengröße" changes (review): a field the new size hides is still saved, and the schema
+ * takes whole numbers only. So a range with an empty or broken bound goes back to its default (10 to 99), and an empty
+ * or broken largest operand goes back to its default (10), at most the range width. Whole numbers stay as they are,
+ * so their errors show again when the parent switches back.
+ */
+function withSize(k: KindFields, size: KindFields['size'], settings: Settings): Partial<KindFields> {
+  const defaults = twoNumberDefaults();
+  const whole = (r: NumberSpan) => Number.isInteger(r.min) && Number.isInteger(r.max);
+  // The range fields may be empty too (NaN); then 1.
+  const span = Math.max(1, settings.range.max - settings.range.min) || 1;
+  return {
+    size,
+    first: whole(k.first) ? k.first : defaults.first,
+    second: whole(k.second) ? k.second : defaults.second,
+    maxOperand: Number.isInteger(k.maxOperand) ? k.maxOperand : Math.min(defaultSettings().subtraction.maxOperand, span),
+  };
+}
+
 function stepOptions() {
   return [1, 2].map((n) => ({ value: String(n), label: t().settings.stepsOption(n) }));
 }
@@ -647,19 +744,27 @@ function Select({
   options,
   onChange,
   description,
+  errors = [],
 }: {
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (v: string) => void;
   description?: string;
+  errors?: string[];
 }) {
   const id = useId();
   const descriptionId = `${id}-description`;
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} aria-describedby={description === undefined ? undefined : descriptionId} onChange={(e) => onChange(e.currentTarget.value)}>
+      <select
+        id={id}
+        value={value}
+        aria-describedby={description === undefined ? undefined : descriptionId}
+        aria-invalid={errors.length > 0 || undefined}
+        onChange={(e) => onChange(e.currentTarget.value)}
+      >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
@@ -671,14 +776,95 @@ function Select({
           {description}
         </p>
       )}
+      <Errors errors={errors} />
     </div>
   );
 }
 
 /**
- * A whole-number field. It keeps the typed text, so an empty or partial entry stays visible while the parent
- * types, and reports NaN for text that is not a number. A value changed from outside (for example by
- * `withRange`) replaces the text.
+ * A "Zwei Zahlen" range (amendment 26, FR-148): "Erste Zahl von [ ] bis [ ]" in one row, with the range's errors
+ * under it. The "bis" field is named in full ("Erste Zahl bis") for screen readers. Like NumberInput, each field keeps
+ * the typed text and reports NaN for text that is not a number.
+ */
+function SpanInput({
+  fromLabel,
+  toLabel,
+  value,
+  errors,
+  onChange,
+}: {
+  fromLabel: string;
+  toLabel: string;
+  value: NumberSpan;
+  errors: string[];
+  onChange: (next: NumberSpan) => void;
+}) {
+  const id = useId();
+  const invalid = errors.length > 0 || undefined;
+  return (
+    <div className="field span-field">
+      <label htmlFor={`${id}-min`}>{fromLabel}</label>
+      <WholeNumberBox id={`${id}-min`} value={value.min} min={TWO_NUMBER_MIN} max={TWO_NUMBER_MAX} invalid={invalid} onChange={(min) => onChange({ ...value, min })} />
+      <label htmlFor={`${id}-max`} className="span-to" aria-hidden="true">
+        {t().settings.labels.to}
+      </label>
+      <WholeNumberBox id={`${id}-max`} label={toLabel} value={value.max} min={TWO_NUMBER_MIN} max={TWO_NUMBER_MAX} invalid={invalid} onChange={(max) => onChange({ ...value, max })} />
+      <Errors errors={errors} />
+    </div>
+  );
+}
+
+/**
+ * A whole-number input box. It keeps the typed text, so an empty or partial entry stays visible while the parent
+ * types, and reports NaN for text that is not a number. A value changed from outside replaces the text.
+ */
+function WholeNumberBox({
+  id,
+  label,
+  value,
+  min,
+  max,
+  invalid,
+  onChange,
+}: {
+  id: string;
+  label?: string;
+  value: number;
+  min?: number;
+  max?: number;
+  invalid?: true;
+  onChange: (n: number) => void;
+}) {
+  const [text, setText] = useState(() => String(value));
+  const [seen, setSeen] = useState(value);
+  if (!Object.is(value, seen)) {
+    setSeen(value);
+    if (!Object.is(parseWhole(text), value) && !Number.isNaN(value)) setText(String(value));
+  }
+  return (
+    <input
+      id={id}
+      type="number"
+      inputMode="numeric"
+      step={1}
+      min={min}
+      max={max}
+      value={text}
+      aria-label={label}
+      aria-invalid={invalid}
+      onChange={(e) => {
+        const next = e.currentTarget.value;
+        setText(next);
+        setSeen(parseWhole(next));
+        onChange(parseWhole(next));
+      }}
+    />
+  );
+}
+
+/**
+ * A whole-number field with its label and errors. The box keeps the typed text (WholeNumberBox); a value changed from
+ * outside (for example by `withRange`) replaces it.
  */
 function NumberInput({
   label,
@@ -696,31 +882,10 @@ function NumberInput({
   onChange: (n: number) => void;
 }) {
   const id = useId();
-  const [text, setText] = useState(() => String(value));
-  const [seen, setSeen] = useState(value);
-  if (!Object.is(value, seen)) {
-    setSeen(value);
-    if (!Object.is(parseWhole(text), value) && !Number.isNaN(value)) setText(String(value));
-  }
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        step={1}
-        min={min}
-        max={max}
-        value={text}
-        aria-invalid={errors.length > 0 || undefined}
-        onChange={(e) => {
-          const next = e.currentTarget.value;
-          setText(next);
-          setSeen(parseWhole(next));
-          onChange(parseWhole(next));
-        }}
-      />
+      <WholeNumberBox id={id} value={value} min={min} max={max} invalid={errors.length > 0 || undefined} onChange={onChange} />
       <Errors errors={errors} />
     </div>
   );

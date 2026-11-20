@@ -12,6 +12,7 @@ import {
   RANGE_PRESETS,
   RANGE_SPAN_MAX,
   RANGE_SPAN_MIN,
+  twoNumberDefaults,
 } from '../settings/defaults';
 import { validateSettings, withRange } from '../settings/validate';
 import type { Settings, Skill } from '../types';
@@ -158,23 +159,23 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
         presetSettings('0-100', {
           challengeTypes: arithmeticOnly,
           crossTens: false,
-          addition: { maxOperand: 10, maxResult: 100, steps: 2 },
-          subtraction: { maxOperand: 10, steps: 2 },
+          addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 2 },
+          subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 },
         }),
       ],
       ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, crossHundreds: false })],
       [
         'custom -20 to 30, negative results on',
-        custom(-20, 30, { negativeResults: true, addition: { maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { maxOperand: 10, steps: 2 } }),
+        custom(-20, 30, { negativeResults: true, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 } }),
       ],
       // The addition limit applies to the added numbers only, so the start can be any number in the range (T216).
       [
         'custom 550 to 780, operands up to 230',
-        custom(550, 780, { addition: { maxOperand: 230, maxResult: 780, steps: 1 }, subtraction: { maxOperand: 230, steps: 2 } }),
+        custom(550, 780, { addition: { ...twoNumberDefaults(), maxOperand: 230, maxResult: 780, steps: 1 }, subtraction: { ...twoNumberDefaults(), maxOperand: 230, steps: 2 } }),
       ],
       [
         'custom 550 to 780, operands up to 10',
-        custom(550, 780, { addition: { maxOperand: 10, maxResult: 780, steps: 2 }, subtraction: { maxOperand: 10, steps: 1 } }),
+        custom(550, 780, { addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 780, steps: 2 }, subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 1 } }),
       ],
     ];
 
@@ -318,8 +319,8 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
     const patched: Settings = {
       ...base,
       challengeTypes: { ...types },
-      addition: { maxOperand: rng.int(1, 100), maxResult: rng.int(-1000, 10_000), steps: rng.pick([1, 2] as const) },
-      subtraction: { maxOperand: rng.int(1, 100), steps: rng.pick([1, 2] as const) },
+      addition: { ...twoNumberDefaults(), maxOperand: rng.int(1, 100), maxResult: rng.int(-1000, 10_000), steps: rng.pick([1, 2] as const) },
+      subtraction: { ...twoNumberDefaults(), maxOperand: rng.int(1, 100), steps: rng.pick([1, 2] as const) },
       crossTens: rng.next() < 0.5,
       crossHundreds: rng.next() < 0.5,
       negativeResults: rng.next() < 0.5,

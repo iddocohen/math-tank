@@ -20,15 +20,23 @@ export const ROUND_LENGTH_MIN = 1;
 export const ROUND_LENGTH_MAX = 20;
 export const TIME_LIMIT_MIN = 10;
 export const TIME_LIMIT_MAX = 120;
+/** Smallest and largest number of a "Zwei Zahlen" range (amendment 26, FR-151). */
+export const TWO_NUMBER_MIN = 1;
+export const TWO_NUMBER_MAX = 999;
+
+/** "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and no carrying (amendment 26, FR-148). Fresh on each call. */
+export function twoNumberDefaults(): { size: 'steps'; first: { min: number; max: number }; second: { min: number; max: number }; carry: boolean } {
+  return { size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false };
+}
 
 /** Data-model.md defaults (FR-046). Returns a fresh object on each call. */
 export function defaultSettings(): Settings {
   return {
-    version: 12,
+    version: 13,
     challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     range: { preset: '0-100', min: 0, max: 100 },
-    addition: { maxOperand: 10, maxResult: 100, steps: 1 },
-    subtraction: { maxOperand: 10, steps: 1 },
+    addition: { maxOperand: 10, maxResult: 100, steps: 1, ...twoNumberDefaults() },
+    subtraction: { maxOperand: 10, steps: 1, ...twoNumberDefaults() },
     crossTens: true,
     crossHundreds: false,
     negativeResults: false,

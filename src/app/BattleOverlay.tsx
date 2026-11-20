@@ -66,6 +66,11 @@
  *
  * Amendment 23: with `onGarage` (the garage is on) a garage icon sits beside the gear; one tap opens the garage over
  * the battle. It never takes focus and does not show on the round end screen.
+ *
+ * Amendment 26 (FR-154, FR-155): at help step 2 of a "Zwei Zahlen" exercise the place-value lines (`helpLines`) show
+ * under the help hint, one element each (`data-testid="help-line"`), and wrap in every layout. The product owner's
+ * rule (2026-11-20) is that the game's spoken instructions ("Vorlesen") do not read the lines; the lines sit in the
+ * status live region like the hint.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';
@@ -75,7 +80,7 @@ import { acceptsInput, visibleEnemy } from '../core/battle/round';
 import { MODE_TRAITS } from '../core/modes';
 import { followHit, HIT_FEEDBACK_MS, hitOutdated, type HitOwner } from '../core/view/hitFeedback';
 import type { LastShot, PromptSpec, RoundState } from '../core/types';
-import { comparisonPrompt, helpText, messageText, promptText, t } from '../i18n';
+import { comparisonPrompt, helpLines, helpText, messageText, promptText, t } from '../i18n';
 import { clamp } from '../core/util';
 import { NumberPad } from './NumberPad';
 
@@ -128,6 +133,7 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
   const inSearch = state.challenge !== null && state.phase !== 'roundOver';
   const content = inSearch && state.phase !== 'playerShot' ? state.help.content : null;
   const hint = content ? helpText(content) : null;
+  const lines = content ? helpLines(content) : [];
   const freshHit = useFreshHit(state);
   const missMessageOn = useMissMessage(state);
   const missed = lastShot !== null && !lastShot.hit;
@@ -195,6 +201,15 @@ export function BattleOverlay({ controller, state, gear, numberPad = false, onSp
         ) : hint ? (
           <span className="help-text" data-testid="help-text">
             {hint}
+            {lines.length > 0 && (
+              <span className="help-lines" data-testid="help-lines">
+                {lines.map((line) => (
+                  <span key={line} className="help-line" data-testid="help-line">
+                    {line}
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
         ) : null}
       </div>
