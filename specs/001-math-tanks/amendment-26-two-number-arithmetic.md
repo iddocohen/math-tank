@@ -43,7 +43,7 @@
    - step 3: carrying or borrowing allowed, second number from the lower half
    - step 4: the parent's settings
 
-   The parent's settings are the ceiling: with the carry switch off, steps 3 and 4 have no carrying. With adaptive difficulty off, the parent's settings apply. The step a skill has reached is kept when the parent changes "Zahlengröße".
+   The parent's settings are the ceiling: with the carry switch off, steps 3 and 4 have no carrying. With adaptive difficulty off, the parent's settings apply. The step a skill has reached is kept when the parent changes "Zahlengröße". When a step has no exercise that fits (for example first numbers 90 to 99, where every sum carries), the game uses the nearest harder step that has one, up to the parent's settings, so the configured exercises still come (critique E2).
 7. **Help step 2 shows the place values** (with the help type "Schritt-Animation" on, FR-024).
    - The banner shows one line per place, then the sum of the parts:
      - 35 + 12: "Zehner: 30 + 10 = 40", "Einer: 5 + 2 = 7", "40 + 7 = 47"
@@ -53,6 +53,8 @@
    - Minus with borrowing cannot be split column by column, so the banner shows the jumps instead: 42 − 17 gives "Erst die Zehner: 42 − 10 = 32" and "Dann die Einer: 32 − 7 = 25".
    - The ruler marker starts at the first number and jumps the second number's hundreds, then its tens, then its ones: 35 + 12 goes 35 → 45 → 47, 46 − 12 goes 46 → 36 → 34. With beginner assistance it jumps one ten (or one hundred) at a time and stops at each ten it crosses in the ones jump, as today: 35 + 32 goes 35 → 45 → 55 → 65 → 67, and 34 + 19 goes 34 → 44 → 50 → 53. Without beginner assistance it makes one jump per place: 35 → 65 → 67.
    - In "Nur Rechnen", which draws no ruler, the banner lines show and the zoomed ten around the answer shows as today.
+   - The lines fit the banner in every layout, including a phone held upright, by wrapping.
+   - With "Vorlesen" on, the lines are read aloud the same way the help hint is read today.
    - Help steps 1 and 3 do not change.
 8. **"Kleine Schritte" does not change.** Its exercises, help, ladder and settings work as before this amendment.
 9. **Old saves load.** Settings version 13 adds, for plus and for minus, "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and the carry switch off. Export files and transfer codes from older versions read with these defaults.
@@ -61,6 +63,10 @@
     - Generator unit tests over many seeds: each number in its range, first number and answer on the battlefield, the minus first number larger, no column carries or borrows with the switch off, and with the switch on exercises with carrying do come. Three-digit ranges and a one-digit second number (45 + 6, 52 + 9) included.
     - Settings tests: the defaults, migration from version 12, each new error, the note, and the export and transfer readers.
     - Help tests: the banner lines and the marker stops for the examples above, with and without beginner assistance, and in "Nur Rechnen".
-    - Ladder tests: each step, clamped by the carry switch.
+    - Ladder tests: each step, clamped by the carry switch, and the fallback to a harder step when a step has no exercise.
+    - Generator test: only plus on, a narrow answer set and the enemy gap around the player still give a challenge.
+    - Performance test: the answer list for 1 to 999 against 1 to 999 takes under about 50 ms.
+    - Transfer test: a link with every new field set to a value other than the default stays under the size limit.
+    - Controller test: changing "Plus mit Übertrag" during a round gives a new scene (amendment 25).
     - Settings page tests: "Zahlengröße" shows and hides the right fields, and the errors and the note show.
     - e2e: turn on only plus, set "Zwei Zahlen" 10 to 99 without carrying, play: the banner shows two two-digit numbers without carrying, and help step 2 shows the place-value lines. Run it in the desktop and the device projects.
