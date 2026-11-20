@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 12 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
- * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18).
+ * Structural schema for persisted settings, version 13 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18; version 13 for amendment 26).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -16,8 +16,26 @@ export const rangeSchema = z.object({
 /** Ruler detail level (FR-017). */
 export const rulerLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]);
 
+/** A range of whole numbers for "Zwei Zahlen" (amendment 26, FR-151); validate.ts checks 1 <= min <= max <= 999. */
+export const numberSpanSchema = z.object({
+  min: z.number().int(),
+  max: z.number().int(),
+});
+
+/**
+ * "Zahlengröße" and its fields, shared by plus and minus (amendment 26, FR-148 to FR-151): 'steps' ("Kleine Schritte")
+ * keeps maxOperand, steps and the global crossing switches; 'twoNumbers' ("Zwei Zahlen") builds a + b or a − b from
+ * `first` and `second`, with or without carrying (plus) or borrowing (minus) by `carry`.
+ */
+const twoNumberFields = {
+  size: z.enum(['steps', 'twoNumbers']),
+  first: numberSpanSchema,
+  second: numberSpanSchema,
+  carry: z.boolean(),
+};
+
 export const settingsSchema = z.object({
-  version: z.literal(12),
+  version: z.literal(13),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -29,10 +47,12 @@ export const settingsSchema = z.object({
     maxOperand: z.number().int(),
     maxResult: z.number().int(),
     steps: z.union([z.literal(1), z.literal(2)]),
+    ...twoNumberFields,
   }),
   subtraction: z.object({
     maxOperand: z.number().int(),
     steps: z.union([z.literal(1), z.literal(2)]),
+    ...twoNumberFields,
   }),
   crossTens: z.boolean(),
   crossHundreds: z.boolean(),
@@ -103,6 +123,9 @@ export type Settings = z.infer<typeof settingsSchema>;
 export type RoundType = Settings['roundType'];
 export type AimCross = Settings['aimCross'];
 export type LineStyle = Settings['lineStyle'];
+/** "Zahlengröße" of plus and minus (amendment 26). */
+export type NumberSize = Settings['addition']['size'];
+export type NumberSpan = z.infer<typeof numberSpanSchema>;
 /** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
 export type PlayMode = keyof Settings['playModes'];
 /** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */

@@ -443,6 +443,19 @@ export const de = {
     additionNoExercise: 'Mit diesen Grenzen gibt es keine Plus-Aufgabe.',
     subtractionMaxOperand: 'Die größte Zahl beim Minus muss zwischen 1 und der Größe des Zahlenraums liegen.',
     subtractionNoExercise: 'Mit diesen Grenzen gibt es keine Minus-Aufgabe.',
+    additionFirstRange: 'Die erste Zahl beim Plus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    additionSecondRange: 'Die zweite Zahl beim Plus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    additionNoPair: 'Mit diesen Zahlen gibt es keine Plus-Aufgabe, die auf das Feld passt.',
+    subtractionFirstRange: 'Die erste Zahl beim Minus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    subtractionSecondRange: 'Die zweite Zahl beim Minus liegt zwischen 1 und 999, „Von“ nicht über „Bis“.',
+    subtractionOrder: 'Beim Minus muss die erste Zahl größer sein können als die zweite.',
+    subtractionNoPair: 'Mit diesen Zahlen gibt es keine Minus-Aufgabe, die auf das Feld passt.',
+  },
+
+  /** Notes on the settings page that do not block saving (amendment 26, FR-152). */
+  settingsNotes: {
+    additionSomeOff: (n: number) => `Nicht alle Aufgaben passen auf das Feld. Es kommen nur Aufgaben mit Ergebnis bis ${n}.`,
+    subtractionSomeOff: (n: number) => `Nicht alle Aufgaben passen auf das Feld. Es kommen nur Aufgaben mit Ergebnis ab ${n}.`,
   },
 
   /** Encouraging feedback after a wrong answer (FR-033, FR-057): at most 8 words each. */

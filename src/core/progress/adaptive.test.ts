@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ATTEMPTS, recordAttempt, rowToRaise } from './adaptive';
 import { effectiveStep, ladders, skillKey, topStep } from './ladders';
-import { defaultSettings } from '../settings/defaults';
+import { defaultSettings, twoNumberDefaults } from '../settings/defaults';
 import { emptyProgress } from '../storage/storage';
 import type { Attempt, Progress, RecentOutcome, Settings, Skill, SkillProgress } from '../types';
 
@@ -162,13 +162,13 @@ describe('recordAttempt and effectiveStep (FR-018, FR-037, FR-075, AC-09)', () =
   });
 
   it('caps the ladder maxOperand by the parent addition.maxOperand', () => {
-    const s = settings({ addition: { maxOperand: 10, maxResult: 100, steps: 1 } });
+    const s = settings({ addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 1 } });
     for (let step = 0; step < ladders.addition.length; step++) {
       const e = effectiveStep(withSkill('addition', { step }), 'addition', RANGE, s);
       expect(e.maxOperand).toBeDefined();
       expect(e.maxOperand).toBeLessThanOrEqual(10);
     }
-    const tight = settings({ addition: { maxOperand: 3, maxResult: 100, steps: 1 } });
+    const tight = settings({ addition: { ...twoNumberDefaults(), maxOperand: 3, maxResult: 100, steps: 1 } });
     let p = emptyProgress();
     for (let i = 0; i < 40; i++) p = recordAttempt(p, attempt('independent', ['addition']), tight);
     expect(effectiveStep(p, 'addition', RANGE, tight).maxOperand).toBe(3);
@@ -261,7 +261,7 @@ describe('recordAttempt and effectiveStep (FR-018, FR-037, FR-075, AC-09)', () =
   });
 
   it('with adaptive off uses the top step clamped by settings and the ruler level rulerLevelStart', () => {
-    const s = settings({ adaptive: false, rulerLevelStart: 2, rulerLevelMax: 5, addition: { maxOperand: 7, maxResult: 100, steps: 1 } });
+    const s = settings({ adaptive: false, rulerLevelStart: 2, rulerLevelMax: 5, addition: { ...twoNumberDefaults(), maxOperand: 7, maxResult: 100, steps: 1 } });
     const top = ladders.positions.length - 1;
     expect(effectiveStep(emptyProgress(), 'positions', RANGE, s)).toEqual({ ...ladders.positions[top], rulerLevel: 2 });
     const add = effectiveStep(emptyProgress(), 'addition', RANGE, s);

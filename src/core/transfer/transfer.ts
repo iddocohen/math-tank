@@ -201,13 +201,15 @@ function settingsDiff(value: Record<string, unknown>, base: Record<string, unkno
  * Amendment 18 adds `pointAfterFullHelp: true`: older codes hold no such field and the version 8 to 9 step gives the same
  * value, so no existing code changes meaning, and a code with the setting on leaves the field out. Amendment 19 adds
  * `aimCross` "Immer" with level 2 in the same way, and amendment 21 `enemiesAtOnce` 1 and `lineStyle` 'straight'.
+ * Amendment 26 adds `size` 'steps', `first` and `second` 10 to 99 and `carry` false to `addition` and `subtraction`, the
+ * values the version 12 to 13 step gives.
  */
 export const TRANSFER_V2_SETTINGS_BASE = deepFreeze({
   version: 6,
   challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
   range: { preset: '0-100', min: 0, max: 100 },
-  addition: { maxOperand: 10, maxResult: 100, steps: 1 },
-  subtraction: { maxOperand: 10, steps: 1 },
+  addition: { maxOperand: 10, maxResult: 100, steps: 1, size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
+  subtraction: { maxOperand: 10, steps: 1, size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
   crossTens: true,
   crossHundreds: false,
   negativeResults: false,

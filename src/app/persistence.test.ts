@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { defaultSettings } from '../core/settings/defaults';
+import { defaultSettings, twoNumberDefaults } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue, type KeyValue } from '../core/storage/keyValue';
@@ -9,7 +9,7 @@ import { emptyRecords } from '../core/records/records';
 import { createPersistence, type StorageManagerLike } from './persistence';
 
 function changedSettings(): Settings {
-  return { ...defaultSettings(), range: { preset: '0-20', min: 0, max: 20 }, addition: { maxOperand: 10, maxResult: 20, steps: 1 }, enemyDifficulty: 'normal', rulerLevelStart: 3 };
+  return { ...defaultSettings(), range: { preset: '0-20', min: 0, max: 20 }, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 20, steps: 1 }, enemyDifficulty: 'normal', rulerLevelStart: 3 };
 }
 
 function storageManager(persisted: boolean, grant: boolean): StorageManagerLike & { persist: ReturnType<typeof vi.fn> } {

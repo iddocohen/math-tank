@@ -5,7 +5,7 @@
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defaultSettings } from '../core/settings/defaults';
+import { defaultSettings, twoNumberDefaults } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
 import { exportData } from '../core/storage/exportImport';
 import { memoryKeyValue } from '../core/storage/keyValue';
@@ -311,7 +311,7 @@ describe('SettingsPage', () => {
       adaptive: false,
       beginnerAssist: false,
       timeLimitSeconds: 45,
-      addition: { maxOperand: 7, maxResult: 90, steps: 2 },
+      addition: { ...twoNumberDefaults(), maxOperand: 7, maxResult: 90, steps: 2 },
     };
     const { persistence } = setup(stored);
     // Every feature is built since Phase 23 (T138, T142).
@@ -488,7 +488,7 @@ describe('SettingsPage data section (FR-048a)', () => {
 
   it('"Daten laden" reads a chosen file, applies it and shows the result', async () => {
     const { persistence, onSaved } = setup();
-    const other = { ...defaultSettings(), enemyDifficulty: 'challenging' as const, range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { maxOperand: 10, maxResult: 20, steps: 1 as const } };
+    const other = { ...defaultSettings(), enemyDifficulty: 'challenging' as const, range: { preset: '0-20' as const, min: 0, max: 20 }, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 20, steps: 1 as const } };
     const text = exportData(other, persistence.progress(), emptyRecords(), persistence.garage(), new Date('2026-11-01T00:00:00Z'));
     const file = new File([text], 'mathe-panzer.json', { type: 'application/json' });
     await act(async () => {
@@ -586,7 +586,7 @@ describe('SettingsPage "Spielstand übertragen" (amendment 15, FR-115, FR-118)',
   const T = m.settings.transfer;
 
   it('shows a QR code and the link of the saved data', async () => {
-    setup({ range: { preset: 'custom', min: 550, max: 780 }, addition: { maxOperand: 10, maxResult: 780, steps: 1 } });
+    setup({ range: { preset: 'custom', min: 550, max: 780 }, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 780, steps: 1 } });
     const group = screen.getByRole('group', { name: T.title });
     const qr = await within(group).findByTestId('transfer-qr');
     expect(qr.tagName.toLowerCase()).toBe('svg');

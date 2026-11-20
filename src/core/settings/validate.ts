@@ -8,9 +8,12 @@ import {
   ROUND_LENGTH_MIN,
   TIME_LIMIT_MAX,
   TIME_LIMIT_MIN,
+  TWO_NUMBER_MAX,
+  TWO_NUMBER_MIN,
 } from './defaults';
+import { twoNumberFit } from '../math/twoNumbers';
 import { clamp } from '../util';
-import type { Settings, SettingsRange } from './schema';
+import type { NumberSpan, Settings, SettingsRange } from './schema';
 
 /** Keys of `settingsErrors` in the translation table (src/i18n/de.ts). */
 export const SETTINGS_ERROR_KEYS = [
@@ -30,6 +33,14 @@ export const SETTINGS_ERROR_KEYS = [
   'additionNoExercise',
   'subtractionMaxOperand',
   'subtractionNoExercise',
+  // Amendment 26 (FR-151, FR-152), only for "Zahlengröße" "Zwei Zahlen".
+  'additionFirstRange',
+  'additionSecondRange',
+  'additionNoPair',
+  'subtractionFirstRange',
+  'subtractionSecondRange',
+  'subtractionOrder',
+  'subtractionNoPair',
 ] as const;
 
 export type SettingsErrorKey = (typeof SETTINGS_ERROR_KEYS)[number];
@@ -98,7 +109,56 @@ export function validateSettings(s: Settings): SettingsValidation {
     add('subtractionNoExercise', 'subtraction.maxOperand');
   }
 
+  for (const kind of ['addition', 'subtraction'] as const) {
+    const k = s[kind];
+    if (k.size !== 'twoNumbers') continue;
+    const firstOk = spanOk(k.first);
+    const secondOk = spanOk(k.second);
+    if (!firstOk) add(`${kind}FirstRange`, `${kind}.first`);
+    if (!secondOk) add(`${kind}SecondRange`, `${kind}.second`);
+    if (!firstOk || !secondOk) continue;
+    // Minus: some first number must be larger than some second number (FR-149).
+    if (kind === 'subtraction' && k.first.max <= k.second.min) {
+      add('subtractionOrder', 'subtraction.first');
+      continue;
+    }
+    if (s.challengeTypes[kind] && !twoNumberFit(kind, s).any) add(`${kind}NoPair`, `${kind}.size`);
+  }
+
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
+}
+
+/** A "Zwei Zahlen" range of whole numbers from 1 to 999, smallest first (FR-151). */
+function spanOk(r: NumberSpan): boolean {
+  return Number.isInteger(r.min) && Number.isInteger(r.max) && r.min >= TWO_NUMBER_MIN && r.max <= TWO_NUMBER_MAX && r.min <= r.max;
+}
+
+/** Keys of `settingsNotes` in the translation table (src/i18n/de.ts). */
+export type SettingsNoticeKey = 'additionSomeOff' | 'subtractionSomeOff';
+
+/**
+ * A note on the settings page that does not block saving (amendment 26, FR-152): only some "Zwei Zahlen" exercises
+ * fit the battlefield. `value` is the largest plus answer or the smallest minus answer that can come.
+ */
+export interface SettingsNotice {
+  key: SettingsNoticeKey;
+  path: string;
+  value: number;
+}
+
+/**
+ * The non-blocking notes for settings without errors in the kind's fields: for each kind that is on with "Zwei Zahlen",
+ * when some pairs of its ranges fit and some do not.
+ */
+export function settingsNotices(s: Settings): SettingsNotice[] {
+  const notices: SettingsNotice[] = [];
+  for (const kind of ['addition', 'subtraction'] as const) {
+    const k = s[kind];
+    if (k.size !== 'twoNumbers' || !s.challengeTypes[kind] || !spanOk(k.first) || !spanOk(k.second)) continue;
+    const fit = twoNumberFit(kind, s);
+    if (fit.any && !fit.all && fit.extreme !== null) notices.push({ key: `${kind}SomeOff`, path: `${kind}.size`, value: fit.extreme });
+  }
+  return notices;
 }
 
 
