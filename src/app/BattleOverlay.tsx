@@ -68,8 +68,9 @@
  * the battle. It never takes focus and does not show on the round end screen.
  *
  * Amendment 26 (FR-154, FR-155): at help step 2 of a "Zwei Zahlen" exercise the place-value lines (`helpLines`) show
- * under the help hint, one element each (`data-testid="help-line"`), and wrap in every layout. They are not read
- * aloud (product owner, 2026-11-20).
+ * under the help hint, one element each (`data-testid="help-line"`), and wrap in every layout. The product owner's
+ * rule (2026-11-20) is that the game's spoken instructions ("Vorlesen") do not read the lines; the lines sit in the
+ * status live region like the hint.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { formatTime } from '../core/records/records';

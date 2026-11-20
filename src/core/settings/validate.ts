@@ -89,18 +89,21 @@ export function validateSettings(s: Settings): SettingsValidation {
   }
 
   const lo = lowestResult(s, range);
+  // The largest operand and the steps apply to "Kleine Schritte" only; with "Zwei Zahlen" they are hidden (review).
+  const addSteps = !isTwoNumbers('addition', s);
+  const subSteps = !isTwoNumbers('subtraction', s);
 
   // Like subtraction, at most the range width, so generating an exercise stays fast (review R5).
-  if (s.addition.maxOperand < 1 || s.addition.maxOperand > span) add('additionMaxOperand', 'addition.maxOperand');
+  if (addSteps && (s.addition.maxOperand < 1 || s.addition.maxOperand > span)) add('additionMaxOperand', 'addition.maxOperand');
   if (s.addition.maxResult > range.max) add('additionMaxResult', 'addition.maxResult');
   else if (s.challengeTypes.addition && lo + 1 > highestResult('addition', s)) {
     // The smallest sum is lo + 1 (lo plus an operand of 1).
     add('additionNoExercise', 'addition.maxResult');
   }
 
-  if (s.subtraction.maxOperand < 1 || s.subtraction.maxOperand > span) {
+  if (subSteps && (s.subtraction.maxOperand < 1 || s.subtraction.maxOperand > span)) {
     add('subtractionMaxOperand', 'subtraction.maxOperand');
-  } else if (s.challengeTypes.subtraction && lo + 1 > range.max) {
+  } else if (subSteps && s.challengeTypes.subtraction && lo + 1 > range.max) {
     // a - b >= lo with b >= 1 needs a >= lo + 1 inside the range.
     add('subtractionNoExercise', 'subtraction.maxOperand');
   }
@@ -118,18 +121,27 @@ function spanOk(r: NumberSpan): boolean {
 /**
  * The "Zwei Zahlen" checks of one kind (amendment 26, FR-149 to FR-152), shared by validateSettings and
  * settingsNotices: the errors of its fields, and how its pairs fit the battlefield when the fields have no error
- * and the kind is on (else `fit` is null). No errors and no fit for "Kleine Schritte".
+ * and the kind is on (else `fit` is null). Each size also checks that the fields it hides hold whole numbers, so the
+ * saved settings pass the schema (review); that error shows at "Zahlengröße". No fit for "Kleine Schritte".
  */
 function twoNumberStatus(kind: 'addition' | 'subtraction', s: Settings): { errors: SettingsError[]; fit: TwoNumberFit | null } {
   const errors: SettingsError[] = [];
-  if (!isTwoNumbers(kind, s)) return { errors, fit: null };
   const k = s[kind];
+  if (!isTwoNumbers(kind, s)) {
+    // The hidden ranges are saved too, and the schema takes whole numbers only (review). The page resets them when
+    // "Zahlengröße" changes, so this error shows at "Zahlengröße" only for settings made elsewhere.
+    const whole = [k.first.min, k.first.max, k.second.min, k.second.max].every(Number.isInteger);
+    if (!whole) errors.push({ key: 'rangeNotInteger', path: `${kind}.size` });
+    return { errors, fit: null };
+  }
   if (!spanOk(k.first)) errors.push({ key: `${kind}FirstRange`, path: `${kind}.first` });
   if (!spanOk(k.second)) errors.push({ key: `${kind}SecondRange`, path: `${kind}.second` });
   // Minus: some first number must be larger than some second number (FR-149).
   if (errors.length === 0 && kind === 'subtraction' && k.first.max <= k.second.min) errors.push({ key: 'subtractionOrder', path: 'subtraction.first' });
   const fit = errors.length === 0 && s.challengeTypes[kind] ? twoNumberFit(kind, s) : null;
   if (fit && !fit.any) errors.push({ key: `${kind}NoPair`, path: `${kind}.size` });
+  // The same for the hidden largest operand of "Kleine Schritte".
+  if (!Number.isInteger(k.maxOperand)) errors.push({ key: 'rangeNotInteger', path: `${kind}.size` });
   return { errors, fit };
 }
 

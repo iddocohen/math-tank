@@ -12,7 +12,7 @@ import { buildReadPosition, readPositionAnswers } from './readPosition';
 import { mainSkillOf, skillsOf } from './skills';
 import { buildSubtraction, subtractionAnswers } from './subtraction';
 import { validateChallenge } from './validate';
-import { playableStep } from '../progress/ladders';
+import { playableSteps } from '../progress/ladders';
 import { MODE_TRAITS } from '../modes';
 
 export interface GenerateInput {
@@ -106,13 +106,19 @@ export function playModeKinds(mode: PlayMode, settings: Settings): Pick<Generate
 }
 
 /**
- * The difficulty step a builder works with: the main skill's ladder step clamped by the settings, with the round's
- * ruler level (the ruler follows the positions skill only, FR-018, and the controller passes it). On a "Zwei Zahlen"
- * ladder a step without a valid pair moves up to the nearest harder step that has one (playableStep, FR-153).
+ * The difficulty steps a builder works with, tried in order: the main skill's ladder step clamped by the settings,
+ * with the round's ruler level (the ruler follows the positions skill only, FR-018, and the controller passes it). On
+ * a "Zwei Zahlen" ladder a step without a valid pair moves up to the nearest harder step that has one, and the harder
+ * steps follow up to the top, for when the enemy gap leaves no answer of a step (playableSteps, FR-153, review).
  */
-function stepFor(kind: ChallengeKind, input: GenerateInput): DifficultyStep {
+function stepsFor(kind: ChallengeKind, input: GenerateInput): DifficultyStep[] {
   const skill = mainSkillOf(kind);
-  return { ...playableStep(skill, input.skillSteps[skill] ?? 0, input.settings), rulerLevel: input.rulerLevel };
+  return playableSteps(skill, input.skillSteps[skill] ?? 0, input.settings).map((step) => ({ ...step, rulerLevel: input.rulerLevel }));
+}
+
+/** The first of `stepsFor`. */
+function stepFor(kind: ChallengeKind, input: GenerateInput): DifficultyStep {
+  return stepsFor(kind, input)[0] as DifficultyStep;
 }
 
 /**
@@ -147,18 +153,21 @@ function tryKind(
 ): Challenge | null {
   const build = BUILDERS[kind];
   if (!build) return null;
-  const step = stepFor(kind, input);
   const candidates = CANDIDATES[kind];
-  // Every "Zwei Zahlen" step (amendment 26) has maxNumberFraction 1, so withinStep keeps every answer there; those
-  // steps narrow by allowCarry and secondFraction instead.
-  const inStep = wholeRange ? answers : withinStep(answers, input.settings, step);
-  const allowed = new Set(inStep);
-  const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
-  if (pool.length === 0) return null;
-  for (let i = 0; i < ANSWER_TRIES; i++) {
-    const draft = build(rng.pick(pool), input.settings, step, rng, input.playerPosition);
-    const challenge = draft && finish(draft);
-    if (challenge) return challenge;
+  // Only a "Zwei Zahlen" kind has more than one step here: a harder step comes when no answer of the easier one keeps
+  // the enemy gap from the player (review).
+  for (const step of stepsFor(kind, input)) {
+    // Every "Zwei Zahlen" step (amendment 26) has maxNumberFraction 1, so withinStep keeps every answer there; those
+    // steps narrow by allowCarry and secondFraction instead.
+    const inStep = wholeRange ? answers : withinStep(answers, input.settings, step);
+    const allowed = new Set(inStep);
+    const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
+    if (pool.length === 0) continue;
+    for (let i = 0; i < ANSWER_TRIES; i++) {
+      const draft = build(rng.pick(pool), input.settings, step, rng, input.playerPosition);
+      const challenge = draft && finish(draft);
+      if (challenge) return challenge;
+    }
   }
   return null;
 }

@@ -28,7 +28,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { qrMatrix, qrPath, type QrMatrix } from '../core/transfer/qr';
 import { encodeTransfer, type EncodedTransfer } from '../core/transfer/transfer';
 import type { RulerLevel } from '../core/numberline/ticks';
-import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN, TWO_NUMBER_MAX, TWO_NUMBER_MIN } from '../core/settings/defaults';
+import { defaultSettings, RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN, TWO_NUMBER_MAX, TWO_NUMBER_MIN, twoNumberDefaults } from '../core/settings/defaults';
 import type { NumberSpan, RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
 import { isTwoNumbers } from '../core/settings/limits';
 import { settingsNotices, validateSettings, withRange, type SettingsNotice } from '../core/settings/validate';
@@ -76,12 +76,14 @@ function collectErrors(s: Settings): Map<string, string[]> {
   if (!r.ok) {
     for (const e of r.errors) add(e.path, m.settingsErrors[e.key]);
   }
+  // The largest operand shows with "Kleine Schritte" only; with "Zwei Zahlen" validateSettings checks it (review).
   const wholeNumbers: Array<[string, number]> = [
-    ['addition.maxOperand', s.addition.maxOperand],
     ['addition.maxResult', s.addition.maxResult],
-    ['subtraction.maxOperand', s.subtraction.maxOperand],
     ['timeLimitSeconds', s.timeLimitSeconds ?? 0],
   ];
+  for (const kind of ['addition', 'subtraction'] as const) {
+    if (!isTwoNumbers(kind, s)) wholeNumbers.push([`${kind}.maxOperand`, s[kind].maxOperand]);
+  }
   for (const [path, value] of wholeNumbers) if (!Number.isInteger(value)) add(path, m.settingsErrors.rangeNotInteger);
   return out;
 }
@@ -631,7 +633,7 @@ function KindSettings({
           { value: 'twoNumbers', label: L.numberSizeTwoNumbers },
         ]}
         errors={errorsAt(`${kind}.size`)}
-        onChange={(v) => change({ size: v === 'twoNumbers' ? 'twoNumbers' : 'steps' })}
+        onChange={(v) => change(withSize(k, v === 'twoNumbers' ? 'twoNumbers' : 'steps', settings))}
       />
       {notes.map((n) => (
         <p key={n.key} className="notice" role="note">
@@ -660,6 +662,25 @@ function KindSettings({
       )}
     </fieldset>
   );
+}
+
+/**
+ * The fields of a kind after "Zahlengröße" changes (review): a field the new size hides is still saved, and the schema
+ * takes whole numbers only. So a range with an empty or broken bound goes back to its default (10 to 99), and an empty
+ * or broken largest operand goes back to its default (10), at most the range width. Whole numbers stay as they are,
+ * so their errors show again when the parent switches back.
+ */
+function withSize(k: KindFields, size: KindFields['size'], settings: Settings): Partial<KindFields> {
+  const defaults = twoNumberDefaults();
+  const whole = (r: NumberSpan) => Number.isInteger(r.min) && Number.isInteger(r.max);
+  // The range fields may be empty too (NaN); then 1.
+  const span = Math.max(1, settings.range.max - settings.range.min) || 1;
+  return {
+    size,
+    first: whole(k.first) ? k.first : defaults.first,
+    second: whole(k.second) ? k.second : defaults.second,
+    maxOperand: Number.isInteger(k.maxOperand) ? k.maxOperand : Math.min(defaultSettings().subtraction.maxOperand, span),
+  };
 }
 
 function stepOptions() {

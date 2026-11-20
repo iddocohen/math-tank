@@ -191,14 +191,24 @@ export function effectiveStep(p: Progress, skill: Skill, rangeKey: string, setti
  * does not import this module, so there is no import cycle.
  */
 export function playableStep(skill: Skill, index: number, settings: Settings): DifficultyStep {
+  return playableSteps(skill, index, settings)[0] as DifficultyStep;
+}
+
+/**
+ * The steps the generator may use, easiest first: `playableStep`, then on a "Zwei Zahlen" ladder every harder step
+ * that has a valid pair, up to the top. The generator moves on to the next one when the enemy gap around the player
+ * leaves no answer of a step (review). Other ladders give the one clamped step.
+ */
+export function playableSteps(skill: Skill, index: number, settings: Settings): DifficultyStep[] {
   const kind = twoNumberKind(skill, settings);
-  if (!kind) return clampStep(skill, index, settings);
+  if (!kind) return [clampStep(skill, index, settings)];
   const last = ladderFor(skill, settings).length - 1;
+  const out: DifficultyStep[] = [];
   for (let i = clamp(Math.trunc(index), 0, last); i <= last; i++) {
     const candidate = clampStep(skill, i, settings);
-    if (twoNumberAnswers(twoNumberRules(kind, settings, candidate), settings).length > 0) return candidate;
+    if (twoNumberAnswers(twoNumberRules(kind, settings, candidate), settings).length > 0) out.push(candidate);
   }
-  return clampStep(skill, last, settings);
+  return out.length > 0 ? out : [clampStep(skill, last, settings)];
 }
 
 /** The ruler level for a range: it follows the positions skill only, so it does not change between kinds (FR-018). */

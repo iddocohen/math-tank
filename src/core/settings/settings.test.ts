@@ -520,4 +520,26 @@ describe('"Zwei Zahlen" settings (amendment 26, FR-148, FR-151, FR-152)', () => 
     expect(settingsNotices(off)).toEqual([]);
     expect(settingsNotices(withRange(twoNumbers({ addition: { carry: true } }), { preset: 'custom', min: 550, max: 780 }))).toEqual([]);
   });
+
+  it('the hidden "Zwei Zahlen" ranges must hold whole numbers with "Kleine Schritte", shown at "Zahlengröße" (review)', () => {
+    const s = defaultSettings();
+    s.addition.first = { min: Number.NaN, max: 99 };
+    s.subtraction.second = { min: 10, max: 1.5 };
+    expect(errorsOf(s)).toEqual([
+      { key: 'rangeNotInteger', path: 'addition.size' },
+      { key: 'rangeNotInteger', path: 'subtraction.size' },
+    ]);
+    // Whole numbers outside 1 to 999 or in the wrong order are only checked once "Zwei Zahlen" is chosen.
+    const loose = defaultSettings();
+    loose.addition.first = { min: 50, max: 20 };
+    loose.subtraction.second = { min: 0, max: 1000 };
+    expect(validateSettings(loose)).toEqual({ ok: true });
+  });
+
+  it('with "Zwei Zahlen" the hidden largest operand is not checked, but must be a whole number (review)', () => {
+    const s = twoNumbers({ addition: { maxOperand: 0 }, subtraction: { maxOperand: 5000 } });
+    expect(validateSettings(s)).toEqual({ ok: true });
+    const nan = twoNumbers({ addition: { maxOperand: Number.NaN } });
+    expect(errorsOf(nan)).toEqual([{ key: 'rangeNotInteger', path: 'addition.size' }]);
+  });
 });

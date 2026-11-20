@@ -806,4 +806,39 @@ describe('SettingsPage "Zahlengröße" (amendment 26, FR-148, FR-152)', () => {
     expect(persistence.settings().addition.carry).toBe(true);
     expect(screen.getByText(m.settings.saved)).toBeTruthy();
   });
+
+  it('a cleared range that "Kleine Schritte" hides is reset to 10 to 99, so the saved settings load again (review)', () => {
+    const { kv } = setup({ addition: plusTwo({ first: { min: 20, max: 60 } }) });
+    setInKind('addition', L.firstFrom, '');
+    expect(saveButton().disabled).toBe(true);
+    setInKind('addition', L.numberSize, 'steps');
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+    const reloaded = createPersistence({ kv, storage: undefined });
+    expect(reloaded.status().resetData).toEqual([]);
+    expect(reloaded.settings().addition).toMatchObject({ size: 'steps', first: { min: 10, max: 99 } });
+    // Back to "Zwei Zahlen", the parent sees the reset range.
+    setInKind('addition', L.numberSize, 'twoNumbers');
+    expect(inKind('addition', L.firstFrom).value).toBe('10');
+    expect(inKind('addition', L.firstTo).value).toBe('99');
+  });
+
+  it('with "Zwei Zahlen" the hidden largest operand does not block "Speichern", and a cleared one is reset (review)', () => {
+    const { kv } = setup();
+    setInKind('subtraction', L.subtractionMaxOperand, '');
+    setInKind('addition', L.additionMaxOperand, '0');
+    expect(saveButton().disabled).toBe(true);
+    setInKind('subtraction', L.numberSize, 'twoNumbers');
+    setInKind('addition', L.numberSize, 'twoNumbers');
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+    const reloaded = createPersistence({ kv, storage: undefined });
+    expect(reloaded.status().resetData).toEqual([]);
+    expect(reloaded.settings().subtraction).toMatchObject({ size: 'twoNumbers', maxOperand: 10 });
+    expect(reloaded.settings().addition).toMatchObject({ size: 'twoNumbers', maxOperand: 0 });
+    // Back to "Kleine Schritte", the out-of-range operand shows its error again.
+    setInKind('addition', L.numberSize, 'steps');
+    expect(rowText(inKind('addition', L.additionMaxOperand))).toContain(m.settingsErrors.additionMaxOperand);
+    expect(saveButton().disabled).toBe(true);
+  });
 });

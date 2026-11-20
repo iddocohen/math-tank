@@ -3,7 +3,8 @@ import { skillStepsFor } from '../progress/ladders';
 import { defaultSettings } from '../settings/defaults';
 import { emptyProgress } from '../storage/storage';
 import type { Settings } from '../types';
-import { generateChallenge } from './generate';
+import { minEnemyGap } from './gaps';
+import { generateChallenge, playModeKinds } from './generate';
 import { skillsOf } from './skills';
 import { borrows, carries } from './twoNumbers';
 
@@ -19,15 +20,19 @@ function onlyTwoNumbers(kind: Kind, own: Partial<Settings['addition']> = {}, ada
   return s;
 }
 
-function generate(settings: Settings, roundSeed: number, playerPosition: number) {
-  return generateChallenge({
+function generateInput(settings: Settings, roundSeed: number, playerPosition: number) {
+  return {
     settings,
     skillSteps: skillStepsFor(emptyProgress(), `${settings.range.min}-${settings.range.max}`, settings),
     roundSeed,
     turn: 0,
     playerPosition,
-    rulerLevel: 1,
-  });
+    rulerLevel: 1 as const,
+  };
+}
+
+function generate(settings: Settings, roundSeed: number, playerPosition: number) {
+  return generateChallenge(generateInput(settings, roundSeed, playerPosition));
 }
 
 describe('generateChallenge with "Zwei Zahlen" (amendment 26, FR-025, FR-149, FR-150)', () => {
@@ -69,6 +74,28 @@ describe('generateChallenge with "Zwei Zahlen" (amendment 26, FR-025, FR-149, FR
       const c = generate(settings, seed, 100);
       expect(c.kind).toBe('addition');
       expect(c.twoNumbers).toBe(true);
+    }
+  });
+
+  it('when the enemy gap leaves no answer at the playable step, a harder step gives the plus challenge (review)', () => {
+    // Adaptive on and a new player: step 0 (no carrying, 1 + 1 to 9 + 5) has the answers 2 to 9, steps 1 and 2 reach
+    // at most 14, and the player at 0 needs at least 15 (the enemy gap). Only step 3 (9 + 6 to 9 + 9) has answers.
+    // The review's own example (first 10 to 20, second 1 to 9, no carrying, player at 15) has no answer at any step:
+    // the largest sum without carrying is 29, and the gap needs 30.
+    const settings = onlyTwoNumbers('addition', { first: { min: 1, max: 9 }, second: { min: 1, max: 9 }, carry: true }, true);
+    const gap = minEnemyGap(0, 100);
+    for (let seed = 1; seed <= 50; seed++) {
+      const c = generate(settings, seed, 0);
+      expect(c.kind).toBe('addition');
+      expect(c.twoNumbers).toBe(true);
+      expect(c.answer).toBeGreaterThanOrEqual(gap);
+      // The stored step stays the child's: the challenge records step 0.
+      expect(c.difficultyStep).toBe(0);
+    }
+    // The same in "Nur Rechnen", which uses this generator with its own kinds and fallbacks.
+    for (let seed = 1; seed <= 50; seed++) {
+      const c = generateChallenge({ ...generateInput(settings, seed, 0), ...playModeKinds('math', settings) });
+      expect(c.kind).toBe('addition');
     }
   });
 
