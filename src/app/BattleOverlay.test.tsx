@@ -12,7 +12,7 @@ import { memoryProgressStore } from '../core/battle/ports';
 import type { RoundState, TankState } from '../core/types';
 import { defaultSettings } from '../core/settings/defaults';
 import type { Settings } from '../core/settings/schema';
-import { encouragements, promptText, t } from '../i18n';
+import { encouragements, helpLines, helpText, promptText, t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
 import { useRoundState } from './useController';
 
@@ -830,5 +830,64 @@ describe('BattleOverlay garage icon (amendment 23)', () => {
     });
     expect(controller.getState().phase).toBe('roundOver');
     expect(screen.queryByRole('button', { name: m.battle.garage })).toBeNull();
+  });
+});
+
+describe('BattleOverlay place-value help of "Zwei Zahlen" (amendment 26, FR-154)', () => {
+  const plusTwoNumbers: Partial<Settings> = {
+    challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false },
+    addition: { ...defaultSettings().addition, size: 'twoNumbers', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
+    adaptive: false,
+  };
+
+  /** A round whose first exercise has ones in both numbers, so help step 2 has a tens line, a ones line and the sum. */
+  function start() {
+    for (let seed = 1; seed < 200; seed++) {
+      const controller = new BattleController({ settings: { ...defaultSettings(), noDamage: true, ...plusTwoNumbers }, progress: memoryProgressStore(), clock: () => 1000, seed });
+      controller.startRound('mixed');
+      const c = controller.getState().challenge;
+      if (!c?.twoNumbers || c.operands.some((n) => n % 10 === 0)) continue;
+      render(<Overlay controller={controller} />);
+      return { controller };
+    }
+    throw new Error('no seed found');
+  }
+
+  /** Asks for help until help step 2 with its place-value lines shows. */
+  function toStepTwo(controller: BattleController) {
+    for (let i = 0; i < 3 && !controller.getState().help.content?.placeValue; i++) act(() => controller.requestHelp());
+    const content = controller.getState().help.content!;
+    expect(content.step).toBe(2);
+    return content;
+  }
+
+  it('help step 2 shows one line per place and the sum of the parts under the help hint', () => {
+    const { controller } = start();
+    expect(screen.queryByTestId('help-lines')).toBeNull();
+    const content = toStepTwo(controller);
+    const lines = helpLines(content);
+    expect(lines).toHaveLength(3);
+    const help = screen.getByTestId('help-text');
+    expect(help.textContent).toContain(helpText(content)!);
+    const shown = [...help.querySelectorAll('[data-testid="help-line"]')].map((e) => e.textContent);
+    expect(shown).toEqual(lines);
+    const [a, b] = controller.getState().challenge!.operands as [number, number];
+    expect(shown[0]).toBe(`Zehner: ${Math.floor(a / 10) * 10} + ${Math.floor(b / 10) * 10} = ${(Math.floor(a / 10) + Math.floor(b / 10)) * 10}`);
+  });
+
+  it('a "Kleine Schritte" challenge shows no lines at help step 2', () => {
+    const controller = new BattleController({
+      settings: { ...defaultSettings(), noDamage: true, ...plusTwoNumbers, addition: { ...defaultSettings().addition } },
+      progress: memoryProgressStore(),
+      clock: () => 1000,
+      seed: 7,
+    });
+    controller.startRound('mixed');
+    render(<Overlay controller={controller} />);
+    act(() => {
+      controller.requestHelp();
+      controller.requestHelp();
+    });
+    expect(screen.queryByTestId('help-lines')).toBeNull();
   });
 });

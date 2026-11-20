@@ -12,6 +12,7 @@ import { memoryKeyValue } from '../core/storage/keyValue';
 import { GARAGE_KEY, PROGRESS_KEY, SETTINGS_KEY } from '../core/storage/storage';
 import { emptyGarage } from '../core/rewards/garage';
 import { decodeTransfer } from '../core/transfer/transfer';
+import { settingsNotices } from '../core/settings/validate';
 import { t } from '../i18n';
 import { emptyRecords } from '../core/records/records';
 import { createPersistence } from './persistence';
@@ -685,5 +686,124 @@ describe('restoring kept copies (amendment 24)', () => {
     fireEvent.click(screen.getByRole('button', { name: m.parent.restoreBackup }));
     expect(screen.getByText(m.parent.restoreFailed)).toBeTruthy();
     expect(onRestored).not.toHaveBeenCalled();
+  });
+});
+
+describe('SettingsPage "Zahlengröße" (amendment 26, FR-148, FR-152)', () => {
+  const kindGroup = (kind: 'addition' | 'subtraction') => screen.getByRole('group', { name: m.settings.groups[kind] });
+  const inKind = (kind: 'addition' | 'subtraction', label: string) => within(kindGroup(kind)).getByLabelText(label) as HTMLInputElement & HTMLSelectElement;
+  const queryInKind = (kind: 'addition' | 'subtraction', label: string) => within(kindGroup(kind)).queryByLabelText(label);
+  const setInKind = (kind: 'addition' | 'subtraction', label: string, value: string) => fireEvent.change(inKind(kind, label), { target: { value } });
+  /** The error texts shown in the field row of the given control. */
+  const rowText = (el: HTMLElement) => el.closest('.field')?.textContent ?? '';
+  const plusTwo = (over: Partial<Settings['addition']> = {}): Settings['addition'] => ({ ...defaultSettings().addition, ...twoNumberDefaults(), size: 'twoNumbers', ...over });
+  const minusTwo = (over: Partial<Settings['subtraction']> = {}): Settings['subtraction'] => ({ ...defaultSettings().subtraction, ...twoNumberDefaults(), size: 'twoNumbers', ...over });
+
+  it('plus and minus each show "Zahlengröße" with "Kleine Schritte" (the default) and "Zwei Zahlen"', () => {
+    setup();
+    for (const kind of ['addition', 'subtraction'] as const) {
+      const select = inKind(kind, L.numberSize);
+      expect(select.value).toBe('steps');
+      expect([...select.options].map((o) => o.textContent)).toEqual([L.numberSizeSteps, L.numberSizeTwoNumbers]);
+      expect(queryInKind(kind, L.firstFrom)).toBeNull();
+      expect(queryInKind(kind, L.secondFrom)).toBeNull();
+    }
+    expect(field(L.additionMaxOperand)).toBeTruthy();
+    expect(field(L.additionSteps)).toBeTruthy();
+    expect(field(L.subtractionMaxOperand)).toBeTruthy();
+    expect(field(L.subtractionSteps)).toBeTruthy();
+  });
+
+  it('"Zwei Zahlen" for plus shows both ranges and "Plus mit Übertrag", hides the largest operand and the steps, and saves', () => {
+    const { persistence } = setup();
+    setInKind('addition', L.numberSize, 'twoNumbers');
+    expect(inKind('addition', L.firstFrom).value).toBe('10');
+    expect(inKind('addition', L.firstTo).value).toBe('99');
+    expect(inKind('addition', L.secondFrom).value).toBe('10');
+    expect(inKind('addition', L.secondTo).value).toBe('99');
+    expect(inKind('addition', L.additionCarry).checked).toBe(false);
+    expect(screen.queryByLabelText(L.additionMaxOperand)).toBeNull();
+    expect(screen.queryByLabelText(L.additionSteps)).toBeNull();
+    expect(field(L.additionMaxResult)).toBeTruthy();
+    // Minus keeps "Kleine Schritte".
+    expect(field(L.subtractionMaxOperand)).toBeTruthy();
+    expect(queryInKind('subtraction', L.firstFrom)).toBeNull();
+
+    setInKind('addition', L.firstFrom, '20');
+    setInKind('addition', L.firstTo, '60');
+    setInKind('addition', L.secondFrom, '1');
+    setInKind('addition', L.secondTo, '9');
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+    expect(persistence.settings().addition).toMatchObject({ size: 'twoNumbers', first: { min: 20, max: 60 }, second: { min: 1, max: 9 }, carry: false });
+  });
+
+  it('"Zwei Zahlen" for minus shows both ranges and "Minus mit Übertrag" and hides the largest operand and the steps', () => {
+    const { persistence } = setup();
+    setInKind('subtraction', L.numberSize, 'twoNumbers');
+    expect(inKind('subtraction', L.firstFrom).value).toBe('10');
+    expect(inKind('subtraction', L.secondTo).value).toBe('99');
+    expect(screen.queryByLabelText(L.subtractionMaxOperand)).toBeNull();
+    expect(screen.queryByLabelText(L.subtractionSteps)).toBeNull();
+    expect(screen.queryByLabelText(L.additionCarry)).toBeNull();
+    fireEvent.click(inKind('subtraction', L.subtractionCarry));
+    fireEvent.click(saveButton());
+    expect(persistence.settings().subtraction).toMatchObject({ size: 'twoNumbers', carry: true });
+  });
+
+  it('each range error shows in the row of its range and blocks "Speichern"', () => {
+    setup({ addition: plusTwo(), subtraction: minusTwo() });
+    setInKind('addition', L.firstFrom, '0');
+    expect(rowText(inKind('addition', L.firstFrom))).toContain(m.settingsErrors.additionFirstRange);
+    expect(rowText(inKind('addition', L.secondFrom))).not.toContain(m.settingsErrors.additionSecondRange);
+    expect(saveButton().disabled).toBe(true);
+    setInKind('addition', L.firstFrom, '10');
+    expect(saveButton().disabled).toBe(false);
+
+    setInKind('addition', L.secondTo, '1000');
+    expect(rowText(inKind('addition', L.secondFrom))).toContain(m.settingsErrors.additionSecondRange);
+    setInKind('addition', L.secondTo, '99');
+
+    setInKind('subtraction', L.firstFrom, '80');
+    setInKind('subtraction', L.firstTo, '20');
+    expect(rowText(inKind('subtraction', L.firstFrom))).toContain(m.settingsErrors.subtractionFirstRange);
+    setInKind('subtraction', L.firstFrom, '10');
+    setInKind('subtraction', L.secondFrom, '50');
+    setInKind('subtraction', L.secondTo, '20');
+    expect(rowText(inKind('subtraction', L.secondFrom))).toContain(m.settingsErrors.subtractionSecondRange);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('minus with no first number larger than a second number shows the order error at the first number', () => {
+    setup({ subtraction: minusTwo() });
+    setInKind('subtraction', L.firstTo, '20');
+    setInKind('subtraction', L.secondFrom, '30');
+    setInKind('subtraction', L.secondTo, '40');
+    expect(rowText(inKind('subtraction', L.firstFrom))).toContain(m.settingsErrors.subtractionOrder);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('no exercise on the battlefield shows the error at "Zahlengröße" of that kind', () => {
+    setup({ addition: plusTwo(), subtraction: minusTwo() });
+    setValue(L.rangePreset, 'custom');
+    setValue(L.rangeMin, '550');
+    setValue(L.rangeMax, '780');
+    expect(rowText(inKind('addition', L.numberSize))).toContain(m.settingsErrors.additionNoPair);
+    expect(rowText(inKind('subtraction', L.numberSize))).toContain(m.settingsErrors.subtractionNoPair);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('the note that only some exercises fit shows at "Zahlengröße" and does not block "Speichern"', () => {
+    const initial = { addition: plusTwo({ carry: true }) };
+    const { persistence } = setup(initial);
+    const notices = settingsNotices({ ...defaultSettings(), ...initial });
+    expect(notices).toHaveLength(1);
+    const text = m.settingsNotes.additionSomeOff(notices[0]!.value);
+    expect(within(kindGroup('addition')).getByText(text)).toBeTruthy();
+    expect(within(kindGroup('subtraction')).queryByText(text)).toBeNull();
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+    expect(persistence.settings().addition.carry).toBe(true);
+    expect(screen.getByText(m.settings.saved)).toBeTruthy();
   });
 });

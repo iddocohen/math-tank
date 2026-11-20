@@ -2979,3 +2979,20 @@ describe('amendment 21: waves of enemies in the ruler searches (FR-137 to FR-143
     expect(s.shot?.shooterId).toBeUndefined();
   });
 });
+
+describe('BattleController "Zwei Zahlen" settings mid-round (amendment 26, FR-157)', () => {
+  it('changing "Plus mit Übertrag" during a round gives a new scene with the switch on', () => {
+    const plusOnly = { numberLine: false, addition: true, subtraction: false, comparison: false };
+    const twoNumbers = { ...defaultSettings().addition, size: 'twoNumbers' as const, carry: false };
+    const { controller } = makeController({ challengeTypes: plusOnly, addition: twoNumbers });
+    controller.startRound('math');
+    const before = controller.getState();
+    expect(before.challenge?.twoNumbers).toBe(true);
+
+    controller.applySettingsNow(rulerSettings({ challengeTypes: plusOnly, addition: { ...twoNumbers, carry: true } }));
+    const after = controller.getState();
+    expect(after.seed).not.toBe(before.seed);
+    expect(after.challenge).not.toBe(before.challenge);
+    expect(controller.getRoundSettings().addition.carry).toBe(true);
+  });
+});

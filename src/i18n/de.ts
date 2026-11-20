@@ -343,6 +343,9 @@ export const de = {
       playModes: 'Spielarten',
       range: 'Zahlenraum',
       arithmetic: 'Plus und Minus',
+      /** The plus and the minus part of "Plus und Minus" (amendment 26, FR-148). */
+      addition: 'Plus',
+      subtraction: 'Minus',
       numberLine: 'Zahlenstrahl',
       help: 'Hilfe',
       enemy: 'Gegner',
@@ -366,6 +369,17 @@ export const de = {
       subtractionSteps: 'Rechenschritte beim Minus',
       crossTens: 'Über den Zehner',
       crossHundreds: 'Über den Hunderter',
+      /** "Zahlengröße" of plus and of minus (amendment 26, FR-148). The "bis" fields are named in full for screen readers. */
+      numberSize: 'Zahlengröße',
+      numberSizeSteps: 'Kleine Schritte',
+      numberSizeTwoNumbers: 'Zwei Zahlen',
+      firstFrom: 'Erste Zahl von',
+      firstTo: 'Erste Zahl bis',
+      secondFrom: 'Zweite Zahl von',
+      secondTo: 'Zweite Zahl bis',
+      to: 'bis',
+      additionCarry: 'Plus mit Übertrag',
+      subtractionCarry: 'Minus mit Übertrag',
       negativeResults: 'Ergebnisse unter null',
       rulerLevelStart: 'Zahlenstrahl am Anfang',
       rulerLevelMax: 'Schwerste Stufe des Zahlenstrahls',
@@ -416,6 +430,8 @@ export const de = {
     /** Amendment 18 (FR-129): one line under each switch of the time limit and the point after the full help. */
     explanations: {
       aimCross: 'Das gelbe Kreuz mit der Linie zum Zahlenstrahl.',
+      /** Under the crossing switches when plus or minus uses "Zwei Zahlen" (amendment 26). */
+      crossingSmallSteps: 'Gilt nur für „Kleine Schritte“.',
       enemiesAtOnce: 'So viele Gegner stehen beim Zahlenstrahl auf einmal da.',
       lineStyle: 'Ohne Linien liest das Kind die Zahl genau unter dem Panzer ab.',
       timeLimit: 'Ist die Zeit um, zeigt das Spiel den nächsten Hilfeschritt, ohne Strafe.',
