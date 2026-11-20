@@ -4,6 +4,7 @@
  * allow, and only the `positions` ladder sets a ruler level, clamped to [rulerLevelStart, rulerLevelMax].
  */
 import { twoNumberAnswers, twoNumberRules } from '../math/twoNumbers';
+import { isTwoNumbers } from '../settings/limits';
 import { clamp } from '../util';
 import type { DifficultyStep, Progress, RulerLevel, Settings, Skill } from '../types';
 
@@ -72,20 +73,20 @@ const TWO_NUMBER_STEPS: DifficultyStep[] = [
   { maxNumberFraction: 1, allowCrossTens: true, allowCarry: true, secondFraction: 1 },
 ];
 
+/** Plus and minus share the same "Zwei Zahlen" ladder. */
 export const twoNumberLadders: Record<'addition' | 'subtraction', DifficultyStep[]> = {
-  addition: TWO_NUMBER_STEPS.map((s) => ({ ...s })),
-  subtraction: TWO_NUMBER_STEPS.map((s) => ({ ...s })),
+  addition: TWO_NUMBER_STEPS,
+  subtraction: TWO_NUMBER_STEPS,
 };
 
 /** The "Zwei Zahlen" kind of a skill when the parent chose "Zwei Zahlen" for it, else undefined. */
 function twoNumberKind(skill: Skill, settings: Settings): 'addition' | 'subtraction' | undefined {
-  return (skill === 'addition' || skill === 'subtraction') && settings[skill].size === 'twoNumbers' ? skill : undefined;
+  return (skill === 'addition' || skill === 'subtraction') && isTwoNumbers(skill, settings) ? skill : undefined;
 }
 
 /** The ladder a skill uses with these settings: the "Zwei Zahlen" ladder for plus or minus with "Zwei Zahlen" on. */
 export function ladderFor(skill: Skill, settings: Settings): DifficultyStep[] {
-  const kind = twoNumberKind(skill, settings);
-  return kind ? twoNumberLadders[kind] : ladders[skill];
+  return twoNumberKind(skill, settings) ? TWO_NUMBER_STEPS : ladders[skill];
 }
 
 /** Key of a skill and range in Progress.skills. */
@@ -187,12 +188,11 @@ export function effectiveStep(p: Progress, skill: Skill, rangeKey: string, setti
  * nearest harder step that has one, ending at the top step. Other ladders, and steps with an exercise, return
  * `clampStep` unchanged. The stored step index is not changed: the child's progress stays where it is.
  * Lives here, not in core/math/generate.ts, so effectiveStep and the generator share it; core/math/twoNumbers.ts
- * imports only types, so there is no import cycle.
+ * does not import this module, so there is no import cycle.
  */
 export function playableStep(skill: Skill, index: number, settings: Settings): DifficultyStep {
-  const step = clampStep(skill, index, settings);
   const kind = twoNumberKind(skill, settings);
-  if (!kind) return step;
+  if (!kind) return clampStep(skill, index, settings);
   const last = ladderFor(skill, settings).length - 1;
   for (let i = clamp(Math.trunc(index), 0, last); i <= last; i++) {
     const candidate = clampStep(skill, i, settings);

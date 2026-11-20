@@ -4,8 +4,9 @@
  * range, for example 560 + 5 in 550 to 780), every sum at most addition.maxResult. With `addition.size: 'twoNumbers'`
  * (amendment 26) the exercise is a + b from the first and second ranges instead (twoNumbers.ts).
  */
+import { isTwoNumbers } from '../settings/limits';
 import type { DifficultyStep, Settings } from '../types';
-import { arithmeticAnswers, arithmeticDraft, arithmeticRules, isTwoNumbers, searchOperands, twoNumberCandidates, twoNumberDraft } from './arithmetic';
+import { arithmeticAnswers, arithmeticDraft, arithmeticRules, searchOperands, twoNumberCandidates, twoNumberDraft } from './arithmetic';
 import type { Builder } from './numberLine';
 
 export const buildAddition: Builder = (answer, settings, step, rng) => {

@@ -5,7 +5,9 @@
  * digit other than 0, highest place first, then the parts are added. Minus with borrowing cannot be split by column,
  * so it gives jumps instead: from the first number, subtract the second number's hundreds, then tens, then ones.
  */
+import type { Challenge } from '../types';
 import type { ArithmeticKind } from './arithmetic';
+import { borrows } from './twoNumbers';
 
 export type PlaceName = 'hundreds' | 'tens' | 'ones';
 
@@ -24,9 +26,14 @@ function digit(n: number, value: number): number {
   return Math.floor(n / value) % 10;
 }
 
-/** True when a − b borrows in some column: a digit of a is smaller than the digit of b at the same place. */
-function borrows(a: number, b: number): boolean {
-  return PLACES.some(({ value }) => digit(a, value) < digit(b, value));
+/**
+ * The kind and operands [a, b] of a "Zwei Zahlen" plus or minus challenge (amendment 26), or null for any other
+ * challenge. The one test of the step path and the help banner for "is this a + b or a − b from two ranges".
+ */
+export function twoNumberOperands(c: Pick<Challenge, 'kind' | 'operands' | 'twoNumbers'>): { kind: ArithmeticKind; a: number; b: number } | null {
+  if (!c.twoNumbers || c.operands.length !== 2) return null;
+  if (c.kind !== 'addition' && c.kind !== 'subtraction') return null;
+  return { kind: c.kind, a: c.operands[0]!, b: c.operands[1]! };
 }
 
 /**

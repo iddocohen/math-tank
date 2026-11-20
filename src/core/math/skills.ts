@@ -1,5 +1,6 @@
 /** Skills per challenge (data-model.md "Main skill per kind", FR-036). */
 import type { Challenge, ChallengeKind, Skill } from '../types';
+import { borrows, carries } from './twoNumbers';
 
 const MAIN_SKILL: Record<ChallengeKind, Skill> = {
   findNumber: 'positions',
@@ -53,7 +54,7 @@ function path(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps'>): num
  */
 function onesCross(c: Pick<Challenge, 'kind' | 'operands'>): boolean {
   const [a = 0, b = 0] = c.operands;
-  return c.kind === 'addition' ? (a % 10) + (b % 10) >= 10 : a % 10 < b % 10;
+  return c.kind === 'addition' ? carries(a % 10, b % 10) : borrows(a % 10, b % 10);
 }
 
 type SkillSource = Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps' | 'twoNumbers'>;

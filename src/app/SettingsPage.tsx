@@ -28,9 +28,10 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { qrMatrix, qrPath, type QrMatrix } from '../core/transfer/qr';
 import { encodeTransfer, type EncodedTransfer } from '../core/transfer/transfer';
 import type { RulerLevel } from '../core/numberline/ticks';
-import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN } from '../core/settings/defaults';
-import type { RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
-import { settingsNotices, validateSettings, withRange } from '../core/settings/validate';
+import { RANGE_PRESETS, ROUND_LENGTH_MAX, ROUND_LENGTH_MIN, TWO_NUMBER_MAX, TWO_NUMBER_MIN } from '../core/settings/defaults';
+import type { NumberSpan, RangePreset, RoundType, Settings, SettingsRange } from '../core/settings/schema';
+import { isTwoNumbers } from '../core/settings/limits';
+import { settingsNotices, validateSettings, withRange, type SettingsNotice } from '../core/settings/validate';
 import { t } from '../i18n';
 import { BUILD_DATE, BUILD_VERSION } from './buildInfo';
 import type { DataKind, Persistence } from './persistence';
@@ -119,7 +120,9 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
     else setRestoreFailed(true);
   };
 
-  const errors = collectErrors(draft);
+  // Checked once per draft: the rules include the "Zwei Zahlen" pair search (amendment 26).
+  const errors = useMemo(() => collectErrors(draft), [draft]);
+  const notices = useMemo(() => settingsNotices(draft), [draft]);
   const valid = errors.size === 0;
   const errorsAt = (path: string) => errors.get(path) ?? [];
 
@@ -201,7 +204,7 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
   const rangeOk = errorsAt('range').length === 0;
   const allTypesOff = !Object.values(draft.challengeTypes).some(Boolean);
   // The crossing switches apply to "Kleine Schritte" only; the page says so once a kind uses "Zwei Zahlen" (amendment 26).
-  const twoNumbersUsed = draft.addition.size === 'twoNumbers' || draft.subtraction.size === 'twoNumbers';
+  const twoNumbersUsed = isTwoNumbers('addition', draft) || isTwoNumbers('subtraction', draft);
   const crossingNote = twoNumbersUsed ? m.settings.explanations.crossingSmallSteps : undefined;
 
   return (
@@ -288,20 +291,8 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
 
         <Group title={m.settings.groups.arithmetic}>
           {/* Amendment 26 (FR-148, FR-152): "Zahlengröße" per kind; "Zwei Zahlen" replaces the largest operand and the steps. */}
-          <KindSettings
-            kind="addition"
-            settings={draft}
-            errorsAt={errorsAt}
-            onChange={(addition) => setLimit({ ...draft, addition: { ...draft.addition, ...addition } })}
-            shared={<NumberInput label={L.additionMaxResult} value={draft.addition.maxResult} errors={errorsAt('addition.maxResult')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxResult: n } })} />}
-          >
-            <NumberInput label={L.additionMaxOperand} value={draft.addition.maxOperand} errors={errorsAt('addition.maxOperand')} onChange={(n) => setLimit({ ...draft, addition: { ...draft.addition, maxOperand: n } })} />
-            <Select label={L.additionSteps} value={String(draft.addition.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, addition: { ...draft.addition, steps: v === '2' ? 2 : 1 } })} />
-          </KindSettings>
-          <KindSettings kind="subtraction" settings={draft} errorsAt={errorsAt} onChange={(subtraction) => setLimit({ ...draft, subtraction: { ...draft.subtraction, ...subtraction } })}>
-            <NumberInput label={L.subtractionMaxOperand} value={draft.subtraction.maxOperand} errors={errorsAt('subtraction.maxOperand')} onChange={(n) => setLimit({ ...draft, subtraction: { ...draft.subtraction, maxOperand: n } })} />
-            <Select label={L.subtractionSteps} value={String(draft.subtraction.steps)} options={stepOptions()} onChange={(v) => setLimit({ ...draft, subtraction: { ...draft.subtraction, steps: v === '2' ? 2 : 1 } })} />
-          </KindSettings>
+          <KindSettings kind="addition" settings={draft} errorsAt={errorsAt} notices={notices} onChange={setLimit} />
+          <KindSettings kind="subtraction" settings={draft} errorsAt={errorsAt} notices={notices} onChange={setLimit} />
           <Check label={L.crossTens} {...bind('crossTens')} />
           <Check label={L.crossHundreds} description={crossingNote} {...bind('crossHundreds')} />
         </Group>
@@ -602,35 +593,33 @@ function LargeQr({ qr, onClose }: { qr: QrMatrix; onClose: () => void }) {
   );
 }
 
-/** The fields of plus or minus that "Zahlengröße" chooses between (amendment 26, FR-148, FR-152). */
-type KindFields = Pick<Settings['addition'], 'size' | 'first' | 'second' | 'carry'>;
+/** The fields plus and minus both have (amendment 26, FR-148, FR-152). */
+type KindFields = Pick<Settings['subtraction'], 'size' | 'first' | 'second' | 'carry' | 'maxOperand' | 'steps'>;
 
 /**
  * The plus or the minus part of "Plus und Minus" (amendment 26): "Zahlengröße", then with "Kleine Schritte" the
- * `children` (the largest operand and the steps), with "Zwei Zahlen" both ranges and the carry switch instead; `shared`
- * (plus: "Größtes Ergebnis") shows with both. Each
- * error shows at its field, and the note that only some exercises fit shows under "Zahlengröße" without blocking
- * "Speichern".
+ * largest operand and the steps, with "Zwei Zahlen" both ranges and the carry switch instead; plus also shows
+ * "Größtes Ergebnis" with both. Each error shows at its field, and the note that only some exercises fit
+ * (`notices`, from settingsNotices) shows under "Zahlengröße" without blocking "Speichern".
  */
 function KindSettings({
   kind,
   settings,
   errorsAt,
+  notices,
   onChange,
-  shared,
-  children,
 }: {
   kind: 'addition' | 'subtraction';
   settings: Settings;
   errorsAt: (path: string) => string[];
-  onChange: (next: Partial<KindFields>) => void;
-  shared?: ReactNode;
-  children: ReactNode;
+  notices: SettingsNotice[];
+  onChange: (next: Settings) => void;
 }) {
   const m = t();
   const L = m.settings.labels;
   const k = settings[kind];
-  const notes = settingsNotices(settings).filter((n) => n.path === `${kind}.size`);
+  const change = (next: Partial<KindFields>) => onChange({ ...settings, [kind]: { ...k, ...next } });
+  const notes = notices.filter((n) => n.path === `${kind}.size`);
   return (
     <fieldset className="settings-subgroup">
       <legend>{m.settings.groups[kind]}</legend>
@@ -642,7 +631,7 @@ function KindSettings({
           { value: 'twoNumbers', label: L.numberSizeTwoNumbers },
         ]}
         errors={errorsAt(`${kind}.size`)}
-        onChange={(v) => onChange({ size: v === 'twoNumbers' ? 'twoNumbers' : 'steps' })}
+        onChange={(v) => change({ size: v === 'twoNumbers' ? 'twoNumbers' : 'steps' })}
       />
       {notes.map((n) => (
         <p key={n.key} className="notice" role="note">
@@ -650,15 +639,25 @@ function KindSettings({
         </p>
       ))}
       {k.size === 'steps' ? (
-        children
+        <>
+          <NumberInput label={L[`${kind}MaxOperand`]} value={k.maxOperand} errors={errorsAt(`${kind}.maxOperand`)} onChange={(maxOperand) => change({ maxOperand })} />
+          <Select label={L[`${kind}Steps`]} value={String(k.steps)} options={stepOptions()} onChange={(v) => change({ steps: v === '2' ? 2 : 1 })} />
+        </>
       ) : (
         <>
-          <SpanInput fromLabel={L.firstFrom} toLabel={L.firstTo} value={k.first} errors={errorsAt(`${kind}.first`)} onChange={(first) => onChange({ first })} />
-          <SpanInput fromLabel={L.secondFrom} toLabel={L.secondTo} value={k.second} errors={errorsAt(`${kind}.second`)} onChange={(second) => onChange({ second })} />
-          <Check label={kind === 'addition' ? L.additionCarry : L.subtractionCarry} checked={k.carry} onChange={(carry) => onChange({ carry })} />
+          <SpanInput fromLabel={L.firstFrom} toLabel={L.firstTo} value={k.first} errors={errorsAt(`${kind}.first`)} onChange={(first) => change({ first })} />
+          <SpanInput fromLabel={L.secondFrom} toLabel={L.secondTo} value={k.second} errors={errorsAt(`${kind}.second`)} onChange={(second) => change({ second })} />
+          <Check label={L[`${kind}Carry`]} checked={k.carry} onChange={(carry) => change({ carry })} />
         </>
       )}
-      {shared}
+      {kind === 'addition' && (
+        <NumberInput
+          label={L.additionMaxResult}
+          value={settings.addition.maxResult}
+          errors={errorsAt('addition.maxResult')}
+          onChange={(maxResult) => onChange({ ...settings, addition: { ...settings.addition, maxResult } })}
+        />
+      )}
     </fieldset>
   );
 }
@@ -775,20 +774,20 @@ function SpanInput({
 }: {
   fromLabel: string;
   toLabel: string;
-  value: { min: number; max: number };
+  value: NumberSpan;
   errors: string[];
-  onChange: (next: { min: number; max: number }) => void;
+  onChange: (next: NumberSpan) => void;
 }) {
   const id = useId();
   const invalid = errors.length > 0 || undefined;
   return (
     <div className="field span-field">
       <label htmlFor={`${id}-min`}>{fromLabel}</label>
-      <WholeNumberBox id={`${id}-min`} value={value.min} min={1} max={999} invalid={invalid} onChange={(min) => onChange({ ...value, min })} />
+      <WholeNumberBox id={`${id}-min`} value={value.min} min={TWO_NUMBER_MIN} max={TWO_NUMBER_MAX} invalid={invalid} onChange={(min) => onChange({ ...value, min })} />
       <label htmlFor={`${id}-max`} className="span-to" aria-hidden="true">
         {t().settings.labels.to}
       </label>
-      <WholeNumberBox id={`${id}-max`} label={toLabel} value={value.max} min={1} max={999} invalid={invalid} onChange={(max) => onChange({ ...value, max })} />
+      <WholeNumberBox id={`${id}-max`} label={toLabel} value={value.max} min={TWO_NUMBER_MIN} max={TWO_NUMBER_MAX} invalid={invalid} onChange={(max) => onChange({ ...value, max })} />
       <Errors errors={errors} />
     </div>
   );

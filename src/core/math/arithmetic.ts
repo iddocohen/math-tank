@@ -5,7 +5,7 @@
  * between 1 and the maximum operand and may lie outside the range (for example 560 + 5 in the range 550 to 780).
  */
 import type { Rng } from '../rng';
-import { lowestResult } from '../settings/validate';
+import { highestResult, isTwoNumbers, lowestResult } from '../settings/limits';
 import type { DifficultyStep, Settings } from '../types';
 import { movementAllowed, type ChallengeDraft } from './numberLine';
 import { twoNumberAnswers, twoNumberPairErrors, twoNumberPairs, twoNumberRules } from './twoNumbers';
@@ -32,8 +32,7 @@ const CHAIN_TRIES = 30;
 export function arithmeticRules(kind: ArithmeticKind, settings: Settings, step?: DifficultyStep): ArithmeticRules {
   const own = kind === 'addition' ? settings.addition : settings.subtraction;
   const maxOperand = Math.min(own.maxOperand, step?.maxOperand ?? Infinity);
-  const highest = kind === 'addition' ? Math.min(settings.addition.maxResult, settings.range.max) : settings.range.max;
-  return { kind, sign: kind === 'addition' ? 1 : -1, maxOperand, steps: own.steps, lowest: lowestResult(settings, settings.range), highest };
+  return { kind, sign: kind === 'addition' ? 1 : -1, maxOperand, steps: own.steps, lowest: lowestResult(settings, settings.range), highest: highestResult(kind, settings) };
 }
 
 /** Whether `n` may be the start (isStart) or a result of the exercise. */
@@ -109,11 +108,6 @@ export function arithmeticAnswers(rules: ArithmeticRules, settings: Settings): n
   const out: number[] = [];
   for (let n = lo; n <= hi; n++) out.push(n);
   return out;
-}
-
-/** Whether `kind` uses "Zwei Zahlen" (amendment 26, FR-148). */
-export function isTwoNumbers(kind: ArithmeticKind, settings: Settings): boolean {
-  return settings[kind].size === 'twoNumbers';
 }
 
 /** "Zwei Zahlen" builder (FR-149, FR-150): a pair [a, b] with the answer, picked with the rng from every valid pair. */
