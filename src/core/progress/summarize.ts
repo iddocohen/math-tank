@@ -6,7 +6,7 @@ import type { Records } from '../records/records';
 import { PLAY_MODES, type PlayMode, type RoundType, type Settings } from '../settings/schema';
 import type { Progress, Skill } from '../types';
 import { rowToRaise } from './adaptive';
-import { ladders } from './ladders';
+import { ladderFor, ladders } from './ladders';
 import { skillStatus } from './mastery';
 
 /** The order of the skills on the page: the order of FR-036. */
@@ -103,7 +103,7 @@ function skillRows(p: Progress, settings: Settings | undefined): SkillRow[] {
       withHelp: sp.assisted,
       guesses: sp.guesses,
       step: sp.step,
-      stepCount: ladders[skill].length,
+      stepCount: (settings ? ladderFor(skill, settings) : ladders[skill]).length,
       toRaise: settings ? rowToRaise(sp, skill, settings) : null,
       status: skillStatus(sp),
     });

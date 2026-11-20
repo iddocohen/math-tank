@@ -117,6 +117,18 @@ describe('summarize (FR-040, FR-087)', () => {
     expect(summarize(p, emptyRecords(), { ...defaultSettings(), adaptive: false }).skills.every((r) => r.toRaise === null)).toBe(true);
   });
 
+  it('shows the step and the answers that raise it on the "Zwei Zahlen" ladder (amendment 26, FR-153)', () => {
+    const p = emptyProgress();
+    p.skills['addition|0-100'] = { step: 1, recent: ['independent'], masteryWindow: [], guesses: 0, attempts: 1, independentCorrect: 1, assisted: 0 };
+    const base = defaultSettings();
+    const on = { ...base, addition: { ...base.addition, size: 'twoNumbers' as const, carry: true } };
+    const row = summarize(p, emptyRecords(), on).skills.find((r) => r.skill === 'addition')!;
+    expect([row.step, row.stepCount, row.toRaise]).toEqual([1, 4, 2]);
+    // Without carrying the top step the settings allow is step 2 (index 1).
+    const off = { ...on, addition: { ...on.addition, carry: false } };
+    expect(summarize(p, emptyRecords(), off).skills.find((r) => r.skill === 'addition')!.toRaise).toBeNull();
+  });
+
   it('skips a personal best whose key cannot be read', () => {
     const r = emptyRecords();
     r.best['nonsense'] = { enemies: 3, ms: 1000, at: 1 };

@@ -4,7 +4,6 @@
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
-import { isTwoNumbers } from './arithmetic';
 import { COMPARISON_KINDS, comparisonAnswers, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, PlayMode, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
@@ -13,7 +12,7 @@ import { buildReadPosition, readPositionAnswers } from './readPosition';
 import { mainSkillOf, skillsOf } from './skills';
 import { buildSubtraction, subtractionAnswers } from './subtraction';
 import { validateChallenge } from './validate';
-import { clampStep } from '../progress/ladders';
+import { playableStep } from '../progress/ladders';
 import { MODE_TRAITS } from '../modes';
 
 export interface GenerateInput {
@@ -108,11 +107,12 @@ export function playModeKinds(mode: PlayMode, settings: Settings): Pick<Generate
 
 /**
  * The difficulty step a builder works with: the main skill's ladder step clamped by the settings, with the round's
- * ruler level (the ruler follows the positions skill only, FR-018, and the controller passes it).
+ * ruler level (the ruler follows the positions skill only, FR-018, and the controller passes it). On a "Zwei Zahlen"
+ * ladder a step without a valid pair moves up to the nearest harder step that has one (playableStep, FR-153).
  */
 function stepFor(kind: ChallengeKind, input: GenerateInput): DifficultyStep {
   const skill = mainSkillOf(kind);
-  return { ...clampStep(skill, input.skillSteps[skill] ?? 0, input.settings), rulerLevel: input.rulerLevel };
+  return { ...playableStep(skill, input.skillSteps[skill] ?? 0, input.settings), rulerLevel: input.rulerLevel };
 }
 
 /**
@@ -149,10 +149,9 @@ function tryKind(
   if (!build) return null;
   const step = stepFor(kind, input);
   const candidates = CANDIDATES[kind];
-  // "Zwei Zahlen" (amendment 26) narrows by its own ladder fields (allowCarry, secondFraction); "smaller numbers first"
-  // would hide answers that only come from large first numbers, so it uses every allowed answer.
-  const twoNumbers = (kind === 'addition' || kind === 'subtraction') && isTwoNumbers(kind, input.settings);
-  const inStep = wholeRange || twoNumbers ? answers : withinStep(answers, input.settings, step);
+  // Every "Zwei Zahlen" step (amendment 26) has maxNumberFraction 1, so withinStep keeps every answer there; those
+  // steps narrow by allowCarry and secondFraction instead.
+  const inStep = wholeRange ? answers : withinStep(answers, input.settings, step);
   const allowed = new Set(inStep);
   const pool = candidates ? candidates(input.settings, step).filter((n) => allowed.has(n)) : inStep;
   if (pool.length === 0) return null;

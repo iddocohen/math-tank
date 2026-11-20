@@ -298,3 +298,46 @@ describe('attempt history cap (research R11)', () => {
     expect(q.sessions).toEqual([{ id: 'new', startedAt: 5000, lastActiveAt: 5000, attempts: 1, independentCorrect: 1, assisted: 0 }]);
   });
 });
+
+describe('"Zwei Zahlen" ladder in the addition and subtraction skills (amendment 26, FR-153)', () => {
+  function twoNumberSettings(carry: boolean, extra: Partial<Settings> = {}): Settings {
+    return settings({ addition: { ...defaultSettings().addition, size: 'twoNumbers', carry }, ...extra });
+  }
+
+  it('keeps the stored step index when the parent changes "Zahlengröße"', () => {
+    const p = withSkill('addition', { step: 2 });
+    const steps = settings();
+    expect(effectiveStep(p, 'addition', RANGE, steps).maxOperand).toBe(10);
+    expect(effectiveStep(p, 'addition', RANGE, steps).allowCarry).toBeUndefined();
+    const two = twoNumberSettings(true);
+    expect(effectiveStep(p, 'addition', RANGE, two)).toMatchObject({ allowCarry: true, secondFraction: 0.5 });
+    expect(sp(p, 'addition').step).toBe(2);
+  });
+
+  it('raises through all 4 steps with carrying on and stops at step 2 with it off', () => {
+    const on = twoNumberSettings(true);
+    let p = emptyProgress();
+    for (let i = 0; i < 12; i++) p = recordAttempt(p, attempt('independent', ['addition']), on);
+    expect(sp(p, 'addition').step).toBe(3);
+    expect(rowToRaise(sp(p, 'addition'), 'addition', on)).toBeNull();
+
+    const off = twoNumberSettings(false);
+    let q = emptyProgress();
+    for (let i = 0; i < 12; i++) q = recordAttempt(q, attempt('independent', ['addition']), off);
+    expect(sp(q, 'addition').step).toBe(1);
+    expect(effectiveStep(q, 'addition', RANGE, off)).toMatchObject({ allowCarry: false, secondFraction: 1 });
+  });
+
+  it('with adaptive off uses the parent settings: carry switch and the whole second range', () => {
+    expect(effectiveStep(emptyProgress(), 'addition', RANGE, twoNumberSettings(true, { adaptive: false }))).toMatchObject({ allowCarry: true, secondFraction: 1 });
+    expect(effectiveStep(emptyProgress(), 'addition', RANGE, twoNumberSettings(false, { adaptive: false }))).toMatchObject({ allowCarry: false, secondFraction: 1 });
+  });
+
+  it('effectiveStep falls back to the nearest harder step that has an exercise (critique E2)', () => {
+    const s = settings({
+      range: { preset: 'custom', min: 0, max: 200 },
+      addition: { ...defaultSettings().addition, maxResult: 200, size: 'twoNumbers', carry: true, first: { min: 90, max: 99 }, second: { min: 10, max: 99 } },
+    } as Partial<Settings>);
+    expect(effectiveStep(emptyProgress(), 'addition', RANGE, s)).toMatchObject({ allowCarry: true, secondFraction: 0.5 });
+  });
+});
