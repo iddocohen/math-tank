@@ -39,6 +39,12 @@ Mouse and touch work too: tap the ruler to choose a number, then tap **Feuer!**.
 - **Number range:** choose 0 to 10, 0 to 20, 0 to 50, 0 to 100, 0 to 1000, or your own range such as 550 to 780. The battlefield always covers exactly this range.
 - **Ruler level ("Zahlenstrahl"):** 5 levels, from every number labeled (level 1) to only the two end points (level 5). Set a starting level and the hardest level. The two previews show what the child will see.
 - **Tasks:** turn on or off reading the ruler, before and after, steps, plus, minus and comparing numbers, and set their limits (largest number, crossing tens, negative results).
+- **Number size for plus and minus ("Zahlengröße"):** plus and minus each have their own setting.
+  - "Kleine Schritte" (the default) adds or subtracts small steps, with the limits above.
+  - "Zwei Zahlen" builds an exercise from two numbers. Set a range for the first number and one for the second number, from 1 to 999 each. For example, first number 10 to 99 and second number 1 to 9 gives exercises like 45 + 6.
+  - "Plus mit Übertrag" and "Minus mit Übertrag" allow carrying and borrowing. When off, 35 + 12 comes but 34 + 19 does not. In minus, the first number is always the larger one.
+  - Help shows tens with tens and ones with ones, for example "Zehner: 30 + 10 = 40", "Einer: 5 + 2 = 7", "40 + 7 = 47".
+  - If no exercise fits the number range, the settings page says so under "Zahlengröße" and does not save.
 - **Adaptive difficulty** (on by default) makes tasks a little harder after repeated success without help, and easier when the child struggles, never beyond your limits.
 - **Progress ("Fortschritt")** shows, per skill, how many tasks were solved alone and how many with help, which skills are mastered, and the personal bests.
 - **Back up your data:** "Daten sichern" downloads settings and progress as a file. "Daten laden" restores them. "Spielstand übertragen" moves them to another browser with a QR code or a link.
@@ -55,10 +61,10 @@ The progress lives in the browser's own storage on that device, not on a server.
 
 ## Status
 
-The first release is built. All 22 amendments made during playtesting are implemented ([amendments 01 to 22](specs/001-math-tanks/)). The game now has:
+The first release is built. All 26 amendments made during playtesting are implemented ([amendments 01 to 26](specs/001-math-tanks/)). The game now has:
 
 - Aiming by number on a fixed cannon, with any number range and 5 ruler levels.
-- Tasks: reading the ruler, before and after, steps, plus and minus with a step animation, and comparing numbers with decoy tanks.
+- Tasks: reading the ruler, before and after, steps, plus and minus with a step animation, plus and minus with two numbers (such as 35 + 12, with or without carrying) and help by place value, and comparing numbers with decoy tanks.
 - Help in steps, hearts, personal bests, adaptive difficulty and the progress page.
 - An enemy that fires back and aims closer after repeated misses, and new hills after every destroyed enemy.
 - A tank garage with looks earned with stars.
