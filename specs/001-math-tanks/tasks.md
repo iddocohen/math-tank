@@ -1031,6 +1031,31 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24l: Amendment 26 plus and minus with two larger numbers
+
+**Purpose**: [Amendment 26](./amendment-26-two-number-arithmetic.md). Plus and minus get "Zahlengröße" with "Zwei Zahlen": a range for the first and for the second number, a carry switch per kind, place-value help on the ruler and in the banner, and a 4-step ladder. Settings version 13.
+
+**Independent test**: `tests/e2e/twoNumbers.spec.ts` turns on only plus with "Zwei Zahlen" 10 to 99 without carrying; every banner shows two two-digit numbers whose columns do not carry, and help step 2 shows "Zehner: …" and "Einer: …".
+
+- [ ] T403 [US3] Write the tests first for settings version 13: `src/core/settings/settings.test.ts` (defaults: `size: 'steps'`, `first` and `second` 10 to 99, `carry: false` for both kinds; schema accepts and rejects the new fields; `validateSettings` errors `additionFirstRange`, `additionSecondRange`, `subtractionFirstRange`, `subtractionSecondRange`, `subtractionOrder`, `additionNoPair`, `subtractionNoPair`, only when `size` is `'twoNumbers'`; `settingsNotices` `additionSomeOff` and `subtractionSomeOff`), `src/core/storage/storage.test.ts` and `exportImport.test.ts` (version 12 data migrates to 13 with the defaults), `src/core/transfer/transfer.test.ts` (old codes read with the defaults; a link with every new field set to a value other than the default stays under 2300 bytes) (FR-148, FR-151, FR-152, FR-156)
+- [ ] T404 [US3] Implement until T403 passes: `src/core/settings/schema.ts` (version 13), `defaults.ts`, `validate.ts` (new error keys, `settingsNotices`), `src/core/storage/migrate.ts` (step 12 to 13), `src/core/transfer/transfer.ts` (`TRANSFER_V2_SETTINGS_BASE`), error and note texts in `src/i18n/de.ts`; update data-model.md if a name changes (FR-148, FR-151, FR-152, FR-156)
+- [ ] T405 [P] [US3] Write the tests first for `src/core/math/twoNumbers.test.ts`: `carries` and `borrows` (35 + 12 no, 34 + 19 yes, 234 + 152 no, 234 + 158 yes, 46 − 12 no, 42 − 17 yes, 45 + 6 yes, 45 + 3 no); over 500 seeds for plus and minus, with and without carrying, two-digit, three-digit and a one-digit second range: each number in its range, first number and answer on the battlefield, answer within lowest and highest (`maxResult` for plus), minus first number larger, no carry or borrow with the switch off, some carrying with it on; `twoNumberAnswers` equals the brute-force set; the worst case 1 to 999 against 1 to 999 runs in under about 50 ms; `twoNumberFit` (FR-149, FR-150, FR-151)
+- [ ] T406 [US3] Implement until T405 passes: `src/core/math/twoNumbers.ts` (memoized answer list) (FR-149, FR-150, FR-151)
+- [ ] T407 [US3] Write the tests first for the generator and validation: `src/core/math/generate.test.ts` (with `size: 'twoNumbers'` addition and subtraction challenges have `operands: [a, b]`, `steps: [a, answer]`, `twoNumbers: true`, the prompt "a + b"; only plus on with a narrow answer set and the player near it still gives a challenge), `src/core/math/validate.test.ts` (`arithmeticErrors` accepts valid two-number challenges and rejects a carry with the switch off, a number outside its range, a minus first number not larger, a first number off the battlefield) (FR-025, FR-149, FR-150)
+- [ ] T408 [US3] Implement until T407 passes: `src/core/math/addition.ts`, `subtraction.ts`, `arithmetic.ts` (`arithmeticErrors` branch), `src/core/types.ts` (`Challenge.twoNumbers`), `src/core/math/generate.ts` if `CANDIDATES` needs the new answer list (FR-149, FR-150)
+- [ ] T409 [P] [US3] Write the tests first for `src/core/math/placeValue.test.ts` and `src/core/battle/help.test.ts`: `placeValueHelp` for 35 + 12, 34 + 19, 45 + 6, 46 − 12, 46 − 2, 234 + 152 (columns) and 42 − 17, 432 − 157 (jumps); `placeValuePath` with and without beginner assistance (35 + 12: [35, 45, 47]; 35 + 32: [35, 45, 55, 65, 67] and [35, 65, 67]; 34 + 19: [34, 44, 50, 53] and [34, 44, 53]; 46 − 12: [46, 36, 34]; 42 − 17: [42, 32, 30, 25]); `stepPath` returns `placeValuePath` for a `twoNumbers` challenge and today's path otherwise; `nextHelp` step 2 sets `placeValue` with the ruler and in "Nur Rechnen", and not with `help.stepAnimation` off; `src/i18n` `helpLines` gives the German lines of amendment 26 item 7 (FR-154, FR-155)
+- [ ] T410 [US3] Implement until T409 passes: `src/core/math/placeValue.ts`, `src/core/math/stepPath.ts`, `src/core/battle/help.ts`, `HelpContent.placeValue` in `src/core/types.ts`, `helpLines` in `src/i18n/index.ts` and the texts in `src/i18n/de.ts` (FR-154, FR-155)
+- [ ] T411 [P] [US7] Write the tests first for `src/core/progress/ladders.test.ts` and `adaptive.test.ts`: with `size: 'twoNumbers'` `clampStep` reads the 4-step "Zwei Zahlen" ladder; `allowCarry` is false when the parent's switch is off; `secondFraction` narrows the second range; a stored index keeps its place when `size` changes; a step with no exercise falls back to the nearest harder step that has one; `sameStep` compares the new fields (FR-153)
+- [ ] T412 [US7] Implement until T411 passes: `src/core/progress/ladders.ts`, `adaptive.ts`, `DifficultyStep.allowCarry` and `secondFraction` in `src/core/types.ts`, the step fallback where the generator reads the step (FR-153)
+- [ ] T413 [US6] Write the tests first for the settings page and the banner: `src/app/SettingsPage.test.tsx` ("Zahlengröße" per kind; "Zwei Zahlen" shows "Erste Zahl von … bis …", "Zweite Zahl von … bis …" and the carry switch and hides the largest operand and the steps; each new error names its field; the note shows and does not block saving), `src/app/BattleOverlay.test.tsx` (help step 2 of a two-number challenge shows the lines; speech reads them like the hint), `src/core/battle/battleController.test.ts` (changing `addition.carry` mid-round gives a new scene, FR-157) (FR-148, FR-152, FR-154, FR-157)
+- [ ] T414 [US6] Implement until T413 passes: `src/app/SettingsPage.tsx`, `src/app/BattleOverlay.tsx` (lines under the hint, wrapping in every layout), `src/app/styles.css`, speech of the lines where the hint is spoken, labels in `src/i18n/de.ts` (FR-148, FR-152, FR-154, FR-157)
+- [ ] T415 [US3] e2e `tests/e2e/twoNumbers.spec.ts` in the desktop and device projects: only plus, "Zwei Zahlen" 10 to 99 without carrying, `/?seed=1`; 5 banners with two two-digit numbers whose columns do not carry; H twice shows the place-value lines inside the viewport; the battlefield 550 to 780 blocks saving with the plus range named (FR-148 to FR-155)
+- [ ] T416 README: the plus and minus "Zahlengröße" settings in "Tutorial for parents"; mark amendment 26 done in the status section; quickstart row 37
+
+**Checkpoint**: A parent sets two-digit plus and minus with or without carrying, and the help shows tens with tens and ones with ones.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies
@@ -1290,6 +1315,16 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-144 | T378, T379, T385, T386, T387, T388, T389, T390 |
 | FR-145 | T385, T386, T390 |
 | FR-146 | T386, T389, T390 |
+| FR-148 | T403, T404, T413, T414, T415 |
+| FR-149 | T405, T406, T407, T408, T415 |
+| FR-150 | T405, T406, T407, T408, T415 |
+| FR-151 | T403, T404, T405, T406 |
+| FR-152 | T403, T404, T413, T414, T415 |
+| FR-153 | T411, T412 |
+| FR-154 | T409, T410, T413, T414, T415 |
+| FR-155 | T409, T410 |
+| FR-156 | T403, T404 |
+| FR-157 | T413, T414 |
 | SC-001 | T043, T046, T150, T165, T345 |
 | SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1324,3 +1359,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 20 | T370 to T377 |
 | US12 | T378 to T391 |
 | Amendment 21 | T378 to T391 |
+| Amendment 26 | T403 to T416 |
