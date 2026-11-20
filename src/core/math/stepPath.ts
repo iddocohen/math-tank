@@ -1,23 +1,22 @@
-/** The marker path of the step animation for addition and subtraction (FR-024, US3 scenarios 1 and 2). */
+/** The marker path of the step animation for addition and subtraction (FR-024, US3 scenarios 1 and 2, FR-154). */
 import type { Challenge } from '../types';
+import { placeValuePath, tensBetween } from './placeValue';
 
 /**
  * The positions the marker stops at: start, intermediate result of a two-step exercise, result. With beginner
  * assistance it also stops at every ten it crosses: 43 − 7 is [43, 40, 36], without assistance [43, 36].
+ * A "Zwei Zahlen" challenge (`twoNumbers`, amendment 26) jumps by place value instead (placeValuePath).
  */
-export function stepPath(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps'>, beginnerAssist: boolean): number[] {
+export function stepPath(c: Pick<Challenge, 'kind' | 'operands' | 'answer' | 'steps' | 'twoNumbers'>, beginnerAssist: boolean): number[] {
+  if (c.twoNumbers && (c.kind === 'addition' || c.kind === 'subtraction') && c.operands.length === 2) {
+    return placeValuePath(c.kind, c.operands[0]!, c.operands[1]!, beginnerAssist);
+  }
   const points = c.steps && c.steps.length >= 2 ? c.steps : [c.operands[0] ?? c.answer, c.answer];
   if (!beginnerAssist) return [...points];
   const out: number[] = [points[0]!];
   for (let i = 1; i < points.length; i++) {
-    const from = points[i - 1]!;
-    const to = points[i]!;
-    if (to > from) {
-      for (let t = Math.floor(from / 10) * 10 + 10; t < to; t += 10) out.push(t + 0);
-    } else if (to < from) {
-      for (let t = Math.ceil(from / 10) * 10 - 10; t > to; t -= 10) out.push(t + 0);
-    }
-    out.push(to);
+    out.push(...tensBetween(points[i - 1]!, points[i]!));
+    out.push(points[i]!);
   }
   return out;
 }

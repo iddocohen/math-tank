@@ -4,6 +4,7 @@ export type { PlayMode, Settings } from './settings/schema';
 export type { RulerLevel } from './numberline/ticks';
 import type { RulerLevel } from './numberline/ticks';
 import type { PlayMode } from './settings/schema';
+import type { PlaceValueHelp } from './math/placeValue';
 
 export type Skill =
   | 'positions'
@@ -263,6 +264,8 @@ export interface HelpContent {
   count: { from: number; to: number; steps: number } | null;
   /** Step 2, addition and subtraction (help.stepAnimation): the marker's stops (stepPath, FR-024). */
   stepPath: number[] | null;
+  /** Step 2, "Zwei Zahlen" (help.stepAnimation, amendment 26): the place-value lines of the banner (FR-154, FR-155). */
+  placeValue: PlaceValueHelp | null;
   /** Step 1, comparison (help.nearestTen): the tens digits of the options in the banner are highlighted (amendment 09). */
   tensDigits: boolean;
   /** Step 2, comparison (help.zoom): a small marker on the ruler under every option, smallest first. */

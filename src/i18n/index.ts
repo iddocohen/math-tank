@@ -71,3 +71,21 @@ export function helpText(h: HelpContent): string | null {
   if (h.optionMarkers) return s.optionMarkers;
   return null;
 }
+
+/**
+ * The place-value lines of help step 2 of a "Zwei Zahlen" exercise (amendment 26 item 7, FR-154, FR-155), shown
+ * under the help hint; empty for any other help. Column form: one line per place, then the sum of the parts (left
+ * out when there is only one part, which the place line already shows). Minus with borrowing: the jumps.
+ */
+export function helpLines(h: HelpContent): string[] {
+  const pv = h.placeValue;
+  if (!pv) return [];
+  const s = active.helpSteps;
+  if (pv.form === 'jumps') {
+    return pv.lines.map((l, i) => (i === 0 ? s.firstJump : s.nextJump)(s.places[l.place], s.equation(l.from, l.by, l.to, 1)));
+  }
+  const minus = pv.sign < 0 ? 1 : 0;
+  const lines = pv.lines.map((l) => s.placeLine(s.places[l.place], s.equation(l.a, l.b, l.result, minus)));
+  if (pv.parts.length > 1) lines.push(s.partsSum(pv.answer, ...pv.parts));
+  return lines;
+}

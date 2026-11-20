@@ -7,7 +7,8 @@
  *   the nearest major line to the answer;
  * - step 2: with `help.zoom` the ten that contains the answer, with `help.countSteps` a count from the landing number
  *   (or the nearest major line) to the answer; addition and subtraction show the step path instead, with
- *   `help.stepAnimation` (FR-024);
+ *   `help.stepAnimation` (FR-024); a "Zwei Zahlen" exercise (amendment 26) also gets its place-value lines
+ *   (`placeValue`, FR-154), with or without a ruler (FR-155);
  * - step 3: the solution.
  * Comparison challenges (amendment 09): step 1 highlights the tens digits of the options in the banner
  * (`help.nearestTen`), step 2 puts a marker on the ruler under every option (`help.zoom`), step 3 shows the solution.
@@ -22,6 +23,7 @@ import type { Challenge, HelpContent, Settings } from '../types';
 import { stepsFor } from '../numberline/ticks';
 import { helpZoomView } from '../numberline/zoom';
 import { stepPath } from '../math/stepPath';
+import { placeValueHelp } from '../math/placeValue';
 
 /** From `from` toward `to` on the ruler, or null when they are the same number. */
 export function directionTo(from: number, to: number): 'right' | 'left' | null {
@@ -47,8 +49,15 @@ function isArithmetic(c: Challenge): boolean {
   return c.kind === 'addition' || c.kind === 'subtraction';
 }
 
+/** The place-value lines of a "Zwei Zahlen" exercise (amendment 26, FR-154), or null for any other challenge. */
+function placeValueOf(c: Challenge): HelpContent['placeValue'] {
+  if (!c.twoNumbers || c.operands.length !== 2) return null;
+  if (c.kind !== 'addition' && c.kind !== 'subtraction') return null;
+  return placeValueHelp(c.kind, c.operands[0]!, c.operands[1]!);
+}
+
 function empty(step: HelpContent['step']): HelpContent {
-  return { step, direction: null, nearestMajor: null, zoom: null, count: null, stepPath: null, tensDigits: false, optionMarkers: null, solution: null };
+  return { step, direction: null, nearestMajor: null, zoom: null, count: null, stepPath: null, placeValue: null, tensDigits: false, optionMarkers: null, solution: null };
 }
 
 /** The content of one step, or null when every help type of that step is turned off. */
@@ -69,10 +78,12 @@ function contentOf(c: Challenge, step: 1 | 2, landed: number | null, settings: S
   if (!rulerShown) {
     out.zoom = help.zoom ? helpZoomView(c.answer, min, max) : null;
     out.stepPath = isArithmetic(c) && help.stepAnimation ? stepPath(c, settings.beginnerAssist) : null;
+    out.placeValue = out.stepPath ? placeValueOf(c) : null;
     return out.zoom || out.stepPath ? out : null;
   }
   if (isArithmetic(c)) {
     out.stepPath = help.stepAnimation ? stepPath(c, settings.beginnerAssist) : null;
+    out.placeValue = out.stepPath ? placeValueOf(c) : null;
     return out.stepPath ? out : null;
   }
   out.zoom = help.zoom ? helpZoomView(c.answer, min, max) : null;

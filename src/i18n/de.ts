@@ -159,6 +159,18 @@ export const de = {
     tensDigits: 'Vergleiche zuerst die Zehner.',
     optionMarkers: 'Weiter rechts steht die größere Zahl.',
     solution: (n: number) => `Hier ist die ${n}.`,
+    /** Step 2 of a "Zwei Zahlen" exercise (amendment 26, FR-154): the place names and the banner lines. */
+    places: { hundreds: 'Hunderter', tens: 'Zehner', ones: 'Einer' },
+    /** One calculation, for example "30 + 10 = 40" or "42 − 10 = 32" (any value of `minus` but 0 gives "−"). */
+    equation: (a: number, b: number, result: number, minus = 0) => `${a} ${minus ? '−' : '+'} ${b} = ${result}`,
+    /** A column line: "Zehner: 30 + 10 = 40". */
+    placeLine: (place: string, equation: string) => `${place}: ${equation}`,
+    /** The sum of the parts: "40 + 7 = 47". */
+    partsSum: (answer: number, ...parts: number[]) => `${parts.join(' + ')} = ${answer}`,
+    /** Minus with borrowing, the first jump: "Erst die Zehner: 42 − 10 = 32". */
+    firstJump: (place: string, equation: string) => `Erst die ${place}: ${equation}`,
+    /** The following jumps: "Dann die Einer: 32 − 7 = 25". */
+    nextJump: (place: string, equation: string) => `Dann die ${place}: ${equation}`,
   },
 
   /** Amendment 06 (FR-085, FR-086): result, time and the personal best, never a comparison. */

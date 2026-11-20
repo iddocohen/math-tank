@@ -3,6 +3,7 @@ import { directionTo, nearestMajorTick, nextHelp } from './help';
 import { defaultSettings } from '../settings/defaults';
 import { helpZoomView } from '../numberline/zoom';
 import { stepPath } from '../math/stepPath';
+import { placeValueHelp, placeValuePath } from '../math/placeValue';
 import type { Challenge, ChallengeKind, Settings } from '../types';
 import { MODE_TRAITS } from '../modes';
 
@@ -166,5 +167,39 @@ describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
   it('"Gemischt" and "Nur Zahlenstrahl" are unchanged', () => {
     expect(nextHelp(find37, 1, 31, settings(), MODE_TRAITS.ruler.showsRuler)).toEqual(nextHelp(find37, 1, 31, settings()));
     expect(nextHelp(find37, 2, 31, settings(), MODE_TRAITS.mixed.showsRuler)).toEqual(nextHelp(find37, 2, 31, settings()));
+  });
+});
+
+describe('nextHelp for "Zwei Zahlen" (amendment 26 item 7, FR-154, FR-155)', () => {
+  const add35plus32 = challenge('addition', 67, { operands: [35, 32], steps: [35, 67], twoNumbers: true });
+  const sub42minus17 = challenge('subtraction', 25, { operands: [42, 17], steps: [42, 25], twoNumbers: true });
+
+  it('step 2 with the ruler sets the place values and the place-value path', () => {
+    const h = nextHelp(add35plus32, 2, null, settings());
+    expect(h.step).toBe(2);
+    expect(h.placeValue).toEqual(placeValueHelp('addition', 35, 32));
+    expect(h.stepPath).toEqual(placeValuePath('addition', 35, 32, true));
+  });
+
+  it('step 2 without beginner assistance has one stop per place', () => {
+    const h = nextHelp(add35plus32, 2, null, { ...settings(), beginnerAssist: false });
+    expect(h.stepPath).toEqual([35, 65, 67]);
+  });
+
+  it('step 2 in "Nur Rechnen" sets the place values and keeps the zoomed ten', () => {
+    const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.math.showsRuler);
+    expect(h).toMatchObject({ step: 2, placeValue: placeValueHelp('subtraction', 42, 17), zoom: helpZoomView(25, 0, 100) });
+  });
+
+  it('with help.stepAnimation off there are no place values', () => {
+    expect(nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }))).toMatchObject({ step: 3, placeValue: null });
+    const math = nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }), MODE_TRAITS.math.showsRuler);
+    expect(math).toMatchObject({ step: 2, placeValue: null, stepPath: null });
+  });
+
+  it('"Kleine Schritte" exercises and the other steps get no place values', () => {
+    expect(nextHelp(sub43minus7, 2, null, settings()).placeValue).toBeNull();
+    expect(nextHelp(add35plus32, 1, 50, settings()).placeValue).toBeNull();
+    expect(nextHelp(add35plus32, 3, 50, settings()).placeValue).toBeNull();
   });
 });
