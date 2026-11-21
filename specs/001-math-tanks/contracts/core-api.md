@@ -46,11 +46,16 @@ generateChallenge(input: {
 mainSkillOf(kind: ChallengeKind): Skill
 enabledKinds(settings: Settings): ChallengeKind[]   // the kinds the challenge-type switches turn on
 playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler' | 'onlyArithmetic'>
-                                                    // reads MODE_TRAITS[mode]; 'mixed' adds nothing
+                                                    // reads MODE_TRAITS[mode]; 'mixed' adds nothing; onlyArithmetic is derived from kinds === 'arithmetic',
+                                                    // not stored as a trait (critique E1)
 arithmeticExerciseAt(settings: Settings, playerPosition: number, rng: Rng): ChallengeDraft | null
                                                     // amendment 27 (core/math/arithmetic.ts): the first valid plus or minus exercise of the turned-on kinds at the
                                                     // parent's settings (top step) whose answer keeps minEnemyGap from playerPosition, walking every answer from one
-                                                    // the rng picks; exact operand search (research R25); memoized on the settings fields it reads
+                                                    // the rng picks; exact operand search (research R25). Memoized is the set of answers that have an
+                                                    // exercise, per settings fields read and player position, not the draft: the rng picks the start answer
+                                                    // and the operands on each call (critique E6)
+arithmeticAnswerSet(settings: Settings, playerPosition: number): ReadonlySet<number>
+                                                    // amendment 27: the memoized answer set above; the settings check tests that it is not empty
 minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
 minOptionGap(min: number, max: number): number   // comparison options apart: max(minTankGap, 2, ceil(0.02 * (max - min))) (amendments 09 and 10, FR-027)
@@ -364,6 +369,9 @@ MODE_TRAITS: Readonly<Record<PlayMode, ModeTraits>>
 //  arithmetic: { showsRuler: false, showsQuestion: true,  forcesPad: true,  kinds: 'arithmetic',          fallbackKinds: [] }
 //  numbers:    { showsRuler: false, showsQuestion: true,  forcesPad: true,  kinds: 'numbersWithoutRuler', fallbackKinds: ['after', 'before'] }
 PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'arithmetic', 'numbers']   // core/settings/schema.ts; start screen order and keys 1 to 4
+modeCanPlay(mode: PlayMode, s: Settings): boolean   // FR-167, critique E2: whether the mode can give a challenge with s, without reading playModes;
+                                                    // 'arithmetic': addition or subtraction on and arithmeticAnswerSet not empty for range.min and range.max;
+                                                    // every other mode: true
 ```
 
-Guarantees: for valid settings (`validateSettings(s).ok`) and every seed, `generateChallenge` with `playModeKinds('arithmetic', s)` returns an `addition` or `subtraction` challenge for both player positions (`range.min`, `range.max`), and with `playModeKinds('numbers', s)` never returns `addition`, `subtraction`, `readPosition` or `findNumber`. `core/settings/validate` adds the error keys `arithmeticModeNoType`, `arithmeticModeNoExercise` and `numbersModeNoType` (data-model.md). `core/progress/summarize`: `BestRow.mode` is `RecordMode = PlayMode | 'math'`. `app/StartScreen`: `offeredModes`, `modeKey` and `keyStartMode` follow `PLAY_MODES`; `keyStartMode` does not know `?mode=math`.
+Guarantees: for valid settings (`validateSettings(s).ok`) and every seed, `generateChallenge` with `playModeKinds('arithmetic', s)` returns an `addition` or `subtraction` challenge for both player positions (`range.min`, `range.max`), and with `playModeKinds('numbers', s)` never returns `addition`, `subtraction`, `readPosition` or `findNumber`. `core/settings/validate` adds the error keys `arithmeticModeNoType`, `arithmeticModeNoExercise` and `numbersModeNoType` (data-model.md). `core/progress/summarize`: `BestRow.mode` is `RecordMode = PlayMode | 'math'`; bests sort by `RECORD_MODES = [...PLAY_MODES, 'math']`, so "Nur Rechnen" comes after "Zahlen-Rätsel" (critique E11). `core/battle/controller`: `applyPendingSettings` keeps the round's task settings and applies only `LIVE_KEYS` when `modeCanPlay(state.mode, merged)` is false (FR-167). `app/App`: `startRound` ("Nochmal", Enter on the end screen) shows the start screen when the mode is not in `offeredModes(settings.playModes)` or `modeCanPlay` is false. `core/storage/migrate.parseSettings` runs the version 13 to 14 exercise check after the schema check (critique E3, data-model.md). `app/StartScreen`: `offeredModes`, `modeKey` and `keyStartMode` follow `PLAY_MODES`; `keyStartMode` does not know `?mode=math`.
