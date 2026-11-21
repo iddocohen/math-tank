@@ -6,8 +6,8 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 
 | Field | Type | Default | Rule |
 |-------|------|---------|------|
-| `version` | `13` | `13` | Schema version. Version 13 (amendment 26) adds `size`, `first`, `second` and `carry` to `addition` and `subtraction`. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; version 11 (amendment 21) adds `enemiesAtOnce` and `lineStyle`; version 12 (amendment 21 item 18) turns the removed `lineStyle` values `'curved'` and `'tangled'` into `'straight'`; `migrate` upgrades version 0 to 11 data (see below) |
-| `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` or `playModes.math` is `true` (FR-047, amendment 17) |
+| `version` | `14` | `14` | Schema version. Version 14 (amendment 27) replaces `playModes.math` with `playModes.arithmetic` and `playModes.numbers`. Version 13 (amendment 26) adds `size`, `first`, `second` and `carry` to `addition` and `subtraction`. Version 2 (amendments 01 and 02) removes `aimCorrection` and replaces `labelLevel` with `rulerLevelStart` and `rulerLevelMax`; version 3 (amendment 04) adds `exactHit`; version 4 (amendment 06) drops `exactHit` and adds `roundType`, `showClock` and `showRecords`; version 5 (amendment 11) adds `garage`; version 6 (amendment 12) adds `numberPad`; version 7 (PO1) turns `sound.speech` off once; version 8 (amendment 17) replaces `freePlay` with `playModes`; version 9 (amendment 18) adds `pointAfterFullHelp`; version 10 (amendment 19) adds `aimCross`; version 11 (amendment 21) adds `enemiesAtOnce` and `lineStyle`; version 12 (amendment 21 item 18) turns the removed `lineStyle` values `'curved'` and `'tangled'` into `'straight'`; `migrate` upgrades version 0 to 11 data (see below) |
+| `challengeTypes` | `{ numberLine: boolean; addition: boolean; subtraction: boolean; comparison: boolean }` | all `true` | At least one `true` when `playModes.mixed` is `true` (FR-047, amendment 17). Amendment 27 (FR-162): `addition` or `subtraction` `true` when `playModes.arithmetic` is `true`; `numberLine` or `comparison` `true` when `playModes.numbers` is `true`. Before amendment 27: when `playModes.mixed` or `playModes.math` is `true` |
 | `range` | `{ preset: '0-10' \| '0-20' \| '0-50' \| '0-100' \| '0-1000' \| 'custom'; min: number; max: number }` | `0-100`, 0, 100 | Integers; `min < max`; `max - min` between 5 and 1000; `min` from -1000 to 9000 (any start, for example 550 to 780); preset values fix `min` and `max` |
 | `addition` | `{ maxOperand: number; maxResult: number; steps: 1 \| 2 }` | 10, `range.max`, 1 | `1 <= maxOperand <= range.max - range.min` (review R5; stored settings with a larger value load with it clamped); `maxResult <= range.max`. `maxOperand` limits the added numbers only (every operand after the first); the starting number can be any number in the range (FR-022, T216) |
 | `subtraction` | `{ maxOperand: number; steps: 1 \| 2 }` | 10, 1 | `1 <= maxOperand <= range.max - range.min` |
@@ -23,7 +23,7 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 | `roundType` | `'untilHearts' \| 'enemyCount'` | `'untilHearts'` | How a round ends (FR-082): "Bis alle Herzen weg" or "Gegner pro Runde". `'untilHearts'` with `noDamage: true` is invalid (it would never end) |
 | `roundLength` | `number` | `5` | Enemies per round for `roundType: 'enemyCount'`, whole number 1 to 20 (amendment 06). Ignored for `'untilHearts'` |
 | `adaptive` | `boolean` | `true` | |
-| `playModes` | `{ mixed: boolean; ruler: boolean; math: boolean }` | all `true` | The play modes the start screen offers (amendment 17, FR-121): "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen". At least one `true` (error key `noPlayMode`). Replaces `freePlay` (version 7 and older) |
+| `playModes` | `{ mixed: boolean; ruler: boolean; arithmetic: boolean; numbers: boolean }` | all `true` | The play modes the start screen offers, in this order (amendment 17, FR-121; amendment 27, FR-158): "Gemischt", "Nur Zahlenstrahl", "Plus und Minus", "Zahlen-Rätsel". At least one `true` (error key `noPlayMode`). Replaces `freePlay` (version 7 and older). Versions 8 to 13 had `math` ("Nur Rechnen") instead of `arithmetic` and `numbers` |
 | `noDamage` | `boolean` | `false` | FR-044 |
 | `showClock` | `boolean` | `false` | Shows an up-counting clock at the top during play (FR-084) |
 | `showRecords` | `boolean` | `true` | Shows "Neuer Rekord!" or "Dein Rekord: N" on the end screen (FR-086); the best is stored either way |
@@ -62,6 +62,10 @@ All types live in `src/core/` and contain no DOM or Phaser references. Persisted
 **Migration from version 11** (amendment 21 item 18): a `lineStyle` of `'curved'` or `'tangled'` becomes `'straight'`; `'straight'` and `'none'` stay; `version` becomes 12. Export files and transfer codes carry the settings version, so a file or code made with version 11 and a curved style reads as `'straight'`. The frozen transfer base keeps `lineStyle: 'straight'`.
 
 **Migration from version 12** (amendment 26, FR-156): `addition` and `subtraction` each gain `size: 'steps'`, `first: { min: 10, max: 99 }`, `second: { min: 10, max: 99 }` and `carry: false` unless already set; `version` becomes 13. The frozen transfer base (`TRANSFER_V2_SETTINGS_BASE`) gains the same defaults.
+
+**Migration from version 13** (amendment 27, FR-165): `playModes.math` is removed. `arithmetic` is `math && (challengeTypes.addition || challengeTypes.subtraction)` and the "Plus und Minus" exercise check below passes; `numbers` is `math && (challengeTypes.numberLine || challengeTypes.comparison)`. When `mixed`, `ruler`, `arithmetic` and `numbers` are all `false`, `mixed` becomes `true` (only "Nur Rechnen" was offered, so a challenge type is on). `version` becomes 14. Export files and transfer codes go through the same step; `TRANSFER_V2_SETTINGS_BASE` does not change, because it holds no `playModes`.
+
+**Checks added by amendment 27** (FR-162), paths in the group "Spielarten": `arithmeticModeNoType` (path `playModes.arithmetic`: `arithmetic` on, `addition` and `subtraction` off); `numbersModeNoType` (path `playModes.numbers`: `numbers` on, `numberLine` and `comparison` off); `arithmeticModeNoExercise` (path `playModes.arithmetic`: `arithmetic` on, a kind on, and `arithmeticExerciseAt(s, range.min)` or `arithmeticExerciseAt(s, range.max)` is null, so no plus or minus exercise at the parent's settings has an answer at least `minEnemyGap` from that end). `noChallengeTypes` now tests `playModes.mixed` only.
 
 **Checks added by amendment 26** (FR-152), for each of `addition` and `subtraction` when `size` is `'twoNumbers'`: error keys `additionFirstRange`, `additionSecondRange`, `subtractionFirstRange`, `subtractionSecondRange` (a range outside 1 to 999 or min above max), `subtractionOrder` (`first.max <= second.min`), `additionNoPair` and `subtractionNoPair` (the kind is on and `twoNumberAnswers` is empty at the parent's top step). Paths: `<kind>.first`, `<kind>.second`, `subtraction.first` for `subtractionOrder`, `<kind>.size` for the `NoPair` keys. `settingsNotices(s)` returns the non-blocking notes `{ key, path, value }` with keys `additionSomeOff` and `subtractionSomeOff`, path `<kind>.size` and `value` the largest (minus: smallest) possible answer, when some pairs of the ranges do not fit the battlefield or `maxResult`; their texts are `settingsNotes` in src/i18n/de.ts. Both use `twoNumberFit` in src/core/math/twoNumbers.ts.
 
@@ -181,7 +185,7 @@ interface BestResult { enemies: number; ms: number; at: number }   // enemies de
 interface Records { version: 1; best: Record<string, BestResult> } // keyed by recordKey(settings, mode)
 ```
 
-`recordKey(s, mode) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` for `mode` `'mixed'`, and the same key with `|ruler` or `|math` appended for the other two play modes (FR-086, amendment 17), from the round's settings snapshot. Keys stored before amendment 17 have no mode part and so belong to "Gemischt"; no migration is needed. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
+`recordKey(s, mode) = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`` for `mode` `'mixed'`, and the same key with `|ruler`, `|arithmetic` or `|numbers` appended for the other play modes (FR-086, amendment 17, amendment 27), from the round's settings snapshot. Keys with `|math` were written for "Nur Rechnen" (amendment 17 to 26); they stay unchanged, the progress page lists them as "Nur Rechnen", and no new round compares with them (amendment 27, FR-164). Keys stored before amendment 17 have no mode part and so belong to "Gemischt"; no migration is needed. `submitResult(records, key, { enemies, ms, at })` returns `{ records, newRecord, best }`: `newRecord` is true when `enemies >= 1` and there is no best for the key or `enemies > best.enemies`; then the result replaces the best. `best` is the best after the submission (null when none). A damaged or invalid stored value loads as empty records. Records are written once per finished round, after the round is over.
 
 ## Garage (persisted: `mathtanks.garage.v1`, amendment 11, star shop since amendment 19)
 
@@ -331,7 +335,7 @@ interface DifficultyStep {
 
 **Ruler level** (FR-018): when adaptive is off, `rulerLevelStart`. When adaptive is on, the level comes from the `positions` skill's step (`rulerLevel` on its ladder), clamped to `[rulerLevelStart, rulerLevelMax]`. Other skills' ladders have no `rulerLevel`, so the ruler does not change between challenge kinds. Help steps draw all lines of the zoomed area whatever the level.
 
-**Help in "Nur Rechnen"** (amendment 17, FR-123): `nextHelp(challenge, level, landed, settings, mode)` with mode `'math'` gives step 1 the direction only (no `nearestMajor`), and step 2 for a challenge that is not a comparison the ten around the answer as `zoom` (with `help.zoom` on) and no `count`; addition and subtraction keep their `stepPath`. The view draws the zoom box only while that step shows; the ruler band itself is not drawn in this mode.
+**Help in "Nur Rechnen"** (amendment 17, FR-123; since amendment 27 in "Plus und Minus" and "Zahlen-Rätsel", which have `showsRuler: false`; the code passes `rulerShown` from `MODE_TRAITS`, not the mode): `nextHelp(challenge, level, landed, settings, mode)` with mode `'math'` gives step 1 the direction only (no `nearestMajor`), and step 2 for a challenge that is not a comparison the ten around the answer as `zoom` (with `help.zoom` on) and no `count`; addition and subtraction keep their `stepPath`. The view draws the zoom box only while that step shows; the ruler band itself is not drawn in this mode.
 
 ## Ruler (not persisted)
 
@@ -353,7 +357,7 @@ Steps follow spec FR-016 for the view's width. Both end points are always drawn 
 ## Round state (not persisted)
 
 ```ts
-type PlayMode = 'mixed' | 'ruler' | 'math';   // amendment 17: "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen"
+type PlayMode = 'mixed' | 'ruler' | 'arithmetic' | 'numbers';   // "Gemischt", "Nur Zahlenstrahl" (amendment 17), "Plus und Minus", "Zahlen-Rätsel" (amendment 27, replacing 'math', "Nur Rechnen")
 
 type Phase =
   | 'challenge'        // guided: challenge shown; the child chooses a number and fires; every fire is an answer
@@ -365,7 +369,7 @@ type Phase =
 
 interface RoundState {
   seed: number;
-  mode: PlayMode;                  // 'mixed' | 'ruler' | 'math' (amendment 17, FR-121 to FR-123); replaces 'guided' | 'freePlay'
+  mode: PlayMode;                  // 'mixed' | 'ruler' | 'arithmetic' | 'numbers' (amendment 17, FR-121 to FR-123; amendment 27, FR-158 to FR-161); replaces 'guided' | 'freePlay'
   turn: number;                    // player shots fired this round (challenge ids use it)
   lives: number;                   // child's hearts, 3 at the start (LIVES), 0 ends the round (FR-080)
   enemiesDestroyed: number;        // score (FR-083): the enemies that count; with pointAfterFullHelp off, an enemy destroyed after help step 3 is not counted (amendment 18, FR-129)
@@ -381,7 +385,7 @@ interface RoundState {
   wave: TankState[];               // amendment 21 (FR-137): the other enemies of the current wave, kind 'enemy', ids `wave-<challenge root id>-<i>`; a destroyed one stays with alive false until the wave ends; [] for a wave of one and in every other search
   decoys: TankState[];             // comparison searches: one decoy at each option other than the answer, [] otherwise (amendment 10); a destroyed decoy stays with alive false until the search ends
   playerSide: 'left' | 'right';    // fixed for the round, alternates between rounds
-  challenge: Challenge | null;     // mode 'ruler': always a readPosition challenge; mode 'math': never readPosition or findNumber
+  challenge: Challenge | null;     // mode 'ruler': always a readPosition challenge; mode 'arithmetic': only addition or subtraction; mode 'numbers': never addition, subtraction, readPosition or findNumber (amendment 27)
   answerableAt: number | null;     // clock time when answers became possible (1 s after display)
   help: { level: 0 | 1 | 2 | 3; wrongAnswers: number; wrongAnswerTimes: number[] };
   selection: number | null;        // previewed number; fired by the fire button or Enter
@@ -423,7 +427,7 @@ Removed by amendment 01: `aim`, `charged`, `shotsAtEnemy`, `challengePurpose` (o
 **State transitions**
 
 ```text
-start → challenge (a search in every play mode, enemy visible; mode 'ruler' always readPosition, mode 'math' never readPosition or findNumber)
+start → challenge (a search in every play mode, enemy visible; mode 'ruler' always readPosition, mode 'arithmetic' only addition or subtraction, mode 'numbers' never addition, subtraction, readPosition or findNumber)
 challenge | aiming --typeDigit / typeMinus / backspace / selectNumber--> same phase (selection, entry and inputMethod change)
 challenge | aiming --confirm or fireAt(n), answerable, n in range--> playerShot (path from solveArcToX)
 challenge | aiming --confirm with entry.outOfRange--> same phase (nothing fired, range hint)

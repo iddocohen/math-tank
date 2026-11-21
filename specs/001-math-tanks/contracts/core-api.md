@@ -37,11 +37,20 @@ generateChallenge(input: {
   turn: number;
   playerPosition: number;                 // range.min or range.max, fixed for the round
   rulerLevel: RulerLevel;                 // decides where a readPosition enemy may stand (FR-067)
-  kindsAllowed?: ChallengeKind[];         // play mode 'ruler' passes ['readPosition']; 'math' passes the enabled kinds without readPosition and findNumber
-  noRulerKinds?: boolean;                 // play mode 'math' (amendment 17, FR-123): the fallbacks use 'after' and 'before' instead of readPosition and findNumber
+  kindsAllowed?: ChallengeKind[];         // from playModeKinds: 'ruler' ['readPosition']; 'arithmetic' the enabled kinds among addition and subtraction; 'numbers' the enabled kinds without addition, subtraction, readPosition and findNumber (amendment 27)
+  fallbackKinds?: readonly ChallengeKind[]; // MODE_TRAITS[mode].fallbackKinds: 'numbers' ['after', 'before']; 'arithmetic' [] (amendment 27)
+  withoutRuler?: boolean;                 // 'arithmetic' and 'numbers': no ruler kind, also not as the last fallback (amendment 17 for "Nur Rechnen")
+  onlyArithmetic?: boolean;               // 'arithmetic' (amendment 27, FR-159, FR-163): instead of "after", "before" and "find N", the arithmetic kinds over the whole battlefield, then arithmeticExerciseAt
   inputMethod?: 'pointer' | 'keyboard';   // amendment 05 (FR-076): 'keyboard' skips findNumber; the fallback is then readPosition. Omitted: no restriction
 }): Challenge
 mainSkillOf(kind: ChallengeKind): Skill
+enabledKinds(settings: Settings): ChallengeKind[]   // the kinds the challenge-type switches turn on
+playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler' | 'onlyArithmetic'>
+                                                    // reads MODE_TRAITS[mode]; 'mixed' adds nothing
+arithmeticExerciseAt(settings: Settings, playerPosition: number, rng: Rng): ChallengeDraft | null
+                                                    // amendment 27 (core/math/arithmetic.ts): the first valid plus or minus exercise of the turned-on kinds at the
+                                                    // parent's settings (top step) whose answer keeps minEnemyGap from playerPosition, walking every answer from one
+                                                    // the rng picks; exact operand search (research R25); memoized on the settings fields it reads
 minTankGap(min: number, max: number): number
 minEnemyGap(min: number, max: number): number
 minOptionGap(min: number, max: number): number   // comparison options apart: max(minTankGap, 2, ceil(0.02 * (max - min))) (amendments 09 and 10, FR-027)
@@ -73,7 +82,7 @@ recordAttempt(p: Progress, a: Attempt, settings: Settings): Progress     // retu
 skillStatus(sp: SkillProgress): 'mastered' | 'developing'
 summarize(p: Progress, records: Records, settings?: Settings): ProgressSummary   // data for the progress page; with settings each SkillRow has toRaise (amendment 17)
 rowToRaise(sp: SkillProgress, skill: Skill, settings: Settings): number | null   // more independent answers in a row that raise the step (1 to 3); null at the top step or with adaptive off (FR-037, FR-040)
-nextHelp(c: Challenge, level: number, landed: number | null, settings: Settings, mode: PlayMode = 'mixed'): HelpContent   // core/battle/help.ts; mode 'math' (amendment 17, FR-123): step 1 direction only, step 2 the zoomed ten around the answer (not for comparison), no count
+nextHelp(c: Challenge, level: number, landed: number | null, settings: Settings, rulerShown = true): HelpContent   // core/battle/help.ts; mode 'math' (amendment 17, FR-123): step 1 direction only, step 2 the zoomed ten around the answer (not for comparison), no count
 ladders: Record<Skill, DifficultyStep[]>
 effectiveStep(p: Progress, skill: Skill, rangeKey: string, settings: Settings): DifficultyStep
 ```
@@ -120,7 +129,7 @@ class BattleController {
   getState(): RoundState
   subscribe(listener: (s: RoundState) => void): () => void
 
-  startRound(mode: PlayMode): void   // 'mixed' | 'ruler' | 'math' (amendment 17); every mode starts a search and records attempts; 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
+  startRound(mode: PlayMode): void   // 'mixed' | 'ruler' | 'arithmetic' | 'numbers' (amendment 17, amendment 27); every mode starts a search and records attempts; 3 hearts, score 0, time 0 (amendment 06); enemy shot index 0; missStreak 0 (amendment 13)
   newScene(): void                         // "Neue Landschaft" (amendment 08, FR-070): new terrain seed, the side may switch, exactly one enemy at a new
                                            // position with a new challenge that is not a comparison (amendment 10 item 10 restores amendment 08 item 1); hearts, enemiesDestroyed, enemiesHit,
                                            // turn, round time, enemy shot index and missStreak stay (amendment 13); no enemy shot; an unfinished challenge is dropped
@@ -178,7 +187,7 @@ Guarantees: `shotKind(n, n, r)` is `'hit'` for every range; in 0 to 100 a shot 2
 interface BestResult { enemies: number; ms: number; at: number }
 interface Records { version: 1; best: Record<string, BestResult> }
 emptyRecords(): Records
-recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>, mode: PlayMode = 'mixed'): string   // `${min}-${max}|${level}|${roundType}`, plus `|ruler` or `|math` for those play modes (amendment 17)
+recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>, mode: PlayMode = 'mixed'): string   // `${min}-${max}|${level}|${roundType}`, plus `|ruler`, `|arithmetic` or `|numbers` for those play modes (amendment 27; `|math` keys of "Nur Rechnen" stay and are never written again) (amendment 17)
 submitResult(r: Records, key: string, result: BestResult): { records: Records; newRecord: boolean; best: BestResult | null }
                                                                       // newRecord when enemies >= 1 and enemies > the stored best (or none)
 formatTime(ms: number): string                                         // m:ss, e.g. 372000 -> "6:12"
@@ -338,3 +347,23 @@ Guarantees: `'columns'` for addition and for subtraction without a borrow, `'jum
 `core/math/stepPath.stepPath(c, beginnerAssist)` returns `placeValuePath` for a challenge with `twoNumbers`. `HelpContent` gains `placeValue: PlaceValueHelp | null`, set at help step 2 with `help.stepAnimation` for such a challenge, with or without a ruler (FR-154, FR-155). `i18n.helpLines(h)` returns the banner lines ("Zehner: 30 + 10 = 40", …, "40 + 7 = 47"; "Erst die Zehner: 42 − 10 = 32", "Dann die Einer: 32 − 7 = 25"); `BattleOverlay` shows them under the help hint.
 
 `core/progress/ladders`: `twoNumberLadders` and `clampStep` as in data-model.md. `core/settings/validate`: the new error keys and `settingsNotices(s)`.
+
+## `core/modes` (pure, amendment 17, changed by amendment 27)
+
+```ts
+interface ModeTraits {
+  showsRuler: boolean;
+  showsQuestion: boolean;
+  forcesPad: boolean;
+  kinds: 'enabled' | 'readPosition' | 'arithmetic' | 'numbersWithoutRuler';   // 'enabledWithoutRuler' ("Nur Rechnen") removed by amendment 27
+  fallbackKinds: readonly ChallengeKind[] | null;
+}
+MODE_TRAITS: Readonly<Record<PlayMode, ModeTraits>>
+//  mixed:      { showsRuler: true,  showsQuestion: true,  forcesPad: false, kinds: 'enabled',             fallbackKinds: null }
+//  ruler:      { showsRuler: true,  showsQuestion: false, forcesPad: false, kinds: 'readPosition',        fallbackKinds: null }
+//  arithmetic: { showsRuler: false, showsQuestion: true,  forcesPad: true,  kinds: 'arithmetic',          fallbackKinds: [] }
+//  numbers:    { showsRuler: false, showsQuestion: true,  forcesPad: true,  kinds: 'numbersWithoutRuler', fallbackKinds: ['after', 'before'] }
+PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'arithmetic', 'numbers']   // core/settings/schema.ts; start screen order and keys 1 to 4
+```
+
+Guarantees: for valid settings (`validateSettings(s).ok`) and every seed, `generateChallenge` with `playModeKinds('arithmetic', s)` returns an `addition` or `subtraction` challenge for both player positions (`range.min`, `range.max`), and with `playModeKinds('numbers', s)` never returns `addition`, `subtraction`, `readPosition` or `findNumber`. `core/settings/validate` adds the error keys `arithmeticModeNoType`, `arithmeticModeNoExercise` and `numbersModeNoType` (data-model.md). `core/progress/summarize`: `BestRow.mode` is `RecordMode = PlayMode | 'math'`. `app/StartScreen`: `offeredModes`, `modeKey` and `keyStartMode` follow `PLAY_MODES`; `keyStartMode` does not know `?mode=math`.
