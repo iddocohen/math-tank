@@ -21,3 +21,6 @@ Thumbs.db
 # spec-kit tooling stays local
 .specify/
 .claude/
+
+# TypeScript build cache
+*.tsbuildinfo
