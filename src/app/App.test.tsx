@@ -15,6 +15,12 @@ import { t } from '../i18n';
 import { App } from './App';
 import { BattleController } from '../core/battle/controller';
 import { HOLD_MS } from './ParentGate';
+import * as modes from '../core/modes';
+
+vi.mock('../core/modes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../core/modes')>();
+  return { ...actual, modeCanPlay: vi.fn(actual.modeCanPlay) };
+});
 
 const game = vi.hoisted(() => ({ created: 0, destroyed: 0, setLook: [] as unknown[] }));
 
@@ -242,5 +248,114 @@ describe('saved settings reach the running round when the settings page closes (
     press('Enter');
     await waitFor(() => expect(game.created).toBe(1));
     expect(Number(screen.getByTestId('battle-overlay').getAttribute('data-enemy-number'))).toBeLessThanOrEqual(20);
+  });
+});
+
+/**
+ * Starts a one-enemy "Plus und Minus" round with Enter and returns the app's controller (the `this` of its latest startRound call).
+ * Date.now is mocked from then on, so endRound can move the time on until the controller takes an answer.
+ */
+let clockAhead = 0;
+async function startArithmeticRound(): Promise<{ controller: () => BattleController; startRound: ReturnType<typeof vi.spyOn> }> {
+  seed({ [SETTINGS_KEY]: { ...defaultSettings(), roundType: 'enemyCount', roundLength: 1, noDamage: true } });
+  const startRound = vi.spyOn(BattleController.prototype, 'startRound');
+  window.history.replaceState(null, '', '/?seed=3&mode=arithmetic');
+  render(<App />);
+  press('Enter');
+  await waitFor(() => expect(game.created).toBe(1));
+  const realNow = Date.now.bind(Date);
+  clockAhead = 0;
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + clockAhead);
+  return { controller: () => startRound.mock.contexts.at(-1) as BattleController, startRound };
+}
+
+/** Destroys the only enemy of the round, so the end screen shows. */
+function endRound(c: BattleController): void {
+  clockAhead += 60_000;
+  act(() => {
+    c.fireAt(c.getState().challenge!.answer);
+    c.shotAnimationDone();
+  });
+  expect(c.getState().phase).toBe('roundOver');
+  expect(screen.getByTestId('round-end')).toBeTruthy();
+}
+
+const actualModes = await vi.importActual<typeof import('../core/modes')>('../core/modes');
+
+/** Restores the spies and gives modeCanPlay its real check again. */
+function resetMocks(): void {
+  vi.restoreAllMocks();
+  vi.mocked(modes.modeCanPlay).mockImplementation(actualModes.modeCanPlay);
+}
+
+describe('"Nochmal" after a "Plus und Minus" round (amendment 27, T427, FR-121, FR-167)', () => {
+  afterEach(resetMocks);
+
+  it('starts the same mode again with "Nochmal" and with Enter when the mode can still play', async () => {
+    const { controller, startRound } = await startArithmeticRound();
+    expect(controller().getState().mode).toBe('arithmetic');
+    endRound(controller());
+    fireEvent.click(screen.getByRole('button', { name: m.roundEnd.again }));
+    expect(startRound).toHaveBeenLastCalledWith('arithmetic');
+    expect(controller().getState().phase).toBe('challenge');
+    expect(screen.queryByTestId('round-end')).toBeNull();
+
+    endRound(controller());
+    press('Enter');
+    expect(startRound).toHaveBeenCalledTimes(3);
+    expect(startRound).toHaveBeenLastCalledWith('arithmetic');
+    expect(controller().getState().phase).toBe('challenge');
+  });
+
+  it('shows the start screen with "Nochmal" and with Enter after a round whose mode was turned off', async () => {
+    const { controller, startRound } = await startArithmeticRound();
+    openSettings();
+    fireEvent.click(screen.getByLabelText(m.settings.labels.playModeArithmetic));
+    saveSettings();
+    closeSettings();
+    // The round goes on in its mode.
+    expect(controller().getState().mode).toBe('arithmetic');
+    expect(controller().getState().phase).toBe('challenge');
+    endRound(controller());
+    fireEvent.click(screen.getByRole('button', { name: m.roundEnd.again }));
+    expect(startRound).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId('mode-button').some((b) => b.textContent?.includes(m.start.modes.arithmetic))).toBe(false);
+    expect(screen.queryByTestId('battle-overlay')).toBeNull();
+    cleanup();
+    resetMocks();
+
+    window.localStorage.clear();
+    game.created = 0;
+    const second = await startArithmeticRound();
+    openSettings();
+    fireEvent.click(screen.getByLabelText(m.settings.labels.playModeArithmetic));
+    saveSettings();
+    closeSettings();
+    endRound(second.controller());
+    press('Enter');
+    expect(second.startRound).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('battle-overlay')).toBeNull();
+    expect(screen.getAllByTestId('mode-button').length).toBeGreaterThan(0);
+  });
+
+  it('shows the start screen with "Nochmal" and with Enter after a round whose mode can no longer play with the stored settings', async () => {
+    const { controller, startRound } = await startArithmeticRound();
+    endRound(controller());
+    vi.mocked(modes.modeCanPlay).mockImplementation((mode) => mode !== 'arithmetic');
+    fireEvent.click(screen.getByRole('button', { name: m.roundEnd.again }));
+    expect(startRound).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('battle-overlay')).toBeNull();
+    expect(screen.getAllByTestId('mode-button').length).toBeGreaterThan(0);
+    cleanup();
+    resetMocks();
+
+    window.localStorage.clear();
+    game.created = 0;
+    const second = await startArithmeticRound();
+    endRound(second.controller());
+    vi.mocked(modes.modeCanPlay).mockImplementation((mode) => mode !== 'arithmetic');
+    press('Enter');
+    expect(second.startRound).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('battle-overlay')).toBeNull();
   });
 });

@@ -71,7 +71,7 @@ export function screenLayout(width: number, height: number): ScreenLayout {
 
 /**
  * Whether the number pad shows. `forced` (ModeTraits.forcesPad on the battle screen) makes "Automatisch" show it on
- * every device: "Nur Rechnen" has no ruler to tap (amendment 17).
+ * every device: "Plus und Minus" and "Zahlen-Rätsel" have no ruler to tap (amendment 17, amendment 27).
  */
 export function numberPadShown(setting: NumberPadSetting, device: { finePointer: boolean; padWidth: boolean }, forced = false): boolean {
   if (setting === 'always') return true;

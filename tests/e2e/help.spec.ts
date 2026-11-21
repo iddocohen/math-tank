@@ -29,7 +29,13 @@ function wrongNumber(answer: number, offset: number): number {
 test('three wrong numbers: help escalates to the solution, Enter fires at it, H shows help without an enemy shot (AC-07)', async ({ page }) => {
   test.setTimeout(150_000);
   // Number line challenges only, so every search is a position search with all three help steps.
-  const settings = { ...defaultSettings(), enemyDifficulty: 'easy' as const, challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } };
+  // "Plus und Minus" needs "Plus" or "Minus", so it is not offered (amendment 27, FR-162).
+  const settings = {
+    ...defaultSettings(),
+    enemyDifficulty: 'easy' as const,
+    challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false },
+    playModes: { mixed: true, ruler: true, arithmetic: false, numbers: true },
+  };
   await seedStorage(page, { [SETTINGS_KEY]: settings });
   await page.goto('/?seed=21');
   await startButton(page).click();

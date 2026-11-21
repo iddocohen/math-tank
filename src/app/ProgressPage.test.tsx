@@ -140,6 +140,20 @@ describe('ProgressPage', () => {
     for (const word of ['Platz', 'Rang', 'besser', 'schlechter', '1.']) expect(text).not.toContain(word);
   });
 
+  it('names "Plus und Minus", "Zahlen-Rätsel" and the old "Nur Rechnen" bests (amendment 27, FR-086)', () => {
+    setup(fixture(), {
+      version: 1,
+      best: {
+        '0-100|1|untilHearts|arithmetic': { enemies: 3, ms: 1000, at: 1 },
+        '0-100|1|untilHearts|numbers': { enemies: 4, ms: 1000, at: 1 },
+        '0-100|1|untilHearts|math': { enemies: 5, ms: 1000, at: 1 },
+      },
+    });
+    const table = screen.getByRole('table', { name: P.bestsTitle });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows.map((r) => cell(r, 'mode'))).toEqual(['Plus und Minus', 'Zahlen-Rätsel', 'Nur Rechnen']);
+  });
+
   it('reset asks for confirmation; "Abbrechen" keeps the progress, "Ja" clears it and keeps the records', () => {
     const { persistence, kv } = setup();
     fireEvent.click(screen.getByRole('button', { name: P.reset }));

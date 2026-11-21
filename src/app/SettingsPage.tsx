@@ -74,7 +74,12 @@ function collectErrors(s: Settings): Map<string, string[]> {
   const add = (path: string, text: string) => out.set(path, [...(out.get(path) ?? []), text]);
   const r = validateSettings(s);
   if (!r.ok) {
-    for (const e of r.errors) add(e.path, m.settingsErrors[e.key]);
+    for (const e of r.errors) {
+      add(e.path, m.settingsErrors[e.key]);
+      // Amendment 27 (critique P4): a range change can cause this error and withRange does not fix it, so the
+      // range field names it too.
+      if (e.key === 'arithmeticModeNoExercise') add('range', m.settingsErrors[e.key]);
+    }
   }
   // The largest operand shows with "Kleine Schritte" only; with "Zwei Zahlen" validateSettings checks it (review).
   const wholeNumbers: Array<[string, number]> = [
@@ -257,8 +262,12 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           {allTypesOff && (
             <div className="hint">
               <p>{m.settings.guidedNeedsType}</p>
-              {(draft.playModes.mixed || draft.playModes.math || !draft.playModes.ruler) && (
-                <button type="button" className="secondary-button" onClick={() => set('playModes', { mixed: false, ruler: true, math: false })}>
+              {(draft.playModes.mixed || draft.playModes.arithmetic || draft.playModes.numbers || !draft.playModes.ruler) && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => set('playModes', { mixed: false, ruler: true, arithmetic: false, numbers: false })}
+                >
                   {m.settings.offerRulerOnly}
                 </button>
               )}
@@ -266,11 +275,15 @@ export function SettingsPage({ persistence, onSaved, onClose, now = () => new Da
           )}
         </Group>
 
-        {/* Amendment 17 (FR-121): the play modes the start screen offers. */}
-        <Group title={m.settings.groups.playModes} errors={errorsAt('playModes')}>
+        {/* Amendment 17 (FR-121) and 27 (FR-158, FR-162): the play modes the start screen offers. */}
+        <Group
+          title={m.settings.groups.playModes}
+          errors={[...errorsAt('playModes'), ...errorsAt('playModes.arithmetic'), ...errorsAt('playModes.numbers')]}
+        >
           <Check label={L.playModeMixed} {...bind('playModes.mixed')} />
           <Check label={L.playModeRuler} {...bind('playModes.ruler')} />
-          <Check label={L.playModeMath} {...bind('playModes.math')} />
+          <Check label={L.playModeArithmetic} {...bind('playModes.arithmetic')} />
+          <Check label={L.playModeNumbers} {...bind('playModes.numbers')} />
         </Group>
 
         <Group title={m.settings.groups.range} errors={errorsAt('range')}>

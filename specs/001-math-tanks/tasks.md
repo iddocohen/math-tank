@@ -1056,6 +1056,48 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 
 ---
 
+## Phase 24m: Amendment 27 "Plus und Minus" and "Zahlen-Rätsel" instead of "Nur Rechnen"
+
+**Purpose**: [Amendment 27](./amendment-27-split-math-mode.md), with the fixes of [its critique](./critiques/critique-20261121-amendment-27.md). The play mode "Nur Rechnen" (`'math'`) becomes "Plus und Minus" (`'arithmetic'`, only addition and subtraction, never another kind) and "Zahlen-Rätsel" (`'numbers'`, the number-line and comparison kinds that need no ruler). The start screen offers up to four modes with keys 1 to 4. Settings version 14. Old "Nur Rechnen" bests stay and show under their old name. A round whose mode can no longer play after a settings change keeps its task settings until it ends. Research R25, plan decision 13.
+
+**Independent test**: `tests/e2e/modes.spec.ts` shows four mode buttons inside the screen without scrolling in every desktop, device and Fire project; key 3 gives only plus and minus questions and no ruler band; key 4 gives no plus, minus, "Finde N" or "Wo steht der Gegner?" question and no ruler band.
+
+### Settings version 14 and the mode switches
+
+- [X] T417 [US6] Write the tests first for settings version 14: `src/core/settings/settings.test.ts` (defaults: `playModes` `{ mixed, ruler, arithmetic, numbers }` all true and `version` 14; the schema rejects `playModes.math` in version 14 data; `noPlayMode` when all four are off; `noChallengeTypes` only when "Gemischt" is offered; `arithmeticModeNoType` with path `playModes.arithmetic` when "Plus und Minus" is offered and "Plus" and "Minus" are off; `numbersModeNoType` with path `playModes.numbers` when "Zahlen-Rätsel" is offered and "Zahlenstrahl" and "Vergleichen" are off; neither error when that mode is not offered), `src/core/storage/storage.test.ts` and `src/core/storage/exportImport.test.ts` (version 13 data migrates to 14: `arithmetic` is `math && (addition || subtraction)`, `numbers` is `math && (numberLine || comparison)`, `math` is removed; version 8 to 12 data go through every step and load with the new switches), `src/core/transfer/transfer.test.ts` (codes written with settings version 8 to 13 read with the new switches; `TRANSFER_V2_SETTINGS_BASE` is unchanged) (FR-047, FR-158, FR-162, FR-165). Done when the new tests fail for the right reason.
+- [X] T418 [US6] Implement until T417 passes: `src/core/settings/schema.ts` (`PlayMode` `'mixed' | 'ruler' | 'arithmetic' | 'numbers'`, `PLAY_MODES` in that order, `playModes` with four switches, `version` 14), `src/core/settings/defaults.ts`, `src/core/settings/validate.ts` (`noPlayMode` over four switches, `noChallengeTypes` for "Gemischt" only, `arithmeticModeNoType`, `numbersModeNoType`), `src/core/storage/migrate.ts` (`migrateSettingsToV14` renames the switches only and runs no exercise search, critique E3; the version 7 to 8 step keeps writing `math`), the error texts and the new `guidedNeedsType` hint in `src/i18n/de.ts` (amendment 27 items 6 and 7). Every other place that names `'math'` gets the new names so `pnpm typecheck` passes; T420 to T428 finish their behavior. Update data-model.md if a name changes (FR-047, FR-158, FR-162, FR-165).
+
+### Mode table, exercise search, generator and the exercise check
+
+- [X] T419 [P] [US11] Write the tests first for the mode table and the generator: `src/core/modes.test.ts` (new: `'arithmetic'` and `'numbers'` have `showsRuler: false`, `showsQuestion: true`, `forcesPad: true`; `'arithmetic'` has `fallbackKinds: []`, `'numbers'` `['after', 'before']`; for every mode `playModeKinds` gives `onlyArithmetic` exactly when `kinds` is `'arithmetic'` and `fallbackKinds` is `[]`, and `withoutRuler` exactly when `showsRuler` is false, critique E1; `modeCanPlay` is true for `'mixed'`, `'ruler'` and `'numbers'` with any valid settings, and false for `'arithmetic'` with "Plus" and "Minus" off or with battlefield 0 to 100, only "Plus", "Größtes Ergebnis" 5, without reading `playModes`), `src/core/math/arithmetic.test.ts` (new: `arithmeticAnswerSet` equals a brute-force set for small ranges with one and two steps, crossing tens and hundreds on and off, negative results on and off, and "Zwei Zahlen"; every answer keeps `minEnemyGap` from the player position; `arithmeticExerciseAt` returns a draft that passes `validateChallenge`, and different seeds give more than one exercise, critique E6; null for battlefield 0 to 100, only "Plus", "Größtes Ergebnis" 5 at position 0; the worst case, width 1000, largest operand 1000, two steps and no valid answer, finishes in under about 50 ms, critique E7), `src/core/math/generate.test.ts` (over 500 seeds and both player positions: with `playModeKinds('arithmetic', s)` every challenge is addition or subtraction, also with only "Plus" on, only "Minus" on and "Zwei Zahlen"; a step with no answer far enough from the tank moves on to stage 2 and then stage 3, and the stage 3 challenge records the skill's current step; with `playModeKinds('numbers', s)` no challenge is addition, subtraction, `readPosition` or `findNumber`, and with only "Vergleichen" on the fallback is "after" or "before"), `src/core/math/generator.property.test.ts` (random valid settings with "Plus und Minus" offered: every challenge for both positions is addition or subtraction and passes `validateChallenge`), `src/core/battle/wave.test.ts` and `src/core/battle/help.test.ts` (both new modes keep a wave of 1; help with `rulerShown` false gives the direction in words at step 1 and the zoomed ten at step 2) (FR-159, FR-160, FR-161, FR-163).
+- [X] T420 [US11] Implement until T419 passes: `src/core/modes.ts` (rows `arithmetic` and `numbers`, `kinds` `'arithmetic'` and `'numbersWithoutRuler'`, `modeCanPlay`), `src/core/math/arithmetic.ts` (memoized `arithmeticAnswerSet` per settings fields read and player position; `arithmeticExerciseAt` lets the rng pick the start answer and the operands, research R25), `src/core/math/generate.ts` (`playModeKinds` derives `onlyArithmetic` from the trait; with `onlyArithmetic` the stages of amendment 27 item 8 replace "after", "before" and "find N"; null from stage 3 throws), comments in `src/core/types.ts`, `src/core/battle/guided.ts`, `src/core/battle/help.ts` and `src/core/view/screen.ts`. Update core-api.md if a signature changes (FR-159, FR-160, FR-161, FR-163).
+- [X] T421 [US6] Write the tests first for the exercise check and its migration step (critique E3): `src/core/settings/settings.test.ts` (`arithmeticModeNoExercise` with path `playModes.arithmetic` for battlefield 0 to 100, only "Plus", "Größtes Ergebnis" 5; no such error when "Plus und Minus" is not offered; the check does not run while the range, a largest operand, `addition.maxResult` or a "Zwei Zahlen" field has an error; it agrees with `modeCanPlay('arithmetic', s)`), `src/core/storage/storage.test.ts` and `src/core/storage/exportImport.test.ts` (version 13 data with only "Nur Rechnen" offered, only "Plus" and "Größtes Ergebnis" 5 loads with only "Gemischt" offered and every other setting kept; the same with "Nur Zahlenstrahl" also offered loads with "Nur Zahlenstrahl" only and "Gemischt" off; version 13 data with `subtraction.maxOperand` 1000000000 loads as invalid in under about 100 ms, without the search; version 14 data that fails the check loads as invalid, not changed), `src/core/transfer/transfer.test.ts` (a version 13 code with the failing case loads like the storage case) (FR-162, FR-165).
+- [X] T422 [US6] Implement until T421 passes: `src/core/settings/validate.ts` (`arithmeticModeNoExercise` through `modeCanPlay`, only when the fields it reads have no error), `src/core/storage/migrate.ts` (`parseSettings` reads the stored `version` before `migrate`; for version 13 and older, after `settingsSchema.safeParse` it turns `arithmetic` off when the check fails and `mixed` on when no mode is left, then runs `validateSettings`), the error text in `src/i18n/de.ts` (amendment 27 item 7) (FR-162, FR-165).
+
+### Records and progress page
+
+- [X] T423 [P] [US7] Write the tests first for records and the progress page: `src/core/records/records.test.ts` (`recordKey` with `'arithmetic'` and `'numbers'` appends `|arithmetic` and `|numbers`; a stored `|math` best does not make the first "Plus und Minus" round with 3 destroyed enemies anything but `newRecord`), `src/core/progress/summarize.test.ts` (a `|math` key parses as mode `'math'`; bests of the same range, level and round type sort "Gemischt", "Nur Zahlenstrahl", "Plus und Minus", "Zahlen-Rätsel", "Nur Rechnen", critique E11; a key with an unknown mode is still dropped), `src/app/ProgressPage.test.tsx` (labels "Plus und Minus", "Zahlen-Rätsel" and "Nur Rechnen" for the three keys) (FR-086, FR-164).
+- [X] T424 [US7] Implement until T423 passes: `src/core/records/records.ts` (`recordKey` and its comment), `src/core/progress/summarize.ts` (`RecordMode = PlayMode | 'math'`, `parseRecordKey`, `RECORD_MODES` for the sort), `src/app/ProgressPage.tsx` (label of `'math'`), `progress.legacyMathMode` in `src/i18n/de.ts` (FR-086, FR-164).
+
+### Start screen, keyboard and settings page
+
+- [X] T425 [P] [US11] Write the tests first for the screens: `src/app/StartScreen.test.tsx` (four buttons with `data-mode` in the order mixed, ruler, arithmetic, numbers, labels "Gemischt", "Nur Zahlenstrahl", "Plus und Minus", "Zahlen-Rätsel" and key numbers 1 to 4; the "Plus und Minus" icon has a plus and a minus shape and the icons have no SVG text; one offered mode shows the single "Spielen" button; `keyStartMode` with `?mode=arithmetic` and `?mode=numbers` starts that mode when offered, and `?mode=math` starts the first offered mode), `src/app/keyboard.test.ts` (keys 1 to 4 start their mode on the start screen; a key for a mode that is not offered and the key 5 do nothing; Enter and Space start the first offered mode for each possible first mode), `src/app/SettingsPage.test.tsx` (four switches in "Spielarten"; each new error names its field; the hint text of amendment 27 item 6 and its button turn off "Gemischt", "Plus und Minus" and "Zahlen-Rätsel"; a range change that causes `arithmeticModeNoExercise` shows the text at the range field and in "Spielarten" and blocks saving, critique P4), `src/app/BattleOverlay.test.tsx` (in "Plus und Minus" help step 2 shows the zoomed ten, and the place-value lines for a "Zwei Zahlen" exercise; in "Zahlen-Rätsel" a comparison shows the option markers; both modes show the number pad with "Zahlenfeld" "Automatisch") (FR-062, FR-121, FR-158, FR-161, FR-162, FR-166).
+- [X] T426 [US11] Implement until T425 passes: `src/app/StartScreen.tsx` (`ModeIcon` for `'arithmetic'` and `'numbers'`, `offeredModes`, `modeKey`, `keyStartMode`), `src/app/keyboard.ts` (`/^[1-4]$/`), `src/app/SettingsPage.tsx` (four switches, the hint button, the exercise error also at the range field), `src/app/styles.css` (`.play-buttons` with mode buttons as a grid of 4 or 2 columns with the sizes of research R25, critique E10; `.mode-arithmetic` and `.mode-numbers` replace `.mode-math`), labels in `src/i18n/de.ts` (`start.modes`, the switch labels), comments in `src/app/App.tsx` (`?mode=`) and `src/game/NumberLineView.ts` (FR-062, FR-121, FR-158, FR-161, FR-162, FR-166).
+
+### Settings changed during a round and "Nochmal" (critique E2)
+
+- [X] T427 [US11] Write the tests first for the controller and the app: `src/core/battle/battleController.test.ts` (`startRound('arithmetic')` gives only addition and subtraction and `startRound('numbers')` none of addition, subtraction, `readPosition` and `findNumber`; during a "Plus und Minus" round `applySettingsNow` with "Plus und Minus", "Plus" and "Minus" turned off gives no error, keeps plus and minus questions until the round ends, and still applies `showClock`; the next `startRound` uses the new settings; during a "Plus und Minus" round a change that keeps a plus or minus exercise rebuilds the scene as amendment 25 says), `src/app/App.test.tsx` ("Nochmal" and Enter on the end screen show the start screen after a "Plus und Minus" round whose mode was turned off, and after one whose mode can no longer play with the stored settings; they start the same mode again otherwise) (FR-049, FR-121, FR-167).
+- [X] T428 [US11] Implement until T427 passes: `src/core/battle/controller.ts` (`applyPendingSettings` keeps the round's task settings and applies only `LIVE_KEYS` when `modeCanPlay(state.mode, merged)` is false; `playModes` stays a live key), `src/app/App.tsx` (`startRound` checks `offeredModes(settings.playModes)` and `modeCanPlay` before `controller.startRound`, else shows the start screen) (FR-049, FR-121, FR-167).
+
+### End-to-end test, Playwright projects and README
+
+- [X] T429 [US11] e2e `tests/e2e/modes.spec.ts` in the desktop, device and Fire projects: four mode buttons and the garage button lie inside the window without scrolling, each at least 48 CSS pixels tall, in one row of four or two rows of two; press 3 at `/?seed=1`: 5 banners with only plus and minus questions, the canvas has no ruler labels and the number pad shows; press 4: no plus, minus, "Finde N" or "Wo steht der Gegner?" question and no ruler labels; update the three-button expectations in `tests/e2e/modes.spec.ts`, `tests/e2e/guided.spec.ts` and `tests/e2e/fullHelp.spec.ts` to four. `playwright.config.ts`: add `modes` to `DEVICE_AND_DESKTOP_SPECS` and to the `testMatch` of the Fire projects (critique E8). Done when it passes in chromium, webkit, firefox, the 4 iPad and iPhone projects and the 6 Fire projects (FR-158, FR-159, FR-160, FR-161, FR-166).
+- [X] T430 README: in "Tutorial for parents" the four play modes, what "Plus und Minus" and "Zahlen-Rätsel" ask, and the new settings errors; in "Status" "All 27 amendments" and "Plus und Minus" and "Zahlen-Rätsel" in the list; quickstart row 38 matches what the e2e observed; the run summary reports the reading of "what is between numbers", the labels (critique P1) and the silent migration (critique P5) for the product owner.
+
+**Checkpoint**: The child chooses "Plus und Minus" or "Zahlen-Rätsel" on the start screen and gets only the questions of that mode, on every supported screen.
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase dependencies
@@ -1099,6 +1141,7 @@ Findings of the code review of 8661a98..06acbee (H = high, M = medium, L = low, 
 - **Phase 24e (amendment 20)**: depends on Phases 22b (medium lines and label rows) and 24d (the aiming cross reads the ruler level). T370 runs before T371, T372 before T373, T374 before T375; T371 runs before T373 and T375 (both read `ticksFor`); T376 after T375; T377 last.
 - **Phase 24f (amendment 21 waves)**: depends on Phases 24a (play modes), 24c (counted kills), 24d (settings version 10) and 24e (readPosition on drawn lines). T378 runs before T379, T380 before T381, T382 before T383; T379 before T381 (the controller reads `enemiesAtOnce`); T381 before T383; T384 is written before T381 and passes after T383.
 - **Phase 24g (amendment 21 pointer line styles)**: depends on Phase 24f. T385 runs before T386, T387 before T388; T386 before T389; T390 is written before T389 and passes after it; T391; T392 last (it removes the curved styles of T385 to T390). T393 (Phase 24) is independent.
+- **Phase 24m (amendment 27)**: depends on Phases 24k (settings applied during a round) and 24l (settings version 13, "Zwei Zahlen"). T417 runs before T418; T418 before every later task of the phase; T419 before T420, T421 before T422, T423 before T424, T425 before T426, T427 before T428; T420 before T421 and T422 (the check uses `arithmeticAnswerSet`) and before T428 (`modeCanPlay`); T424, T426 and T428 before T429; T430 last.
 
 ### User story dependencies
 
@@ -1325,6 +1368,16 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | FR-155 | T409, T410 |
 | FR-156 | T403, T404 |
 | FR-157 | T413, T414 |
+| FR-158 | T417, T418, T425, T426, T429 |
+| FR-159 | T419, T420, T429 |
+| FR-160 | T419, T420, T429 |
+| FR-161 | T419, T420, T425, T426, T429 |
+| FR-162 | T417, T418, T421, T422, T425, T426 |
+| FR-163 | T419, T420 |
+| FR-164 | T423, T424 |
+| FR-165 | T417, T418, T421, T422 |
+| FR-166 | T425, T426, T429 |
+| FR-167 | T427, T428 |
 | SC-001 | T043, T046, T150, T165, T345 |
 | SC-002 | T150, T292, T293, T345 |
 | SC-003 | T055, T059, T079, T086, T107, T148, T236, T242, T244, T251 |
@@ -1352,7 +1405,7 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | Amendment 12 | T272 to T280; T136 and T141 changed |
 | Amendment 14 | T285 to T294 |
 | Amendment 15 | T295 to T301 |
-| US11 | T327 to T341 |
+| US11 | T327 to T341, T417 to T430 |
 | Amendment 17 | T327 to T341 |
 | Amendment 18 | T349 to T356 |
 | Amendment 19 | T358 to T367 |
@@ -1360,3 +1413,4 @@ Removed requirements have no tasks. Amendment 05 removed the arrow-key and ±1 p
 | US12 | T378 to T391 |
 | Amendment 21 | T378 to T391 |
 | Amendment 26 | T403 to T416 |
+| Amendment 27 | T417 to T430 |

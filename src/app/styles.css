@@ -110,6 +110,37 @@ input:focus-visible {
   justify-content: center;
 }
 
+/*
+ * Mode buttons (amendment 27, FR-158, research R25, critique E10): a grid, not a wrapping row, so four buttons show
+ * as one row of four or two rows of two, never three and one. `--wide-columns` is the number of offered modes (at
+ * most 4), so the grid never has more columns than buttons; the media rules below lower 3 or 4 to 2. The garage button takes its own row below.
+ */
+.play-buttons.mode-grid {
+  --columns: var(--wide-columns);
+  --button-width: 220px;
+  display: grid;
+  grid-template-columns: repeat(var(--columns), var(--button-width));
+  justify-content: center;
+  justify-items: stretch;
+}
+
+.mode-grid.modes-2 {
+  --wide-columns: 2;
+}
+
+.mode-grid.modes-3 {
+  --wide-columns: 3;
+}
+
+.mode-grid.modes-4 {
+  --wide-columns: 4;
+}
+
+.mode-grid > .garage-button {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
 /* Play mode picture buttons (amendment 17, FR-121): icon above the label, the start key in the corner. */
 .mode-button {
   position: relative;
@@ -118,10 +149,17 @@ input:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-width: 220px;
+  min-width: 0;
   min-height: 180px;
-  padding: 16px 24px;
+  padding: 16px 12px;
   font-size: 1.75rem;
+  line-height: 1.15;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+.mode-label {
+  max-width: 100%;
 }
 
 .mode-ruler {
@@ -129,9 +167,14 @@ input:focus-visible {
   box-shadow: 0 6px 0 #313d58;
 }
 
-.mode-math {
+.mode-arithmetic {
   background: #b5651d;
   box-shadow: 0 6px 0 #7a4210;
+}
+
+.mode-numbers {
+  background: #8a4fb8;
+  box-shadow: 0 6px 0 #5c3080;
 }
 
 .mode-key {
@@ -142,10 +185,57 @@ input:focus-visible {
   opacity: 0.85;
 }
 
+/*
+ * Two columns (R25): iPad and Fire tablets upright and windows from 600 to 959 pixels wide keep 220 by 180 buttons;
+ * phone sideways (height 500 or less and width 688 or more) keeps four columns.
+ */
+@media (max-width: 959.98px) and (min-height: 500.02px), (max-width: 687.98px) {
+  .mode-grid.modes-3,
+  .mode-grid.modes-4 {
+    --columns: 2;
+  }
+}
+
+/* Phone sideways, Fire 7 and Fire HD 8 sideways (R25): smaller buttons, gap 16 px. */
 @media (max-height: 500px) {
+  .start-screen {
+    gap: 16px;
+  }
+
+  .play-buttons.mode-grid {
+    --button-width: 160px;
+    gap: 16px;
+  }
+
   .mode-button {
-    min-width: 160px;
     min-height: 120px;
+    padding: 12px 8px;
+    font-size: 1.3rem;
+  }
+
+  .mode-icon {
+    width: 64px;
+    height: 52px;
+  }
+
+  .mode-grid > .garage-button {
+    min-height: 72px;
+    font-size: 1.75rem;
+  }
+}
+
+/* Phone upright (R25): two columns, each half the free width, buttons 120 px tall, gap 16 px. */
+@media (max-width: 599.98px) {
+  .play-buttons.mode-grid {
+    --button-width: minmax(0, 1fr);
+    width: 100%;
+    padding: 0 16px;
+    gap: 16px;
+  }
+
+  .mode-button {
+    min-height: 120px;
+    padding: 12px 8px;
     font-size: 1.3rem;
   }
 

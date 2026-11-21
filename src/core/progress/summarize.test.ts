@@ -96,14 +96,31 @@ describe('summarize (FR-040, FR-087)', () => {
 
   it('reads the play mode of a personal best; a key without one is "Gemischt" (amendment 17, FR-086)', () => {
     const r = emptyRecords();
-    r.best['0-100|1|untilHearts|math'] = { enemies: 3, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|numbers'] = { enemies: 3, ms: 1000, at: 1 };
     r.best['0-100|1|untilHearts|ruler'] = { enemies: 2, ms: 1000, at: 1 };
     r.best['0-100|1|untilHearts'] = { enemies: 4, ms: 1000, at: 1 };
     r.best['0-100|1|untilHearts|free'] = { enemies: 9, ms: 1000, at: 1 };
     expect(summarize(emptyProgress(), r).bests.map((b) => [b.mode, b.enemies])).toEqual([
       ['mixed', 4],
       ['ruler', 2],
-      ['math', 3],
+      ['numbers', 3],
+    ]);
+  });
+
+  it('reads an old |math best as mode "math" and sorts it after "Zahlen-Rätsel" (amendment 27, FR-086, critique E11)', () => {
+    const r = emptyRecords();
+    r.best['0-100|1|untilHearts|math'] = { enemies: 5, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|numbers'] = { enemies: 4, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|arithmetic'] = { enemies: 3, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|ruler'] = { enemies: 2, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts'] = { enemies: 1, ms: 1000, at: 1 };
+    r.best['0-100|1|untilHearts|free'] = { enemies: 9, ms: 1000, at: 1 };
+    expect(summarize(emptyProgress(), r).bests.map((b) => [b.mode, b.enemies])).toEqual([
+      ['mixed', 1],
+      ['ruler', 2],
+      ['arithmetic', 3],
+      ['numbers', 4],
+      ['math', 5],
     ]);
   });
 

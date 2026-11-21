@@ -3,6 +3,7 @@ import { defaultSettings, RANGE_PRESETS, twoNumberDefaults } from './defaults';
 import { settingsSchema, type Settings } from './schema';
 import { settingsNotices, validateSettings, withRange, type SettingsError } from './validate';
 import { parseSettings } from '../storage/migrate';
+import { modeCanPlay } from '../modes';
 
 function clone(s: Settings): Settings {
   return structuredClone(s);
@@ -21,7 +22,7 @@ describe('defaults', () => {
   it('match data-model.md', () => {
     const d = defaultSettings();
     expect(d).toEqual({
-      version: 13,
+      version: 14,
       challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
       range: { preset: '0-100', min: 0, max: 100 },
       addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 1, size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
@@ -39,7 +40,7 @@ describe('defaults', () => {
       roundType: 'untilHearts',
       roundLength: 5,
       adaptive: true,
-      playModes: { mixed: true, ruler: true, math: true },
+      playModes: { mixed: true, ruler: true, arithmetic: true, numbers: true },
       noDamage: false,
       showClock: false,
       showRecords: true,
@@ -124,24 +125,55 @@ describe('validateSettings', () => {
     expect(paths(s)).toContain('range');
   });
 
-  it('rejects all challenge types off while "Gemischt" or "Nur Rechnen" is offered (US6 scenario 4, amendment 17)', () => {
+  it('rejects all challenge types off while "Gemischt" is offered (US6 scenario 4, amendment 17, amendment 27)', () => {
     const s = clone(defaultSettings());
     s.challengeTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
-    expect(paths(s)).toContain('challengeTypes');
-    s.playModes = { mixed: false, ruler: true, math: true };
-    expect(paths(s)).toContain('challengeTypes');
-    s.playModes = { mixed: true, ruler: true, math: false };
-    expect(paths(s)).toContain('challengeTypes');
-    s.playModes = { mixed: false, ruler: true, math: false };
+    s.playModes = { mixed: true, ruler: true, arithmetic: false, numbers: false };
+    expect(errorsOf(s)).toContainEqual({ key: 'noChallengeTypes', path: 'challengeTypes' });
+    s.playModes = { mixed: false, ruler: true, arithmetic: false, numbers: false };
     expect(validateSettings(s)).toEqual({ ok: true });
   });
 
-  it('rejects settings that offer no play mode (FR-121)', () => {
+  it('gives noChallengeTypes only when "Gemischt" is offered (amendment 27, FR-162)', () => {
     const s = clone(defaultSettings());
-    s.playModes = { mixed: false, ruler: false, math: false };
+    s.challengeTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
+    s.playModes = { mixed: false, ruler: true, arithmetic: true, numbers: true };
+    expect(errorsOf(s).map((e) => e.key)).not.toContain('noChallengeTypes');
+  });
+
+  it('rejects settings that offer no play mode (FR-121, amendment 27)', () => {
+    const s = clone(defaultSettings());
+    s.playModes = { mixed: false, ruler: false, arithmetic: false, numbers: false };
     expect(errorsOf(s)).toContainEqual({ key: 'noPlayMode', path: 'playModes' });
-    s.playModes.math = true;
+    for (const mode of ['mixed', 'ruler', 'arithmetic', 'numbers'] as const) {
+      const one = clone(s);
+      one.playModes[mode] = true;
+      expect(validateSettings(one)).toEqual({ ok: true });
+    }
+  });
+
+  it('rejects "Plus und Minus" offered with "Plus" and "Minus" off (amendment 27, FR-162)', () => {
+    const s = clone(defaultSettings());
+    s.challengeTypes = { numberLine: true, addition: false, subtraction: false, comparison: true };
+    expect(errorsOf(s)).toEqual([{ key: 'arithmeticModeNoType', path: 'playModes.arithmetic' }]);
+    s.playModes.arithmetic = false;
     expect(validateSettings(s)).toEqual({ ok: true });
+  });
+
+  it('rejects "Zahlen-Rätsel" offered with "Zahlenstrahl" and "Vergleichen" off (amendment 27, FR-162)', () => {
+    const s = clone(defaultSettings());
+    s.challengeTypes = { numberLine: false, addition: true, subtraction: true, comparison: false };
+    expect(errorsOf(s)).toEqual([{ key: 'numbersModeNoType', path: 'playModes.numbers' }]);
+    s.playModes.numbers = false;
+    expect(validateSettings(s)).toEqual({ ok: true });
+  });
+
+  it('schema takes version 14 with four mode switches and rejects playModes.math (amendment 27)', () => {
+    const d = defaultSettings();
+    expect(settingsSchema.safeParse(d).success).toBe(true);
+    const withMath = { ...d, playModes: { mixed: true, ruler: true, math: true } };
+    expect(settingsSchema.safeParse(withMath).success).toBe(false);
+    expect(settingsSchema.safeParse({ ...d, version: 13 }).success).toBe(false);
   });
 
   it('rejects max - min outside 5 to 1000', () => {
@@ -286,6 +318,7 @@ describe('validateSettings', () => {
     // The same limits are fine when those types are off.
     n.challengeTypes.addition = false;
     n.challengeTypes.subtraction = false;
+    n.playModes.arithmetic = false;
     expect(validateSettings(n)).toEqual({ ok: true });
   });
 
@@ -352,7 +385,7 @@ describe('whole numbers and one parse function (review T4)', () => {
     const { numberPad: _drop, playModes: _modes, ...v5 } = { ...defaultSettings(), version: 5, freePlay: true };
     void _drop;
     void _modes;
-    expect(parseSettings(v5)).toMatchObject({ version: 13, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, math: true }, pointAfterFullHelp: true });
+    expect(parseSettings(v5)).toMatchObject({ version: 14, enemiesAtOnce: 1, lineStyle: 'straight', aimCross: { mode: 'always', level: 2 }, numberPad: 'auto', playModes: { mixed: true, ruler: true, arithmetic: true, numbers: true }, pointAfterFullHelp: true });
     expect(parseSettings({ ...defaultSettings(), roundLength: 99 })).toBeNull();
     expect(parseSettings('nope')).toBeNull();
   });
@@ -477,6 +510,7 @@ describe('"Zwei Zahlen" settings (amendment 26, FR-148, FR-151, FR-152)', () => 
       { key: 'subtractionNoPair', path: 'subtraction.size' },
     ]);
     s.challengeTypes = { ...s.challengeTypes, addition: false, subtraction: false };
+    s.playModes.arithmetic = false;
     expect(validateSettings(s)).toEqual({ ok: true });
     // Without carrying, first numbers 90 to 99 and second numbers 10 to 99 always carry.
     expect(keys(twoNumbers({ addition: { first: { min: 90, max: 99 } } }))).toContain('additionNoPair');
@@ -541,5 +575,84 @@ describe('"Zwei Zahlen" settings (amendment 26, FR-148, FR-151, FR-152)', () => 
     expect(validateSettings(s)).toEqual({ ok: true });
     const nan = twoNumbers({ addition: { maxOperand: Number.NaN } });
     expect(errorsOf(nan)).toEqual([{ key: 'rangeNotInteger', path: 'addition.size' }]);
+  });
+});
+
+describe('arithmeticModeNoExercise (amendment 27 item 7, FR-162, critique E3)', () => {
+  /** Battlefield 0 to 100, only "Plus", "Größtes Ergebnis" 5, "Zahlen-Rätsel" not offered (it needs its own types). */
+  function onlyPlusMaxResult5(): Settings {
+    const s = clone(defaultSettings());
+    s.challengeTypes = { numberLine: false, addition: true, subtraction: false, comparison: false };
+    s.addition.maxResult = 5;
+    s.playModes = { mixed: true, ruler: true, arithmetic: true, numbers: false };
+    return s;
+  }
+  const NO_EXERCISE = { key: 'arithmeticModeNoExercise', path: 'playModes.arithmetic' };
+
+  it('rejects "Plus und Minus" when no plus exercise keeps the enemy gap from the tank at 0', () => {
+    expect(errorsOf(onlyPlusMaxResult5())).toEqual([NO_EXERCISE]);
+  });
+
+  it('gives no such error when "Plus und Minus" is not offered', () => {
+    const s = onlyPlusMaxResult5();
+    s.playModes.arithmetic = false;
+    expect(validateSettings(s)).toEqual({ ok: true });
+  });
+
+  it('does not run while the range has an error', () => {
+    const s = onlyPlusMaxResult5();
+    s.range = { preset: '0-20', min: 0, max: 100 };
+    expect(errorsOf(s).map((e) => e.key)).toEqual(['rangePresetMismatch']);
+  });
+
+  it('does not run while a largest operand has an error', () => {
+    const s = onlyPlusMaxResult5();
+    s.subtraction.maxOperand = 1_000_000_000;
+    expect(errorsOf(s).map((e) => e.key)).toEqual(['subtractionMaxOperand']);
+    const plus = onlyPlusMaxResult5();
+    plus.addition.maxOperand = 0;
+    expect(errorsOf(plus).map((e) => e.key)).toEqual(['additionMaxOperand']);
+  });
+
+  it('does not run while addition.maxResult has an error', () => {
+    const s = onlyPlusMaxResult5();
+    s.range = { preset: '0-20', min: 0, max: 20 };
+    s.addition.maxOperand = 5;
+    s.subtraction.maxOperand = 5;
+    s.addition.maxResult = 0;
+    // No sum is 0 or less: the error at "Größtes Ergebnis" is additionNoExercise, and the exercise check waits for it.
+    expect(errorsOf(s).map((e) => e.key)).toEqual(['additionNoExercise']);
+  });
+
+  it('does not run while a "Zwei Zahlen" field has an error', () => {
+    const s = onlyPlusMaxResult5();
+    s.addition = { ...s.addition, size: 'twoNumbers', first: { min: 0, max: 99 } };
+    expect(errorsOf(s).map((e) => e.key)).toEqual(['additionFirstRange']);
+  });
+
+  it('agrees with modeCanPlay("arithmetic", s) for settings without field errors', () => {
+    const cases: Settings[] = [defaultSettings(), onlyPlusMaxResult5()];
+    for (const maxResult of [5, 14, 15, 16, 30, 100]) {
+      for (const [addition, subtraction] of [
+        [true, false],
+        [false, true],
+        [true, true],
+      ] as const) {
+        const s = onlyPlusMaxResult5();
+        s.challengeTypes = { ...s.challengeTypes, addition, subtraction };
+        s.addition.maxResult = maxResult;
+        cases.push(s);
+      }
+    }
+    const small = withRange(onlyPlusMaxResult5(), { preset: 'custom', min: -60, max: 40 });
+    cases.push({ ...small, negativeResults: false, challengeTypes: { numberLine: false, addition: false, subtraction: true, comparison: false } });
+    let failing = 0;
+    for (const s of cases) {
+      const noExercise = errorsOf(s).some((e) => e.key === 'arithmeticModeNoExercise');
+      expect(noExercise).toBe(!modeCanPlay('arithmetic', s));
+      if (noExercise) failing++;
+    }
+    expect(failing).toBeGreaterThan(0);
+    expect(failing).toBeLessThan(cases.length);
   });
 });

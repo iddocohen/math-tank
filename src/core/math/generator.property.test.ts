@@ -21,6 +21,7 @@ import { validateChallenge } from './validate';
 import { minEnemyGap, minTankGap } from './gaps';
 import { clampStep, ladders } from '../progress/ladders';
 import { crossesMultiple, mainSkillOf } from './skills';
+import { modeCanPlay } from '../modes';
 
 const SEEDS = 10_000;
 const ZERO_STEPS: Record<Skill, number> = {
@@ -146,24 +147,26 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
 
   describe('addition and subtraction on, 10,000 seeds each (T079, FR-022, FR-023, FR-029, SC-003, AC-04)', () => {
     const arithmeticOnly = { numberLine: false, addition: true, subtraction: true, comparison: false };
+    // "Zahlen-Rätsel" needs "Zahlenstrahl" or "Vergleichen" (amendment 27, FR-162).
+    const arithmeticModes = { mixed: true, ruler: true, arithmetic: true, numbers: false };
     const custom = (min: number, max: number, patch: Partial<Settings>): Settings => ({
       ...defaultSettings(),
-      challengeTypes: arithmeticOnly,
+      challengeTypes: arithmeticOnly, playModes: arithmeticModes,
       range: { preset: 'custom', min, max },
       ...patch,
     });
     const cases: Array<[string, Settings]> = [
-      ['0 to 20, one step', presetSettings('0-20', { challengeTypes: arithmeticOnly })],
+      ['0 to 20, one step', presetSettings('0-20', { challengeTypes: arithmeticOnly, playModes: arithmeticModes })],
       [
         '0 to 100, two steps, crossing tens off',
         presetSettings('0-100', {
-          challengeTypes: arithmeticOnly,
+          challengeTypes: arithmeticOnly, playModes: arithmeticModes,
           crossTens: false,
           addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 2 },
           subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 },
         }),
       ],
-      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, crossHundreds: false })],
+      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, playModes: arithmeticModes, crossHundreds: false })],
       [
         'custom -20 to 30, negative results on',
         custom(-20, 30, { negativeResults: true, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 } }),
@@ -299,6 +302,11 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
     comparison: (bits & 8) !== 0,
   }));
 
+  /** The play modes for settings with some challenge type on: "Gemischt" and the modes whose challenge types are on. */
+  function withoutRulerModes(types: Settings['challengeTypes'], ruler: boolean, offer: boolean): Settings['playModes'] {
+    return { mixed: true, ruler, arithmetic: offer && (types.addition || types.subtraction), numbers: offer && (types.numberLine || types.comparison) };
+  }
+
   /** One random settings object; it may break a rule, then the caller drops it. */
   function randomSettings(rng: Rng, forced?: { range0to20: boolean; types: Settings['challengeTypes'] }): Settings {
     const base = defaultSettings();
@@ -327,7 +335,8 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
       rulerLevelStart: startLevel,
       rulerLevelMax: rng.pick(LEVELS.filter((l) => l >= startLevel)),
       // Every switch off is valid only with "Nur Zahlenstrahl" as the only play mode (FR-047, amendment 17).
-      playModes: allOff ? { mixed: false, ruler: true, math: false } : { mixed: true, ruler: rng.next() < 0.7, math: rng.next() < 0.7 },
+      // "Plus und Minus" and "Zahlen-Rätsel" need their own challenge types (amendment 27, FR-162).
+      playModes: allOff ? { mixed: false, ruler: true, arithmetic: false, numbers: false } : withoutRulerModes(types, rng.next() < 0.7, rng.next() < 0.7),
     };
     // withRange clamps the linked limits to the range, as the settings page does.
     return withRange(patched, range);
@@ -395,11 +404,12 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
     });
   }
 
-  // Code review: "Nur Rechnen" never falls back to a ruler kind, also on custom ranges at the lowest steps.
+  // Code review: the modes without a ruler never fall back to a ruler kind, also on custom ranges at the lowest steps.
+  // "Zahlen-Rätsel" (amendment 27, FR-160) also never asks plus or minus.
   const mathSettings = all.filter((s) => Object.values(s.challengeTypes).some(Boolean));
   for (let i = 0; i < mathSettings.length; i += 40) {
     const group = mathSettings.slice(i, i + 40);
-    it(`"Nur Rechnen", settings ${i + 1} to ${i + group.length}: no findNumber or readPosition, and every challenge validates`, () => {
+    it(`"Zahlen-Rätsel", settings ${i + 1} to ${i + group.length}: no findNumber, readPosition, addition or subtraction, and every challenge validates`, () => {
       const problems: string[] = [];
       for (const settings of group) {
         const { min, max } = settings.range;
@@ -415,11 +425,52 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
             playerPosition,
             rulerLevel: levels[seed % levels.length]!,
             inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
-            ...playModeKinds('math', settings),
+            ...playModeKinds('numbers', settings),
           });
-          if (c.kind === 'findNumber' || c.kind === 'readPosition') problems.push(`${label}: ${c.kind}`);
+          if (['findNumber', 'readPosition', 'addition', 'subtraction'].includes(c.kind)) problems.push(`${label}: ${c.kind}`);
           const errors = validateChallenge(c, settings, playerPosition);
           if (errors.length > 0) problems.push(`${label} ${c.kind}: ${errors.join('; ')}`);
+        }
+      }
+      expect(problems).toEqual([]);
+    });
+  }
+
+  // Amendment 27 (FR-159, FR-163): "Plus und Minus" gives only addition and subtraction, for both player positions.
+  // modeCanPlay is the exercise check of the settings page (FR-162), which validateSettings runs from T422 on.
+  const arithmeticSettings = all.filter((s) => s.playModes.arithmetic && modeCanPlay('arithmetic', s));
+  it('"Plus und Minus" is offered in enough of the random settings', () => {
+    expect(arithmeticSettings.length).toBeGreaterThanOrEqual(40);
+  });
+  for (let i = 0; i < arithmeticSettings.length; i += 40) {
+    const group = arithmeticSettings.slice(i, i + 40);
+    it(`"Plus und Minus", settings ${i + 1} to ${i + group.length}: only addition or subtraction, and every challenge validates`, () => {
+      const problems: string[] = [];
+      for (const settings of group) {
+        const { min, max } = settings.range;
+        for (let seed = 0; seed < 200 && problems.length < 5; seed++) {
+          for (const playerPosition of [min, max]) {
+            const label = `${min}..${max} types ${JSON.stringify(settings.challengeTypes)} seed ${seed} player ${playerPosition}`;
+            let c;
+            try {
+              c = generateChallenge({
+                settings,
+                skillSteps: seed % 3 === 0 ? (Object.fromEntries(Object.keys(ZERO_STEPS).map((k) => [k, 9])) as Record<Skill, number>) : ZERO_STEPS,
+                roundSeed: seed,
+                turn: 1 + (seed % 7),
+                playerPosition,
+                rulerLevel: settings.rulerLevelStart,
+                inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
+                ...playModeKinds('arithmetic', settings),
+              });
+            } catch (e) {
+              problems.push(`${label}: threw ${String(e)}`);
+              continue;
+            }
+            if (c.kind !== 'addition' && c.kind !== 'subtraction') problems.push(`${label}: ${c.kind}`);
+            const errors = validateChallenge(c, settings, playerPosition);
+            if (errors.length > 0) problems.push(`${label} ${c.kind}: ${errors.join('; ')}`);
+          }
         }
       }
       expect(problems).toEqual([]);
@@ -485,7 +536,7 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
   ];
 
   for (const preset of PRESET_LIST) {
-    it(`range ${preset}: "Nur Rechnen" never gives readPosition or findNumber, with pointer and keyboard input`, () => {
+    it(`range ${preset}: "Zahlen-Rätsel" never gives readPosition, findNumber, addition or subtraction, with pointer and keyboard input`, () => {
       const problems: string[] = [];
       for (const types of TYPES) {
         const settings = presetSettings(preset, { challengeTypes: types });
@@ -501,9 +552,9 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
             playerPosition,
             rulerLevel: ((seed % 5) + 1) as Settings['rulerLevelStart'],
             inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
-            ...playModeKinds('math', settings),
+            ...playModeKinds('numbers', settings),
           });
-          if (c.kind === 'readPosition' || c.kind === 'findNumber') problems.push(`${JSON.stringify(types)} seed ${seed}: ${c.kind}`);
+          if (['readPosition', 'findNumber', 'addition', 'subtraction'].includes(c.kind)) problems.push(`${JSON.stringify(types)} seed ${seed}: ${c.kind}`);
           const errors = validateChallenge(c, settings, playerPosition);
           if (errors.length > 0) problems.push(`${JSON.stringify(types)} seed ${seed} ${c.kind}: ${errors.join('; ')}`);
         }
@@ -523,7 +574,7 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
     });
   }
 
-  it('"Nur Rechnen" falls back to "after" or "before" over the whole range, not to "find N", when no kind fits (code review)', () => {
+  it('"Zahlen-Rätsel" falls back to "after" or "before" over the whole range, not to "find N", when no kind fits (code review)', () => {
     const settings = presetSettings('0-100');
     const { min, max } = settings.range;
     const answers = new Set<number>();
@@ -537,7 +588,7 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
         turn: 1,
         playerPosition,
         rulerLevel: 1,
-        ...playModeKinds('math', settings),
+        ...playModeKinds('numbers', settings),
         kindsAllowed: [],
         fallbackKinds: [],
       });

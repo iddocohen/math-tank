@@ -8,7 +8,8 @@ import type { Rng } from '../rng';
 import { highestResult, isTwoNumbers, lowestResult } from '../settings/limits';
 import type { DifficultyStep, Settings } from '../types';
 import { movementAllowed, type ChallengeDraft } from './numberLine';
-import { twoNumberAnswers, twoNumberPairErrors, twoNumberPairs, twoNumberRules } from './twoNumbers';
+import { minEnemyGap } from './gaps';
+import { memo, twoNumberAnswers, twoNumberPairErrors, twoNumberPairs, twoNumberRules } from './twoNumbers';
 
 export type ArithmeticKind = 'addition' | 'subtraction';
 
@@ -188,4 +189,167 @@ export function arithmeticErrors(c: ArithmeticChallenge, settings: Settings): st
   }
   chainErrors(c, chain, errors);
   return errors;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Exact exercise search of "Plus und Minus" (amendment 27, FR-159, FR-162, FR-163, research R25)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** The top difficulty step: the parent's settings unchanged (no operand limit, no crossing limit of a ladder step). */
+const TOP_STEP: DifficultyStep = { maxNumberFraction: 1, allowCrossTens: true };
+
+/** The turned-on kinds among addition and subtraction, in this order. */
+function turnedOnKinds(settings: Settings): ArithmeticKind[] {
+  const out: ArithmeticKind[] = [];
+  if (settings.challengeTypes.addition) out.push('addition');
+  if (settings.challengeTypes.subtraction) out.push('subtraction');
+  return out;
+}
+
+/** The settings fields the exact search of `kind` reads: the key of the caches below. */
+function exactKey(kind: ArithmeticKind, settings: Settings): string {
+  const own = settings[kind];
+  const { range } = settings;
+  const common = [kind, range.min, range.max, lowestResult(settings, range), highestResult(kind, settings)];
+  if (isTwoNumbers(kind, settings)) return [...common, 'two', own.first.min, own.first.max, own.second.min, own.second.max, own.carry].join('|');
+  return [...common, 'steps', own.maxOperand, own.steps, settings.crossTens, settings.crossHundreds].join('|');
+}
+
+/** Results of a "Kleine Schritte" exercise at the parent's settings: `first` after one step, `answers` after all steps. */
+interface StepReach {
+  /** first[r - lowest] is 1 when some start in the range reaches r in one allowed movement. */
+  first: Uint8Array;
+  /** The answers that have an exercise, ascending. */
+  answers: number[];
+}
+
+/**
+ * Marks every result in [lowest, highest] that a marked `from` reaches with one operand from 1 to maxOperand in an
+ * allowed movement. The loop bounds keep each result inside [lowest, highest], so the work is at most the number of
+ * `from` values times min(maxOperand, highest - lowest + 1).
+ */
+function reach(froms: Iterable<number>, rules: ArithmeticRules, settings: Settings): Uint8Array {
+  const { lowest, highest, sign, maxOperand } = rules;
+  const out = new Uint8Array(Math.max(0, highest - lowest + 1));
+  for (const from of froms) {
+    const kMin = Math.max(1, sign === 1 ? lowest - from : from - highest);
+    const kMax = Math.min(maxOperand, sign === 1 ? highest - from : from - lowest);
+    for (let k = kMin; k <= kMax; k++) {
+      const to = from + sign * k;
+      if (!out[to - lowest] && movementAllowed(from, to, settings)) out[to - lowest] = 1;
+    }
+  }
+  return out;
+}
+
+/** The whole numbers from lo to hi. */
+function* span(lo: number, hi: number): Generator<number> {
+  for (let n = lo; n <= hi; n++) yield n;
+}
+
+/** The numbers whose entry in `found` is 1: entry i stands for offset + i. */
+function* marked(found: Uint8Array, offset: number): Generator<number> {
+  for (let i = 0; i < found.length; i++) if (found[i]) yield offset + i;
+}
+
+const stepReachCache = new Map<string, StepReach>();
+
+/** The "Kleine Schritte" reach of `kind` at the parent's settings; memoized on the fields it reads. */
+function stepReach(kind: ArithmeticKind, settings: Settings): StepReach {
+  return memo(stepReachCache, exactKey(kind, settings), () => {
+    const rules = arithmeticRules(kind, settings);
+    const first = reach(span(settings.range.min, settings.range.max), rules, settings);
+    const last = rules.steps === 1 ? first : reach(marked(first, rules.lowest), rules, settings);
+    return { first, answers: [...marked(last, rules.lowest)] };
+  });
+}
+
+/** Every answer of `kind` that has an exercise at the parent's settings, ascending, before the enemy gap. */
+function exactAnswers(kind: ArithmeticKind, settings: Settings): readonly number[] {
+  if (isTwoNumbers(kind, settings)) return twoNumberAnswers(twoNumberRules(kind, settings), settings);
+  return stepReach(kind, settings).answers;
+}
+
+const answersNearCache = new Map<string, number[]>();
+
+/** `exactAnswers` of `kind` that keep minEnemyGap from the player, ascending; memoized per player position. */
+function answersAt(kind: ArithmeticKind, settings: Settings, playerPosition: number): number[] {
+  return memo(answersNearCache, `${exactKey(kind, settings)}|${playerPosition}`, () => {
+    const gap = minEnemyGap(settings.range.min, settings.range.max);
+    return exactAnswers(kind, settings).filter((n) => Math.abs(n - playerPosition) >= gap);
+  });
+}
+
+const answerSetCache = new Map<string, ReadonlySet<number>>();
+
+/**
+ * The answers of a plus or minus exercise of the turned-on kinds at the parent's settings (the top step) that keep
+ * minEnemyGap from `playerPosition` (amendment 27, research R25). Exact: every answer in the set has an exercise,
+ * and no other answer has one. Memoized per settings fields read and player position. Do not change the returned set.
+ */
+export function arithmeticAnswerSet(settings: Settings, playerPosition: number): ReadonlySet<number> {
+  const kinds = turnedOnKinds(settings);
+  const key = [...kinds.map((kind) => exactKey(kind, settings)), playerPosition].join('#');
+  return memo(answerSetCache, key, () => new Set(kinds.flatMap((kind) => answersAt(kind, settings, playerPosition))));
+}
+
+/** A "Kleine Schritte" exercise with the answer `answer` at the parent's settings, operands picked with the rng. */
+function stepExercise(kind: ArithmeticKind, answer: number, settings: Settings, rng: Rng): ChallengeDraft | null {
+  const rules = arithmeticRules(kind, settings);
+  const { min, max } = settings.range;
+  const into = (to: number, ok: (from: number) => boolean): number[] => {
+    const out: number[] = [];
+    for (let k = 1; k <= rules.maxOperand; k++) {
+      const from = to - rules.sign * k;
+      if (ok(from) && movementAllowed(from, to, settings)) out.push(k);
+    }
+    return out;
+  };
+  const isStart = (from: number) => from >= min && from <= max;
+  if (rules.steps === 1) {
+    const ks = into(answer, isStart);
+    if (ks.length === 0) return null;
+    const b = rng.pick(ks);
+    return arithmeticDraft(kind, [answer - rules.sign * b, b]);
+  }
+  const { first } = stepReach(kind, settings);
+  const cs = into(answer, (middle) => first[middle - rules.lowest] === 1);
+  if (cs.length === 0) return null;
+  const c = rng.pick(cs);
+  const middle = answer - rules.sign * c;
+  const bs = into(middle, isStart);
+  if (bs.length === 0) return null;
+  const b = rng.pick(bs);
+  return arithmeticDraft(kind, [middle - rules.sign * b, b, c]);
+}
+
+/**
+ * Stage 3 of the "Plus und Minus" generator (amendment 27 item 8, FR-163): a plus or minus exercise of the turned-on
+ * kinds at the parent's settings whose answer keeps minEnemyGap from `playerPosition`, or null when there is none.
+ * The rng picks the kind to try first, the start answer of the walk through `arithmeticAnswerSet` and the operands,
+ * so stage 3 does not give the same exercise every time (critique E6).
+ *
+ * `accept` turns a draft into the caller's result, or null to reject it; the walk then moves on to the next answer
+ * and takes the first draft that `accept` keeps (amendment 27 Behavior item 8). Without `accept`, every draft is kept.
+ */
+export function arithmeticExerciseAt(settings: Settings, playerPosition: number, rng: Rng): ChallengeDraft | null;
+export function arithmeticExerciseAt<T>(settings: Settings, playerPosition: number, rng: Rng, accept: (draft: ChallengeDraft) => T | null): T | null;
+export function arithmeticExerciseAt<T>(
+  settings: Settings,
+  playerPosition: number,
+  rng: Rng,
+  accept: (draft: ChallengeDraft) => T | null = (draft) => draft as T,
+): T | null {
+  for (const kind of rng.shuffled(turnedOnKinds(settings))) {
+    const answers = answersAt(kind, settings, playerPosition);
+    if (answers.length === 0) continue;
+    const start = rng.int(0, answers.length - 1);
+    for (let i = 0; i < answers.length; i++) {
+      const answer = answers[(start + i) % answers.length]!;
+      const draft = isTwoNumbers(kind, settings) ? twoNumberDraft(kind, answer, settings, TOP_STEP, rng) : stepExercise(kind, answer, settings, rng);
+      const result = draft && accept(draft);
+      if (result) return result;
+    }
+  }
+  return null;
 }

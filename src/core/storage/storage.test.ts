@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
-import { settingsSchema } from '../settings/schema';
+import { settingsSchema, type Settings } from '../settings/schema';
 import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { memoryKeyValue, type KeyValue } from './keyValue';
 import { migrate } from './migrate';
 
-const ALL_MODES = { mixed: true, ruler: true, math: true };
+const ALL_MODES = { mixed: true, ruler: true, arithmetic: true, numbers: true };
+/** The play modes of settings versions 8 to 13, with "Nur Rechnen" (amendment 17). */
+const V13_ALL_MODES = { mixed: true, ruler: true, math: true };
+
+/** The current defaults in the shape of settings versions 8 to 13: `math` instead of `arithmetic` and `numbers` (amendment 27). */
+function v13Defaults() {
+  return { ...defaultSettings(), playModes: V13_ALL_MODES };
+}
 
 /** The default aiming cross of settings version 10 (amendment 19). */
 const AIM_CROSS_DEFAULT = { mode: 'always', level: 2 };
@@ -29,7 +36,7 @@ function legacyDefaults(freePlay = false): Record<string, unknown> {
 function upgraded(v: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const { freePlay: _free, ...rest } = v;
   void _free;
-  return { ...rest, playModes: ALL_MODES, pointAfterFullHelp: true, aimCross: AIM_CROSS_DEFAULT, enemiesAtOnce: 1, lineStyle: 'straight', ...extra, version: 13 };
+  return { ...rest, playModes: ALL_MODES, pointAfterFullHelp: true, aimCross: AIM_CROSS_DEFAULT, enemiesAtOnce: 1, lineStyle: 'straight', ...extra, version: 14 };
 }
 import { progressSchema } from './progressSchema';
 import { emptyRecords, type Records } from '../records/records';
@@ -168,7 +175,7 @@ describe('damaged data', () => {
 
   it('data from a newer version of the game gives defaults with resetReason newer, not invalid (review M2)', () => {
     const kv = memoryKeyValue({
-      [SETTINGS_KEY]: JSON.stringify({ ...defaultSettings(), version: 99 }),
+      [SETTINGS_KEY]: JSON.stringify({ ...v13Defaults(), version: 99 }),
       [PROGRESS_KEY]: JSON.stringify({ ...emptyProgress(), version: 2 }),
       [RECORDS_KEY]: JSON.stringify({ version: 2, best: {} }),
       [GARAGE_KEY]: JSON.stringify({ version: 3, balance: 3, look: emptyGarage().look }),
@@ -219,7 +226,7 @@ describe('migrate', () => {
     const migrated = migrate(v0, 'settings');
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(13);
+    expect(parsed.data?.version).toBe(14);
     expect(parsed.data?.range).toEqual({ preset: '0-20', min: 0, max: 20 });
     expect(parsed.data?.challengeTypes.addition).toBe(false);
     expect(parsed.data?.rulerLevelStart).toBe(2);
@@ -240,7 +247,7 @@ describe('migrate', () => {
     const migrated = migrate(v1Settings(4, true), 'settings') as Record<string, unknown>;
     const parsed = settingsSchema.safeParse(migrated);
     expect(parsed.success).toBe(true);
-    expect(parsed.data?.version).toBe(13);
+    expect(parsed.data?.version).toBe(14);
     expect(parsed.data?.rulerLevelStart).toBe(5);
     expect(parsed.data?.rulerLevelMax).toBe(5);
     expect('aimCorrection' in migrated).toBe(false);
@@ -260,7 +267,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ ...v1Settings(3, true), roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(13);
+    expect(settings.version).toBe(14);
     expect(settings.rulerLevelStart).toBe(3);
     expect(settings.roundLength).toBe(12);
   });
@@ -286,7 +293,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify({ version: 0, roundLength: 12 }));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.version).toBe(13);
+    expect(settings.version).toBe(14);
     expect(settings.roundLength).toBe(12);
   });
 
@@ -307,7 +314,7 @@ describe('migrate', () => {
     const migrated = migrate(v2, 'settings') as Record<string, unknown>;
     expect(migrated).toEqual(upgraded(v2, { roundType: 'untilHearts', showClock: false, showRecords: true, garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 13, roundType: 'untilHearts', garage: true });
+    expect(migrate(v1Settings(2, false), 'settings')).toMatchObject({ version: 14, roundType: 'untilHearts', garage: true });
   });
 
   it('turns version 3 settings into version 6: exactHit dropped, roundType, showClock, showRecords and garage added (amendments 06 and 11)', () => {
@@ -334,7 +341,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v2));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 13, roundType: 'untilHearts', playModes: ALL_MODES });
+    expect(settings).toMatchObject({ version: 14, roundType: 'untilHearts', playModes: ALL_MODES });
     expect('freePlay' in settings).toBe(false);
     expect('exactHit' in settings).toBe(false);
   });
@@ -344,7 +351,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v3Settings({ noDamage: true, exactHit: true })));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 13, roundType: 'enemyCount', noDamage: true });
+    expect(settings).toMatchObject({ version: 14, roundType: 'enemyCount', noDamage: true });
   });
 
   it('turns version 4 settings into version 6 with garage on, and keeps a stored garage value (amendment 11)', () => {
@@ -354,7 +361,7 @@ describe('migrate', () => {
     const migrated = migrate(v4, 'settings');
     expect(migrated).toEqual(upgraded(v4, { garage: true, numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 13, garage: false });
+    expect(migrate({ ...v4, garage: false }, 'settings')).toMatchObject({ version: 14, garage: false });
   });
 
   it('turns version 5 settings into version 6 with numberPad auto, and keeps a stored numberPad value (amendment 12)', () => {
@@ -363,7 +370,7 @@ describe('migrate', () => {
     const migrated = migrate(v5, 'settings');
     expect(migrated).toEqual(upgraded(v5, { numberPad: 'auto' }));
     expect(settingsSchema.safeParse(migrated).success).toBe(true);
-    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 13, numberPad: 'always' });
+    expect(migrate({ ...v5, numberPad: 'always' }, 'settings')).toMatchObject({ version: 14, numberPad: 'always' });
   });
 
   it('loadSettings upgrades stored version 5 settings without a reset (amendment 12)', () => {
@@ -373,7 +380,7 @@ describe('migrate', () => {
     kv.set(SETTINGS_KEY, JSON.stringify(v5));
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 13, numberPad: 'auto', playModes: ALL_MODES });
+    expect(settings).toMatchObject({ version: 14, numberPad: 'auto', playModes: ALL_MODES });
   });
 
   it('version 6 becomes version 7 with reading aloud turned off once (PO1)', () => {
@@ -384,10 +391,10 @@ describe('migrate', () => {
   it('version 7 becomes version 8: free play becomes the play modes (amendment 17)', () => {
     const v7 = { ...legacyDefaults(), version: 7 };
     expect(migrate(v7, 'settings')).toEqual(upgraded(v7));
-    expect(migrate({ ...v7, freePlay: true }, 'settings')).toMatchObject({ version: 13, playModes: ALL_MODES });
+    expect(migrate({ ...v7, freePlay: true }, 'settings')).toMatchObject({ version: 14, playModes: ALL_MODES });
     const noTypes = { numberLine: false, addition: false, subtraction: false, comparison: false };
     const onlyFree = migrate({ ...v7, freePlay: true, challengeTypes: noTypes }, 'settings') as Record<string, unknown>;
-    expect(onlyFree.playModes).toEqual({ mixed: false, ruler: true, math: false });
+    expect(onlyFree.playModes).toEqual({ mixed: false, ruler: true, arithmetic: false, numbers: false });
     expect('freePlay' in onlyFree).toBe(false);
     const parsed = settingsSchema.safeParse(onlyFree);
     expect(parsed.success).toBe(true);
@@ -395,51 +402,51 @@ describe('migrate', () => {
   });
 
   it('version 8 becomes version 9: a point after the full help is added, on unless already set (amendment 18)', () => {
-    const { pointAfterFullHelp: _point, aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v8 } = { ...defaultSettings(), version: 8 };
+    const { pointAfterFullHelp: _point, aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v8 } = { ...v13Defaults(), version: 8 };
     void _wave;
     void _lines;
     void _point;
     void _cross;
-    expect(migrate(v8, 'settings')).toEqual({ ...defaultSettings(), version: 13, pointAfterFullHelp: true });
-    expect(migrate({ ...v8, pointAfterFullHelp: false }, 'settings')).toMatchObject({ version: 13, pointAfterFullHelp: false });
+    expect(migrate(v8, 'settings')).toEqual({ ...defaultSettings(), version: 14, pointAfterFullHelp: true });
+    expect(migrate({ ...v8, pointAfterFullHelp: false }, 'settings')).toMatchObject({ version: 14, pointAfterFullHelp: false });
     // Version 0 and version 7 data go through every step and get the default.
-    expect(migrate({ ...legacyDefaults(), version: 7 }, 'settings')).toMatchObject({ version: 13, pointAfterFullHelp: true });
-    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 13, pointAfterFullHelp: true });
+    expect(migrate({ ...legacyDefaults(), version: 7 }, 'settings')).toMatchObject({ version: 14, pointAfterFullHelp: true });
+    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 14, pointAfterFullHelp: true });
   });
 
   it('version 9 becomes version 10: the aiming cross is added as "Immer" unless already set (amendment 19, FR-135)', () => {
-    const { aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v9 } = { ...defaultSettings(), version: 9 };
+    const { aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v9 } = { ...v13Defaults(), version: 9 };
     void _cross;
     void _wave;
     void _lines;
-    expect(migrate(v9, 'settings')).toEqual({ ...defaultSettings(), version: 13, aimCross: { mode: 'always', level: 2 } });
+    expect(migrate(v9, 'settings')).toEqual({ ...defaultSettings(), version: 14, aimCross: { mode: 'always', level: 2 } });
     const never = { mode: 'never', level: 4 };
-    expect(migrate({ ...v9, aimCross: never }, 'settings')).toMatchObject({ version: 13, aimCross: never });
+    expect(migrate({ ...v9, aimCross: never }, 'settings')).toMatchObject({ version: 14, aimCross: never });
     // Version 0 and version 8 data go through every step and get the default.
-    expect(migrate({ ...legacyDefaults(), version: 7 }, 'settings')).toMatchObject({ version: 13, aimCross: AIM_CROSS_DEFAULT });
-    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 13, aimCross: AIM_CROSS_DEFAULT });
+    expect(migrate({ ...legacyDefaults(), version: 7 }, 'settings')).toMatchObject({ version: 14, aimCross: AIM_CROSS_DEFAULT });
+    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 14, aimCross: AIM_CROSS_DEFAULT });
   });
 
   it('version 10 becomes version 12: one enemy at once and straight lines unless already set (amendment 21, FR-136)', () => {
-    const { enemiesAtOnce: _wave, lineStyle: _lines, ...v10 } = { ...defaultSettings(), version: 10, aimCross: { mode: 'never', level: 3 } };
+    const { enemiesAtOnce: _wave, lineStyle: _lines, ...v10 } = { ...v13Defaults(), version: 10, aimCross: { mode: 'never', level: 3 } };
     void _wave;
     void _lines;
-    expect(migrate(v10, 'settings')).toEqual({ ...defaultSettings(), aimCross: { mode: 'never', level: 3 }, version: 13, enemiesAtOnce: 1, lineStyle: 'straight' });
-    expect(migrate({ ...v10, enemiesAtOnce: 3, lineStyle: 'none' }, 'settings')).toMatchObject({ version: 13, enemiesAtOnce: 3, lineStyle: 'none' });
-    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 13, enemiesAtOnce: 1, lineStyle: 'straight' });
+    expect(migrate(v10, 'settings')).toEqual({ ...defaultSettings(), aimCross: { mode: 'never', level: 3 }, version: 14, enemiesAtOnce: 1, lineStyle: 'straight' });
+    expect(migrate({ ...v10, enemiesAtOnce: 3, lineStyle: 'none' }, 'settings')).toMatchObject({ version: 14, enemiesAtOnce: 3, lineStyle: 'none' });
+    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 14, enemiesAtOnce: 1, lineStyle: 'straight' });
   });
 
   it('version 11 becomes version 12: the removed curved line styles become straight, the rest stays (amendment 21 item 18)', () => {
-    const v11 = { ...defaultSettings(), version: 11, enemiesAtOnce: 3 };
+    const v11 = { ...v13Defaults(), version: 11, enemiesAtOnce: 3 };
     for (const lineStyle of ['curved', 'tangled']) {
-      expect(migrate({ ...v11, lineStyle }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, lineStyle: 'straight', version: 13 });
+      expect(migrate({ ...v11, lineStyle }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, lineStyle: 'straight', version: 14 });
     }
-    expect(migrate({ ...v11, lineStyle: 'none' }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, lineStyle: 'none', version: 13 });
-    expect(migrate({ ...v11, lineStyle: 'straight' }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, version: 13 });
+    expect(migrate({ ...v11, lineStyle: 'none' }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, lineStyle: 'none', version: 14 });
+    expect(migrate({ ...v11, lineStyle: 'straight' }, 'settings')).toEqual({ ...defaultSettings(), enemiesAtOnce: 3, version: 14 });
     // Stored version 11 settings with a curved style load as straight without a reset.
     const { settings, resetReason } = loadSettings(memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...v11, lineStyle: 'tangled' }) }));
     expect(resetReason).toBe('none');
-    expect(settings).toMatchObject({ version: 13, enemiesAtOnce: 3, lineStyle: 'straight' });
+    expect(settings).toMatchObject({ version: 14, enemiesAtOnce: 3, lineStyle: 'straight' });
   });
 
   it('version 12 becomes version 13: plus and minus get "Kleine Schritte", ranges 10 to 99 and no carrying unless already set (amendment 26, FR-156)', () => {
@@ -452,17 +459,89 @@ describe('migrate', () => {
       return rest;
     };
     const d = defaultSettings();
-    const v12 = { ...d, version: 12, addition: strip({ ...d.addition, maxOperand: 7 }), subtraction: strip(d.subtraction) };
+    const v12 = { ...d, playModes: V13_ALL_MODES, version: 12, addition: strip({ ...d.addition, maxOperand: 7 }), subtraction: strip(d.subtraction) };
     expect(migrate(v12, 'settings')).toEqual({ ...d, addition: { ...d.addition, maxOperand: 7 } });
     const set = { size: 'twoNumbers', first: { min: 100, max: 999 }, second: { min: 1, max: 9 }, carry: true };
-    expect(migrate({ ...v12, subtraction: { ...v12.subtraction, ...set } }, 'settings')).toMatchObject({ version: 13, subtraction: set, addition: { size: 'steps', carry: false } });
+    expect(migrate({ ...v12, subtraction: { ...v12.subtraction, ...set } }, 'settings')).toMatchObject({ version: 14, subtraction: set, addition: { size: 'steps', carry: false } });
     // Older data goes through every step and gets the defaults.
-    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 13, addition: { size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false } });
-    expect(migrate({ ...legacyDefaults(), version: 7, addition: strip(d.addition), subtraction: strip(d.subtraction) }, 'settings')).toMatchObject({ version: 13, subtraction: { size: 'steps', carry: false } });
+    expect(migrate({ rulerLevelStart: 2 }, 'settings')).toMatchObject({ version: 14, addition: { size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false } });
+    expect(migrate({ ...legacyDefaults(), version: 7, addition: strip(d.addition), subtraction: strip(d.subtraction) }, 'settings')).toMatchObject({ version: 14, subtraction: { size: 'steps', carry: false } });
     // Stored version 12 settings load without a reset.
     const { settings, resetReason } = loadSettings(memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify(v12) }));
     expect(resetReason).toBe('none');
     expect(settings).toEqual({ ...d, addition: { ...d.addition, maxOperand: 7 } });
+  });
+
+  it('version 13 becomes version 14: "Nur Rechnen" becomes "Plus und Minus" and "Zahlen-Rätsel" by the challenge types (amendment 27, FR-165)', () => {
+    const v13 = { ...v13Defaults(), version: 13 };
+    const types = (numberLine: boolean, addition: boolean, subtraction: boolean, comparison: boolean) => ({ numberLine, addition, subtraction, comparison });
+    const modesAfter = (math: boolean, challengeTypes: Record<string, boolean>) =>
+      (migrate({ ...v13, playModes: { mixed: true, ruler: false, math }, challengeTypes }, 'settings') as Record<string, unknown>).playModes;
+    expect(migrate(v13, 'settings')).toEqual(defaultSettings());
+    expect(modesAfter(true, types(true, true, true, true))).toEqual({ mixed: true, ruler: false, arithmetic: true, numbers: true });
+    expect(modesAfter(true, types(false, true, false, false))).toEqual({ mixed: true, ruler: false, arithmetic: true, numbers: false });
+    expect(modesAfter(true, types(false, false, true, false))).toEqual({ mixed: true, ruler: false, arithmetic: true, numbers: false });
+    expect(modesAfter(true, types(true, false, false, false))).toEqual({ mixed: true, ruler: false, arithmetic: false, numbers: true });
+    expect(modesAfter(true, types(false, false, false, true))).toEqual({ mixed: true, ruler: false, arithmetic: false, numbers: true });
+    expect(modesAfter(false, types(true, true, true, true))).toEqual({ mixed: true, ruler: false, arithmetic: false, numbers: false });
+    const migrated = migrate(v13, 'settings') as { playModes: Record<string, unknown> };
+    expect('math' in migrated.playModes).toBe(false);
+  });
+
+  it('loadSettings upgrades stored version 8 to 13 settings with the new mode switches without a reset (amendment 27)', () => {
+    for (const version of [8, 9, 10, 11, 12, 13]) {
+      const stored = { ...v13Defaults(), version, playModes: { mixed: false, ruler: true, math: true } };
+      const { settings, resetReason } = loadSettings(memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify(stored) }));
+      expect(resetReason).toBe('none');
+      expect(settings).toMatchObject({ version: 14, playModes: { mixed: false, ruler: true, arithmetic: true, numbers: true } });
+    }
+  });
+
+  describe('version 13 settings whose "Nur Rechnen" has no plus or minus exercise (amendment 27 item 9, FR-165, critique E3)', () => {
+    /** Only "Plus", "Größtes Ergebnis" 5 on 0 to 100: no plus exercise keeps the enemy gap from the tank at 0. */
+    function onlyPlus5(playModes: Record<string, boolean>, version = 13): Record<string, unknown> {
+      const d = defaultSettings();
+      return {
+        ...d,
+        version,
+        challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false },
+        addition: { ...d.addition, maxResult: 5 },
+        playModes,
+      };
+    }
+    const load = (stored: Record<string, unknown>) => loadSettings(memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify(stored) }));
+    const expected = (playModes: Settings['playModes']): Settings => {
+      const d = defaultSettings();
+      return { ...d, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false }, addition: { ...d.addition, maxResult: 5 }, playModes };
+    };
+
+    it('only "Nur Rechnen" offered: loads with only "Gemischt" offered and every other setting kept', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: false, math: true }));
+      expect(resetReason).toBe('none');
+      expect(settings).toEqual(expected({ mixed: true, ruler: false, arithmetic: false, numbers: false }));
+    });
+
+    it('"Nur Zahlenstrahl" also offered: loads with only "Nur Zahlenstrahl" and "Gemischt" off', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: true, math: true }));
+      expect(resetReason).toBe('none');
+      expect(settings).toEqual(expected({ mixed: false, ruler: true, arithmetic: false, numbers: false }));
+    });
+
+    it('subtraction.maxOperand 1000000000 loads as invalid in under about 100 ms, without the exercise search', () => {
+      const d = defaultSettings();
+      const stored = { ...onlyPlus5({ mixed: false, ruler: false, math: true }), subtraction: { ...d.subtraction, maxOperand: 1_000_000_000 } };
+      const started = performance.now();
+      const { settings, resetReason } = load(stored);
+      expect(performance.now() - started).toBeLessThan(100);
+      expect(resetReason).toBe('invalid');
+      expect(settings).toEqual(defaultSettings());
+    });
+
+    it('version 14 data that fails the check loads as invalid, not changed', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: false, arithmetic: true, numbers: false }, 14));
+      expect(resetReason).toBe('invalid');
+      expect(settings).toEqual(defaultSettings());
+    });
   });
 
   it('loadSettings keeps a stored wave size and line style (amendment 21)', () => {
@@ -490,7 +569,7 @@ describe('migrate', () => {
     const kv = memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify({ ...legacyDefaults(true), version: 7, challengeTypes: noTypes }) });
     const { settings, resetReason } = loadSettings(kv);
     expect(resetReason).toBe('none');
-    expect(settings.playModes).toEqual({ mixed: false, ruler: true, math: false });
+    expect(settings.playModes).toEqual({ mixed: false, ruler: true, arithmetic: false, numbers: false });
   });
 
   it('loadSettings turns reading aloud off in stored version 6 settings, and keeps it on when the parent turns it on again (PO1)', () => {

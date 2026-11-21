@@ -75,19 +75,91 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: m.settings.offerRulerOnly }));
     expect(field(L.playModeMixed).checked).toBe(false);
     expect(field(L.playModeRuler).checked).toBe(true);
-    expect(field(L.playModeMath).checked).toBe(false);
+    expect(field(L.playModeArithmetic).checked).toBe(false);
+    expect(field(L.playModeNumbers).checked).toBe(false);
     expect(saveButton().disabled).toBe(false);
   });
 
   it('shows a switch per play mode, all on by default; all off shows the error and blocks saving (amendment 17, FR-121)', () => {
     const { persistence } = setup();
-    for (const label of [L.playModeMixed, L.playModeRuler, L.playModeMath]) expect(field(label).checked).toBe(true);
+    for (const label of [L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers]) expect(field(label).checked).toBe(true);
     toggle(L.playModeMixed);
-    toggle(L.playModeMath);
+    toggle(L.playModeArithmetic);
+    toggle(L.playModeNumbers);
     fireEvent.click(saveButton());
-    expect(persistence.settings().playModes).toEqual({ mixed: false, ruler: true, math: false });
+    expect(persistence.settings().playModes).toEqual({ mixed: false, ruler: true, arithmetic: false, numbers: false });
     toggle(L.playModeRuler);
     expect(screen.getByText(m.settingsErrors.noPlayMode)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('shows the hint of amendment 27 item 6 when every challenge type is off; its button turns off the other three modes', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false } });
+    for (const label of [L.numberLine, L.addition, L.subtraction]) toggle(label);
+    expect(screen.getByText('„Gemischt“, „Plus und Minus“ und „Zahlen-Rätsel“ brauchen Aufgabenarten. Ohne Aufgabenart gibt es nur „Nur Zahlenstrahl“.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nur „Nur Zahlenstrahl“ anbieten' }));
+    expect([L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers].map((l) => field(l).checked)).toEqual([false, true, false, false]);
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('names the four switches of "Spielarten" (amendment 27 item 6, FR-158)', () => {
+    setup();
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    for (const label of [
+      'Spielart „Gemischt“ anbieten',
+      'Spielart „Nur Zahlenstrahl“ anbieten',
+      'Spielart „Plus und Minus“ anbieten',
+      'Spielart „Zahlen-Rätsel“ anbieten',
+    ]) {
+      expect(within(group).getByLabelText(label)).toBeTruthy();
+    }
+  });
+
+  it('"Plus und Minus" without "Plus" and "Minus" names its field in "Spielarten" and blocks saving (amendment 27 item 7)', () => {
+    setup();
+    toggle(L.addition);
+    toggle(L.subtraction);
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    expect(within(group).getByText('„Plus und Minus“ braucht „Plus“ oder „Minus“.')).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+    toggle(L.playModeArithmetic);
+    expect(within(group).queryByText(m.settingsErrors.arithmeticModeNoType)).toBeNull();
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('"Zahlen-Rätsel" without "Zahlenstrahl" and "Vergleichen" names its field in "Spielarten" and blocks saving (amendment 27 item 7)', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false } });
+    toggle(L.numberLine);
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    expect(within(group).getByText('„Zahlen-Rätsel“ braucht „Zahlenstrahl“ oder „Vergleichen“.')).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+    toggle(L.playModeNumbers);
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('"Gemischt" alone needs a challenge type: the error shows in "Aufgabenarten" (amendment 27 item 7)', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false }, playModes: { mixed: true, ruler: true, arithmetic: false, numbers: false } });
+    for (const label of [L.numberLine, L.addition, L.subtraction]) toggle(label);
+    const group = screen.getByRole('group', { name: m.settings.groups.challengeTypes });
+    expect(within(group).getByText(m.settingsErrors.noChallengeTypes)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('a range change that leaves no plus exercise far from the tank shows the text at the range field and in "Spielarten" and blocks saving (critique P4)', () => {
+    const text = 'Bei „Plus und Minus“ passt keine Aufgabe weit genug vom Panzer des Kindes. Bitte den Zahlenraum, „Größtes Ergebnis“ oder die Zahlen ändern.';
+    setup({
+      range: { preset: 'custom', min: 0, max: 20 },
+      challengeTypes: { numberLine: true, addition: true, subtraction: false, comparison: false },
+      addition: { ...defaultSettings().addition, maxResult: 5, maxOperand: 5 },
+      subtraction: { ...defaultSettings().subtraction, maxOperand: 10 },
+    });
+    expect(screen.queryByText(text)).toBeNull();
+    expect(field(L.rangeMax).value).toBe('20');
+    expect(saveButton().disabled).toBe(false);
+    setValue(L.rangeMax, '100');
+    expect(field(L.additionMaxResult).value).toBe('5');
+    expect(within(screen.getByRole('group', { name: m.settings.groups.range })).getByText(text)).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: m.settings.groups.playModes })).getByText(text)).toBeTruthy();
     expect(saveButton().disabled).toBe(true);
   });
 
@@ -288,7 +360,7 @@ describe('SettingsPage', () => {
   it('shows every field of FR-046', () => {
     setup({ timeLimitSeconds: 30, roundType: 'enemyCount' });
     for (const label of [
-      L.numberLine, L.addition, L.subtraction, L.comparison, L.playModeMixed, L.playModeRuler, L.playModeMath,
+      L.numberLine, L.addition, L.subtraction, L.comparison, L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers,
       L.rangePreset,
       L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps,
       L.crossTens, L.crossHundreds,

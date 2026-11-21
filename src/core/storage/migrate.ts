@@ -6,10 +6,29 @@ import { validateSettings } from '../settings/validate';
 /**
  * Settings from storage, an export file or a transfer code (review T4): migrated to the current version, checked by
  * the schema and by every settings rule. Null when anything fails; the caller decides what that means.
+ *
+ * Settings stored as version 13 or older (amendment 27 item 9, FR-165, critique E3): "Nur Rechnen" became "Plus und
+ * Minus" in `migrateSettingsToV14`, which runs no exercise search on raw data. Here, after the schema check and the
+ * operand clamp, "Plus und Minus" is turned off when its exercise check fails, and "Gemischt" is turned on when no
+ * mode is left (only "Nur Rechnen" was offered, so a challenge type is on). The parent gets no notice (critique P5).
+ * Version 14 data is not changed: when it fails the check, it fails validation.
  */
 export function parseSettings(raw: unknown): Settings | null {
+  const storedVersion = isRecord(raw) ? (raw.version ?? 0) : null;
   const parsed = settingsSchema.safeParse(migrate(raw, 'settings'));
-  return parsed.success && validateSettings(parsed.data).ok ? parsed.data : null;
+  if (!parsed.success) return null;
+  let settings = parsed.data;
+  if (typeof storedVersion === 'number' && storedVersion <= 13) settings = withoutUnplayableArithmetic(settings);
+  return validateSettings(settings).ok ? settings : null;
+}
+
+/** "Plus und Minus" off when its exercise check fails, and "Gemischt" on when no play mode is left (amendment 27). */
+function withoutUnplayableArithmetic(s: Settings): Settings {
+  const check = validateSettings(s);
+  if (check.ok || !check.errors.some((e) => e.key === 'arithmeticModeNoExercise')) return s;
+  const playModes = { ...s.playModes, arithmetic: false };
+  if (!Object.values(playModes).some(Boolean)) playModes.mixed = true;
+  return { ...s, playModes };
 }
 
 /**
@@ -22,7 +41,7 @@ export function parseSettings(raw: unknown): Settings | null {
  * (amendment 11: `garage` added, default true). Version 5 becomes version 6 (amendment 12: `numberPad` added, default
  * 'auto'). Version 6 becomes version 7 (PO1: "Vorlesen" turned off once). Version 7 becomes version 8 (amendment 17: `freePlay`
  * becomes `playModes`). Version 8 becomes version 9 (amendment 18: `pointAfterFullHelp` added, default true). Version 9 becomes version 10
- * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Version 11 becomes version 12 (amendment 21 item 18: the removed `lineStyle` values 'curved' and 'tangled' become 'straight'). Version 12 becomes version 13 (amendment 26: plus and minus get "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and no carrying). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
+ * (amendment 19: `aimCross` added, default "Immer"). Version 10 becomes version 11 (amendment 21: `enemiesAtOnce` 1 and `lineStyle` 'straight' added). Version 11 becomes version 12 (amendment 21 item 18: the removed `lineStyle` values 'curved' and 'tangled' become 'straight'). Version 12 becomes version 13 (amendment 26: plus and minus get "Zahlengröße" "Kleine Schritte", both ranges 10 to 99 and no carrying). Version 13 becomes version 14 (amendment 27: `playModes.math` becomes `arithmetic` and `numbers`). Older versions go through every later step. Every settings version then gets `addition.maxOperand`
  * clamped to the range width (review R5). Progress: version 0 becomes version 1.
  * Anything that is not an object, or has an unknown version, is returned unchanged so validation rejects it.
  */
@@ -47,6 +66,7 @@ const SETTINGS_STEPS: Array<(raw: Record<string, unknown>) => Record<string, unk
   migrateSettingsToV11,
   migrateSettingsToV12,
   migrateSettingsToV13,
+  migrateSettingsToV14,
 ];
 
 function migrateSettings(raw: Record<string, unknown>, version: unknown): Record<string, unknown> {
@@ -183,6 +203,22 @@ function migrateSettingsToV13(raw: Record<string, unknown>): Record<string, unkn
     return { ...k, size: k.size ?? d.size, first: k.first ?? d.first, second: k.second ?? d.second, carry: k.carry ?? d.carry };
   };
   return { ...raw, addition: withDefaults(raw.addition), subtraction: withDefaults(raw.subtraction), version: 13 };
+}
+
+/**
+ * Version 13 to 14 (amendment 27, FR-165): "Nur Rechnen" (`playModes.math`) becomes "Plus und Minus" (`arithmetic`)
+ * when "Plus" or "Minus" is on, and "Zahlen-Rätsel" (`numbers`) when "Zahlenstrahl" or "Vergleichen" is on. This step
+ * only renames the switches and runs no exercise search, because it works on raw data before the schema check
+ * (critique E3). Play modes or challenge types that are not objects are kept so validation rejects them.
+ */
+function migrateSettingsToV14(raw: Record<string, unknown>): Record<string, unknown> {
+  const { playModes, challengeTypes: t } = raw;
+  if (!isRecord(playModes) || !isRecord(t)) return { ...raw, version: 14 };
+  const { math, ...rest } = playModes;
+  const offered = math === true;
+  const arithmetic = offered && (t.addition === true || t.subtraction === true);
+  const numbers = offered && (t.numberLine === true || t.comparison === true);
+  return { ...raw, playModes: { ...rest, arithmetic, numbers }, version: 14 };
 }
 
 function migrateProgressV0(raw: Record<string, unknown>): Record<string, unknown> {

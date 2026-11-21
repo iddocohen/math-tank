@@ -4,6 +4,7 @@ import { defaultSettings, twoNumberDefaults } from '../settings/defaults';
 import type { Settings } from '../settings/schema';
 import { validateSettings, withRange } from '../settings/validate';
 import { migrate } from '../storage/migrate';
+import { modeCanPlay } from '../modes';
 import type { Attempt, Progress, SessionSummary } from '../types';
 import type { Garage } from '../rewards/garage';
 import type { Records } from '../records/records';
@@ -33,6 +34,9 @@ function settings(): Settings {
     roundLength: 12,
   };
 }
+
+/** The play modes of settings versions 8 to 13, with "Nur Rechnen" (amendment 17). */
+const V13_ALL_MODES = { mixed: true, ruler: true, math: true };
 
 function garage(): Garage {
   return { version: 2, balance: 7, totalEarned: 87, owned: ['sky', 'rocket', 'sparkles', 'crown'], look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
@@ -189,7 +193,7 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
 
   it('a code made with settings version 11 and a removed curved line style reads as straight lines (amendment 21 item 18)', async () => {
     for (const lineStyle of ['curved', 'tangled']) {
-      const old = { ...data(), settings: { ...settings(), version: 11, enemiesAtOnce: 3, lineStyle } } as unknown as ReturnType<typeof data>;
+      const old = { ...data(), settings: { ...settings(), playModes: V13_ALL_MODES, version: 11, enemiesAtOnce: 3, lineStyle } } as unknown as ReturnType<typeof data>;
       for (const codec of [null, undefined]) {
         const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
         const dec = await decodeTransfer(codeOf(enc.link));
@@ -219,11 +223,37 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
       void _carry;
       return rest;
     };
-    const old = { ...data(), settings: { ...settings(), version: 12, addition: strip(settings().addition), subtraction: strip(settings().subtraction) } } as unknown as ReturnType<typeof data>;
+    const old = { ...data(), settings: { ...settings(), playModes: V13_ALL_MODES, version: 12, addition: strip(settings().addition), subtraction: strip(settings().subtraction) } } as unknown as ReturnType<typeof data>;
     for (const codec of [null, undefined]) {
       const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
       const dec = await decodeTransfer(codeOf(enc.link));
       expect(dec.ok && dec.data.settings).toEqual(settings());
+    }
+  });
+
+  it('codes made with settings version 8 to 13 read with "Plus und Minus" and "Zahlen-Rätsel" (amendment 27, FR-165)', async () => {
+    for (const version of [8, 9, 10, 11, 12, 13]) {
+      const old = { ...data(), settings: { ...settings(), version, playModes: V13_ALL_MODES } } as unknown as ReturnType<typeof data>;
+      for (const codec of [null, undefined]) {
+        const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
+        const dec = await decodeTransfer(codeOf(enc.link));
+        expect(dec.ok && dec.data.settings).toEqual(settings());
+      }
+    }
+    const onlyPlus = { ...settings(), challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false } };
+    const old = { ...data(), settings: { ...onlyPlus, version: 13, playModes: { mixed: false, ruler: false, math: true } } } as unknown as ReturnType<typeof data>;
+    const dec = await decodeTransfer(codeOf((await encodeTransfer(old, PAGE)).link));
+    expect(dec.ok && dec.data.settings.playModes).toEqual({ mixed: false, ruler: false, arithmetic: true, numbers: false });
+  });
+
+  it('a version 13 code whose "Nur Rechnen" has no plus or minus exercise reads with "Plus und Minus" off (amendment 27 item 9, FR-165)', async () => {
+    const d = defaultSettings();
+    const onlyPlus5 = { ...d, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false }, addition: { ...d.addition, maxResult: 5 } };
+    const old = { ...data(), settings: { ...onlyPlus5, version: 13, playModes: { mixed: false, ruler: false, math: true } } } as unknown as ReturnType<typeof data>;
+    for (const codec of [null, undefined]) {
+      const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
+      const dec = await decodeTransfer(codeOf(enc.link));
+      expect(dec.ok && dec.data.settings).toEqual({ ...onlyPlus5, playModes: { mixed: true, ruler: false, arithmetic: false, numbers: false } });
     }
   });
 
@@ -310,6 +340,30 @@ describe('size limit and trimming order (FR-118)', () => {
     expect(r.fits).toBe(true);
     expect(new TextEncoder().encode(r.link).length).toBeLessThanOrEqual(2300);
   });
+
+  it('a code with all four modes and four new bests (keys with |arithmetic and |numbers, plus |math and a Gemischt key) stays under the 2300-byte limit (amendment 27)', async () => {
+    const s: Settings = { ...settings(), playModes: { mixed: true, ruler: true, arithmetic: true, numbers: true } };
+    expect(validateSettings(s)).toEqual({ ok: true });
+    const bests: Records = {
+      version: 1,
+      best: {
+        ...records().best,
+        '0-1000|3|untilHearts': { enemies: 27, ms: 1_234_000, at: 1_700_000_200_000 },
+        '0-1000|3|untilHearts|arithmetic': { enemies: 31, ms: 1_456_000, at: 1_700_000_300_000 },
+        '0-1000|3|untilHearts|numbers': { enemies: 22, ms: 987_000, at: 1_700_000_400_000 },
+        '0-1000|3|untilHearts|math': { enemies: 19, ms: 876_000, at: 1_700_000_500_000 },
+      },
+    };
+    const four: SaveData = { ...data(200), settings: s, records: bests };
+    const r = await encodeTransfer(four, PAGE);
+    expect(r.fits).toBe(true);
+    expect(new TextEncoder().encode(r.link).length).toBeLessThanOrEqual(TRANSFER_MAX_LINK_BYTES);
+    const dec = await decodeTransfer(codeOf(r.link));
+    expect(dec.ok).toBe(true);
+    if (!dec.ok) return;
+    expect(dec.data.settings.playModes).toEqual(s.playModes);
+    expect(dec.data.records).toEqual(bests);
+  });
 });
 
 describe('invalid codes change nothing (FR-120)', () => {
@@ -352,9 +406,9 @@ describe('migration of an older transfer (FR-120)', () => {
     const dec = await decodeTransfer(`v1.${b64url(JSON.stringify(old))}`);
     expect(dec.ok).toBe(true);
     if (!dec.ok) return;
-    expect(dec.data.settings.version).toBe(13);
+    expect(dec.data.settings.version).toBe(14);
     expect(dec.data.settings.aimCross).toEqual({ mode: 'always', level: 2 });
-    expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
+    expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, arithmetic: true, numbers: true });
     expect(dec.data.settings.pointAfterFullHelp).toBe(true);
     expect(dec.data.settings.numberPad).toBe('auto');
     expect(dec.data.settings.sound.speech).toBe(false);
@@ -530,7 +584,7 @@ describe('frozen version 2 codes (review T1, P4)', () => {
         showClock: true,
       };
       expect(dec.data.settings).toEqual(migrate(v6, 'settings'));
-      expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, math: true });
+      expect(dec.data.settings.playModes).toEqual({ mixed: true, ruler: true, arithmetic: true, numbers: true });
       expect('freePlay' in dec.data.settings).toBe(false);
       // Made before amendment 18: the setting reads as on.
       expect(dec.data.settings.pointAfterFullHelp).toBe(true);
@@ -542,7 +596,7 @@ describe('frozen version 2 codes (review T1, P4)', () => {
       for (const kind of ['addition', 'subtraction'] as const) {
         expect(dec.data.settings[kind]).toMatchObject({ size: 'steps', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false });
       }
-      expect(dec.data.settings.version).toBe(13);
+      expect(dec.data.settings.version).toBe(14);
       expect(dec.data.garage).toEqual({
         version: 2,
         balance: 0,
@@ -597,8 +651,13 @@ function randomSettings(seed: number): Settings {
   const noDamage = bool();
   const types = { numberLine: bool(), addition: bool(), subtraction: bool(), comparison: bool() };
   const anyType = Object.values(types).some(Boolean);
-  const playModes = anyType ? { mixed: bool(), ruler: bool(), math: bool() } : { mixed: false, ruler: true, math: false };
-  if (!playModes.mixed && !playModes.ruler && !playModes.math) playModes.ruler = true;
+  const playModes = {
+    mixed: anyType && bool(),
+    ruler: bool(),
+    arithmetic: (types.addition || types.subtraction) && bool(),
+    numbers: (types.numberLine || types.comparison) && bool(),
+  };
+  if (!Object.values(playModes).some(Boolean)) playModes.ruler = true;
   const start = r.int(1, 5) as Settings['rulerLevelStart'];
   // A range below 1 has exercises only with negative results.
   const negativeResults = range.min < 0 && (bool() || range.max < 1);
@@ -634,6 +693,11 @@ function randomSettings(seed: number): Settings {
   const lo = negativeResults ? range.min : Math.max(range.min, 0);
   fitted.addition = { ...fitted.addition, maxOperand: r.int(1, span), maxResult: r.int(Math.min(lo + 1, range.max), range.max), steps: r.pick([1, 2] as const) };
   fitted.subtraction = { ...fitted.subtraction, maxOperand: r.int(1, span), steps: r.pick([1, 2] as const) };
+  // "Plus und Minus" needs a plus or minus exercise far enough from the child's tank (amendment 27, FR-162).
+  if (fitted.playModes.arithmetic && !modeCanPlay('arithmetic', fitted)) {
+    fitted.playModes = { ...fitted.playModes, arithmetic: false };
+    if (!Object.values(fitted.playModes).some(Boolean)) fitted.playModes.ruler = true;
+  }
   return fitted;
 }
 

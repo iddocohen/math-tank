@@ -130,11 +130,11 @@ describe('nextHelp with help types turned off by the parent (FR-032)', () => {
   });
 });
 
-describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
+describe('nextHelp in the modes without a ruler ("Zahlen-Rätsel", amendment 27; before it "Nur Rechnen", amendment 17, FR-123)', () => {
   const after26 = challenge('after', 27, { mainSkill: 'countForward', skills: ['countForward'], operands: [26] });
-  const noRuler = MODE_TRAITS.math.showsRuler;
+  const noRuler = MODE_TRAITS.numbers.showsRuler;
 
-  it('"Nur Rechnen" draws no ruler', () => {
+  it('"Zahlen-Rätsel" draws no ruler (amendment 27)', () => {
     expect(noRuler).toBe(false);
   });
 
@@ -170,6 +170,18 @@ describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
   });
 });
 
+describe('nextHelp in "Plus und Minus" and "Zahlen-Rätsel" (amendment 27, FR-161)', () => {
+  const sub43 = sub43minus7;
+  for (const mode of ['arithmetic', 'numbers'] as const) {
+    const rulerShown = MODE_TRAITS[mode].showsRuler;
+    it(`${mode}: step 1 names the direction in words, step 2 shows the zoomed ten`, () => {
+      expect(rulerShown).toBe(false);
+      expect(nextHelp(sub43, 1, 50, settings(), rulerShown)).toMatchObject({ step: 1, direction: 'left', nearestMajor: null });
+      expect(nextHelp(sub43, 2, 50, settings(), rulerShown)).toMatchObject({ step: 2, zoom: helpZoomView(36, 0, 100) });
+    });
+  }
+});
+
 describe('nextHelp for "Zwei Zahlen" (amendment 26 item 7, FR-154, FR-155)', () => {
   const add35plus32 = challenge('addition', 67, { operands: [35, 32], steps: [35, 67], twoNumbers: true });
   const sub42minus17 = challenge('subtraction', 25, { operands: [42, 17], steps: [42, 25], twoNumbers: true });
@@ -186,14 +198,14 @@ describe('nextHelp for "Zwei Zahlen" (amendment 26 item 7, FR-154, FR-155)', () 
     expect(h.stepPath).toEqual([35, 65, 67]);
   });
 
-  it('step 2 in "Nur Rechnen" sets the place values and keeps the zoomed ten', () => {
-    const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.math.showsRuler);
+  it('step 2 in the modes without a ruler sets the place values and keeps the zoomed ten (amendment 27)', () => {
+    const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.numbers.showsRuler);
     expect(h).toMatchObject({ step: 2, placeValue: placeValueHelp('subtraction', 42, 17), zoom: helpZoomView(25, 0, 100) });
   });
 
   it('with help.stepAnimation off there are no place values', () => {
     expect(nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }))).toMatchObject({ step: 3, placeValue: null });
-    const math = nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }), MODE_TRAITS.math.showsRuler);
+    const math = nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }), MODE_TRAITS.numbers.showsRuler);
     expect(math).toMatchObject({ step: 2, placeValue: null, stepPath: null });
   });
 

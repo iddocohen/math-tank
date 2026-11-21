@@ -45,6 +45,16 @@ Mouse and touch work too: tap the ruler to choose a number, then tap **Feuer!**.
   - "Plus mit Übertrag" and "Minus mit Übertrag" allow carrying and borrowing. When off, 35 + 12 comes but 34 + 19 does not. In minus, the first number is always the larger one.
   - Help shows tens with tens and ones with ones, for example "Zehner: 30 + 10 = 40", "Einer: 5 + 2 = 7", "40 + 7 = 47".
   - If no exercise fits the number range, the settings page says so under "Zahlengröße" and does not save.
+- **Play modes ("Spielarten"):** the start screen shows one picture button per mode the parent offers. The child presses 1 to 4 or taps a button. All four are on by default.
+  - "Gemischt" (key 1) mixes every turned-on task, with the ruler.
+  - "Nur Zahlenstrahl" (key 2) asks no question: the child reads the enemy's number from the ruler.
+  - "Plus und Minus" (key 3) asks only plus and minus exercises, such as "Der Gegner ist bei 43 − 7", with the "Zahlengröße" you set. No ruler shows, and the number pad shows on every screen.
+  - "Zahlen-Rätsel" (key 4) asks the other turned-on questions that need no ruler: which number comes before or after, steps to the left or right, the number between two numbers, the number in the middle, and comparing numbers. It never asks plus, minus, "Finde N" or "Wo steht der Gegner?". No ruler shows.
+  - A mode that cannot give a task blocks saving, with one of these messages:
+    - "„Plus und Minus“ braucht „Plus“ oder „Minus“."
+    - "„Zahlen-Rätsel“ braucht „Zahlenstrahl“ oder „Vergleichen“."
+    - "Bei „Plus und Minus“ passt keine Aufgabe weit genug vom Panzer des Kindes." This shows when every plus and minus answer lies too close to the child's tank, for example with the range 0 to 100, only "Plus" and "Größtes Ergebnis" 5. Change the range, "Größtes Ergebnis" or the numbers.
+  - The earlier mode "Nur Rechnen" is now "Plus und Minus" and "Zahlen-Rätsel". Saved settings that offered it offer each new mode whose tasks are turned on and fit the number range. A personal best from "Nur Rechnen" stays on the progress page under that name.
 - **Adaptive difficulty** (on by default) makes tasks a little harder after repeated success without help, and easier when the child struggles, never beyond your limits.
 - **Progress ("Fortschritt")** shows, per skill, how many tasks were solved alone and how many with help, which skills are mastered, and the personal bests.
 - **Back up your data:** "Daten sichern" downloads settings and progress as a file. "Daten laden" restores them. "Spielstand übertragen" moves them to another browser with a QR code or a link.
@@ -61,9 +71,10 @@ The progress lives in the browser's own storage on that device, not on a server.
 
 ## Status
 
-The first release is built. All 26 amendments made during playtesting are implemented ([amendments 01 to 26](specs/001-math-tanks/)). The game now has:
+The first release is built. All 27 amendments made during playtesting are implemented ([amendments 01 to 27](specs/001-math-tanks/)). The game now has:
 
 - Aiming by number on a fixed cannon, with any number range and 5 ruler levels.
+- Four play modes: "Gemischt", "Nur Zahlenstrahl", "Plus und Minus" (only plus and minus, without a ruler) and "Zahlen-Rätsel" (before and after, steps, between and comparing, without a ruler).
 - Tasks: reading the ruler, before and after, steps, plus and minus with a step animation, plus and minus with two numbers (such as 35 + 12, with or without carrying) and help by place value, and comparing numbers with decoy tanks.
 - Help in steps, hearts, personal bests, adaptive difficulty and the progress page.
 - An enemy that fires back and aims closer after repeated misses, and new hills after every destroyed enemy.

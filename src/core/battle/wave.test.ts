@@ -87,7 +87,14 @@ describe('waveSize (amendment 21, FR-137)', () => {
     expect(waveSize('ruler', s, challengeOf('readPosition'))).toBe(3);
     expect(waveSize('mixed', s, challengeOf('readPosition'))).toBe(3);
     for (const kind of ['findNumber', 'after', 'addition', 'greater', 'middle3'] as const) expect(waveSize('mixed', s, challengeOf(kind))).toBe(1);
-    expect(waveSize('math', s, challengeOf('addition'))).toBe(1);
+    expect(waveSize('arithmetic', s, challengeOf('addition'))).toBe(1);
+  });
+
+  it('"Plus und Minus" and "Zahlen-Rätsel" keep a wave of 1 for every kind (amendment 27)', () => {
+    const s = { ...defaultSettings(), enemiesAtOnce: 4 as const };
+    for (const mode of ['arithmetic', 'numbers'] as const) {
+      for (const kind of ['readPosition', 'findNumber', 'after', 'addition', 'subtraction', 'greater'] as const) expect(waveSize(mode, s, challengeOf(kind))).toBe(1);
+    }
     expect(waveSize('ruler', defaultSettings(), challengeOf('readPosition'))).toBe(1);
   });
 });
