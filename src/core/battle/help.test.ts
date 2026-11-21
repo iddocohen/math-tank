@@ -130,11 +130,11 @@ describe('nextHelp with help types turned off by the parent (FR-032)', () => {
   });
 });
 
-describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
+describe('nextHelp in the modes without a ruler ("Zahlen-Rätsel", amendment 27; before it "Nur Rechnen", amendment 17, FR-123)', () => {
   const after26 = challenge('after', 27, { mainSkill: 'countForward', skills: ['countForward'], operands: [26] });
   const noRuler = MODE_TRAITS.numbers.showsRuler;
 
-  it('"Nur Rechnen" draws no ruler', () => {
+  it('"Zahlen-Rätsel" draws no ruler (amendment 27)', () => {
     expect(noRuler).toBe(false);
   });
 
@@ -198,7 +198,7 @@ describe('nextHelp for "Zwei Zahlen" (amendment 26 item 7, FR-154, FR-155)', () 
     expect(h.stepPath).toEqual([35, 65, 67]);
   });
 
-  it('step 2 in "Nur Rechnen" sets the place values and keeps the zoomed ten', () => {
+  it('step 2 in the modes without a ruler sets the place values and keeps the zoomed ten (amendment 27)', () => {
     const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.numbers.showsRuler);
     expect(h).toMatchObject({ step: 2, placeValue: placeValueHelp('subtraction', 42, 17), zoom: helpZoomView(25, 0, 100) });
   });

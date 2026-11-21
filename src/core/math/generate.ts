@@ -232,10 +232,13 @@ export function generateChallenge(input: GenerateInput): Challenge {
       const challenge = tryKind(kind, answers, input, rng, finish, true);
       if (challenge) return challenge;
     }
-    const draft = arithmeticExerciseAt(settings, playerPosition, rng);
-    const challenge = draft && finish(draft);
+    // Stage 3 walks every answer from the start answer the rng picks and takes the first exercise that finish keeps.
+    const challenge = arithmeticExerciseAt(settings, playerPosition, rng, finish);
     if (challenge) return challenge;
-    throw new Error(`generateChallenge: no plus or minus exercise at least the enemy gap from ${playerPosition} in ${settings.range.min} to ${settings.range.max}`);
+    const turnedOn = (['addition', 'subtraction'] as const).filter((k) => settings.challengeTypes[k]).join(', ') || 'none';
+    throw new Error(
+      `generateChallenge: no plus or minus exercise (turned-on kinds: ${turnedOn}) at least the enemy gap from player position ${playerPosition} in the range ${settings.range.min} to ${settings.range.max}`,
+    );
   }
 
   // The mode's fallbacks ("Zahlen-Rätsel": "after", "before"), or after keyboard input "read the ruler" instead of
@@ -245,8 +248,8 @@ export function generateChallenge(input: GenerateInput): Challenge {
     if (challenge) return challenge;
   }
 
-  // The modes without a ruler never fall back to a ruler kind (FR-123, amendment 27): "after" or "before" over the whole range, still with the
-  // settings, the gaps and the FR-021 rules that validateChallenge checks.
+  // The modes without a ruler never fall back to a ruler kind (FR-123, amendment 27): "after" or "before" over the
+  // whole range, still with the settings, the gaps and the FR-021 rules that validateChallenge checks.
   if (input.withoutRuler) {
     for (const kind of ['after', 'before'] as const) {
       const challenge = tryKind(kind, answers, input, rng, finish, true);

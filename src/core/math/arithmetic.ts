@@ -328,8 +328,18 @@ function stepExercise(kind: ArithmeticKind, answer: number, settings: Settings, 
  * kinds at the parent's settings whose answer keeps minEnemyGap from `playerPosition`, or null when there is none.
  * The rng picks the kind to try first, the start answer of the walk through `arithmeticAnswerSet` and the operands,
  * so stage 3 does not give the same exercise every time (critique E6).
+ *
+ * `accept` turns a draft into the caller's result, or null to reject it; the walk then moves on to the next answer
+ * and takes the first draft that `accept` keeps (amendment 27 Behavior item 8). Without `accept`, every draft is kept.
  */
-export function arithmeticExerciseAt(settings: Settings, playerPosition: number, rng: Rng): ChallengeDraft | null {
+export function arithmeticExerciseAt(settings: Settings, playerPosition: number, rng: Rng): ChallengeDraft | null;
+export function arithmeticExerciseAt<T>(settings: Settings, playerPosition: number, rng: Rng, accept: (draft: ChallengeDraft) => T | null): T | null;
+export function arithmeticExerciseAt<T>(
+  settings: Settings,
+  playerPosition: number,
+  rng: Rng,
+  accept: (draft: ChallengeDraft) => T | null = (draft) => draft as T,
+): T | null {
   for (const kind of rng.shuffled(turnedOnKinds(settings))) {
     const answers = answersAt(kind, settings, playerPosition);
     if (answers.length === 0) continue;
@@ -337,7 +347,8 @@ export function arithmeticExerciseAt(settings: Settings, playerPosition: number,
     for (let i = 0; i < answers.length; i++) {
       const answer = answers[(start + i) % answers.length]!;
       const draft = isTwoNumbers(kind, settings) ? twoNumberDraft(kind, answer, settings, TOP_STEP, rng) : stepExercise(kind, answer, settings, rng);
-      if (draft) return draft;
+      const result = draft && accept(draft);
+      if (result) return result;
     }
   }
   return null;

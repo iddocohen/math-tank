@@ -18,7 +18,8 @@
  * start screen offers the play modes the parent chose; a mode button or the keys 1 to 4 start that mode, Enter and
  * Space the first offered one, or the offered mode of `?mode=mixed|ruler|arithmetic|numbers` (T070, amendment 27
  * item 11; the old `?mode=math` is unknown, so Enter starts the first offered mode). "Nochmal" and Enter on the end
- * screen start a new round in the same mode. The personal best is kept per play mode too. "Nur Zahlenstrahl" is not
+ * screen start a new round in the same mode, or show the start screen when that mode is no longer offered or cannot
+ * play (FR-167, amendment 27). The personal best is kept per play mode too. "Nur Zahlenstrahl" is not
  * read aloud (it has no question), and "Plus und Minus" and "Zahlen-Rätsel" show the number pad unless "Zahlenfeld" is
  * "Nie", because there is no ruler to tap.
  *

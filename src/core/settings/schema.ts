@@ -136,6 +136,10 @@ export type NumberSpan = z.infer<typeof numberSpanSchema>;
  */
 export type PlayMode = keyof Settings['playModes'];
 /** The play modes in start screen order; keys 1 to 4 start them (FR-121, FR-158). */
-export const PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'arithmetic', 'numbers'];
+const PLAY_MODE_ORDER = ['mixed', 'ruler', 'arithmetic', 'numbers'] as const satisfies readonly PlayMode[];
+/** Every key of `playModes` in start screen order; a key missing from PLAY_MODE_ORDER is a compile error. */
+export const PLAY_MODES: readonly PlayMode[] = PLAY_MODE_ORDER satisfies [Exclude<PlayMode, (typeof PLAY_MODE_ORDER)[number]>] extends [never]
+  ? readonly PlayMode[]
+  : never;
 export type RangePreset = z.infer<typeof rangePresetSchema>;
 export type SettingsRange = z.infer<typeof rangeSchema>;

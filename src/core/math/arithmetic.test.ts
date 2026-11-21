@@ -140,6 +140,26 @@ describe('arithmeticExerciseAt (amendment 27, FR-163, research R25)', () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
+  it('moves on to the next answer when the caller rejects the first draft (amendment 27 Behavior item 8)', () => {
+    const s = small(0, 100, types(true, false));
+    const first = arithmeticExerciseAt(s, 0, createRng(7))!;
+    const tried: ChallengeDraft[] = [];
+    const draft = arithmeticExerciseAt(s, 0, createRng(7), (d) => {
+      tried.push(d);
+      return d.answer === first.answer ? null : d;
+    });
+    expect(tried.length).toBeGreaterThan(1);
+    expect(tried[0]!.answer).toBe(first.answer);
+    expect(draft).not.toBeNull();
+    expect(draft!.answer).not.toBe(first.answer);
+    expect(validateChallenge(asChallenge(draft!), s, 0)).toEqual([]);
+  });
+
+  it('is null when the caller rejects every draft', () => {
+    const s = small(0, 100, types(true, false));
+    expect(arithmeticExerciseAt(s, 0, createRng(7), () => null)).toBeNull();
+  });
+
   it('is null for battlefield 0 to 100, only "Plus", "Größtes Ergebnis" 5 at position 0', () => {
     const s = small(0, 100, (x) => ({ ...types(true, false)(x), addition: { ...x.addition, maxResult: 5 } }));
     expect(arithmeticExerciseAt(s, 0, createRng(1))).toBeNull();

@@ -340,6 +340,30 @@ describe('size limit and trimming order (FR-118)', () => {
     expect(r.fits).toBe(true);
     expect(new TextEncoder().encode(r.link).length).toBeLessThanOrEqual(2300);
   });
+
+  it('a code with all four modes and four new bests (keys with |arithmetic and |numbers, plus |math and a Gemischt key) stays under the 2300-byte limit (amendment 27)', async () => {
+    const s: Settings = { ...settings(), playModes: { mixed: true, ruler: true, arithmetic: true, numbers: true } };
+    expect(validateSettings(s)).toEqual({ ok: true });
+    const bests: Records = {
+      version: 1,
+      best: {
+        ...records().best,
+        '0-1000|3|untilHearts': { enemies: 27, ms: 1_234_000, at: 1_700_000_200_000 },
+        '0-1000|3|untilHearts|arithmetic': { enemies: 31, ms: 1_456_000, at: 1_700_000_300_000 },
+        '0-1000|3|untilHearts|numbers': { enemies: 22, ms: 987_000, at: 1_700_000_400_000 },
+        '0-1000|3|untilHearts|math': { enemies: 19, ms: 876_000, at: 1_700_000_500_000 },
+      },
+    };
+    const four: SaveData = { ...data(200), settings: s, records: bests };
+    const r = await encodeTransfer(four, PAGE);
+    expect(r.fits).toBe(true);
+    expect(new TextEncoder().encode(r.link).length).toBeLessThanOrEqual(TRANSFER_MAX_LINK_BYTES);
+    const dec = await decodeTransfer(codeOf(r.link));
+    expect(dec.ok).toBe(true);
+    if (!dec.ok) return;
+    expect(dec.data.settings.playModes).toEqual(s.playModes);
+    expect(dec.data.records).toEqual(bests);
+  });
 });
 
 describe('invalid codes change nothing (FR-120)', () => {
