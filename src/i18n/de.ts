@@ -251,6 +251,8 @@ export const de = {
     sessionsTitle: 'Spielzeiten',
     sessionColumns: { date: 'Datum', attempts: 'Aufgaben', independent: 'Allein richtig', withHelp: 'Mit Hilfe' },
     bestsTitle: 'Rekorde',
+    /** The label of a best stored by the former "Nur Rechnen" mode under `|math` (amendment 27, FR-086). */
+    legacyMathMode: 'Nur Rechnen',
     bestColumns: { range: 'Zahlenraum', roundType: 'Rundenende', level: 'Zahlenstrahl am Anfang', mode: 'Spielart', enemies: 'Gegner getroffen', time: 'Zeit' },
     level: (n: number) => `Stufe ${n}`,
     empty: 'Noch keine Aufgaben gespielt.',

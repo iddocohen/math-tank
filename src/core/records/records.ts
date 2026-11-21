@@ -29,9 +29,10 @@ export function emptyRecords(): Records {
 }
 
 /**
- * `${min}-${max}|${rulerLevelStart}|${roundType}`, from the round's settings snapshot, plus `|ruler` or `|math` for
- * those play modes (amendment 17, FR-086). "Gemischt" keeps the key without a mode part, so the bests stored before
- * amendment 17 stay its bests.
+ * `${min}-${max}|${rulerLevelStart}|${roundType}`, from the round's settings snapshot, plus `|ruler`, `|arithmetic` or
+ * `|numbers` for those play modes (amendments 17 and 27, FR-086). "Gemischt" keeps the key without a mode part, so the
+ * bests stored before amendment 17 stay its bests. Keys with `|math` from the former "Nur Rechnen" stay in storage and
+ * on the progress page, but no new round writes or compares them.
  */
 export function recordKey(s: Pick<Settings, 'range' | 'rulerLevelStart' | 'roundType'>, mode: PlayMode = 'mixed'): string {
   const key = `${s.range.min}-${s.range.max}|${s.rulerLevelStart}|${s.roundType}`;

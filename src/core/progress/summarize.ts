@@ -41,13 +41,22 @@ export interface SessionRow {
   withHelp: number;
 }
 
+/**
+ * The modes a stored best can name: the play modes plus `math`, the former "Nur Rechnen" (amendment 27, FR-086). Old
+ * `|math` bests stay listed; no new round writes them.
+ */
+export type RecordMode = PlayMode | 'math';
+
+/** The order of the bests of the same range, level and round type: "Nur Rechnen" after "Zahlen-Rätsel" (critique E11). */
+export const RECORD_MODES: readonly RecordMode[] = [...PLAY_MODES, 'math'];
+
 export interface BestRow {
   min: number;
   max: number;
   rulerLevelStart: number;
   roundType: RoundType;
-  /** The play mode (amendment 17); a key without a mode part belongs to "Gemischt". */
-  mode: PlayMode;
+  /** The play mode (amendment 17); a key without a mode part belongs to "Gemischt", `math` to the former "Nur Rechnen". */
+  mode: RecordMode;
   enemies: number;
   ms: number;
 }
@@ -69,16 +78,19 @@ export function parseRangeKey(rangeKey: string): { min: number; max: number } | 
   return m ? { min: Number(m[1]), max: Number(m[2]) } : null;
 }
 
-function isPlayMode(mode: string): mode is PlayMode {
-  return (PLAY_MODES as readonly string[]).includes(mode);
+function isRecordMode(mode: string): mode is RecordMode {
+  return (RECORD_MODES as readonly string[]).includes(mode);
 }
 
-/** A record key `${min}-${max}|${rulerLevelStart}|${roundType}` with an optional `|ruler` or `|math` (records.ts recordKey). */
+/**
+ * A record key `${min}-${max}|${rulerLevelStart}|${roundType}` with an optional mode part (records.ts recordKey), or
+ * the old `|math`. A key with any other mode part is dropped.
+ */
 function parseRecordKey(key: string): Omit<BestRow, 'enemies' | 'ms'> | null {
   const [range, level, roundType, mode = 'mixed', ...rest] = key.split('|');
   const r = range === undefined ? null : parseRangeKey(range);
   if (!r || !/^[1-5]$/.test(level ?? '') || (roundType !== 'untilHearts' && roundType !== 'enemyCount')) return null;
-  if (rest.length > 0 || !isPlayMode(mode)) return null;
+  if (rest.length > 0 || !isRecordMode(mode)) return null;
   return { ...r, rulerLevelStart: Number(level), roundType, mode };
 }
 
@@ -128,6 +140,6 @@ export function summarize(p: Progress, records: Records, settings?: Settings): P
     const parsed = parseRecordKey(key);
     if (parsed) bests.push({ ...parsed, enemies: best.enemies, ms: best.ms });
   }
-  bests.sort((a, b) => a.min - b.min || a.max - b.max || a.rulerLevelStart - b.rulerLevelStart || a.roundType.localeCompare(b.roundType) || PLAY_MODES.indexOf(a.mode) - PLAY_MODES.indexOf(b.mode));
+  bests.sort((a, b) => a.min - b.min || a.max - b.max || a.rulerLevelStart - b.rulerLevelStart || a.roundType.localeCompare(b.roundType) || RECORD_MODES.indexOf(a.mode) - RECORD_MODES.indexOf(b.mode));
   return { skills, mostHelp, sessions, bests };
 }

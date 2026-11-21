@@ -192,7 +192,7 @@ export function ProgressPage({ persistence, onClose }: Props) {
                       {b.roundType === 'enemyCount' ? m.settings.labels.roundTypeEnemyCount : m.settings.labels.roundTypeUntilHearts}
                     </td>
                     <td data-col="level">{P.level(b.rulerLevelStart)}</td>
-                    <td data-col="mode">{m.start.modes[b.mode]}</td>
+                    <td data-col="mode">{b.mode === 'math' ? P.legacyMathMode : m.start.modes[b.mode]}</td>
                     <td data-col="enemies">{b.enemies}</td>
                     <td data-col="time">{formatTime(b.ms)}</td>
                   </tr>
