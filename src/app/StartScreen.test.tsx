@@ -28,6 +28,25 @@ describe('StartScreen play modes (T070, amendment 17, FR-121)', () => {
     expect(screen.queryByRole('button', { name: t().start.play })).toBeNull();
   });
 
+  it('labels the four buttons "Gemischt", "Nur Zahlenstrahl", "Plus und Minus" and "Zahlen-Rätsel" with keys 1 to 4 (amendment 27, FR-158)', () => {
+    render(<StartScreen onPlay={vi.fn()} modes={ALL} />);
+    const buttons = screen.getAllByTestId('mode-button');
+    expect(buttons.map((b) => b.querySelector('.mode-label')!.textContent)).toEqual(['Gemischt', 'Nur Zahlenstrahl', 'Plus und Minus', 'Zahlen-Rätsel']);
+    expect(buttons.map((b) => b.querySelector('.mode-key')!.textContent)).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('draws a plus and a minus shape for "Plus und Minus" and a question mark for "Zahlen-Rätsel", with no SVG text (amendment 27)', () => {
+    render(<StartScreen onPlay={vi.fn()} modes={ALL} />);
+    const icon = (mode: PlayMode) => screen.getAllByTestId('mode-button').find((b) => b.dataset.mode === mode)!.querySelector('svg')!;
+    const plusMinus = icon('arithmetic');
+    expect(plusMinus.querySelector('[data-shape="plus"]')).toBeTruthy();
+    expect(plusMinus.querySelector('[data-shape="minus"]')).toBeTruthy();
+    expect(plusMinus.querySelector('[data-shape="question"]')).toBeNull();
+    expect(icon('numbers').querySelector('[data-shape="question"]')).toBeTruthy();
+    expect(icon('numbers').querySelector('[data-shape="plus"]')).toBeNull();
+    for (const mode of ALL) expect(icon(mode).querySelector('text')).toBeNull();
+  });
+
   it('shows only the offered modes, with the key of each mode', () => {
     render(<StartScreen onPlay={vi.fn()} modes={['ruler', 'arithmetic']} />);
     expect(screen.getAllByTestId('mode-button').map((b) => [b.dataset.mode, b.getAttribute('aria-keyshortcuts')])).toEqual([
@@ -50,6 +69,15 @@ describe('StartScreen play modes (T070, amendment 17, FR-121)', () => {
     expect(keyStartMode('?seed=3&mode=numbers', ALL)).toBe('numbers');
     expect(keyStartMode('?mode=ruler', ['mixed', 'arithmetic'])).toBe('mixed');
     expect(keyStartMode('?mode=free', ALL)).toBe('mixed');
+  });
+
+  it('?mode=arithmetic and ?mode=numbers start that mode when offered; ?mode=math starts the first offered mode (amendment 27 item 11)', () => {
+    expect(keyStartMode('?mode=arithmetic', ALL)).toBe('arithmetic');
+    expect(keyStartMode('?mode=numbers', ALL)).toBe('numbers');
+    expect(keyStartMode('?mode=arithmetic', ['ruler', 'numbers'])).toBe('ruler');
+    expect(keyStartMode('?mode=math', ALL)).toBe('mixed');
+    expect(keyStartMode('?mode=math', ['arithmetic', 'numbers'])).toBe('arithmetic');
+    expect(keyStartMode('?mode=math', ['numbers'])).toBe('numbers');
   });
 });
 

@@ -74,7 +74,12 @@ function collectErrors(s: Settings): Map<string, string[]> {
   const add = (path: string, text: string) => out.set(path, [...(out.get(path) ?? []), text]);
   const r = validateSettings(s);
   if (!r.ok) {
-    for (const e of r.errors) add(e.path, m.settingsErrors[e.key]);
+    for (const e of r.errors) {
+      add(e.path, m.settingsErrors[e.key]);
+      // Amendment 27 (critique P4): a range change can cause this error and withRange does not fix it, so the
+      // range field names it too.
+      if (e.key === 'arithmeticModeNoExercise') add('range', m.settingsErrors[e.key]);
+    }
   }
   // The largest operand shows with "Kleine Schritte" only; with "Zwei Zahlen" validateSettings checks it (review).
   const wholeNumbers: Array<[string, number]> = [

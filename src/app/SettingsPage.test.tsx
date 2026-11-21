@@ -93,6 +93,76 @@ describe('SettingsPage', () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it('shows the hint of amendment 27 item 6 when every challenge type is off; its button turns off the other three modes', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false } });
+    for (const label of [L.numberLine, L.addition, L.subtraction]) toggle(label);
+    expect(screen.getByText('„Gemischt“, „Plus und Minus“ und „Zahlen-Rätsel“ brauchen Aufgabenarten. Ohne Aufgabenart gibt es nur „Nur Zahlenstrahl“.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nur „Nur Zahlenstrahl“ anbieten' }));
+    expect([L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers].map((l) => field(l).checked)).toEqual([false, true, false, false]);
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('names the four switches of "Spielarten" (amendment 27 item 6, FR-158)', () => {
+    setup();
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    for (const label of [
+      'Spielart „Gemischt“ anbieten',
+      'Spielart „Nur Zahlenstrahl“ anbieten',
+      'Spielart „Plus und Minus“ anbieten',
+      'Spielart „Zahlen-Rätsel“ anbieten',
+    ]) {
+      expect(within(group).getByLabelText(label)).toBeTruthy();
+    }
+  });
+
+  it('"Plus und Minus" without "Plus" and "Minus" names its field in "Spielarten" and blocks saving (amendment 27 item 7)', () => {
+    setup();
+    toggle(L.addition);
+    toggle(L.subtraction);
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    expect(within(group).getByText('„Plus und Minus“ braucht „Plus“ oder „Minus“.')).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+    toggle(L.playModeArithmetic);
+    expect(within(group).queryByText(m.settingsErrors.arithmeticModeNoType)).toBeNull();
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('"Zahlen-Rätsel" without "Zahlenstrahl" and "Vergleichen" names its field in "Spielarten" and blocks saving (amendment 27 item 7)', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false } });
+    toggle(L.numberLine);
+    const group = screen.getByRole('group', { name: m.settings.groups.playModes });
+    expect(within(group).getByText('„Zahlen-Rätsel“ braucht „Zahlenstrahl“ oder „Vergleichen“.')).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+    toggle(L.playModeNumbers);
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('"Gemischt" alone needs a challenge type: the error shows in "Aufgabenarten" (amendment 27 item 7)', () => {
+    setup({ challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: false }, playModes: { mixed: true, ruler: true, arithmetic: false, numbers: false } });
+    for (const label of [L.numberLine, L.addition, L.subtraction]) toggle(label);
+    const group = screen.getByRole('group', { name: m.settings.groups.challengeTypes });
+    expect(within(group).getByText(m.settingsErrors.noChallengeTypes)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('a range change that leaves no plus exercise far from the tank shows the text at the range field and in "Spielarten" and blocks saving (critique P4)', () => {
+    const text = 'Bei „Plus und Minus“ passt keine Aufgabe weit genug vom Panzer des Kindes. Bitte den Zahlenraum, „Größtes Ergebnis“ oder die Zahlen ändern.';
+    setup({
+      range: { preset: 'custom', min: 0, max: 20 },
+      challengeTypes: { numberLine: true, addition: true, subtraction: false, comparison: false },
+      addition: { ...defaultSettings().addition, maxResult: 5, maxOperand: 5 },
+      subtraction: { ...defaultSettings().subtraction, maxOperand: 10 },
+    });
+    expect(screen.queryByText(text)).toBeNull();
+    expect(field(L.rangeMax).value).toBe('20');
+    expect(saveButton().disabled).toBe(false);
+    setValue(L.rangeMax, '100');
+    expect(field(L.additionMaxResult).value).toBe('5');
+    expect(within(screen.getByRole('group', { name: m.settings.groups.range })).getByText(text)).toBeTruthy();
+    expect(within(screen.getByRole('group', { name: m.settings.groups.playModes })).getByText(text)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+  });
+
   it('changing the preset from 0-100 to 0-20 clamps addition.maxResult to 20', () => {
     const { persistence } = setup();
     expect(field(L.additionMaxResult).value).toBe('100');

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { keyToAction, type KeyAction, type KeyLike, type KeyScreen } from './keyboard';
+import { keyStartMode } from './StartScreen';
+import type { PlayMode } from '../core/settings/schema';
 
 const key = (k: string, extra: Partial<KeyLike> = {}): KeyLike => ({ key: k, code: '', ctrlKey: false, altKey: false, metaKey: false, repeat: false, ...extra });
 const SCREENS: KeyScreen[] = ['start', 'battle', 'paused', 'roundEnd'];
@@ -150,21 +152,38 @@ describe('keyToAction: no key starts a new scene (amendment 03, FR-070)', () => 
   });
 });
 
-describe('keyToAction: play modes on the start screen (amendment 17, FR-062, FR-121)', () => {
-  const all = { modes: ['mixed', 'ruler', 'arithmetic'] as const };
-  it('1, 2 and 3 start "Gemischt", "Nur Zahlenstrahl" and "Nur Rechnen" when offered', () => {
+describe('keyToAction: play modes on the start screen (amendment 17 and 27, FR-062, FR-121, FR-158)', () => {
+  const all = { modes: ['mixed', 'ruler', 'arithmetic', 'numbers'] as const };
+  it('1, 2, 3 and 4 start "Gemischt", "Nur Zahlenstrahl", "Plus und Minus" and "Zahlen-Rätsel" when offered', () => {
     expect(keyToAction(key('1'), 'start', all)).toEqual({ type: 'start', mode: 'mixed' });
     expect(keyToAction(key('2'), 'start', all)).toEqual({ type: 'start', mode: 'ruler' });
     expect(keyToAction(key('3'), 'start', all)).toEqual({ type: 'start', mode: 'arithmetic' });
+    expect(keyToAction(key('4'), 'start', all)).toEqual({ type: 'start', mode: 'numbers' });
     expect(keyToAction(key('1', { code: 'Numpad1' }), 'start', all)).toEqual({ type: 'start', mode: 'mixed' });
+    expect(keyToAction(key('4', { code: 'Numpad4' }), 'start', all)).toEqual({ type: 'start', mode: 'numbers' });
   });
 
-  it('a key for a mode that is not offered, other digits and repeated keys do nothing', () => {
+  it('a key for a mode that is not offered, the key 5, other digits and repeated keys do nothing', () => {
     expect(keyToAction(key('1'), 'start', { modes: ['ruler', 'arithmetic'] })).toBeNull();
+    expect(keyToAction(key('4'), 'start', { modes: ['mixed', 'ruler', 'arithmetic'] })).toBeNull();
+    expect(keyToAction(key('3'), 'start', { modes: ['mixed', 'numbers'] })).toBeNull();
     expect(keyToAction(key('2'), 'start')).toBeNull();
-    for (const k of ['0', '4', '9']) expect(keyToAction(key(k), 'start', all)).toBeNull();
+    for (const k of ['0', '5', '9']) expect(keyToAction(key(k), 'start', all)).toBeNull();
     expect(keyToAction(key('2', { repeat: true }), 'start', all)).toBeNull();
     expect(keyToAction(key('2', { ctrlKey: true }), 'start', all)).toBeNull();
+  });
+
+  it('Enter and Space start the first offered mode, for each possible first mode', () => {
+    const offeredLists: PlayMode[][] = [
+      ['mixed', 'ruler', 'arithmetic', 'numbers'],
+      ['ruler', 'arithmetic', 'numbers'],
+      ['arithmetic', 'numbers'],
+      ['numbers'],
+    ];
+    for (const modes of offeredLists) {
+      for (const k of ['Enter', ' ']) expect(keyToAction(key(k), 'start', { modes })).toEqual({ type: 'start' });
+      expect(keyStartMode('', modes)).toBe(modes[0]);
+    }
   });
 });
 

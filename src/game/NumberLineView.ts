@@ -63,7 +63,8 @@
  *   The canvas carries `data-help-step`, `data-help-highlight` (the highlighted major line), `data-help-zoom`
  *   ("30,40"), `data-help-count` (steps counted so far), `data-help-options` and `data-help-solution` ('' when
  *   none) for the end-to-end tests only.
- * - "Nur Rechnen" (amendment 17, FR-123): no ruler band, lines, labels or pointer lines (`data-ruler-labels` and
+ * - "Plus und Minus" and "Zahlen-Rätsel" (amendment 17 and 27, FR-123, FR-161; the modes whose trait `showsRuler` is
+ *   false, which replace "Nur Rechnen"): no ruler band, lines, labels or pointer lines (`data-ruler-labels` and
  *   `data-pointer-lines` are empty), and a tap on the ruler area selects nothing. The landing number, the step count
  *   and the help steps still show; help step 2 shows the zoomed ten around the answer (showZoom) while it lasts.
  */
@@ -157,7 +158,7 @@ interface Drawn {
   min: number;
   max: number;
   seed: number;
-  /** "Nur Rechnen" draws no ruler band (amendment 17). */
+  /** "Plus und Minus" and "Zahlen-Rätsel" draw no ruler band (amendment 17 and 27). */
   hidden: boolean;
   rulerLevel: RulerLevel;
 }
@@ -667,7 +668,7 @@ export class NumberLineView {
     this.scene.tweens.killTweensOf(this.helpLine);
   }
 
-  /** "Nur Rechnen" (amendment 17, FR-123): no ruler band, lines or labels. */
+  /** "Plus und Minus" and "Zahlen-Rätsel" (amendment 17 and 27, FR-123): no ruler band, lines or labels. */
   private hideRuler(): void {
     for (const label of this.labels) label.destroy();
     this.labels = [];
@@ -860,7 +861,7 @@ export class NumberLineView {
    */
   private drawPointerLines(s: RoundState): void {
     const enemy = visibleEnemy(s);
-    // "Nur Rechnen" has no ruler for the lines to point at (amendment 17).
+    // "Plus und Minus" and "Zahlen-Rätsel" have no ruler for the lines to point at (amendment 17 and 27).
     // Amendment 21: every standing enemy of a wave has its line too.
     const visible: TankState[] = !MODE_TRAITS[s.mode].showsRuler
       ? []

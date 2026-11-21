@@ -14,6 +14,8 @@ import { defaultSettings } from '../core/settings/defaults';
 import type { PlayMode, Settings } from '../core/settings/schema';
 import { encouragements, helpLines, helpText, promptText, t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
+import { MODE_TRAITS } from '../core/modes';
+import { numberPadShown } from '../core/view/screen';
 import { useRoundState } from './useController';
 
 /** The enemy with its number; it is always visible (amendment 07). */
@@ -753,7 +755,7 @@ describe('BattleOverlay play modes (amendment 17, FR-122, FR-123)', () => {
     expect(screen.getByTestId('battle-overlay').getAttribute('data-mode')).toBe('ruler');
   });
 
-  it('"Nur Rechnen" and "Gemischt" show the banner', () => {
+  it('"Plus und Minus", "Zahlen-Rätsel" and "Gemischt" show the banner', () => {
     for (const mode of ['arithmetic', 'numbers', 'mixed'] as const) {
       const controller = start(mode);
       expect(screen.getByTestId('challenge-banner').textContent).toBe(promptText(controller.getState().challenge!.prompt));
@@ -889,5 +891,82 @@ describe('BattleOverlay place-value help of "Zwei Zahlen" (amendment 26, FR-154)
       controller.requestHelp();
     });
     expect(screen.queryByTestId('help-lines')).toBeNull();
+  });
+});
+
+describe('BattleOverlay in "Plus und Minus" and "Zahlen-Rätsel" (amendment 27 item 5, FR-161, FR-166)', () => {
+  function PadOverlay({ controller, numberPad }: { controller: BattleController; numberPad: boolean }) {
+    const state = useRoundState(controller);
+    return <BattleOverlay controller={controller} state={state} numberPad={numberPad} />;
+  }
+
+  /** A round in `mode` whose first challenge matches `accept`, rendered with the pad that "Zahlenfeld" "Automatisch" gives on a desktop. */
+  function start(mode: PlayMode, over: Partial<Settings>, accept: (s: RoundState) => boolean = () => true) {
+    for (let seed = 1; seed < 400; seed++) {
+      const settings = { ...defaultSettings(), noDamage: true, ...over };
+      const controller = new BattleController({ settings, progress: memoryProgressStore(), clock: () => 1000, seed });
+      controller.startRound(mode);
+      if (!accept(controller.getState())) continue;
+      const numberPad = numberPadShown(settings.numberPad, { finePointer: true, padWidth: false }, MODE_TRAITS[mode].forcesPad);
+      render(<PadOverlay controller={controller} numberPad={numberPad} />);
+      return controller;
+    }
+    throw new Error('no seed found');
+  }
+
+  /** Asks for help until help step 2 shows. */
+  function toStepTwo(controller: BattleController) {
+    for (let i = 0; i < 3 && controller.getState().help.content?.step !== 2; i++) act(() => controller.requestHelp());
+    const content = controller.getState().help.content!;
+    expect(content.step).toBe(2);
+    expect(screen.getByTestId('battle-overlay').getAttribute('data-help-level')).toBe('2');
+    return content;
+  }
+
+  it('"Plus und Minus": help step 2 shows the zoomed ten around the answer', () => {
+    const controller = start('arithmetic', {});
+    const c = controller.getState().challenge!;
+    expect(['addition', 'subtraction']).toContain(c.kind);
+    const content = toStepTwo(controller);
+    expect(content.zoom).not.toBeNull();
+    expect(content.zoom!.min).toBeLessThanOrEqual(c.answer);
+    expect(content.zoom!.max).toBeGreaterThanOrEqual(c.answer);
+  });
+
+  it('"Plus und Minus": help step 2 of a "Zwei Zahlen" exercise shows the place-value lines and the zoomed ten', () => {
+    const controller = start(
+      'arithmetic',
+      {
+        challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false },
+        addition: { ...defaultSettings().addition, size: 'twoNumbers', first: { min: 10, max: 99 }, second: { min: 10, max: 99 }, carry: false },
+        adaptive: false,
+      },
+      (s) => s.challenge?.twoNumbers === true && s.challenge.operands.every((n) => n % 10 !== 0),
+    );
+    const content = toStepTwo(controller);
+    expect(content.placeValue).not.toBeNull();
+    expect(content.zoom).not.toBeNull();
+    const shown = [...screen.getByTestId('help-text').querySelectorAll('[data-testid="help-line"]')].map((e) => e.textContent);
+    expect(shown).toEqual(helpLines(content));
+    expect(shown.length).toBeGreaterThan(0);
+  });
+
+  it('"Zahlen-Rätsel": help step 2 of a comparison shows the option markers and no zoom', () => {
+    const controller = start('numbers', { challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } }, (s) =>
+      ['greater', 'smaller', 'largest3', 'smallest3'].includes(s.challenge?.kind ?? ''),
+    );
+    const c = controller.getState().challenge!;
+    const content = toStepTwo(controller);
+    expect(content.optionMarkers).toEqual([...c.options!].sort((a, b) => a - b));
+    expect(content.zoom).toBeNull();
+  });
+
+  it('both modes show the number pad with "Zahlenfeld" "Automatisch", also on a desktop', () => {
+    for (const mode of ['arithmetic', 'numbers'] as const) {
+      start(mode, { numberPad: 'auto' });
+      expect(screen.getByTestId('battle-overlay').getAttribute('data-number-pad')).toBe('true');
+      expect(screen.getByTestId('number-pad')).toBeTruthy();
+      cleanup();
+    }
   });
 });

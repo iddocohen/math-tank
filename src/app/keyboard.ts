@@ -5,8 +5,9 @@
  * Amendment 05: the arrow keys do nothing; only digits, Minus, Backspace, Enter, Space, H and Escape act.
  * Amendment 11 (FR-062, FR-092): G on the start screen opens the garage when it is on; in the garage, digits type an
  * item number, Backspace deletes a digit, Enter chooses and Escape goes back.
- * Amendment 17 (FR-062, FR-121): 1, 2 and 3 on the start screen start "Gemischt", "Nur Zahlenstrahl" and "Nur Rechnen"
- * when that mode is offered; Enter and Space start without a mode, and the app starts the first offered one.
+ * Amendment 17 and 27 (FR-062, FR-121, FR-158): 1 to 4 on the start screen start "Gemischt", "Nur Zahlenstrahl",
+ * "Plus und Minus" and "Zahlen-Rätsel" when that mode is offered; Enter and Space start without a mode, and the app
+ * starts the first offered one.
  */
 import type { Digit } from '../core/battle/entry';
 import { SOLUTION_HELP_LEVEL } from '../core/battle/guided';
@@ -44,7 +45,7 @@ export interface KeyContext {
   helpLevel?: number;
   /** The parent's "Garage und Sterne" setting: G opens the garage only when it is on. */
   garage?: boolean;
-  /** The offered play modes (amendment 17): 1, 2 and 3 start only these. */
+  /** The offered play modes (amendment 17 and 27): 1 to 4 start only these. */
   modes?: readonly PlayMode[];
 }
 

@@ -15,11 +15,12 @@
  * the browser tab is hidden the battle is paused, so the time does not run; it resumes only what it paused.
  *
  * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). Amendment 17 (FR-121): the
- * start screen offers the play modes the parent chose; a mode button or the keys 1, 2 and 3 start that mode, Enter and
- * Space the first offered one, or the offered mode of `?mode=mixed|ruler|arithmetic|numbers` (T070). "Nochmal" and Enter on the end
+ * start screen offers the play modes the parent chose; a mode button or the keys 1 to 4 start that mode, Enter and
+ * Space the first offered one, or the offered mode of `?mode=mixed|ruler|arithmetic|numbers` (T070, amendment 27
+ * item 11; the old `?mode=math` is unknown, so Enter starts the first offered mode). "Nochmal" and Enter on the end
  * screen start a new round in the same mode. The personal best is kept per play mode too. "Nur Zahlenstrahl" is not
- * read aloud (it has no question), and "Nur Rechnen" shows the number pad unless "Zahlenfeld" is "Nie", because there is
- * no ruler to tap.
+ * read aloud (it has no question), and "Plus und Minus" and "Zahlen-Rätsel" show the number pad unless "Zahlenfeld" is
+ * "Nie", because there is no ruler to tap.
  *
  * Amendment 11 (FR-089 to FR-096): every increase of `enemiesDestroyed` (enemies only, never decoys) adds stars at
  * once, with the garage on or off. The garage screen opens from the start screen (button or G, only with the garage
@@ -149,7 +150,8 @@ export function App() {
   const roundStartBalance = useRef(garage.balance);
   const gameParent = useRef<HTMLDivElement>(null);
   const [transfer, setTransfer] = useState<Transfer | null>(() => (saveCodeFromHash(window.location.hash) === null ? null : { kind: 'reading' }));
-  // "Nur Rechnen" has no ruler to tap, so "Automatisch" shows the number pad on every screen there (amendment 17).
+  // "Plus und Minus" and "Zahlen-Rätsel" have no ruler to tap, so "Automatisch" shows the number pad on every screen
+  // there (amendment 17 and 27).
   const { layout, numberPad, lastEvent } = useScreen(persistence.settings().numberPad, screen === 'battle' && MODE_TRAITS[state.mode].forcesPad);
   // Bug "iPhone rotation in Chrome" (Phase 24): `?debug=screen` shows what the app measured.
   const [debugScreen] = useState(() => debugScreenRequested(window.location.search));
