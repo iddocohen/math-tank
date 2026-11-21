@@ -140,6 +140,24 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(noMath.ok && noMath.settings.playModes).toEqual({ mixed: true, ruler: true, arithmetic: false, numbers: false });
   });
 
+  it('a version 13 file whose "Nur Rechnen" has no plus or minus exercise imports with "Plus und Minus" off (amendment 27 item 9, FR-165)', () => {
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const d = defaultSettings();
+    const onlyPlus5 = { ...d, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false }, addition: { ...d.addition, maxResult: 5 } };
+    const only = importData(JSON.stringify({ ...file, settings: { ...onlyPlus5, version: 13, playModes: { mixed: false, ruler: false, math: true } } }));
+    expect(only.ok && only.settings).toEqual({ ...onlyPlus5, playModes: { mixed: true, ruler: false, arithmetic: false, numbers: false } });
+    const ruler = importData(JSON.stringify({ ...file, settings: { ...onlyPlus5, version: 13, playModes: { mixed: false, ruler: true, math: true } } }));
+    expect(ruler.ok && ruler.settings).toEqual({ ...onlyPlus5, playModes: { mixed: false, ruler: true, arithmetic: false, numbers: false } });
+    // Invalid operand limits are rejected before the exercise search could walk them (critique E3).
+    const huge = { ...onlyPlus5, subtraction: { ...d.subtraction, maxOperand: 1_000_000_000 }, version: 13, playModes: { mixed: false, ruler: false, math: true } };
+    const started = performance.now();
+    expect(importData(JSON.stringify({ ...file, settings: huge }))).toEqual({ ok: false, reason: 'invalidSettings' });
+    expect(performance.now() - started).toBeLessThan(100);
+    // Version 14 data is not changed: it fails the check and does not import.
+    const v14 = { ...onlyPlus5, playModes: { mixed: false, ruler: false, arithmetic: true, numbers: false } };
+    expect(importData(JSON.stringify({ ...file, settings: v14 }))).toEqual({ ok: false, reason: 'invalidSettings' });
+  });
+
   it('a version 12 settings file (exported before amendment 26) imports with "Kleine Schritte", ranges 10 to 99 and no carrying (FR-156)', () => {
     const strip = (k: Record<string, unknown>) => {
       const { size: _size, first: _first, second: _second, carry: _carry, ...rest } = k;

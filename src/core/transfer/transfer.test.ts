@@ -4,6 +4,7 @@ import { defaultSettings, twoNumberDefaults } from '../settings/defaults';
 import type { Settings } from '../settings/schema';
 import { validateSettings, withRange } from '../settings/validate';
 import { migrate } from '../storage/migrate';
+import { modeCanPlay } from '../modes';
 import type { Attempt, Progress, SessionSummary } from '../types';
 import type { Garage } from '../rewards/garage';
 import type { Records } from '../records/records';
@@ -243,6 +244,17 @@ describe('encodeTransfer and decodeTransfer round trip (FR-117, FR-120)', () => 
     const old = { ...data(), settings: { ...onlyPlus, version: 13, playModes: { mixed: false, ruler: false, math: true } } } as unknown as ReturnType<typeof data>;
     const dec = await decodeTransfer(codeOf((await encodeTransfer(old, PAGE)).link));
     expect(dec.ok && dec.data.settings.playModes).toEqual({ mixed: false, ruler: false, arithmetic: true, numbers: false });
+  });
+
+  it('a version 13 code whose "Nur Rechnen" has no plus or minus exercise reads with "Plus und Minus" off (amendment 27 item 9, FR-165)', async () => {
+    const d = defaultSettings();
+    const onlyPlus5 = { ...d, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false }, addition: { ...d.addition, maxResult: 5 } };
+    const old = { ...data(), settings: { ...onlyPlus5, version: 13, playModes: { mixed: false, ruler: false, math: true } } } as unknown as ReturnType<typeof data>;
+    for (const codec of [null, undefined]) {
+      const enc = await encodeTransfer(old, PAGE, codec === null ? { codec: null } : {});
+      const dec = await decodeTransfer(codeOf(enc.link));
+      expect(dec.ok && dec.data.settings).toEqual({ ...onlyPlus5, playModes: { mixed: true, ruler: false, arithmetic: false, numbers: false } });
+    }
   });
 
   it('carries every "Zwei Zahlen" field, leaves the defaults out and stays under 2300 bytes (amendment 26, FR-148)', async () => {
@@ -657,6 +669,11 @@ function randomSettings(seed: number): Settings {
   const lo = negativeResults ? range.min : Math.max(range.min, 0);
   fitted.addition = { ...fitted.addition, maxOperand: r.int(1, span), maxResult: r.int(Math.min(lo + 1, range.max), range.max), steps: r.pick([1, 2] as const) };
   fitted.subtraction = { ...fitted.subtraction, maxOperand: r.int(1, span), steps: r.pick([1, 2] as const) };
+  // "Plus und Minus" needs a plus or minus exercise far enough from the child's tank (amendment 27, FR-162).
+  if (fitted.playModes.arithmetic && !modeCanPlay('arithmetic', fitted)) {
+    fitted.playModes = { ...fitted.playModes, arithmetic: false };
+    if (!Object.values(fitted.playModes).some(Boolean)) fitted.playModes.ruler = true;
+  }
   return fitted;
 }
 

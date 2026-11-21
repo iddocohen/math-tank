@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaults';
-import { settingsSchema } from '../settings/schema';
+import { settingsSchema, type Settings } from '../settings/schema';
 import { validateSettings } from '../settings/validate';
 import type { Progress } from '../types';
 import { memoryKeyValue, type KeyValue } from './keyValue';
@@ -495,6 +495,53 @@ describe('migrate', () => {
       expect(resetReason).toBe('none');
       expect(settings).toMatchObject({ version: 14, playModes: { mixed: false, ruler: true, arithmetic: true, numbers: true } });
     }
+  });
+
+  describe('version 13 settings whose "Nur Rechnen" has no plus or minus exercise (amendment 27 item 9, FR-165, critique E3)', () => {
+    /** Only "Plus", "Größtes Ergebnis" 5 on 0 to 100: no plus exercise keeps the enemy gap from the tank at 0. */
+    function onlyPlus5(playModes: Record<string, boolean>, version = 13): Record<string, unknown> {
+      const d = defaultSettings();
+      return {
+        ...d,
+        version,
+        challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false },
+        addition: { ...d.addition, maxResult: 5 },
+        playModes,
+      };
+    }
+    const load = (stored: Record<string, unknown>) => loadSettings(memoryKeyValue({ [SETTINGS_KEY]: JSON.stringify(stored) }));
+    const expected = (playModes: Settings['playModes']): Settings => {
+      const d = defaultSettings();
+      return { ...d, challengeTypes: { numberLine: false, addition: true, subtraction: false, comparison: false }, addition: { ...d.addition, maxResult: 5 }, playModes };
+    };
+
+    it('only "Nur Rechnen" offered: loads with only "Gemischt" offered and every other setting kept', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: false, math: true }));
+      expect(resetReason).toBe('none');
+      expect(settings).toEqual(expected({ mixed: true, ruler: false, arithmetic: false, numbers: false }));
+    });
+
+    it('"Nur Zahlenstrahl" also offered: loads with only "Nur Zahlenstrahl" and "Gemischt" off', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: true, math: true }));
+      expect(resetReason).toBe('none');
+      expect(settings).toEqual(expected({ mixed: false, ruler: true, arithmetic: false, numbers: false }));
+    });
+
+    it('subtraction.maxOperand 1000000000 loads as invalid in under about 100 ms, without the exercise search', () => {
+      const d = defaultSettings();
+      const stored = { ...onlyPlus5({ mixed: false, ruler: false, math: true }), subtraction: { ...d.subtraction, maxOperand: 1_000_000_000 } };
+      const started = performance.now();
+      const { settings, resetReason } = load(stored);
+      expect(performance.now() - started).toBeLessThan(100);
+      expect(resetReason).toBe('invalid');
+      expect(settings).toEqual(defaultSettings());
+    });
+
+    it('version 14 data that fails the check loads as invalid, not changed', () => {
+      const { settings, resetReason } = load(onlyPlus5({ mixed: false, ruler: false, arithmetic: true, numbers: false }, 14));
+      expect(resetReason).toBe('invalid');
+      expect(settings).toEqual(defaultSettings());
+    });
   });
 
   it('loadSettings keeps a stored wave size and line style (amendment 21)', () => {

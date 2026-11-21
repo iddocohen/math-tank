@@ -6,10 +6,29 @@ import { validateSettings } from '../settings/validate';
 /**
  * Settings from storage, an export file or a transfer code (review T4): migrated to the current version, checked by
  * the schema and by every settings rule. Null when anything fails; the caller decides what that means.
+ *
+ * Settings stored as version 13 or older (amendment 27 item 9, FR-165, critique E3): "Nur Rechnen" became "Plus und
+ * Minus" in `migrateSettingsToV14`, which runs no exercise search on raw data. Here, after the schema check and the
+ * operand clamp, "Plus und Minus" is turned off when its exercise check fails, and "Gemischt" is turned on when no
+ * mode is left (only "Nur Rechnen" was offered, so a challenge type is on). The parent gets no notice (critique P5).
+ * Version 14 data is not changed: when it fails the check, it fails validation.
  */
 export function parseSettings(raw: unknown): Settings | null {
+  const storedVersion = isRecord(raw) ? (raw.version ?? 0) : null;
   const parsed = settingsSchema.safeParse(migrate(raw, 'settings'));
-  return parsed.success && validateSettings(parsed.data).ok ? parsed.data : null;
+  if (!parsed.success) return null;
+  let settings = parsed.data;
+  if (typeof storedVersion === 'number' && storedVersion <= 13) settings = withoutUnplayableArithmetic(settings);
+  return validateSettings(settings).ok ? settings : null;
+}
+
+/** "Plus und Minus" off when its exercise check fails, and "Gemischt" on when no play mode is left (amendment 27). */
+function withoutUnplayableArithmetic(s: Settings): Settings {
+  const check = validateSettings(s);
+  if (check.ok || !check.errors.some((e) => e.key === 'arithmeticModeNoExercise')) return s;
+  const playModes = { ...s.playModes, arithmetic: false };
+  if (!Object.values(playModes).some(Boolean)) playModes.mixed = true;
+  return { ...s, playModes };
 }
 
 /**

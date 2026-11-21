@@ -12,6 +12,7 @@ import {
   TWO_NUMBER_MIN,
 } from './defaults';
 import { twoNumberFit, type TwoNumberFit } from '../math/twoNumbers';
+import { modeCanPlay } from '../modes';
 import { clamp } from '../util';
 import { highestResult, isTwoNumbers, lowestResult } from './limits';
 import type { NumberSpan, Settings, SettingsRange } from './schema';
@@ -27,6 +28,7 @@ export const SETTINGS_ERROR_KEYS = [
   'noPlayMode',
   // Amendment 27 (FR-162).
   'arithmeticModeNoType',
+  'arithmeticModeNoExercise',
   'numbersModeNoType',
   'rulerLevelOrder',
   'roundLength',
@@ -117,8 +119,18 @@ export function validateSettings(s: Settings): SettingsValidation {
 
   for (const kind of ['addition', 'subtraction'] as const) errors.push(...twoNumberStatus(kind, s).errors);
 
+  // Amendment 27 item 7 (FR-162): "Plus und Minus" needs a plus or minus exercise far enough from the child's tank at
+  // both ends. The search walks every operand, so it runs only when the range, the largest operands, "Größtes
+  // Ergebnis" and the "Zwei Zahlen" fields have no error (critique E3).
+  if (playModes.arithmetic && (t.addition || t.subtraction) && !errors.some((e) => EXERCISE_FIELDS.test(e.path)) && !modeCanPlay('arithmetic', s)) {
+    add('arithmeticModeNoExercise', 'playModes.arithmetic');
+  }
+
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
+
+/** The error paths of the fields the "Plus und Minus" exercise check reads: the range and the plus and minus fields. */
+const EXERCISE_FIELDS = /^(range|addition\.|subtraction\.)/;
 
 /** A "Zwei Zahlen" range of whole numbers from 1 to 999, smallest first (FR-151). */
 function spanOk(r: NumberSpan): boolean {

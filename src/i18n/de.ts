@@ -465,6 +465,7 @@ export const de = {
     noPlayMode: 'Bitte mindestens eine Spielart anbieten.',
     // Amendment 27 item 7 (FR-162).
     arithmeticModeNoType: '„Plus und Minus“ braucht „Plus“ oder „Minus“.',
+    arithmeticModeNoExercise: 'Bei „Plus und Minus“ passt keine Aufgabe weit genug vom Panzer des Kindes. Bitte den Zahlenraum, „Größtes Ergebnis“ oder die Zahlen ändern.',
     numbersModeNoType: '„Zahlen-Rätsel“ braucht „Zahlenstrahl“ oder „Vergleichen“.',
     rulerLevelOrder: 'Die Startstufe darf nicht schwerer sein als die schwerste Stufe.',
     roundLength: 'Eine Runde hat 1 bis 20 Gegner.',
