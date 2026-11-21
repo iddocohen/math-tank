@@ -82,7 +82,7 @@ import { useScreen } from './useScreen';
 import { decodeTransfer, saveCodeFromHash, type SaveData } from '../core/transfer/transfer';
 import { TransferDialog, type TransferDialogState } from './TransferDialog';
 import { useAutoPause, useDocumentHidden } from './useAutoPause';
-import { MODE_TRAITS } from '../core/modes';
+import { MODE_TRAITS, modeCanPlay } from '../core/modes';
 
 /** A save link being read, or its dialog (amendment 15). */
 type Transfer = { kind: 'reading' } | (TransferDialogState & { data?: SaveData });
@@ -288,10 +288,17 @@ export function App() {
     return () => sfx.stopMusic();
   }, [musicOn, sfx]);
 
-  // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070).
+  // "Nochmal" and Enter on the end screen repeat the mode of the round that ended (T070). When that mode is no longer
+  // offered or cannot give a challenge with the current settings, they show the start screen (amendment 27, FR-167).
   const startRound = useCallback(() => {
+    const mode = controller.getState().mode;
+    const settings = persistence.settings();
+    if (!offeredModes(settings.playModes).includes(mode) || !modeCanPlay(mode, settings)) {
+      setScreen('start');
+      return;
+    }
     roundStartBalance.current = persistence.garage().balance;
-    controller.startRound(controller.getState().mode);
+    controller.startRound(mode);
   }, [controller, persistence]);
   const play = useCallback(
     (mode: PlayMode) => {

@@ -2998,3 +2998,85 @@ describe('BattleController "Zwei Zahlen" settings mid-round (amendment 26, FR-15
     expect(controller.getRoundSettings().addition.carry).toBe(true);
   });
 });
+
+describe('BattleController a round that outlives its settings (amendment 27, T427, FR-049, FR-121, FR-167)', () => {
+  const ARITHMETIC_KINDS = new Set(['addition', 'subtraction']);
+  const longRound = { roundType: 'enemyCount', roundLength: 50, noDamage: true } as const;
+
+  it("startRound('arithmetic') gives only addition and subtraction; startRound('numbers') none of them, readPosition or findNumber", () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const plus = makeController(longRound, seed);
+      plus.controller.startRound('arithmetic');
+      const numbers = makeController(longRound, seed);
+      numbers.controller.startRound('numbers');
+      for (let i = 0; i < 5; i++) {
+        expect(ARITHMETIC_KINDS.has(plus.controller.getState().challenge!.kind)).toBe(true);
+        const kind = numbers.controller.getState().challenge!.kind;
+        expect(['addition', 'subtraction', 'readPosition', 'findNumber']).not.toContain(kind);
+        playTurn(plus.controller, fireAtEnemy);
+        playTurn(numbers.controller, fireAtEnemy);
+      }
+    }
+  });
+
+  it('keeps plus and minus questions until the round ends when "Plus und Minus", "Plus" and "Minus" are turned off; the clock still applies', () => {
+    const { controller } = makeController(longRound);
+    controller.startRound('arithmetic');
+    const before = controller.getState();
+    const off = rulerSettings({
+      ...longRound,
+      showClock: true,
+      playModes: { mixed: true, ruler: true, arithmetic: false, numbers: true },
+      challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: true },
+    });
+    expect(() => controller.applySettingsNow(off)).not.toThrow();
+    const after = controller.getState();
+    expect(after.seed).toBe(before.seed);
+    expect(after.challenge).toBe(before.challenge);
+    expect(after.mode).toBe('arithmetic');
+    const round = controller.getRoundSettings();
+    expect(round.challengeTypes).toMatchObject({ addition: true, subtraction: true });
+    expect(round.showClock).toBe(true);
+    expect(round.playModes.arithmetic).toBe(false);
+
+    for (let i = 0; i < 5; i++) {
+      playTurn(controller, fireAtEnemy);
+      expect(ARITHMETIC_KINDS.has(controller.getState().challenge!.kind)).toBe(true);
+    }
+    controller.newScene();
+    expect(ARITHMETIC_KINDS.has(controller.getState().challenge!.kind)).toBe(true);
+
+    // The next round uses the new settings.
+    controller.startRound('mixed');
+    expect(controller.getRoundSettings().challengeTypes).toMatchObject({ addition: false, subtraction: false });
+    expect(ARITHMETIC_KINDS.has(controller.getState().challenge!.kind)).toBe(false);
+  });
+
+  it('keeps the task settings of a paused "Plus und Minus" round that can no longer play, and it stays paused', () => {
+    const { controller } = makeController(longRound);
+    controller.startRound('arithmetic');
+    controller.pause();
+    const before = controller.getState();
+    controller.applySettingsNow(rulerSettings({ ...longRound, challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: true } }));
+    expect(controller.getState().phase).toBe('paused');
+    expect(controller.getState().seed).toBe(before.seed);
+    controller.resume();
+    expect(controller.getState().challenge).toBe(before.challenge);
+    expect(controller.getRoundSettings().challengeTypes.addition).toBe(true);
+  });
+
+  it('rebuilds the scene of a "Plus und Minus" round when the change keeps a plus or minus exercise (amendment 25)', () => {
+    const { controller } = makeController(longRound);
+    controller.startRound('arithmetic');
+    const before = controller.getState();
+    controller.applySettingsNow(rulerSettings({ ...longRound, challengeTypes: { numberLine: true, addition: true, subtraction: false, comparison: true } }));
+    const after = controller.getState();
+    expect(after.seed).not.toBe(before.seed);
+    expect(controller.getRoundSettings().challengeTypes.subtraction).toBe(false);
+    expect(after.challenge!.kind).toBe('addition');
+    for (let i = 0; i < 3; i++) {
+      playTurn(controller, fireAtEnemy);
+      expect(controller.getState().challenge!.kind).toBe('addition');
+    }
+  });
+});

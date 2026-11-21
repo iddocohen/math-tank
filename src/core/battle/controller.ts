@@ -31,6 +31,7 @@ import { afterHelpRequest, afterMiss, ANSWER_DELAY_MS, SOLUTION_HELP_LEVEL, star
 import { challengeFor, nearestEnemy, retarget, standingEnemies } from './wave';
 import { buildAttempt, rangeKeyOf } from './attempt';
 import { rulerLevelFor, skillStepsFor } from '../progress/ladders';
+import { modeCanPlay } from '../modes';
 import {
   acceptsInput,
   applyImpact,
@@ -147,6 +148,8 @@ export class BattleController {
    * unfinished search is dropped without an attempt. Settings that change no task (LIVE_KEYS) apply without a new scene.
    * A paused round stays paused with the new scene. While a shell flies, the change waits until the round is back in
    * 'challenge'. Once the round is over nothing changes; the next round uses the settings.
+   * Amendment 27 (FR-167): when the round's mode cannot give a challenge with the new settings (`modeCanPlay`), the
+   * round keeps its task settings until it ends and takes only the settings that change no task (LIVE_KEYS).
    */
   applySettingsNow(settings: Settings): void {
     this.updateSettings(settings);
@@ -168,6 +171,12 @@ export class BattleController {
     this.applyPending = false;
     const merged: Settings = structuredClone(this.nextSettings);
     for (const key of ROUND_KEYS) (merged as Record<string, unknown>)[key] = structuredClone(this.settings[key]);
+    if (!modeCanPlay(this.state.mode, merged)) {
+      // The round outlives its settings (amendment 27, FR-167): it keeps every setting that shapes the tasks.
+      for (const key of Object.keys(merged) as Array<keyof Settings>) {
+        if (!LIVE_KEYS.has(key)) (merged as Record<string, unknown>)[key] = structuredClone(this.settings[key]);
+      }
+    }
     const rebuild = changesTasks(this.settings, merged);
     this.settings = merged;
     if (!rebuild) {
