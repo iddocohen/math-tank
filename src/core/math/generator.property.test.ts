@@ -146,24 +146,26 @@ describe('generateChallenge property (FR-029, SC-003, AC-04)', () => {
 
   describe('addition and subtraction on, 10,000 seeds each (T079, FR-022, FR-023, FR-029, SC-003, AC-04)', () => {
     const arithmeticOnly = { numberLine: false, addition: true, subtraction: true, comparison: false };
+    // "Zahlen-Rätsel" needs "Zahlenstrahl" or "Vergleichen" (amendment 27, FR-162).
+    const arithmeticModes = { mixed: true, ruler: true, arithmetic: true, numbers: false };
     const custom = (min: number, max: number, patch: Partial<Settings>): Settings => ({
       ...defaultSettings(),
-      challengeTypes: arithmeticOnly,
+      challengeTypes: arithmeticOnly, playModes: arithmeticModes,
       range: { preset: 'custom', min, max },
       ...patch,
     });
     const cases: Array<[string, Settings]> = [
-      ['0 to 20, one step', presetSettings('0-20', { challengeTypes: arithmeticOnly })],
+      ['0 to 20, one step', presetSettings('0-20', { challengeTypes: arithmeticOnly, playModes: arithmeticModes })],
       [
         '0 to 100, two steps, crossing tens off',
         presetSettings('0-100', {
-          challengeTypes: arithmeticOnly,
+          challengeTypes: arithmeticOnly, playModes: arithmeticModes,
           crossTens: false,
           addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 100, steps: 2 },
           subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 },
         }),
       ],
-      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, crossHundreds: false })],
+      ['0 to 1000, crossing hundreds off', presetSettings('0-1000', { challengeTypes: arithmeticOnly, playModes: arithmeticModes, crossHundreds: false })],
       [
         'custom -20 to 30, negative results on',
         custom(-20, 30, { negativeResults: true, addition: { ...twoNumberDefaults(), maxOperand: 10, maxResult: 30, steps: 1 }, subtraction: { ...twoNumberDefaults(), maxOperand: 10, steps: 2 } }),
@@ -299,6 +301,11 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
     comparison: (bits & 8) !== 0,
   }));
 
+  /** The play modes for settings with some challenge type on: "Gemischt" and the modes whose challenge types are on. */
+  function withoutRulerModes(types: Settings['challengeTypes'], ruler: boolean, offer: boolean): Settings['playModes'] {
+    return { mixed: true, ruler, arithmetic: offer && (types.addition || types.subtraction), numbers: offer && (types.numberLine || types.comparison) };
+  }
+
   /** One random settings object; it may break a rule, then the caller drops it. */
   function randomSettings(rng: Rng, forced?: { range0to20: boolean; types: Settings['challengeTypes'] }): Settings {
     const base = defaultSettings();
@@ -327,7 +334,8 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
       rulerLevelStart: startLevel,
       rulerLevelMax: rng.pick(LEVELS.filter((l) => l >= startLevel)),
       // Every switch off is valid only with "Nur Zahlenstrahl" as the only play mode (FR-047, amendment 17).
-      playModes: allOff ? { mixed: false, ruler: true, math: false } : { mixed: true, ruler: rng.next() < 0.7, math: rng.next() < 0.7 },
+      // "Plus und Minus" and "Zahlen-Rätsel" need their own challenge types (amendment 27, FR-162).
+      playModes: allOff ? { mixed: false, ruler: true, arithmetic: false, numbers: false } : withoutRulerModes(types, rng.next() < 0.7, rng.next() < 0.7),
     };
     // withRange clamps the linked limits to the range, as the settings page does.
     return withRange(patched, range);
@@ -415,7 +423,7 @@ describe('generateChallenge with 200 random valid settings, 1000 seeds each (T10
             playerPosition,
             rulerLevel: levels[seed % levels.length]!,
             inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
-            ...playModeKinds('math', settings),
+            ...playModeKinds('numbers', settings),
           });
           if (c.kind === 'findNumber' || c.kind === 'readPosition') problems.push(`${label}: ${c.kind}`);
           const errors = validateChallenge(c, settings, playerPosition);
@@ -501,7 +509,7 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
             playerPosition,
             rulerLevel: ((seed % 5) + 1) as Settings['rulerLevelStart'],
             inputMethod: seed % 4 === 0 ? 'pointer' : 'keyboard',
-            ...playModeKinds('math', settings),
+            ...playModeKinds('numbers', settings),
           });
           if (c.kind === 'readPosition' || c.kind === 'findNumber') problems.push(`${JSON.stringify(types)} seed ${seed}: ${c.kind}`);
           const errors = validateChallenge(c, settings, playerPosition);
@@ -537,7 +545,7 @@ describe('play modes (amendment 17, FR-122, FR-123)', () => {
         turn: 1,
         playerPosition,
         rulerLevel: 1,
-        ...playModeKinds('math', settings),
+        ...playModeKinds('numbers', settings),
         kindsAllowed: [],
         fallbackKinds: [],
       });

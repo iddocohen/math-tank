@@ -11,7 +11,7 @@ import { BattleController } from '../core/battle/controller';
 import { memoryProgressStore } from '../core/battle/ports';
 import type { RoundState, TankState } from '../core/types';
 import { defaultSettings } from '../core/settings/defaults';
-import type { Settings } from '../core/settings/schema';
+import type { PlayMode, Settings } from '../core/settings/schema';
 import { encouragements, helpLines, helpText, promptText, t } from '../i18n';
 import { BattleOverlay } from './BattleOverlay';
 import { useRoundState } from './useController';
@@ -738,7 +738,7 @@ describe('BattleOverlay pause, fullscreen and speaker (US8, T140, T141, T138)', 
 });
 
 describe('BattleOverlay play modes (amendment 17, FR-122, FR-123)', () => {
-  function start(mode: 'mixed' | 'ruler' | 'math', over: Partial<Settings> = {}) {
+  function start(mode: PlayMode, over: Partial<Settings> = {}) {
     const controller = new BattleController({ settings: { ...defaultSettings(), ...over }, progress: memoryProgressStore(), clock: () => 1000, seed: 7 });
     controller.startRound(mode);
     render(<Overlay controller={controller} />);
@@ -754,7 +754,7 @@ describe('BattleOverlay play modes (amendment 17, FR-122, FR-123)', () => {
   });
 
   it('"Nur Rechnen" and "Gemischt" show the banner', () => {
-    for (const mode of ['math', 'mixed'] as const) {
+    for (const mode of ['arithmetic', 'numbers', 'mixed'] as const) {
       const controller = start(mode);
       expect(screen.getByTestId('challenge-banner').textContent).toBe(promptText(controller.getState().challenge!.prompt));
       expect(screen.getByTestId('battle-overlay').getAttribute('data-mode')).toBe(mode);

@@ -125,7 +125,7 @@ test('a guided "Finde N" search: the enemy is visible, a miss shows the step cou
 
 test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen" button starts it (T070, FR-121)', async ({ page }) => {
   await page.goto('/?seed=12');
-  await expect(page.getByTestId('mode-button')).toHaveCount(3);
+  await expect(page.getByTestId('mode-button')).toHaveCount(4);
   await page.keyboard.press('Enter');
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
@@ -133,7 +133,7 @@ test('Enter starts "Gemischt"; with only "Nur Zahlenstrahl" offered one "Spielen
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
 
   // The parent offers only "Nur Zahlenstrahl": one "Spielen" button, no banner, the enemy visible.
-  const onlyRuler = { ...defaultSettings(), playModes: { mixed: false, ruler: true, math: false } };
+  const onlyRuler = { ...defaultSettings(), playModes: { mixed: false, ruler: true, arithmetic: false, numbers: false } };
   await writeStorage(page, { [SETTINGS_KEY]: onlyRuler });
   await page.goto('/?seed=12');
   await expect(page.getByTestId('mode-button')).toHaveCount(0);

@@ -14,8 +14,15 @@ import { t } from '../../src/i18n';
 
 const m = t();
 
-/** Number line only, so every "Nur Rechnen" search is a number line search with the zoomed ten at help step 2. */
-const numberLineOnly = { ...defaultSettings(), challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } };
+/**
+ * Number line only, so every "Zahlen-Rätsel" search is a number line search with the zoomed ten at help step 2.
+ * "Plus und Minus" needs "Plus" or "Minus", so it is not offered (amendment 27, FR-162).
+ */
+const numberLineOnly = {
+  ...defaultSettings(),
+  challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false },
+  playModes: { mixed: true, ruler: true, arithmetic: false, numbers: true },
+};
 
 async function shot(page: Page, info: TestInfo, name: string): Promise<void> {
   // playwright.config.ts passes SCREENSHOT_DIR as metadata (the e2e specs have no Node types).
@@ -31,11 +38,11 @@ async function missNumber(overlay: Locator): Promise<number> {
   return Math.round((own + enemy) / 2);
 }
 
-test('the start screen shows three picture buttons with their keys (FR-121)', async ({ page }, info) => {
+test('the start screen shows four picture buttons with their keys (FR-121, FR-158)', async ({ page }, info) => {
   await page.goto('/?seed=1');
   const buttons = page.getByTestId('mode-button');
-  await expect(buttons).toHaveCount(3);
-  for (const [i, mode] of (['mixed', 'ruler', 'math'] as const).entries()) {
+  await expect(buttons).toHaveCount(4);
+  for (const [i, mode] of (['mixed', 'ruler', 'arithmetic', 'numbers'] as const).entries()) {
     await expect(buttons.nth(i)).toHaveAttribute('data-mode', mode);
     await expect(buttons.nth(i)).toHaveAttribute('aria-keyshortcuts', String(i + 1));
     await expect(buttons.nth(i)).toContainText(m.start.modes[mode]);
@@ -47,7 +54,7 @@ test('the start screen shows three picture buttons with their keys (FR-121)', as
 
 test('key 1 starts "Gemischt": the banner and the ruler', async ({ page }) => {
   await page.goto('/?seed=2');
-  await expect(page.getByTestId('mode-button')).toHaveCount(3);
+  await expect(page.getByTestId('mode-button')).toHaveCount(4);
   await page.keyboard.press('1');
   const overlay = page.getByTestId('battle-overlay');
   await expect(overlay).toHaveAttribute('data-mode', 'mixed');
@@ -59,7 +66,7 @@ test('key 1 starts "Gemischt": the banner and the ruler', async ({ page }) => {
 test('key 2 starts "Nur Zahlenstrahl": no banner, a pointer line, and 3 calm hits in a row raise the step in the same round (FR-122, FR-037)', async ({ page }, info) => {
   test.setTimeout(120_000);
   await page.goto('/?seed=3');
-  await expect(page.getByTestId('mode-button')).toHaveCount(3);
+  await expect(page.getByTestId('mode-button')).toHaveCount(4);
   await page.keyboard.press('2');
   const overlay = page.getByTestId('battle-overlay');
   const canvas = page.locator('canvas');
@@ -84,15 +91,15 @@ test('key 2 starts "Nur Zahlenstrahl": no banner, a pointer line, and 3 calm hit
   await expect(overlay).toHaveAttribute('data-round-seed', roundSeed!);
 });
 
-test('key 3 starts "Nur Rechnen": the banner, no ruler; a miss shows the landing number and steps; help step 2 shows the zoomed ten (FR-123)', async ({ page }, info) => {
+test('key 4 starts "Zahlen-Rätsel": the banner, no ruler; a miss shows the landing number and steps; help step 2 shows the zoomed ten (FR-123)', async ({ page }, info) => {
   test.setTimeout(120_000);
   await seedStorage(page, { [SETTINGS_KEY]: numberLineOnly });
   await page.goto('/?seed=4');
   await expect(page.getByTestId('mode-button')).toHaveCount(3);
-  await page.keyboard.press('3');
+  await page.keyboard.press('4');
   const overlay = page.getByTestId('battle-overlay');
   const canvas = page.locator('canvas');
-  await expect(overlay).toHaveAttribute('data-mode', 'math');
+  await expect(overlay).toHaveAttribute('data-mode', 'numbers');
   await expect(overlay).toHaveAttribute('data-phase', 'challenge');
   await expect(page.getByTestId('challenge-banner')).toBeVisible();
   await expect(canvas).toHaveAttribute('data-ruler-labels', '');

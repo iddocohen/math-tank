@@ -15,7 +15,7 @@ export const de = {
   start: {
     play: 'Spielen',
     /** Amendment 17 (FR-121): the play mode buttons on the start screen. */
-    modes: { mixed: 'Gemischt', ruler: 'Nur Zahlenstrahl', math: 'Nur Rechnen' },
+    modes: { mixed: 'Gemischt', ruler: 'Nur Zahlenstrahl', arithmetic: 'Plus und Minus', numbers: 'Zahlen-Rätsel' },
     fullscreen: 'Vollbild',
     parentHint: 'Für Eltern: Zahnrad gedrückt halten',
     gear: 'Für Eltern',
@@ -295,8 +295,8 @@ export const de = {
     previewStart: 'Am Anfang',
     previewMax: 'Schwerste Stufe',
     previewUnavailable: 'Die Vorschau erscheint, sobald der Zahlenraum gültig ist.',
-    /** Shown when every challenge type is off (FR-047, US6 scenario 4). */
-    guidedNeedsType: '„Gemischt“ und „Nur Rechnen“ brauchen mindestens eine Aufgabenart. Ohne Aufgabenart gibt es nur „Nur Zahlenstrahl“.',
+    /** Shown when every challenge type is off (FR-047, US6 scenario 4; amendment 27 item 6). */
+    guidedNeedsType: '„Gemischt“, „Plus und Minus“ und „Zahlen-Rätsel“ brauchen Aufgabenarten. Ohne Aufgabenart gibt es nur „Nur Zahlenstrahl“.',
     offerRulerOnly: 'Nur „Nur Zahlenstrahl“ anbieten',
     data: {
       title: 'Daten',
@@ -420,7 +420,8 @@ export const de = {
       adaptive: 'Schwierigkeit automatisch anpassen',
       playModeMixed: 'Spielart „Gemischt“ anbieten',
       playModeRuler: 'Spielart „Nur Zahlenstrahl“ anbieten',
-      playModeMath: 'Spielart „Nur Rechnen“ anbieten',
+      playModeArithmetic: 'Spielart „Plus und Minus“ anbieten',
+      playModeNumbers: 'Spielart „Zahlen-Rätsel“ anbieten',
       noDamage: 'Ohne Schaden spielen',
       timeLimit: 'Zeitlimit',
       timeLimitSeconds: 'Sekunden pro Aufgabe',
@@ -462,6 +463,9 @@ export const de = {
     rangePresetMismatch: 'Der Zahlenraum passt nicht zur Auswahl.',
     noChallengeTypes: 'Bitte mindestens eine Aufgabenart wählen oder nur „Nur Zahlenstrahl“ anbieten.',
     noPlayMode: 'Bitte mindestens eine Spielart anbieten.',
+    // Amendment 27 item 7 (FR-162).
+    arithmeticModeNoType: '„Plus und Minus“ braucht „Plus“ oder „Minus“.',
+    numbersModeNoType: '„Zahlen-Rätsel“ braucht „Zahlenstrahl“ oder „Vergleichen“.',
     rulerLevelOrder: 'Die Startstufe darf nicht schwerer sein als die schwerste Stufe.',
     roundLength: 'Eine Runde hat 1 bis 20 Gegner.',
     roundTypeNoDamage: '„Bis alle Herzen weg“ geht nicht ohne Schaden. Bitte „Gegner pro Runde“ wählen.',

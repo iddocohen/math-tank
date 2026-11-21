@@ -25,6 +25,9 @@ export const SETTINGS_ERROR_KEYS = [
   'rangePresetMismatch',
   'noChallengeTypes',
   'noPlayMode',
+  // Amendment 27 (FR-162).
+  'arithmeticModeNoType',
+  'numbersModeNoType',
   'rulerLevelOrder',
   'roundLength',
   'roundTypeNoDamage',
@@ -70,10 +73,14 @@ export function validateSettings(s: Settings): SettingsValidation {
     if (fixed.min !== range.min || fixed.max !== range.max) add('rangePresetMismatch', 'range');
   }
 
-  // Amendment 17: at least one play mode; "Gemischt" and "Nur Rechnen" need a challenge type, "Nur Zahlenstrahl" does not.
-  const anyType = Object.values(s.challengeTypes).some(Boolean);
-  if (!s.playModes.mixed && !s.playModes.ruler && !s.playModes.math) add('noPlayMode', 'playModes');
-  if (!anyType && (s.playModes.mixed || s.playModes.math)) add('noChallengeTypes', 'challengeTypes');
+  // Amendment 17 and 27: at least one play mode; "Gemischt" needs a challenge type, "Plus und Minus" needs "Plus" or
+  // "Minus", "Zahlen-Rätsel" needs "Zahlenstrahl" or "Vergleichen"; "Nur Zahlenstrahl" needs none.
+  const { challengeTypes: t, playModes } = s;
+  const anyType = Object.values(t).some(Boolean);
+  if (!Object.values(playModes).some(Boolean)) add('noPlayMode', 'playModes');
+  if (!anyType && playModes.mixed) add('noChallengeTypes', 'challengeTypes');
+  if (playModes.arithmetic && !t.addition && !t.subtraction) add('arithmeticModeNoType', 'playModes.arithmetic');
+  if (playModes.numbers && !t.numberLine && !t.comparison) add('numbersModeNoType', 'playModes.numbers');
 
   if (s.rulerLevelStart > s.rulerLevelMax) add('rulerLevelOrder', 'rulerLevelStart');
 

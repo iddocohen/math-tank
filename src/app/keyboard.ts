@@ -59,7 +59,7 @@ export function keyToAction(event: KeyLike, screen: KeyScreen, context: KeyConte
   switch (screen) {
     case 'start':
       if (isEnter || isSpace) return { type: 'start' };
-      if (/^[1-3]$/.test(key)) {
+      if (/^[1-4]$/.test(key)) {
         const mode = PLAY_MODES[Number(key) - 1]!;
         return !event.repeat && context.modes?.includes(mode) ? { type: 'start', mode } : null;
       }

@@ -32,7 +32,7 @@ export function twoNumberDefaults(): { size: 'steps'; first: { min: number; max:
 /** Data-model.md defaults (FR-046). Returns a fresh object on each call. */
 export function defaultSettings(): Settings {
   return {
-    version: 13,
+    version: 14,
     challengeTypes: { numberLine: true, addition: true, subtraction: true, comparison: true },
     range: { preset: '0-100', min: 0, max: 100 },
     addition: { maxOperand: 10, maxResult: 100, steps: 1, ...twoNumberDefaults() },
@@ -50,7 +50,7 @@ export function defaultSettings(): Settings {
     roundType: 'untilHearts',
     roundLength: 5,
     adaptive: true,
-    playModes: { mixed: true, ruler: true, math: true },
+    playModes: { mixed: true, ruler: true, arithmetic: true, numbers: true },
     noDamage: false,
     showClock: false,
     showRecords: true,

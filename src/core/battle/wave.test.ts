@@ -87,7 +87,7 @@ describe('waveSize (amendment 21, FR-137)', () => {
     expect(waveSize('ruler', s, challengeOf('readPosition'))).toBe(3);
     expect(waveSize('mixed', s, challengeOf('readPosition'))).toBe(3);
     for (const kind of ['findNumber', 'after', 'addition', 'greater', 'middle3'] as const) expect(waveSize('mixed', s, challengeOf(kind))).toBe(1);
-    expect(waveSize('math', s, challengeOf('addition'))).toBe(1);
+    expect(waveSize('arithmetic', s, challengeOf('addition'))).toBe(1);
     expect(waveSize('ruler', defaultSettings(), challengeOf('readPosition'))).toBe(1);
   });
 });

@@ -16,7 +16,7 @@
  *
  * `?seed=<n>` fixes the base seed so rounds are reproducible (quickstart.md, tasks.md D4). Amendment 17 (FR-121): the
  * start screen offers the play modes the parent chose; a mode button or the keys 1, 2 and 3 start that mode, Enter and
- * Space the first offered one, or the offered mode of `?mode=mixed|ruler|math` (T070). "Nochmal" and Enter on the end
+ * Space the first offered one, or the offered mode of `?mode=mixed|ruler|arithmetic|numbers` (T070). "Nochmal" and Enter on the end
  * screen start a new round in the same mode. The personal best is kept per play mode too. "Nur Zahlenstrahl" is not
  * read aloud (it has no question), and "Nur Rechnen" shows the number pad unless "Zahlenfeld" is "Nie", because there is
  * no ruler to tap.

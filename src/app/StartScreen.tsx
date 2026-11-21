@@ -2,7 +2,7 @@
  * Start screen (SC-001, FR-053, FR-062, FR-121, T070): one big picture button per play mode the parent offers
  * (amendment 17): "Gemischt" (ruler and question icons), "Nur Zahlenstrahl" (ruler icon) and "Nur Rechnen" (question-mark
  * icon), in this order; keys 1, 2 and 3 start them and Enter or Space the first offered one (the app's keyboard
- * listener). With only one mode offered a single "Spielen" button starts it. `?mode=mixed|ruler|math` (like `?seed=`,
+ * listener). With only one mode offered a single "Spielen" button starts it. `?mode=mixed|ruler|arithmetic|numbers` (like `?seed=`,
  * tasks.md D4) makes Enter and Space start that mode when it is offered.
  * The gear (`gear`, the ParentGate from the app) sits at the top right; it opens the parent menu after a 2-second
  * press and ignores keys (FR-045).
@@ -82,7 +82,8 @@ function ModeIcon({ mode }: { mode: PlayMode }) {
         </>
       )}
       {mode === 'ruler' && <RulerIcon />}
-      {mode === 'math' && <QuestionIcon cx={32} cy={26} r={22} />}
+      {/* Amendment 27: both new modes keep the question badge of "Nur Rechnen" for now; T426 draws the plus and minus badge. */}
+      {(mode === 'arithmetic' || mode === 'numbers') && <QuestionIcon cx={32} cy={26} r={22} />}
     </svg>
   );
 }

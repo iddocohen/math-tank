@@ -19,7 +19,7 @@ describe('recordKey (amendment 06, FR-086)', () => {
     expect(recordKey(s, 'mixed')).toBe('0-100|1|untilHearts');
     expect(recordKey(s)).toBe('0-100|1|untilHearts');
     expect(recordKey(s, 'ruler')).toBe('0-100|1|untilHearts|ruler');
-    expect(recordKey(s, 'math')).toBe('0-100|1|untilHearts|math');
+    expect(recordKey(s, 'arithmetic')).toBe('0-100|1|untilHearts|arithmetic');
   });
 
   it('differs when any of the three differs', () => {

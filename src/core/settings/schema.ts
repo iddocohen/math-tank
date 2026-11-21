@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Structural schema for persisted settings, version 13 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
- * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18; version 13 for amendment 26).
+ * Structural schema for persisted settings, version 14 (`mathtanks.settings.v1`, research R11 and R23; amendments 06, 11 and 12; version 7 for PO1; version 8 for
+ * amendment 17; version 9 for amendment 18; version 10 for amendment 19; version 11 for amendment 21; version 12 for its item 18; version 13 for amendment 26; version 14 for amendment 27).
  * Cross-field rules (range order, linked limits) live in validate.ts.
  */
 export const rangePresetSchema = z.enum(['0-10', '0-20', '0-50', '0-100', '0-1000', 'custom']);
@@ -35,7 +35,7 @@ const twoNumberFields = {
 };
 
 export const settingsSchema = z.object({
-  version: z.literal(13),
+  version: z.literal(14),
   challengeTypes: z.object({
     numberLine: z.boolean(),
     addition: z.boolean(),
@@ -77,11 +77,15 @@ export const settingsSchema = z.object({
   /** Enemies per round for `roundType: 'enemyCount'`, 1 to 20. */
   roundLength: z.number().int(),
   adaptive: z.boolean(),
-  /** The play modes the start screen offers (amendment 17, FR-121): "Gemischt", "Nur Zahlenstrahl", "Nur Rechnen". */
+  /**
+   * The play modes the start screen offers (amendment 17, FR-121; amendment 27, FR-158): "Gemischt", "Nur Zahlenstrahl",
+   * "Plus und Minus", "Zahlen-Rätsel". Versions 8 to 13 had `math` ("Nur Rechnen") instead of the last two.
+   */
   playModes: z.object({
     mixed: z.boolean(),
     ruler: z.boolean(),
-    math: z.boolean(),
+    arithmetic: z.boolean(),
+    numbers: z.boolean(),
   }),
   noDamage: z.boolean(),
   /** An up-counting clock at the top during play (FR-084). */
@@ -126,9 +130,12 @@ export type LineStyle = Settings['lineStyle'];
 /** "Zahlengröße" of plus and minus (amendment 26). */
 export type NumberSize = Settings['addition']['size'];
 export type NumberSpan = z.infer<typeof numberSpanSchema>;
-/** A play mode (amendment 17): mixed is the guided mode, ruler only reads the ruler, math hides the ruler. */
+/**
+ * A play mode (amendment 17, amendment 27): mixed is the guided mode, ruler only reads the ruler, arithmetic ("Plus und
+ * Minus") and numbers ("Zahlen-Rätsel") hide the ruler.
+ */
 export type PlayMode = keyof Settings['playModes'];
-/** The play modes in start screen order; keys 1, 2 and 3 start them (FR-121). */
-export const PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'math'];
+/** The play modes in start screen order; keys 1 to 4 start them (FR-121, FR-158). */
+export const PLAY_MODES: readonly PlayMode[] = ['mixed', 'ruler', 'arithmetic', 'numbers'];
 export type RangePreset = z.infer<typeof rangePresetSchema>;
 export type SettingsRange = z.infer<typeof rangeSchema>;

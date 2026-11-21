@@ -94,7 +94,7 @@ describe('generateChallenge with "Zwei Zahlen" (amendment 26, FR-025, FR-149, FR
     }
     // The same in "Nur Rechnen", which uses this generator with its own kinds and fallbacks.
     for (let seed = 1; seed <= 50; seed++) {
-      const c = generateChallenge({ ...generateInput(settings, seed, 0), ...playModeKinds('math', settings) });
+      const c = generateChallenge({ ...generateInput(settings, seed, 0), ...playModeKinds('numbers', settings) });
       expect(c.kind).toBe('addition');
     }
   });

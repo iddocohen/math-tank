@@ -75,17 +75,19 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: m.settings.offerRulerOnly }));
     expect(field(L.playModeMixed).checked).toBe(false);
     expect(field(L.playModeRuler).checked).toBe(true);
-    expect(field(L.playModeMath).checked).toBe(false);
+    expect(field(L.playModeArithmetic).checked).toBe(false);
+    expect(field(L.playModeNumbers).checked).toBe(false);
     expect(saveButton().disabled).toBe(false);
   });
 
   it('shows a switch per play mode, all on by default; all off shows the error and blocks saving (amendment 17, FR-121)', () => {
     const { persistence } = setup();
-    for (const label of [L.playModeMixed, L.playModeRuler, L.playModeMath]) expect(field(label).checked).toBe(true);
+    for (const label of [L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers]) expect(field(label).checked).toBe(true);
     toggle(L.playModeMixed);
-    toggle(L.playModeMath);
+    toggle(L.playModeArithmetic);
+    toggle(L.playModeNumbers);
     fireEvent.click(saveButton());
-    expect(persistence.settings().playModes).toEqual({ mixed: false, ruler: true, math: false });
+    expect(persistence.settings().playModes).toEqual({ mixed: false, ruler: true, arithmetic: false, numbers: false });
     toggle(L.playModeRuler);
     expect(screen.getByText(m.settingsErrors.noPlayMode)).toBeTruthy();
     expect(saveButton().disabled).toBe(true);
@@ -288,7 +290,7 @@ describe('SettingsPage', () => {
   it('shows every field of FR-046', () => {
     setup({ timeLimitSeconds: 30, roundType: 'enemyCount' });
     for (const label of [
-      L.numberLine, L.addition, L.subtraction, L.comparison, L.playModeMixed, L.playModeRuler, L.playModeMath,
+      L.numberLine, L.addition, L.subtraction, L.comparison, L.playModeMixed, L.playModeRuler, L.playModeArithmetic, L.playModeNumbers,
       L.rangePreset,
       L.additionMaxOperand, L.additionMaxResult, L.additionSteps, L.subtractionMaxOperand, L.subtractionSteps,
       L.crossTens, L.crossHundreds,

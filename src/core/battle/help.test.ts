@@ -132,7 +132,7 @@ describe('nextHelp with help types turned off by the parent (FR-032)', () => {
 
 describe('nextHelp in "Nur Rechnen" (amendment 17, FR-123)', () => {
   const after26 = challenge('after', 27, { mainSkill: 'countForward', skills: ['countForward'], operands: [26] });
-  const noRuler = MODE_TRAITS.math.showsRuler;
+  const noRuler = MODE_TRAITS.numbers.showsRuler;
 
   it('"Nur Rechnen" draws no ruler', () => {
     expect(noRuler).toBe(false);
@@ -187,13 +187,13 @@ describe('nextHelp for "Zwei Zahlen" (amendment 26 item 7, FR-154, FR-155)', () 
   });
 
   it('step 2 in "Nur Rechnen" sets the place values and keeps the zoomed ten', () => {
-    const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.math.showsRuler);
+    const h = nextHelp(sub42minus17, 2, null, settings(), MODE_TRAITS.numbers.showsRuler);
     expect(h).toMatchObject({ step: 2, placeValue: placeValueHelp('subtraction', 42, 17), zoom: helpZoomView(25, 0, 100) });
   });
 
   it('with help.stepAnimation off there are no place values', () => {
     expect(nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }))).toMatchObject({ step: 3, placeValue: null });
-    const math = nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }), MODE_TRAITS.math.showsRuler);
+    const math = nextHelp(add35plus32, 2, null, settings({ stepAnimation: false }), MODE_TRAITS.numbers.showsRuler);
     expect(math).toMatchObject({ step: 2, placeValue: null, stepPath: null });
   });
 

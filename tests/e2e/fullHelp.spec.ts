@@ -21,6 +21,8 @@ test('with "Punkt nach voller Hilfe" off, the hit at the shown solution does not
     roundLength: 2,
     enemyDifficulty: 'easy' as const,
     challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false },
+    // "Plus und Minus" needs "Plus" or "Minus" (amendment 27, FR-162).
+    playModes: { mixed: true, ruler: true, arithmetic: false, numbers: true },
   };
   await seedStorage(page, { [SETTINGS_KEY]: settings, [GARAGE_KEY]: emptyGarage() }, { once: true });
   await page.goto('/?seed=21');

@@ -21,6 +21,9 @@ function sampleSettings(): Settings {
   };
 }
 
+/** The play modes of settings versions 8 to 13, with "Nur Rechnen" (amendment 17). */
+const V13_ALL_MODES = { mixed: true, ruler: true, math: true };
+
 function sampleGarage(): Garage {
   return { version: 2, balance: 7, totalEarned: 87, owned: ['sky', 'rocket', 'sparkles', 'crown'], look: { color: 'sky', flag: 'rocket', trail: 'sparkles', hat: 'crown' } };
 }
@@ -125,6 +128,18 @@ describe('importData (FR-048, FR-048a)', () => {
     expect(r.ok && r.settings).toEqual(two);
   });
 
+  it('a version 13 settings file (exported before amendment 27) imports with "Plus und Minus" and "Zahlen-Rätsel" by the challenge types (FR-165)', () => {
+    const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
+    const v13 = { ...sampleSettings(), version: 13, playModes: V13_ALL_MODES };
+    const all = importData(JSON.stringify({ ...file, settings: v13 }));
+    expect(all.ok && all.settings).toEqual(sampleSettings());
+    const onlyRulerTypes = { numberLine: true, addition: false, subtraction: false, comparison: false };
+    const r = importData(JSON.stringify({ ...file, settings: { ...v13, challengeTypes: onlyRulerTypes } }));
+    expect(r.ok && r.settings.playModes).toEqual({ mixed: true, ruler: true, arithmetic: false, numbers: true });
+    const noMath = importData(JSON.stringify({ ...file, settings: { ...v13, playModes: { mixed: true, ruler: true, math: false } } }));
+    expect(noMath.ok && noMath.settings.playModes).toEqual({ mixed: true, ruler: true, arithmetic: false, numbers: false });
+  });
+
   it('a version 12 settings file (exported before amendment 26) imports with "Kleine Schritte", ranges 10 to 99 and no carrying (FR-156)', () => {
     const strip = (k: Record<string, unknown>) => {
       const { size: _size, first: _first, second: _second, carry: _carry, ...rest } = k;
@@ -134,7 +149,7 @@ describe('importData (FR-048, FR-048a)', () => {
       void _carry;
       return rest;
     };
-    const v12 = { ...sampleSettings(), version: 12, addition: strip(sampleSettings().addition), subtraction: strip(sampleSettings().subtraction) };
+    const v12 = { ...sampleSettings(), playModes: V13_ALL_MODES, version: 12, addition: strip(sampleSettings().addition), subtraction: strip(sampleSettings().subtraction) };
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
     const r = importData(JSON.stringify({ ...file, settings: v12 }));
     expect(r.ok && r.settings).toEqual(sampleSettings());
@@ -143,13 +158,13 @@ describe('importData (FR-048, FR-048a)', () => {
   it('a version 11 settings file with a removed curved line style imports with straight lines (amendment 21 item 18)', () => {
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
     for (const lineStyle of ['curved', 'tangled']) {
-      const r = importData(JSON.stringify({ ...file, settings: { ...sampleSettings(), version: 11, enemiesAtOnce: 3, lineStyle } }));
+      const r = importData(JSON.stringify({ ...file, settings: { ...sampleSettings(), playModes: V13_ALL_MODES, version: 11, enemiesAtOnce: 3, lineStyle } }));
       expect(r.ok && r.settings).toEqual({ ...sampleSettings(), enemiesAtOnce: 3, lineStyle: 'straight' });
     }
   });
 
   it('a version 10 settings file (exported before amendment 21) imports with one enemy and straight lines', () => {
-    const { enemiesAtOnce: _wave, lineStyle: _lines, ...v10 } = { ...sampleSettings(), version: 10 };
+    const { enemiesAtOnce: _wave, lineStyle: _lines, ...v10 } = { ...sampleSettings(), playModes: V13_ALL_MODES, version: 10 };
     void _wave;
     void _lines;
     const file = JSON.parse(exportData(sampleSettings(), sampleProgress(), sampleRecords(), sampleGarage())) as Record<string, unknown>;
@@ -158,7 +173,7 @@ describe('importData (FR-048, FR-048a)', () => {
   });
 
   it('a version 9 settings file (exported before amendment 19) imports with the aiming cross "Immer"', () => {
-    const { aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v9 } = { ...sampleSettings(), version: 9 };
+    const { aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v9 } = { ...sampleSettings(), playModes: V13_ALL_MODES, version: 9 };
     void _cross;
     void _wave;
     void _lines;
@@ -168,7 +183,7 @@ describe('importData (FR-048, FR-048a)', () => {
   });
 
   it('a version 8 settings file (exported before amendment 18) imports with a point after the full help', () => {
-    const { pointAfterFullHelp: _point, aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v8 } = { ...sampleSettings(), version: 8 };
+    const { pointAfterFullHelp: _point, aimCross: _cross, enemiesAtOnce: _wave, lineStyle: _lines, ...v8 } = { ...sampleSettings(), playModes: V13_ALL_MODES, version: 8 };
     void _wave;
     void _lines;
     void _point;
@@ -274,7 +289,7 @@ describe('importData (FR-048, FR-048a)', () => {
     const r = importData(JSON.stringify({ app: 'math-tanks', exportedAt: '2026-01-01T00:00:00.000Z', settings: v1, progress: emptyProgress() }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.settings.version).toBe(13);
+    expect(r.settings.version).toBe(14);
     expect(r.settings.rulerLevelStart).toBe(5);
     expect(r.settings.rulerLevelMax).toBe(5);
     expect('exactHit' in r.settings).toBe(false);

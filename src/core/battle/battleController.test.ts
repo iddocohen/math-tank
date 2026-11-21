@@ -2727,15 +2727,15 @@ describe('BattleController play modes (amendment 17, T333, FR-122 to FR-124)', (
     expect(attempts.every((a) => a.kind === 'readPosition' && a.skills.includes('positions') && a.independent)).toBe(true);
   });
 
-  it("startRound('math') never gives readPosition or findNumber, also for pointer input, and records attempts", () => {
+  it("startRound('numbers') never gives readPosition or findNumber, also for pointer input, and records attempts", () => {
     const kinds = new Set<string>();
     for (let seed = 1; seed <= 12; seed++) {
       const g = adaptiveController({ adaptive: false }, emptyProgress(), seed);
-      g.controller.startRound('math');
+      g.controller.startRound('numbers');
       g.controller.selectNumber(50);
       for (let i = 0; i < 5; i++) {
         const s = g.controller.getState();
-        expect(s.mode).toBe('math');
+        expect(s.mode).toBe('numbers');
         kinds.add(s.challenge!.kind);
         destroyCalmly(g);
       }
@@ -2772,13 +2772,13 @@ describe('BattleController play modes (amendment 17, T333, FR-122 to FR-124)', (
   });
 
   it('help works in every mode, and "Nur Rechnen" help step 2 shows the zoomed ten', () => {
-    for (const mode of ['mixed', 'ruler', 'math'] as const) {
+    for (const mode of ['mixed', 'ruler', 'arithmetic', 'numbers'] as const) {
       const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } }, emptyProgress(), 5);
       g.controller.startRound(mode);
       g.controller.requestHelp();
       const first = g.controller.getState();
       // Before any miss "Nur Rechnen" has no step 1 (no direction yet, no ruler line to highlight).
-      if (mode === 'math') expect(first.help.content).toMatchObject({ step: 2, zoom: { min: expect.any(Number), max: expect.any(Number) } });
+      if (mode === 'arithmetic' || mode === 'numbers') expect(first.help.content).toMatchObject({ step: 2, zoom: { min: expect.any(Number), max: expect.any(Number) } });
       else expect(first.help.level, mode).toBe(1);
       g.controller.requestHelp();
       expect(g.controller.getState().help.level, mode).toBeGreaterThanOrEqual(2);
@@ -2985,7 +2985,7 @@ describe('BattleController "Zwei Zahlen" settings mid-round (amendment 26, FR-15
     const plusOnly = { numberLine: false, addition: true, subtraction: false, comparison: false };
     const twoNumbers = { ...defaultSettings().addition, size: 'twoNumbers' as const, carry: false };
     const { controller } = makeController({ challengeTypes: plusOnly, addition: twoNumbers });
-    controller.startRound('math');
+    controller.startRound('numbers');
     const before = controller.getState();
     expect(before.challenge?.twoNumbers).toBe(true);
 

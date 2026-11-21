@@ -1,6 +1,6 @@
 /**
  * What each play mode changes (amendment 17, FR-121 to FR-123), in one table: "Gemischt" ('mixed'), "Nur Zahlenstrahl"
- * ('ruler') and "Nur Rechnen" ('math'). The generator, the help steps, the overlay, the number line and the app read
+ * ('ruler'), "Plus und Minus" ('arithmetic') and "Zahlen-Rätsel" ('numbers', amendment 27). The generator, the help steps, the overlay, the number line and the app read
  * these traits instead of checking the mode by name.
  */
 import type { ChallengeKind, PlayMode } from './types';
@@ -28,5 +28,7 @@ export interface ModeTraits {
 export const MODE_TRAITS: Readonly<Record<PlayMode, ModeTraits>> = {
   mixed: { showsRuler: true, showsQuestion: true, forcesPad: false, kinds: 'enabled', fallbackKinds: null },
   ruler: { showsRuler: true, showsQuestion: false, forcesPad: false, kinds: 'readPosition', fallbackKinds: null },
-  math: { showsRuler: false, showsQuestion: true, forcesPad: true, kinds: 'enabledWithoutRuler', fallbackKinds: ['after', 'before'] },
+  // Amendment 27: for now both new modes keep the traits of "Nur Rechnen"; T420 gives each its own kinds.
+  arithmetic: { showsRuler: false, showsQuestion: true, forcesPad: true, kinds: 'enabledWithoutRuler', fallbackKinds: ['after', 'before'] },
+  numbers: { showsRuler: false, showsQuestion: true, forcesPad: true, kinds: 'enabledWithoutRuler', fallbackKinds: ['after', 'before'] },
 };
