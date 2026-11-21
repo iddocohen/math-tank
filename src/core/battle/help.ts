@@ -15,7 +15,8 @@
  *
  * A step whose help types are all turned off is skipped; the solution step is always on (FR-032).
  *
- * "Nur Rechnen" (amendment 17, FR-123) draws no ruler: step 1 gives only the direction (no ruler line highlighted),
+ * The modes without a ruler ("Plus und Minus" and "Zahlen-Rätsel", amendment 27; before them "Nur Rechnen", amendment
+ * 17, FR-123) draw no ruler: step 1 gives only the direction (no ruler line highlighted),
  * step 2 the ten around the answer as a zoomed piece of ruler (with `help.zoom`) and no count; addition and
  * subtraction keep their step path, comparison keeps its option markers and gets no zoom, which would show the answer.
  */

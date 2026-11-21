@@ -217,7 +217,10 @@ export interface RoundState {
   wave: TankState[];
   /** Fixed for the round, alternates between rounds. */
   playerSide: 'left' | 'right';
-  /** The search's challenge; mode 'ruler' always readPosition, mode 'math' never readPosition or findNumber (amendment 17). */
+  /**
+   * The search's challenge; mode 'ruler' always readPosition (amendment 17); mode 'arithmetic' only addition or
+   * subtraction; mode 'numbers' never addition, subtraction, readPosition or findNumber (amendment 27).
+   */
   challenge: Challenge | null;
   /** Clock time when answers became possible (1 s after display). */
   answerableAt: number | null;

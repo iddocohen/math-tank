@@ -2771,13 +2771,15 @@ describe('BattleController play modes (amendment 17, T333, FR-122 to FR-124)', (
     expect(g.progress.getProgress().skills[skillKey('positions', '0-100')]!.step).toBe(1);
   });
 
-  it('help works in every mode, and "Nur Rechnen" help step 2 shows the zoomed ten', () => {
+  it('help works in every mode, and help step 2 of the modes without a ruler shows the zoomed ten', () => {
     for (const mode of ['mixed', 'ruler', 'arithmetic', 'numbers'] as const) {
-      const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: true, addition: false, subtraction: false, comparison: false } }, emptyProgress(), 5);
+      // "Plus und Minus" asks only plus and minus (amendment 27), so it gets "Plus" instead of "Zahlenstrahl".
+      const plus = mode === 'arithmetic';
+      const g = adaptiveController({ adaptive: false, challengeTypes: { numberLine: !plus, addition: plus, subtraction: false, comparison: false } }, emptyProgress(), 5);
       g.controller.startRound(mode);
       g.controller.requestHelp();
       const first = g.controller.getState();
-      // Before any miss "Nur Rechnen" has no step 1 (no direction yet, no ruler line to highlight).
+      // Before any miss the modes without a ruler have no step 1 (no direction yet, no ruler line to highlight).
       if (mode === 'arithmetic' || mode === 'numbers') expect(first.help.content).toMatchObject({ step: 2, zoom: { min: expect.any(Number), max: expect.any(Number) } });
       else expect(first.help.level, mode).toBe(1);
       g.controller.requestHelp();
@@ -2985,7 +2987,7 @@ describe('BattleController "Zwei Zahlen" settings mid-round (amendment 26, FR-15
     const plusOnly = { numberLine: false, addition: true, subtraction: false, comparison: false };
     const twoNumbers = { ...defaultSettings().addition, size: 'twoNumbers' as const, carry: false };
     const { controller } = makeController({ challengeTypes: plusOnly, addition: twoNumbers });
-    controller.startRound('numbers');
+    controller.startRound('arithmetic');
     const before = controller.getState();
     expect(before.challenge?.twoNumbers).toBe(true);
 

@@ -4,6 +4,7 @@
  */
 import { createRng, deriveSeed, type Rng } from '../rng';
 import { additionAnswers, buildAddition } from './addition';
+import { arithmeticExerciseAt } from './arithmetic';
 import { COMPARISON_KINDS, comparisonAnswers, comparisonBuilders, comparisonFits, isComparisonKind } from './comparison';
 import type { Challenge, ChallengeKind, DifficultyStep, InputMethod, PlayMode, RulerLevel, Settings, Skill } from '../types';
 import { minEnemyGap } from './gaps';
@@ -34,8 +35,8 @@ export interface GenerateInput {
   kindsAllowed?: ChallengeKind[];
   /**
    * The kinds tried in order when no allowed kind fits, before the final "find N" fallback (ModeTraits.fallbackKinds).
-   * Omitted: readPosition after keyboard input (FR-076), nothing otherwise. "Nur Rechnen" (amendment 17, FR-123) passes
-   * 'after' and 'before', which need no ruler.
+   * Omitted: readPosition after keyboard input (FR-076), nothing otherwise. "Zahlen-Rätsel" (amendment 27, FR-160)
+   * passes 'after' and 'before', which need no ruler; "Plus und Minus" passes none (FR-159).
    */
   fallbackKinds?: readonly ChallengeKind[];
   /**
@@ -44,10 +45,17 @@ export interface GenerateInput {
    */
   inputMethod?: InputMethod;
   /**
-   * "Nur Rechnen" (amendment 17, FR-123): no ruler kind, also not as the final fallback. When no kind fits, "after" or
-   * "before" over the whole range comes instead of "find N".
+   * The play modes without a ruler (amendment 17, FR-123; amendment 27): no ruler kind, also not as the final fallback.
+   * When no kind fits, "after" or "before" over the whole range comes instead of "find N".
    */
   withoutRuler?: boolean;
+  /**
+   * "Plus und Minus" (amendment 27 item 8, FR-159, FR-163): no other kind than addition and subtraction, also not as a
+   * fallback. When no allowed kind fits at its step, the same kinds at the same step over the whole battlefield come
+   * (stage 2), then arithmeticExerciseAt at the parent's settings (stage 3). When stage 3 finds nothing, the generator
+   * throws; the settings check `arithmeticModeNoExercise` and modeCanPlay keep it from getting there.
+   */
+  onlyArithmetic?: boolean;
 }
 
 /** Answers tried per kind before the generator moves on to another kind (research R10). */
@@ -86,21 +94,32 @@ export function enabledKinds(settings: Settings): ChallengeKind[] {
   return kinds;
 }
 
-/** The kinds that need the ruler to be meaningful; "Nur Rechnen" never generates them (amendment 17, FR-123). */
+/** The kinds that need the ruler to be meaningful; the modes without a ruler never generate them (amendment 17, FR-123). */
 export const RULER_KINDS: readonly ChallengeKind[] = ['readPosition', 'findNumber'];
+
+/** The kinds of "Plus und Minus" (amendment 27, FR-159). */
+const ARITHMETIC_KINDS: readonly ChallengeKind[] = ['addition', 'subtraction'];
+
+export type PlayModeInput = Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler' | 'onlyArithmetic'>;
 
 /**
  * The generator input of a play mode (amendment 17, MODE_TRAITS): "Nur Zahlenstrahl" only reads the ruler (FR-122),
- * "Nur Rechnen" uses the enabled kinds without the ruler kinds and its own fallbacks (FR-123), "Gemischt" adds nothing.
+ * "Plus und Minus" only the turned-on arithmetic kinds (FR-159), "Zahlen-Rätsel" the turned-on kinds without the
+ * arithmetic and ruler kinds and its own fallbacks (FR-160), "Gemischt" adds nothing. `withoutRuler` follows
+ * `showsRuler`, and `onlyArithmetic` follows the trait `kinds: 'arithmetic'`, not a field of its own (critique E1).
  */
-export function playModeKinds(mode: PlayMode, settings: Settings): Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler'> {
+export function playModeKinds(mode: PlayMode, settings: Settings): PlayModeInput {
   const traits = MODE_TRAITS[mode];
-  const out: Pick<GenerateInput, 'kindsAllowed' | 'fallbackKinds' | 'withoutRuler'> = {};
+  const out: PlayModeInput = {};
   if (traits.kinds === 'readPosition') out.kindsAllowed = ['readPosition'];
-  if (traits.kinds === 'enabledWithoutRuler') {
-    out.kindsAllowed = enabledKinds(settings).filter((k) => !RULER_KINDS.includes(k));
-    out.withoutRuler = true;
+  if (traits.kinds === 'arithmetic') {
+    out.kindsAllowed = enabledKinds(settings).filter((k) => ARITHMETIC_KINDS.includes(k));
+    out.onlyArithmetic = true;
   }
+  if (traits.kinds === 'numbersWithoutRuler') {
+    out.kindsAllowed = enabledKinds(settings).filter((k) => !RULER_KINDS.includes(k) && !ARITHMETIC_KINDS.includes(k));
+  }
+  if (!traits.showsRuler) out.withoutRuler = true;
   if (traits.fallbackKinds) out.fallbackKinds = traits.fallbackKinds;
   return out;
 }
@@ -205,14 +224,28 @@ export function generateChallenge(input: GenerateInput): Challenge {
     kinds = kinds.filter((k) => k !== kind);
   }
 
-  // The mode's fallbacks ("Nur Rechnen": "after", "before"), or after keyboard input "read the ruler" instead of
+  // "Plus und Minus" (amendment 27 item 8): stage 2, the same kinds at the same step over the whole battlefield, then
+  // stage 3, the parent's settings. The challenge records the skill's current step (finish), as every challenge does;
+  // adaptive difficulty can then count a harder exercise as one of the current step (critique E4, accepted).
+  if (input.onlyArithmetic) {
+    for (const kind of (input.kindsAllowed ?? []).filter((k) => ARITHMETIC_KINDS.includes(k))) {
+      const challenge = tryKind(kind, answers, input, rng, finish, true);
+      if (challenge) return challenge;
+    }
+    const draft = arithmeticExerciseAt(settings, playerPosition, rng);
+    const challenge = draft && finish(draft);
+    if (challenge) return challenge;
+    throw new Error(`generateChallenge: no plus or minus exercise at least the enemy gap from ${playerPosition} in ${settings.range.min} to ${settings.range.max}`);
+  }
+
+  // The mode's fallbacks ("Zahlen-Rätsel": "after", "before"), or after keyboard input "read the ruler" instead of
   // "find N" (FR-076).
   for (const kind of input.fallbackKinds ?? (keyboard ? ['readPosition'] : [])) {
     const challenge = tryKind(kind, answers, input, rng, finish);
     if (challenge) return challenge;
   }
 
-  // "Nur Rechnen" never falls back to a ruler kind (FR-123): "after" or "before" over the whole range, still with the
+  // The modes without a ruler never fall back to a ruler kind (FR-123, amendment 27): "after" or "before" over the whole range, still with the
   // settings, the gaps and the FR-021 rules that validateChallenge checks.
   if (input.withoutRuler) {
     for (const kind of ['after', 'before'] as const) {

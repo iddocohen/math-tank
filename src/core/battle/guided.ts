@@ -37,7 +37,8 @@ export interface SearchOptions {
  * The challenge of a guided search in the round `s` (its seed, turn, player position, input method and play mode).
  * The latest input method decides whether findNumber may come: before any input the game treats the input as keyboard
  * input (FR-076). With `noComparison` exactly one tank stands opposite the child. The play mode (amendment 17):
- * "Nur Zahlenstrahl" only reads the ruler, "Nur Rechnen" never uses the ruler kinds (playModeKinds).
+ * "Nur Zahlenstrahl" only reads the ruler, "Plus und Minus" only asks plus and minus, "Zahlen-Rätsel" never uses the
+ * arithmetic or ruler kinds (playModeKinds, amendment 27).
  */
 export function searchChallenge(s: RoundState, settings: Settings, { avoid, difficulty, noComparison }: SearchOptions): Challenge {
   const byMode = playModeKinds(s.mode, settings);
@@ -56,6 +57,7 @@ export function searchChallenge(s: RoundState, settings: Settings, { avoid, diff
       ...(kindsAllowed ? { kindsAllowed } : {}),
       ...(byMode.fallbackKinds ? { fallbackKinds: byMode.fallbackKinds } : {}),
       ...(byMode.withoutRuler ? { withoutRuler: true } : {}),
+      ...(byMode.onlyArithmetic ? { onlyArithmetic: true } : {}),
     });
     if (challenge.answer !== avoid) break;
   }

@@ -148,9 +148,10 @@ const CACHE_LIMIT = 32;
 
 /**
  * The cached value for `key`, or `compute()` stored under it. A full cache drops its oldest entry (Map keeps
- * insertion order), so typing on the settings page does not push out every entry the game uses.
+ * insertion order), so typing on the settings page does not push out every entry the game uses. Also used by the
+ * exact exercise search of "Plus und Minus" (arithmetic.ts, amendment 27).
  */
-function memo<T>(cache: Map<string, T>, key: string, compute: () => T): T {
+export function memo<T>(cache: Map<string, T>, key: string, compute: () => T): T {
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   const value = compute();
