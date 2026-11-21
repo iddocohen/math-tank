@@ -11,10 +11,17 @@ import { emptyProgress } from '../storage/storage';
 
 /**
  * Only subtraction on, range 0 to 100, adaptive difficulty off (the challenge follows the parent settings, not the
- * easiest ladder step of a new player), the other settings at their defaults.
+ * easiest ladder step of a new player), the other settings at their defaults. "Zahlen-Rätsel" needs "Zahlenstrahl" or
+ * "Vergleichen", so it is not offered; otherwise the settings fail the check and load as the defaults (amendment 27,
+ * FR-162).
  */
 function onlySubtraction(): Settings {
-  return { ...defaultSettings(), adaptive: false, challengeTypes: { numberLine: false, addition: false, subtraction: true, comparison: false } };
+  return {
+    ...defaultSettings(),
+    adaptive: false,
+    challengeTypes: { numberLine: false, addition: false, subtraction: true, comparison: false },
+    playModes: { mixed: true, ruler: true, arithmetic: true, numbers: false },
+  };
 }
 
 /** The skill steps BattleController passes with adaptive difficulty off: the top step per skill. */
@@ -44,9 +51,17 @@ export const SUBTRACTION_43_MINUS_7: {
   },
 };
 
-/** Only comparison on, range 0 to 100, adaptive difficulty off, the other settings at their defaults. */
+/**
+ * Only comparison on, range 0 to 100, adaptive difficulty off, the other settings at their defaults. "Plus und Minus"
+ * needs "Plus" or "Minus", so it is not offered (amendment 27, FR-162).
+ */
 function onlyComparison(): Settings {
-  return { ...defaultSettings(), adaptive: false, challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true } };
+  return {
+    ...defaultSettings(),
+    adaptive: false,
+    challengeTypes: { numberLine: false, addition: false, subtraction: false, comparison: true },
+    playModes: { mixed: true, ruler: true, arithmetic: false, numbers: true },
+  };
 }
 
 const SEED_47_74 = 65327;

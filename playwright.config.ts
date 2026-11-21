@@ -6,9 +6,11 @@ import { FIRE_BARS_HEIGHT, FIRE_DEVICES, silkUserAgent } from './tests/e2e/silk'
 const DEVICE_SPECS = /(devices|touch|rotation)\.spec\.ts$/;
 /**
  * Amendments 23, 25 and 26: the garage from the battle, settings applied mid-round and "Zwei Zahlen" run in the desktop
- * and device projects.
+ * and device projects. Amendment 27 (critique E8): the four play modes run there and in the Fire projects as well.
  */
-const DEVICE_AND_DESKTOP_SPECS = /(garageBattle|settingsApply|twoNumbers)\.spec\.ts$/;
+const DEVICE_AND_DESKTOP_SPECS = /(garageBattle|settingsApply|twoNumbers|modes)\.spec\.ts$/;
+/** The four play modes, also in the Fire projects (amendment 27). */
+const MODES_SPEC = /modes\.spec\.ts$/;
 /** The smoke test of the build for GitHub Pages runs only in the `base-path` project (P11, T304). */
 const BASE_PATH_SPEC = /basePath\.spec\.ts$/;
 /** The frame rate test runs alone, after every other project (T150). */
@@ -23,7 +25,7 @@ function fireProjects() {
       const screen = orientation === 'landscape' ? d.screen : { width: d.screen.height, height: d.screen.width };
       return {
         name: `${d.id}-${orientation}`,
-        testMatch: FIRE_SPEC,
+        testMatch: [FIRE_SPEC, MODES_SPEC],
         use: {
           ...devices['Desktop Chrome'],
           userAgent: silkUserAgent(d.model),
@@ -82,7 +84,7 @@ export default defineConfig({
     // Amendment 22: a phone held upright plays in the portrait layout.
     { name: 'iphone-portrait', testMatch: [DEVICE_SPECS, DEVICE_AND_DESKTOP_SPECS], use: { ...devices['iPhone 13'] } },
     // Amendment 16: Fire 7, Fire HD 8 and Fire HD 10 held sideways and upright, in Chromium with Silk's user agent and
-    // touch. They run only tests/e2e/fire.spec.ts.
+    // touch. They run tests/e2e/fire.spec.ts and, from amendment 27, tests/e2e/modes.spec.ts.
     ...FIRE_PROJECTS,
     // P11 (T304): the build for GitHub Pages under /math-tank/, in Chromium.
     { name: 'base-path', testMatch: BASE_PATH_SPEC, use: { ...devices['Desktop Chrome'], baseURL: BASE_PATH_URL, launchOptions: { args: ['--mute-audio'] } } },

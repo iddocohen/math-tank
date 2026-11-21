@@ -1,8 +1,8 @@
 /**
  * Amendment 26 end to end (T415, FR-148 to FR-155): the parent turns on only plus and sets plus "Zahlengröße" to
- * "Zwei Zahlen" with the first and the second number 10 to 99 and "Plus mit Übertrag" off, then saves. In "Gemischt"
- * the child destroys 5 enemies: every banner shows two two-digit numbers whose columns do not carry. On the next enemy
- * H twice reaches help step 2, which shows the place-value lines inside the viewport. Then the parent sets the
+ * "Zwei Zahlen" with the first and the second number 10 to 99 and "Plus mit Übertrag" off, stops offering "Zahlen-Rätsel"
+ * (amendment 27), then saves. In "Gemischt" the child destroys 5 enemies: every banner shows two two-digit numbers
+ * whose columns do not carry. On the next enemy H twice reaches help step 2, which shows the place-value lines inside the viewport. Then the parent sets the
  * battlefield to 550 to 780: saving is blocked and the error under the plus "Zahlengröße" names plus.
  * Runs in the desktop projects and in the device projects (playwright.config.ts); on touch devices the parent gate is a
  * held touch and every button is a tap.
@@ -55,6 +55,8 @@ test('"Zwei Zahlen" plus without carrying: 5 banners with two two-digit numbers,
   await settings.getByLabel(L.numberLine, { exact: true }).uncheck();
   await settings.getByLabel(L.subtraction, { exact: true }).uncheck();
   await settings.getByLabel(L.comparison, { exact: true }).uncheck();
+  // "Zahlen-Rätsel" needs "Zahlenstrahl" or "Vergleichen", so the parent stops offering it (amendment 27, FR-162).
+  await settings.getByLabel(L.playModeNumbers, { exact: true }).uncheck();
   const plus = settings.getByRole('group', { name: m.settings.groups.addition, exact: true });
   await plus.getByLabel(L.numberSize, { exact: true }).selectOption('twoNumbers');
   await expect(plus.getByLabel(L.firstFrom, { exact: true })).toHaveValue('10');
